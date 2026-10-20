@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "allowImportingTsExtensions": false,
+    "outDir": "dist-wx",
+    "declaration": false,
+    "module": "CommonJS",
+    "moduleResolution": "Node"
+  },
+  "include": ["src/platform/wx.ts", "src/engine/**/*", "src/game/**/*"],
+  "exclude": ["src/platform/h5.ts", "src/main.ts"]
+}

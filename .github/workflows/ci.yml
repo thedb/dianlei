@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-test-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Test
+        run: npm run test
+
+      - name: Build H5
+        run: npm run build:h5
+
+      - name: Build WeChat (type check only)
+        run: npm run build:wx
+
+      - name: Upload H5 build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: h5-dist
+          path: dist/
+          retention-days: 7
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: lint-test-build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build H5 for production
+        run: npm run build:h5
+        env:
+          ASSET_BASE_URL: 'https://cdn.it-consultis.com/vibeCoding/dianlei/assets/'
+
+      - name: Set Cache-Control for index.html
+        run: |
+          # Create a metadata file for ossutil to set headers
+          echo "index.html" > /tmp/html-files.txt
+
+      - name: Install ossutil
+        run: |
+          curl -fsSL https://gosspublic.alicdn.com/ossutil/install.sh | sudo bash
+
+      - name: Configure ossutil
+        run: |
+          ossutil config -e oss-cn-shanghai.aliyuncs.com -i ${{ secrets.OSS_ACCESS_KEY_ID }} -k ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+
+      - name: Deploy to Aliyun OSS
+        run: |
+          # Upload all files except index.html with default caching (immutable hashed assets)
+          ossutil cp -r dist/ oss://it-consultis/vibeCoding/dianlei/h5/ \
+            --exclude "index.html" \
+            --update \
+            --jobs 10
+
+          # Upload index.html with no-cache header
+          ossutil cp dist/index.html oss://it-consultis/vibeCoding/dianlei/h5/index.html \
+            --meta "Cache-Control:no-cache" \
+            --update
+
+      - name: Output deploy URL
+        run: |
+          echo "::notice::Deployed to https://cdn.it-consultis.com/vibeCoding/dianlei/h5/index.html"
