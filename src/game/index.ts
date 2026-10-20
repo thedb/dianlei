@@ -2,7 +2,7 @@
  * Main game class - coordinates all systems
  */
 
-import type { PlatformAdapter } from '@/platform/types';
+import type { H5Platform } from '@/platform/h5';
 import { createGameLoop, type GameLoop } from '@/engine/loop';
 import { createInputHandler, type InputHandler } from '@/engine/input';
 import { createRenderer, type Renderer } from '@/engine/renderer';
@@ -17,17 +17,32 @@ export interface Game {
   toggleDebug(): void;
 }
 
-export function createGame(platform: PlatformAdapter): Game {
+export function createGame(platform: H5Platform): Game {
   const safeArea = platform.getSafeArea();
+  const screen = platform.getScreenSize();
+  const dpr = platform.getDevicePixelRatio();
 
-  // Create core systems
-  const renderer: Renderer = createRenderer(platform);
-  const inputHandler: InputHandler = createInputHandler(platform, safeArea.bottom);
-  const audioSystem: AudioSystem = createAudioSystem(platform);
+  // Get container
+  const container = document.getElementById('game') ?? document.body;
 
-  // Set up input scaling based on canvas
+  // Create renderer (creates its own canvas)
+  const renderer: Renderer = createRenderer({
+    screenWidth: screen.width,
+    screenHeight: screen.height,
+    dpr,
+    container,
+  });
+
+  // Register canvas with platform for touch coordinate conversion
   const scaleInfo = renderer.getScaleInfo();
+  platform.setCanvas(renderer.getCanvas(), scaleInfo.scale);
+
+  // Create input handler
+  const inputHandler: InputHandler = createInputHandler(platform, safeArea.bottom);
   inputHandler.setScaleFactor(scaleInfo.scale, scaleInfo.offsetX, scaleInfo.offsetY);
+
+  // Create audio system
+  const audioSystem: AudioSystem = createAudioSystem(platform);
 
   // Scene context
   const sceneContext: SceneContext = {
@@ -61,7 +76,8 @@ export function createGame(platform: PlatformAdapter): Game {
 
       // Draw debug overlay
       if (sceneContext.showDebug) {
-        renderer.drawDebugOverlay(loop.getDebugInfo(), inputHandler.getDebugInfo());
+        const gameDebugInfo = sceneManager.getCurrentScene()?.getDebugInfo?.();
+        renderer.drawDebugOverlay(loop.getDebugInfo(), inputHandler.getDebugInfo(), gameDebugInfo);
       }
     },
   });

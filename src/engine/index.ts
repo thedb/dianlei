@@ -6,5 +6,11 @@ export {
   type InputState,
   type InputDebugInfo,
 } from './input';
-export { createRenderer, type Renderer } from './renderer';
+export {
+  createRenderer,
+  calculateScaling,
+  type Renderer,
+  type RendererOptions,
+  type GameDebugInfo,
+} from './renderer';
 export { createAudioSystem, type AudioSystem } from './audio';

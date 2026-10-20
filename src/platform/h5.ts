@@ -4,54 +4,110 @@
 
 import type { PlatformAdapter, SafeArea, TouchPoint } from './types';
 
-export function createH5Platform(container: HTMLElement): PlatformAdapter {
-  let mainCanvas: HTMLCanvasElement | null = null;
+export interface H5Platform extends PlatformAdapter {
+  /** Set the canvas element for touch coordinate conversion */
+  setCanvas(canvas: HTMLCanvasElement, scale: number): void;
+}
+
+export function createH5Platform(container: HTMLElement): H5Platform {
+  let canvas: HTMLCanvasElement | null = null;
+  let canvasScale = 1;
 
   const toTouchPoints = (touchList: TouchList): TouchPoint[] => {
     const points: TouchPoint[] = [];
+    if (!canvas) return points;
+
+    const rect = canvas.getBoundingClientRect();
     for (let i = 0; i < touchList.length; i++) {
       const t = touchList[i];
-      if (t && mainCanvas) {
-        const rect = mainCanvas.getBoundingClientRect();
+      if (t) {
+        // Convert screen coordinates to logical coordinates
         points.push({
           id: t.identifier,
-          x: t.clientX - rect.left,
-          y: t.clientY - rect.top,
+          x: (t.clientX - rect.left) / canvasScale,
+          y: (t.clientY - rect.top) / canvasScale,
         });
       }
     }
     return points;
   };
 
+  // Touch event handlers - will be registered once canvas is set
+  let touchStartCallback: ((touches: TouchPoint[]) => void) | null = null;
+  let touchMoveCallback: ((touches: TouchPoint[]) => void) | null = null;
+  let touchEndCallback: ((touches: TouchPoint[]) => void) | null = null;
+  let touchCancelCallback: ((touches: TouchPoint[]) => void) | null = null;
+
+  function registerTouchHandlers(): void {
+    if (!canvas) return;
+
+    canvas.addEventListener(
+      'touchstart',
+      (e) => {
+        e.preventDefault();
+        touchStartCallback?.(toTouchPoints(e.touches));
+      },
+      { passive: false }
+    );
+
+    canvas.addEventListener(
+      'touchmove',
+      (e) => {
+        e.preventDefault();
+        touchMoveCallback?.(toTouchPoints(e.touches));
+      },
+      { passive: false }
+    );
+
+    canvas.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      touchEndCallback?.(toTouchPoints(e.touches));
+    });
+
+    canvas.addEventListener('touchcancel', (e) => {
+      e.preventDefault();
+      touchCancelCallback?.(toTouchPoints(e.touches));
+    });
+  }
+
   return {
+    setCanvas(c: HTMLCanvasElement, scale: number): void {
+      canvas = c;
+      canvasScale = scale;
+      registerTouchHandlers();
+    },
+
     createCanvas(width: number, height: number): CanvasRenderingContext2D {
-      const canvas = document.createElement('canvas');
+      // This method is kept for compatibility but renderer creates its own canvas
+      const c = document.createElement('canvas');
       const dpr = window.devicePixelRatio || 1;
 
-      canvas.width = width * dpr;
-      canvas.height = height * dpr;
-      canvas.style.width = `${width}px`;
-      canvas.style.height = `${height}px`;
-      canvas.style.imageRendering = 'pixelated';
-      canvas.style.touchAction = 'none';
+      c.width = width * dpr;
+      c.height = height * dpr;
+      c.style.width = `${width}px`;
+      c.style.height = `${height}px`;
+      c.style.imageRendering = 'pixelated';
+      c.style.touchAction = 'none';
 
-      container.appendChild(canvas);
-      mainCanvas = canvas;
+      container.appendChild(c);
+      canvas = c;
+      canvasScale = 1;
 
-      const ctx = canvas.getContext('2d');
+      const ctx = c.getContext('2d');
       if (!ctx) throw new Error('Failed to get 2D context');
 
       ctx.scale(dpr, dpr);
       ctx.imageSmoothingEnabled = false;
 
+      registerTouchHandlers();
       return ctx;
     },
 
     createOffscreenCanvas(width: number, height: number): CanvasRenderingContext2D {
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
+      const c = document.createElement('canvas');
+      c.width = width;
+      c.height = height;
+      const ctx = c.getContext('2d');
       if (!ctx) throw new Error('Failed to create offscreen canvas');
       ctx.imageSmoothingEnabled = false;
       return ctx;
@@ -121,47 +177,20 @@ export function createH5Platform(container: HTMLElement): PlatformAdapter {
     },
 
     onTouchStart(callback: (touches: TouchPoint[]) => void): void {
-      if (mainCanvas) {
-        mainCanvas.addEventListener(
-          'touchstart',
-          (e) => {
-            e.preventDefault();
-            callback(toTouchPoints(e.touches));
-          },
-          { passive: false }
-        );
-      }
+      touchStartCallback = callback;
+      // If canvas already exists, it's already registered
     },
 
     onTouchMove(callback: (touches: TouchPoint[]) => void): void {
-      if (mainCanvas) {
-        mainCanvas.addEventListener(
-          'touchmove',
-          (e) => {
-            e.preventDefault();
-            callback(toTouchPoints(e.touches));
-          },
-          { passive: false }
-        );
-      }
+      touchMoveCallback = callback;
     },
 
     onTouchEnd(callback: (touches: TouchPoint[]) => void): void {
-      if (mainCanvas) {
-        mainCanvas.addEventListener('touchend', (e) => {
-          e.preventDefault();
-          callback(toTouchPoints(e.touches));
-        });
-      }
+      touchEndCallback = callback;
     },
 
     onTouchCancel(callback: (touches: TouchPoint[]) => void): void {
-      if (mainCanvas) {
-        mainCanvas.addEventListener('touchcancel', (e) => {
-          e.preventDefault();
-          callback(toTouchPoints(e.touches));
-        });
-      }
+      touchCancelCallback = callback;
     },
 
     onKeyDown(callback: (key: string) => void): void {

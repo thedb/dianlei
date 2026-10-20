@@ -16,9 +16,15 @@ export interface GameLoop {
 }
 
 export interface LoopDebugInfo {
-  fps: number;
+  /** Render frames per second (matches display refresh rate) */
+  renderFps: number;
+  /** Game updates per second (should be ~60) */
+  updateRate: number;
+  /** Time spent in update() this frame (ms) */
   updateTime: number;
+  /** Time spent in render() this frame (ms) */
   renderTime: number;
+  /** Total frame time (ms) */
   frameTime: number;
 }
 
@@ -38,10 +44,17 @@ export function createGameLoop(platform: PlatformAdapter, callbacks: LoopCallbac
   let lastTime = 0;
   let accumulator = 0;
 
-  // Debug metrics
-  let frameCount = 0;
-  let fpsTime = 0;
-  let currentFps = 0;
+  // Render FPS metrics (rAF calls per second)
+  let renderFrameCount = 0;
+  let renderFpsTime = 0;
+  let currentRenderFps = 0;
+
+  // Update rate metrics (fixed-step updates per second)
+  let updateCount = 0;
+  let updateRateTime = 0;
+  let currentUpdateRate = 0;
+
+  // Per-frame timing
   let updateTimeMs = 0;
   let renderTimeMs = 0;
   let frameTimeMs = 0;
@@ -65,15 +78,21 @@ export function createGameLoop(platform: PlatformAdapter, callbacks: LoopCallbac
       dt = MAX_FRAME_TIME;
     }
 
-    frameTimeMs = dt;
+    // Render FPS calculation
+    renderFrameCount++;
+    renderFpsTime += dt;
+    if (renderFpsTime >= 1000) {
+      currentRenderFps = Math.round((renderFrameCount * 1000) / renderFpsTime);
+      renderFrameCount = 0;
+      renderFpsTime = 0;
+    }
 
-    // FPS calculation
-    frameCount++;
-    fpsTime += dt;
-    if (fpsTime >= 1000) {
-      currentFps = Math.round((frameCount * 1000) / fpsTime);
-      frameCount = 0;
-      fpsTime = 0;
+    // Update rate calculation (tracked separately)
+    updateRateTime += dt;
+    if (updateRateTime >= 1000) {
+      currentUpdateRate = updateCount;
+      updateCount = 0;
+      updateRateTime = 0;
     }
 
     if (paused) {
@@ -81,6 +100,7 @@ export function createGameLoop(platform: PlatformAdapter, callbacks: LoopCallbac
       const renderStart = platform.now();
       callbacks.render(1);
       renderTimeMs = platform.now() - renderStart;
+      frameTimeMs = platform.now() - frameStart;
       return;
     }
 
@@ -91,6 +111,7 @@ export function createGameLoop(platform: PlatformAdapter, callbacks: LoopCallbac
     while (accumulator >= FIXED_DT_MS) {
       callbacks.update(FIXED_DT);
       accumulator -= FIXED_DT_MS;
+      updateCount++;
     }
     updateTimeMs = platform.now() - updateStart;
 
@@ -110,6 +131,9 @@ export function createGameLoop(platform: PlatformAdapter, callbacks: LoopCallbac
       paused = false;
       lastTime = 0;
       accumulator = 0;
+      updateCount = 0;
+      updateRateTime = 0;
+      currentUpdateRate = 60; // Initial estimate
       rafId = platform.requestAnimationFrame(tick);
     },
 
@@ -135,7 +159,8 @@ export function createGameLoop(platform: PlatformAdapter, callbacks: LoopCallbac
 
     getDebugInfo(): LoopDebugInfo {
       return {
-        fps: currentFps,
+        renderFps: currentRenderFps,
+        updateRate: currentUpdateRate,
         updateTime: updateTimeMs,
         renderTime: renderTimeMs,
         frameTime: frameTimeMs,

@@ -2,7 +2,6 @@
  * Canvas 2D renderer with scaling and debug overlay
  */
 
-import type { PlatformAdapter } from '@/platform/types';
 import { LOGICAL_W, LOGICAL_H } from '@/game/config';
 import type { LoopDebugInfo } from './loop';
 import type { InputDebugInfo } from './input';
@@ -14,43 +13,95 @@ export interface Renderer {
   fillCircle(x: number, y: number, radius: number, color: string): void;
   strokeCircle(x: number, y: number, radius: number, color: string, lineWidth?: number): void;
   fillText(text: string, x: number, y: number, color: string, fontSize?: number): void;
-  drawDebugOverlay(loopInfo: LoopDebugInfo, inputInfo: InputDebugInfo): void;
+  drawDebugOverlay(
+    loopInfo: LoopDebugInfo,
+    inputInfo: InputDebugInfo,
+    gameInfo?: GameDebugInfo
+  ): void;
   getScaleInfo(): { scale: number; offsetX: number; offsetY: number };
+  getCanvas(): HTMLCanvasElement;
   resize(): void;
   getContext(): CanvasRenderingContext2D;
 }
 
-export function createRenderer(platform: PlatformAdapter): Renderer {
-  const screen = platform.getScreenSize();
+export interface GameDebugInfo {
+  bombs: number;
+  bombCooldown: number;
+  bulletCount: number;
+  fireHeld: boolean;
+  bombPressed: boolean;
+}
 
-  // Calculate scale to fit logical resolution in screen while maintaining aspect ratio
-  const scaleX = screen.width / LOGICAL_W;
-  const scaleY = screen.height / LOGICAL_H;
+/**
+ * Calculate scaling parameters to fit logical resolution in screen
+ * @returns scale factor and canvas offset for letterboxing
+ */
+export function calculateScaling(
+  screenWidth: number,
+  screenHeight: number,
+  logicalW: number = LOGICAL_W,
+  logicalH: number = LOGICAL_H
+): { scale: number; canvasWidth: number; canvasHeight: number; offsetX: number; offsetY: number } {
+  const scaleX = screenWidth / logicalW;
+  const scaleY = screenHeight / logicalH;
   let scale = Math.min(scaleX, scaleY);
 
-  // For crisp pixels, use integer scaling when close to an integer
+  // For crisp pixels, prefer integer scaling when close
   const intScale = Math.floor(scale);
   if (intScale >= 1 && scale - intScale < 0.2) {
     scale = intScale;
   }
 
-  const canvasWidth = Math.floor(LOGICAL_W * scale);
-  const canvasHeight = Math.floor(LOGICAL_H * scale);
-  const offsetX = Math.floor((screen.width - canvasWidth) / 2);
-  const offsetY = Math.floor((screen.height - canvasHeight) / 2);
+  const canvasWidth = Math.floor(logicalW * scale);
+  const canvasHeight = Math.floor(logicalH * scale);
+  const offsetX = Math.floor((screenWidth - canvasWidth) / 2);
+  const offsetY = Math.floor((screenHeight - canvasHeight) / 2);
 
-  const ctx = platform.createCanvas(canvasWidth, canvasHeight);
+  return { scale, canvasWidth, canvasHeight, offsetX, offsetY };
+}
 
-  // Set canvas position for centering (letterboxing)
-  const canvas = ctx.canvas;
-  if (canvas.style) {
-    canvas.style.position = 'absolute';
-    canvas.style.left = `${offsetX}px`;
-    canvas.style.top = `${offsetY}px`;
-  }
+export interface RendererOptions {
+  screenWidth: number;
+  screenHeight: number;
+  dpr: number;
+  container: HTMLElement;
+}
 
-  // Scale context to logical resolution
-  ctx.setTransform(scale, 0, 0, scale, 0, 0);
+export function createRenderer(options: RendererOptions): Renderer {
+  const { screenWidth, screenHeight, dpr, container } = options;
+
+  const { scale, canvasWidth, canvasHeight, offsetX, offsetY } = calculateScaling(
+    screenWidth,
+    screenHeight
+  );
+
+  // Create canvas element
+  const canvas = document.createElement('canvas');
+
+  // Backing store size (physical pixels)
+  canvas.width = canvasWidth * dpr;
+  canvas.height = canvasHeight * dpr;
+
+  // CSS size (logical CSS pixels)
+  canvas.style.width = `${canvasWidth}px`;
+  canvas.style.height = `${canvasHeight}px`;
+  canvas.style.imageRendering = 'pixelated';
+  canvas.style.touchAction = 'none';
+
+  // Position for letterboxing
+  canvas.style.position = 'absolute';
+  canvas.style.left = `${offsetX}px`;
+  canvas.style.top = `${offsetY}px`;
+
+  container.appendChild(canvas);
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Failed to get 2D context');
+
+  // Combined transform: DPR * scale to map logical coords to backing store
+  const combinedScale = scale * dpr;
+  ctx.setTransform(combinedScale, 0, 0, combinedScale, 0, 0);
+  ctx.imageSmoothingEnabled = false;
 
   return {
     clear(color: string): void {
@@ -91,29 +142,62 @@ export function createRenderer(platform: PlatformAdapter): Renderer {
       ctx.fillText(text, Math.floor(x), Math.floor(y));
     },
 
-    drawDebugOverlay(loopInfo: LoopDebugInfo, inputInfo: InputDebugInfo): void {
+    drawDebugOverlay(
+      loopInfo: LoopDebugInfo,
+      inputInfo: InputDebugInfo,
+      gameInfo?: GameDebugInfo
+    ): void {
+      // Position debug overlay at bottom-left to avoid HUD overlap
       const x = 4;
-      let y = 4;
-      const lineHeight = 14;
-      const fontSize = 10;
-      const bgColor = 'rgba(0, 0, 0, 0.6)';
+      const lineHeight = 11;
+      const fontSize = 9;
+      const bgColor = 'rgba(0, 0, 0, 0.75)';
       const textColor = '#0f0';
+      const labelColor = '#888';
+      const activeColor = '#ff0';
 
-      const lines = [
-        `FPS: ${loopInfo.fps}`,
-        `Update: ${loopInfo.updateTime.toFixed(1)}ms`,
-        `Render: ${loopInfo.renderTime.toFixed(1)}ms`,
-        `Frame: ${loopInfo.frameTime.toFixed(1)}ms`,
-        `Touches: ${inputInfo.activeTouches}`,
-        `Joy: ${inputInfo.joystickActive ? 'active' : 'idle'}`,
+      const lines: { text: string; color: string }[] = [
+        { text: `Render: ${loopInfo.renderFps} fps`, color: textColor },
+        { text: `Update: ${loopInfo.updateRate}/s`, color: textColor },
+        { text: `Frame: ${loopInfo.frameTime.toFixed(1)}ms`, color: textColor },
+        { text: `Touches: ${inputInfo.activeTouches}`, color: textColor },
+        {
+          text: `Joy: ${inputInfo.joystickActive ? 'ACTIVE' : 'idle'}`,
+          color: inputInfo.joystickActive ? activeColor : textColor,
+        },
       ];
 
-      // Background
-      this.fillRect(x - 2, y - 2, 100, lines.length * lineHeight + 4, bgColor);
+      if (gameInfo) {
+        lines.push(
+          {
+            text: `Fire: ${gameInfo.fireHeld ? 'HELD' : 'off'}`,
+            color: gameInfo.fireHeld ? activeColor : textColor,
+          },
+          {
+            text: `Bomb: ${gameInfo.bombPressed ? 'PRESSED' : 'off'} (${gameInfo.bombs})`,
+            color: gameInfo.bombPressed ? activeColor : textColor,
+          },
+          { text: `Bullets: ${gameInfo.bulletCount}`, color: textColor },
+          {
+            text: `BombCD: ${gameInfo.bombCooldown.toFixed(1)}s`,
+            color: gameInfo.bombCooldown > 0 ? activeColor : textColor,
+          }
+        );
+      }
 
-      // Text
+      const boxHeight = (lines.length + 1) * lineHeight + 4;
+      const boxY = LOGICAL_H - boxHeight - 4;
+
+      // Background
+      this.fillRect(x - 2, boxY - 2, 105, boxHeight, bgColor);
+
+      // Title
+      this.fillText('DEBUG', x, boxY, labelColor, fontSize);
+
+      // Text lines
+      let y = boxY + lineHeight;
       for (const line of lines) {
-        this.fillText(line, x, y, textColor, fontSize);
+        this.fillText(line.text, x, y, line.color, fontSize);
         y += lineHeight;
       }
     },
@@ -122,8 +206,12 @@ export function createRenderer(platform: PlatformAdapter): Renderer {
       return { scale, offsetX, offsetY };
     },
 
+    getCanvas(): HTMLCanvasElement {
+      return canvas;
+    },
+
     resize(): void {
-      // In P0, we don't handle dynamic resize - would need to recreate canvas
+      // TODO: In P1+, handle window resize by recalculating scale and recreating canvas
     },
 
     getContext(): CanvasRenderingContext2D {
