@@ -14,6 +14,8 @@ import {
   EB_SPEED_BIG,
   EB_SPEED_FAST,
   AIMED_MIN_DIST,
+  EB_HIT_RADIUS_SMALL,
+  EB_HIT_RADIUS_LARGE,
 } from '@/game/config';
 
 export type EnemyBulletType = 'small' | 'large' | 'fast';
@@ -40,7 +42,7 @@ export function createEnemyBullet(): EnemyBullet {
     vx: 0,
     vy: 0,
     type: 'small',
-    hitRadius: 2,
+    hitRadius: EB_HIT_RADIUS_SMALL,
 
     reset() {
       this.x = 0;
@@ -50,7 +52,7 @@ export function createEnemyBullet(): EnemyBullet {
       this.vx = 0;
       this.vy = 0;
       this.type = 'small';
-      this.hitRadius = 2;
+      this.hitRadius = EB_HIT_RADIUS_SMALL;
     },
   };
 }
@@ -71,7 +73,7 @@ export function spawnEnemyBullet(
   bullet.vx = vx;
   bullet.vy = vy;
   bullet.type = type;
-  bullet.hitRadius = type === 'large' ? 4 : 2;
+  bullet.hitRadius = type === 'large' ? EB_HIT_RADIUS_LARGE : EB_HIT_RADIUS_SMALL;
 }
 
 /** Update bullet and return true if should be culled */

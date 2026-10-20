@@ -11,9 +11,21 @@ import {
   checkPlayerEnemyCollision,
   checkBulletEnemyCollision,
   checkItemPickup,
+  checkPlayerBulletSwept,
+  segmentCircleCollision,
+  isPlayerVulnerable,
   SpatialGrid,
 } from './collision';
-import { HITBOX_RADIUS, ITEM_PICKUP_RADIUS } from '@/game/config';
+import {
+  HITBOX_RADIUS,
+  ITEM_PICKUP_RADIUS,
+  EB_HIT_RADIUS_SMALL,
+  EB_HIT_RADIUS_LARGE,
+  EB_SPEED_FAST,
+  ENEMY_BULLET_SPEED_SCALE,
+  FIXED_DT,
+} from '@/game/config';
+import { createEnemyBullet, spawnEnemyBullet } from '@/game/entities/enemyBullet';
 
 describe('circleCollision', () => {
   it('should detect overlapping circles', () => {
@@ -147,5 +159,111 @@ describe('SpatialGrid', () => {
     grid.clear();
 
     expect(grid.getAtPosition(50, 50)).toHaveLength(0);
+  });
+});
+
+describe('segmentCircleCollision', () => {
+  it('hits when the segment passes through the circle', () => {
+    expect(segmentCircleCollision(-10, 0, 10, 0, 0, 0, 1)).toBe(true);
+  });
+
+  it('misses when the closest approach is outside the radius', () => {
+    expect(segmentCircleCollision(-10, 2, 10, 2, 0, 0, 1.5)).toBe(false);
+  });
+
+  it('only considers the segment, not the infinite line', () => {
+    expect(segmentCircleCollision(5, 0, 10, 0, 0, 0, 2)).toBe(false);
+  });
+
+  it('degenerates to a point test for zero-length segments', () => {
+    expect(segmentCircleCollision(1, 1, 1, 1, 0, 0, 2)).toBe(true);
+    expect(segmentCircleCollision(3, 0, 3, 0, 0, 0, 2)).toBe(false);
+  });
+});
+
+describe('checkPlayerBulletSwept', () => {
+  const sum = HITBOX_RADIUS + EB_HIT_RADIUS_SMALL;
+
+  it('catches a bullet that tunnels over the hitbox in one step', () => {
+    // Bullet jumps from above to below the player; neither endpoint overlaps
+    const prevY = 100 - sum - 3;
+    const y = 100 + sum + 3;
+    expect(checkPlayerBulletCollision(180, 100, 180, prevY, EB_HIT_RADIUS_SMALL)).toBe(false);
+    expect(checkPlayerBulletCollision(180, 100, 180, y, EB_HIT_RADIUS_SMALL)).toBe(false);
+    expect(
+      checkPlayerBulletSwept(180, 100, 180, 100, 180, prevY, 180, y, EB_HIT_RADIUS_SMALL)
+    ).toBe(true);
+  });
+
+  it('catches the fastest bullet type at the fixed timestep', () => {
+    const step = EB_SPEED_FAST * ENEMY_BULLET_SPEED_SCALE * FIXED_DT;
+    // Positioned so the point samples straddle the hitbox center
+    const prevY = 100 - step / 2;
+    const y = 100 + step / 2;
+    expect(
+      checkPlayerBulletSwept(180, 100, 180, 100, 181, prevY, 181, y, EB_HIT_RADIUS_SMALL)
+    ).toBe(true);
+  });
+
+  it('accounts for player motion during the step', () => {
+    // Player moves right across a stationary bullet
+    expect(
+      checkPlayerBulletSwept(170, 100, 190, 100, 180, 100, 180, 100, EB_HIT_RADIUS_SMALL)
+    ).toBe(true);
+    // Player and bullet move together, never overlapping
+    expect(checkPlayerBulletSwept(170, 100, 190, 100, 170, 90, 190, 90, EB_HIT_RADIUS_SMALL)).toBe(
+      false
+    );
+  });
+
+  it('counts an edge graze just inside the combined radius as a hit', () => {
+    const x = 180 + sum - 0.05;
+    expect(checkPlayerBulletSwept(180, 100, 180, 100, x, 60, x, 140, EB_HIT_RADIUS_SMALL)).toBe(
+      true
+    );
+  });
+
+  it('treats a pass just outside the combined radius as a miss', () => {
+    const x = 180 + sum + 0.05;
+    expect(checkPlayerBulletSwept(180, 100, 180, 100, x, 60, x, 140, EB_HIT_RADIUS_SMALL)).toBe(
+      false
+    );
+  });
+});
+
+describe('enemy bullet hit radius', () => {
+  it('matches the drawn orb sprite size', () => {
+    const b = createEnemyBullet();
+    spawnEnemyBullet(b, 0, 0, 0, 0, 'small');
+    expect(b.hitRadius).toBe(EB_HIT_RADIUS_SMALL);
+    expect(b.hitRadius * 2).toBe(6);
+    spawnEnemyBullet(b, 0, 0, 0, 0, 'large');
+    expect(b.hitRadius).toBe(EB_HIT_RADIUS_LARGE);
+    expect(b.hitRadius * 2).toBe(12);
+  });
+});
+
+describe('isPlayerVulnerable', () => {
+  const base = { isDead: false, isFlying: false, bombInvincible: 0, respawnInvincible: 0 };
+
+  it('is vulnerable when controllable and not invincible', () => {
+    expect(isPlayerVulnerable(base)).toBe(true);
+  });
+
+  it('does not kill during bomb invincibility even on a direct hit', () => {
+    const s = { ...base, bombInvincible: 0.5 };
+    const hit = checkPlayerBulletSwept(180, 100, 180, 100, 180, 90, 180, 110, 3);
+    expect(hit).toBe(true);
+    expect(hit && isPlayerVulnerable(s)).toBe(false);
+  });
+
+  it('does not kill during respawn invincibility, fly-in, or while dead', () => {
+    expect(isPlayerVulnerable({ ...base, respawnInvincible: 1.2 })).toBe(false);
+    expect(isPlayerVulnerable({ ...base, isFlying: true })).toBe(false);
+    expect(isPlayerVulnerable({ ...base, isDead: true })).toBe(false);
+  });
+
+  it('becomes vulnerable again the moment invincibility runs out', () => {
+    expect(isPlayerVulnerable({ ...base, respawnInvincible: 0 })).toBe(true);
   });
 });

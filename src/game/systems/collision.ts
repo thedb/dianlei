@@ -56,6 +56,69 @@ export function checkPlayerBulletCollision(
   return circleCollision(playerX, playerY, HITBOX_RADIUS, bulletX, bulletY, bulletRadius);
 }
 
+/**
+ * Check whether segment a→b passes within r of point c (strictly less than r,
+ * matching circleCollision so exact tangency is a miss)
+ */
+export function segmentCircleCollision(
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  cx: number,
+  cy: number,
+  r: number
+): boolean {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const lenSq = dx * dx + dy * dy;
+  let t = lenSq > 0 ? ((cx - ax) * dx + (cy - ay) * dy) / lenSq : 0;
+  t = Math.max(0, Math.min(1, t));
+  const ex = ax + dx * t - cx;
+  const ey = ay + dy * t - cy;
+  return ex * ex + ey * ey < r * r;
+}
+
+/**
+ * Swept enemy-bullet vs player-hitbox test for one fixed step.
+ * Works in the player's frame of reference, so both the bullet's and the
+ * player's motion during the step are covered and fast bullets can't tunnel
+ * through the 2.5px hitbox.
+ */
+export function checkPlayerBulletSwept(
+  playerPrevX: number,
+  playerPrevY: number,
+  playerX: number,
+  playerY: number,
+  bulletPrevX: number,
+  bulletPrevY: number,
+  bulletX: number,
+  bulletY: number,
+  bulletRadius: number
+): boolean {
+  return segmentCircleCollision(
+    bulletPrevX - playerPrevX,
+    bulletPrevY - playerPrevY,
+    bulletX - playerX,
+    bulletY - playerY,
+    0,
+    0,
+    HITBOX_RADIUS + bulletRadius
+  );
+}
+
+export interface PlayerVulnerabilityState {
+  isDead: boolean;
+  isFlying: boolean;
+  bombInvincible: number;
+  respawnInvincible: number;
+}
+
+/** Whether enemy bullets / bodies can kill the player this step */
+export function isPlayerVulnerable(s: PlayerVulnerabilityState): boolean {
+  return !s.isDead && !s.isFlying && s.bombInvincible <= 0 && s.respawnInvincible <= 0;
+}
+
 /** Check if player hitbox collides with enemy body */
 export function checkPlayerEnemyCollision(
   playerX: number,

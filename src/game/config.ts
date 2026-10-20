@@ -220,6 +220,14 @@ export const EB_SPEED_BIG = 125;
 export const EB_SPEED_FAST = 190;
 export const EB_SPEED_MISSILE = 110;
 
+/**
+ * Enemy bullet hit radii, equal to the solid orb sprite radius
+ * (small 6x6, large 12x12). The soft additive glow drawn around them is
+ * deliberate visual padding and never counts as a hit.
+ */
+export const EB_HIT_RADIUS_SMALL = 3;
+export const EB_HIT_RADIUS_LARGE = 6;
+
 /** Missile homing duration */
 export const MISSILE_HOMING_TIME = 1.2;
 
