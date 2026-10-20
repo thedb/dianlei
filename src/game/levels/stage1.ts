@@ -1,9 +1,57 @@
 /**
- * Stage 1 wave data - MVP waves only (marked ★ in wave table)
- * Full data from docs/电雷_第一关波次表_v1.md
+ * Stage 1 wave data from docs/电雷_第一关波次表_v1.md
+ *
+ * MVP small-fighter formations (W01/W02/W06/W07/W10/W13/W17/W21) keep the
+ * playtest density bump already on main: 94 MVP enemies including W27,
+ * 148 fixed stage enemies, 149 when the W27 relief ship spawns.
+ * Non-MVP counts follow the wave table. Docs win where a formation's
+ * geometry was wrong (V stagger, hover stopY, escort angles).
  */
 
-import type { StageData } from './types';
+import type { SpawnGroup, StageData } from './types';
+
+function sideArc(side: 'left' | 'right', y0: number, delay: number, speed: number): SpawnGroup {
+  return {
+    enemy: 'interceptor',
+    count: 1,
+    xs: [side === 'left' ? -16 : 376],
+    y: y0,
+    delay,
+    move: { kind: 'side_arc', side, y0, speed },
+    fire: { kind: 'aimed1', maxShots: 1 },
+  };
+}
+
+function drone(
+  x: number,
+  anchorY: number,
+  delay: number,
+  hold: number,
+  fireInterval: number
+): SpawnGroup {
+  return {
+    enemy: 'drone',
+    count: 1,
+    xs: [x],
+    delay,
+    move: {
+      kind: 'orbit',
+      anchor: { x, y: anchorY },
+      r: 30,
+      period: 2.5,
+      hold,
+    },
+    fire: { kind: 'ring8', interval: fireInterval, rotStep: 22.5 },
+  };
+}
+
+const w20Anchors: ReadonlyArray<readonly [number, number]> = [
+  [60, 120],
+  [120, 200],
+  [180, 140],
+  [240, 180],
+  [300, 160],
+];
 
 export const stage1: StageData = {
   stage: 1,
@@ -12,10 +60,8 @@ export const stage1: StageData = {
 
   waves: [
     // ========================================================================
-    // GROUND SECTION (0:05 - 0:50)
+    // GROUND (0:05–0:50)
     // ========================================================================
-
-    // W01 ★ - Opening formation
     {
       id: 'W01',
       t: 6,
@@ -32,8 +78,6 @@ export const stage1: StageData = {
         },
       ],
     },
-
-    // W02 ★ - Two columns with aimed shots
     {
       id: 'W02',
       t: 10,
@@ -50,8 +94,6 @@ export const stage1: StageData = {
         },
       ],
     },
-
-    // W03 ★ - V-formation dive
     {
       id: 'W03',
       t: 15,
@@ -60,16 +102,30 @@ export const stage1: StageData = {
       groups: [
         {
           enemy: 'small',
-          count: 5,
-          xs: [120, 240, 150, 210, 180],
-          interval: 0.15,
+          count: 1,
+          xs: [180],
+          y: -20,
           move: { kind: 'v_dive', speed: 120, stopY: 180 },
-          fire: { kind: 'aimed1', interval: 2, maxShots: 1 },
+          fire: { kind: 'aimed1', maxShots: 1, atY: 180 },
+        },
+        {
+          enemy: 'small',
+          count: 2,
+          xs: [150, 210],
+          y: -40,
+          move: { kind: 'v_dive', speed: 120, stopY: 180 },
+          fire: { kind: 'aimed1', maxShots: 1, atY: 180 },
+        },
+        {
+          enemy: 'small',
+          count: 2,
+          xs: [120, 240],
+          y: -60,
+          move: { kind: 'v_dive', speed: 120, stopY: 180 },
+          fire: { kind: 'aimed1', maxShots: 1, atY: 180 },
         },
       ],
     },
-
-    // W04 ★ - First medium fighter with P drop
     {
       id: 'W04',
       t: 20,
@@ -86,8 +142,21 @@ export const stage1: StageData = {
         },
       ],
     },
-
-    // W06 ★ - Sine wave from left
+    {
+      id: 'W05',
+      t: 24,
+      section: 'ground',
+      mvp: false,
+      groups: [
+        {
+          enemy: 'tank',
+          count: 2,
+          xs: [72, 288],
+          move: { kind: 'ground' },
+          fire: { kind: 'aimed1', interval: 2.2 },
+        },
+      ],
+    },
     {
       id: 'W06',
       t: 28,
@@ -104,8 +173,6 @@ export const stage1: StageData = {
         },
       ],
     },
-
-    // W07 ★ - Sine wave from right (mirror)
     {
       id: 'W07',
       t: 32,
@@ -123,8 +190,55 @@ export const stage1: StageData = {
         },
       ],
     },
-
-    // W10 ★ - Two columns straight down
+    {
+      id: 'W08',
+      t: 37,
+      section: 'ground',
+      mvp: false,
+      groups: [
+        {
+          enemy: 'turret2',
+          count: 1,
+          xs: [180],
+          move: { kind: 'ground' },
+          fire: { kind: 'fixed2', interval: 1.6 },
+        },
+        {
+          enemy: 'tank',
+          count: 2,
+          xs: [96, 264],
+          move: { kind: 'ground' },
+          fire: { kind: 'aimed1', interval: 2.2 },
+        },
+      ],
+    },
+    {
+      id: 'W09',
+      t: 43,
+      section: 'ground',
+      mvp: false,
+      groups: [
+        {
+          enemy: 'interceptor',
+          count: 2,
+          xs: [-16],
+          y: 80,
+          interval: 1.2,
+          move: { kind: 'side_arc', side: 'left', y0: 80, speed: 170 },
+          fire: { kind: 'aimed1', maxShots: 1 },
+        },
+        {
+          enemy: 'interceptor',
+          count: 2,
+          xs: [376],
+          y: 120,
+          delay: 0.6,
+          interval: 1.2,
+          move: { kind: 'side_arc', side: 'right', y0: 120, speed: 170 },
+          fire: { kind: 'aimed1', maxShots: 1 },
+        },
+      ],
+    },
     {
       id: 'W10',
       t: 47,
@@ -144,10 +258,8 @@ export const stage1: StageData = {
     },
 
     // ========================================================================
-    // COAST SECTION (0:50 - 1:35)
+    // COAST (0:50–1:35)
     // ========================================================================
-
-    // W11 ★ - Two medium fighters with P drop
     {
       id: 'W11',
       t: 52,
@@ -165,8 +277,13 @@ export const stage1: StageData = {
         },
       ],
     },
-
-    // W13 ★ - Cross from left + medium with B drop
+    {
+      id: 'W12',
+      t: 58,
+      section: 'coast',
+      mvp: false,
+      groups: [drone(90, 150, 0, 5, 2.2), drone(180, 150, 0, 5, 2.2), drone(270, 150, 0, 5, 2.2)],
+    },
     {
       id: 'W13',
       t: 62,
@@ -176,7 +293,7 @@ export const stage1: StageData = {
         {
           enemy: 'small',
           count: 9,
-          xs: [-12, -12, -12, -12, -12, -12, -12, -12, -12],
+          xs: [-12],
           y: 40,
           interval: 0.3,
           move: { kind: 'cross', from: 'topLeft', speed: 160 },
@@ -192,8 +309,60 @@ export const stage1: StageData = {
         },
       ],
     },
-
-    // W17 ★ - Cross pattern from both sides
+    {
+      id: 'W14',
+      t: 68,
+      section: 'coast',
+      mvp: false,
+      groups: [
+        {
+          enemy: 'bomber',
+          count: 1,
+          xs: [180],
+          move: { kind: 'slow_push', stopY: 170, hold: 6 },
+          fire: { kind: 'fan5', spread: 50, interval: 1.8 },
+          drops: [{ index: 0, item: 'P' }],
+        },
+      ],
+    },
+    {
+      id: 'W15',
+      t: 74,
+      section: 'coast',
+      mvp: false,
+      groups: [
+        {
+          enemy: 'missile_car',
+          count: 2,
+          xs: [48, 312],
+          move: { kind: 'ground' },
+          fire: { kind: 'missile', interval: 3.0 },
+        },
+        {
+          enemy: 'tank',
+          count: 1,
+          xs: [120],
+          move: { kind: 'ground', vx: 20 },
+          fire: { kind: 'aimed1', interval: 2.2 },
+        },
+        {
+          enemy: 'tank',
+          count: 1,
+          xs: [240],
+          move: { kind: 'ground', vx: -20 },
+          fire: { kind: 'aimed1', interval: 2.2 },
+        },
+      ],
+    },
+    {
+      id: 'W16',
+      t: 80,
+      section: 'coast',
+      mvp: false,
+      groups: [0, 1, 2, 3, 4, 5].map((i) =>
+        sideArc(i % 2 === 0 ? 'left' : 'right', 60 + i * 16, i * 0.5, 180)
+      ),
+    },
     {
       id: 'W17',
       t: 86,
@@ -203,27 +372,25 @@ export const stage1: StageData = {
         {
           enemy: 'small',
           count: 7,
-          xs: [-12, -12, -12, -12, -12, -12, -12],
+          xs: [-12],
           y: 20,
           interval: 0.3,
           move: { kind: 'cross', from: 'topLeft', speed: 170 },
-          fire: { kind: 'aimed1', maxShots: 1 },
+          fire: { kind: 'aimed1', maxShots: 1, firstDelay: 0.7 },
           fireOnly: [2, 5],
         },
         {
           enemy: 'small',
           count: 7,
-          xs: [372, 372, 372, 372, 372, 372, 372],
+          xs: [372],
           y: 20,
           interval: 0.3,
           move: { kind: 'cross', from: 'topRight', speed: 170 },
-          fire: { kind: 'aimed1', maxShots: 1 },
+          fire: { kind: 'aimed1', maxShots: 1, firstDelay: 0.7 },
           fireOnly: [2, 5],
         },
       ],
     },
-
-    // W18 ★ - Three medium fighters in triangle
     {
       id: 'W18',
       t: 91,
@@ -232,20 +399,64 @@ export const stage1: StageData = {
       groups: [
         {
           enemy: 'medium',
-          count: 3,
-          xs: [120, 180, 240],
-          interval: 0.5,
-          move: { kind: 'hover', stopY: 125, hold: 4 },
+          count: 1,
+          xs: [120],
+          move: { kind: 'hover', stopY: 110, hold: 4 },
+          fire: { kind: 'fan3', spread: 30, interval: 1.5 },
+        },
+        {
+          enemy: 'medium',
+          count: 1,
+          xs: [180],
+          delay: 0.5,
+          move: { kind: 'hover', stopY: 140, hold: 4 },
+          fire: { kind: 'fan3', spread: 30, interval: 1.5 },
+        },
+        {
+          enemy: 'medium',
+          count: 1,
+          xs: [240],
+          delay: 1,
+          move: { kind: 'hover', stopY: 110, hold: 4 },
           fire: { kind: 'fan3', spread: 30, interval: 1.5 },
         },
       ],
     },
 
     // ========================================================================
-    // BASE SECTION (1:35 - 2:30)
+    // BASE (1:35–2:30)
     // ========================================================================
-
-    // W21 ★ - Medium with P drop + small escort
+    {
+      id: 'W19',
+      t: 97,
+      section: 'base',
+      mvp: false,
+      groups: [
+        {
+          enemy: 'turret2',
+          count: 3,
+          xs: [64, 180, 296],
+          move: { kind: 'ground' },
+          fire: { kind: 'fixed2', interval: 1.8 },
+          fireStagger: 0.6,
+        },
+        {
+          enemy: 'tank',
+          count: 4,
+          xs: [28],
+          interval: 0.8,
+          move: { kind: 'ground', vx: 30 },
+          fire: { kind: 'aimed1', interval: 2.4 },
+        },
+      ],
+    },
+    {
+      id: 'W20',
+      t: 104,
+      section: 'base',
+      mvp: false,
+      groups: w20Anchors.map(([x, y], i) => drone(x, y, i * 0.3, 5, 2.4)),
+    },
     {
       id: 'W21',
       t: 109,
@@ -262,16 +473,70 @@ export const stage1: StageData = {
         },
         {
           enemy: 'small',
-          count: 7,
-          xs: [40, 320, 40, 320, 40, 320, 40],
-          interval: 0.28,
+          count: 4,
+          xs: [40],
+          interval: 0.56,
           move: { kind: 'straight', speed: 160, angle: 15 },
+          fire: { kind: 'none' },
+        },
+        {
+          enemy: 'small',
+          count: 3,
+          xs: [320],
+          delay: 0.28,
+          interval: 0.56,
+          move: { kind: 'straight', speed: 160, angle: -15 },
           fire: { kind: 'none' },
         },
       ],
     },
-
-    // W24 ☆ (partial MVP - only small fighters)
+    {
+      id: 'W22',
+      t: 115,
+      section: 'base',
+      mvp: false,
+      groups: [
+        {
+          enemy: 'bomber',
+          count: 1,
+          xs: [100],
+          move: { kind: 'slow_push', stopY: 160, hold: 6 },
+          fire: { kind: 'fan5', spread: 50, interval: 1.8 },
+        },
+        {
+          enemy: 'bomber',
+          count: 1,
+          xs: [260],
+          delay: 1,
+          move: { kind: 'slow_push', stopY: 160, hold: 6 },
+          fire: { kind: 'fan5', spread: 50, interval: 1.8, firstDelay: 1.7 },
+          drops: [{ index: 0, item: 'B' }],
+        },
+      ],
+    },
+    {
+      id: 'W23',
+      t: 122,
+      section: 'base',
+      mvp: false,
+      groups: [
+        {
+          enemy: 'missile_car',
+          count: 3,
+          xs: [60, 180, 300],
+          move: { kind: 'ground' },
+          fire: { kind: 'missile', interval: 3.0 },
+          fireStagger: 1,
+        },
+        {
+          enemy: 'turret2',
+          count: 2,
+          xs: [120, 240],
+          move: { kind: 'ground' },
+          fire: { kind: 'fixed2', interval: 1.8 },
+        },
+      ],
+    },
     {
       id: 'W24',
       t: 128,
@@ -281,16 +546,18 @@ export const stage1: StageData = {
         {
           enemy: 'small',
           count: 14,
-          xs: [40, 86, 133, 180, 227, 274, 320, 40, 86, 133, 180, 227, 274, 320],
+          xs: [40, 320, 86, 274, 133, 227, 180, 40, 320, 86, 274, 133, 227, 180],
           interval: 0.25,
           move: { kind: 'straight', speed: 190 },
-          fire: { kind: 'aimed1', maxShots: 1 },
+          fire: { kind: 'aimed1', maxShots: 1, firstDelay: 0.45 },
           fireOnly: [0, 2, 4, 6, 8, 10, 12],
         },
+        sideArc('left', 70, 0.4, 180),
+        sideArc('right', 100, 0.9, 180),
+        sideArc('left', 130, 1.4, 180),
+        sideArc('right', 90, 1.9, 180),
       ],
     },
-
-    // W25 ★ - Four medium fighters with B drop
     {
       id: 'W25',
       t: 135,
@@ -299,17 +566,50 @@ export const stage1: StageData = {
       groups: [
         {
           enemy: 'medium',
-          count: 4,
-          xs: [70, 150, 210, 290],
-          interval: 0.5,
-          move: { kind: 'hover', stopY: 120, hold: 4 },
+          count: 2,
+          xs: [70, 210],
+          interval: 1,
+          move: { kind: 'hover', stopY: 100, hold: 4 },
           fire: { kind: 'fan3', spread: 30, interval: 1.4 },
-          drops: [{ index: 2, item: 'B' }],
+          drops: [{ index: 1, item: 'B' }],
+        },
+        {
+          enemy: 'medium',
+          count: 2,
+          xs: [150, 290],
+          delay: 0.5,
+          interval: 1,
+          move: { kind: 'hover', stopY: 140, hold: 4 },
+          fire: { kind: 'fan3', spread: 30, interval: 1.4 },
         },
       ],
     },
-
-    // W27 ★ - Conditional backup P drop
+    {
+      id: 'W26',
+      t: 141,
+      section: 'base',
+      mvp: false,
+      groups: [
+        drone(80, 130, 0, 4, 2.6),
+        drone(280, 130, 0.2, 4, 2.6),
+        drone(80, 190, 0.4, 4, 2.6),
+        drone(280, 190, 0.6, 4, 2.6),
+        {
+          enemy: 'tank',
+          count: 4,
+          xs: [60, 140, 220, 300],
+          move: { kind: 'ground' },
+          fire: { kind: 'aimed1', interval: 2.4 },
+        },
+        {
+          enemy: 'bomber',
+          count: 1,
+          xs: [180],
+          move: { kind: 'slow_push', stopY: 150, hold: 4 },
+          fire: { kind: 'fan5', spread: 50, interval: 2.0 },
+        },
+      ],
+    },
     {
       id: 'W27',
       t: 146,
@@ -365,14 +665,37 @@ export const stage1: StageData = {
   },
 };
 
-/** Get MVP-only waves (for P1 playable) */
+/** Waves marked playable in the MVP (★ and ☆). */
 export function getMvpWaves() {
   return stage1.waves.filter((w) => w.mvp === true || w.mvp === 'partial');
 }
 
-/** Get total enemy count for MVP waves */
-export function getMvpEnemyCount() {
-  return getMvpWaves().reduce((total, wave) => {
-    return total + wave.groups.reduce((groupTotal, group) => groupTotal + group.count, 0);
+function countGroups(wave: (typeof stage1.waves)[number], mvpPartial: boolean): number {
+  return wave.groups.reduce((sum, group) => {
+    if (
+      mvpPartial &&
+      wave.mvp === 'partial' &&
+      group.enemy !== 'small' &&
+      group.enemy !== 'medium'
+    ) {
+      return sum;
+    }
+    return sum + group.count;
+  }, 0);
+}
+
+/** Small and medium ships the MVP scheduler actually spawns, including W27. */
+export function getMvpEnemyCount(): number {
+  return getMvpWaves().reduce((total, wave) => total + countGroups(wave, true), 0);
+}
+
+/**
+ * Every ship in the full stage.
+ * The conditional relief ship (W27) is included only when asked.
+ */
+export function getStageEnemyCount(includeConditional = true): number {
+  return stage1.waves.reduce((total, wave) => {
+    if (!includeConditional && wave.condition) return total;
+    return total + countGroups(wave, false);
   }, 0);
 }

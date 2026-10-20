@@ -66,10 +66,29 @@ const ENEMY_BULLET_LARGE = [
   [_, _, _, _, BD, BD, BD, BD, _, _, _, _],
 ];
 
+/**
+ * Missile — 6×12, nose at the top. Drawn rotated to its velocity.
+ */
+const MISSILE: number[][] = [
+  [_, _, BD, BD, _, _],
+  [_, BD, BC, BC, BD, _],
+  [_, BD, BM, BM, BD, _],
+  [BD, BP, BM, BM, BP, BD],
+  [BD, BP, BM, BM, BP, BD],
+  [BD, BP, BP, BP, BP, BD],
+  [BD, BM, BP, BP, BM, BD],
+  [_, BD, BM, BM, BD, _],
+  [_, BD, W, W, BD, _],
+  [_, _, BD, BD, _, _],
+  [_, BD, COLOR.EXPLOSION_ORANGE, COLOR.EXPLOSION_ORANGE, BD, _],
+  [_, _, BD, BD, _, _],
+];
+
 export interface BulletAssets {
   playerBullet: SpriteFrame;
   enemyBulletSmall: SpriteFrame;
   enemyBulletLarge: SpriteFrame;
+  missile: SpriteFrame;
 }
 
 /** Create all bullet sprites */
@@ -78,6 +97,7 @@ export function createBulletAssets(): BulletAssets {
     playerBullet: renderSprite(PLAYER_BULLET, 0.5, 0.5),
     enemyBulletSmall: renderSprite(ENEMY_BULLET_SMALL, 0.5, 0.5),
     enemyBulletLarge: renderSprite(ENEMY_BULLET_LARGE, 0.5, 0.5),
+    missile: renderSprite(MISSILE, 0.5, 0.5),
   };
 }
 

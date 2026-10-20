@@ -13,12 +13,16 @@ import {
   EB_SPEED_SMALL,
   EB_SPEED_BIG,
   EB_SPEED_FAST,
+  EB_SPEED_MISSILE,
   AIMED_MIN_DIST,
   EB_HIT_RADIUS_SMALL,
   EB_HIT_RADIUS_LARGE,
+  FIXED2_SEPARATION,
+  MISSILE_HOMING_TIME,
+  MISSILE_TURN_RATE,
 } from '@/game/config';
 
-export type EnemyBulletType = 'small' | 'large' | 'fast';
+export type EnemyBulletType = 'small' | 'large' | 'fast' | 'missile';
 
 export interface EnemyBullet extends Poolable {
   x: number;
@@ -29,6 +33,8 @@ export interface EnemyBullet extends Poolable {
   vy: number;
   type: EnemyBulletType;
   hitRadius: number;
+  /** Seconds of homing left. 0 means the shot flies straight. */
+  homing: number;
 }
 
 /** Create enemy bullet factory for pool */
@@ -43,6 +49,7 @@ export function createEnemyBullet(): EnemyBullet {
     vy: 0,
     type: 'small',
     hitRadius: EB_HIT_RADIUS_SMALL,
+    homing: 0,
 
     reset() {
       this.x = 0;
@@ -53,6 +60,7 @@ export function createEnemyBullet(): EnemyBullet {
       this.vy = 0;
       this.type = 'small';
       this.hitRadius = EB_HIT_RADIUS_SMALL;
+      this.homing = 0;
     },
   };
 }
@@ -64,7 +72,8 @@ export function spawnEnemyBullet(
   y: number,
   vx: number,
   vy: number,
-  type: EnemyBulletType = 'small'
+  type: EnemyBulletType = 'small',
+  homing = 0
 ): void {
   bullet.x = x;
   bullet.y = y;
@@ -74,16 +83,48 @@ export function spawnEnemyBullet(
   bullet.vy = vy;
   bullet.type = type;
   bullet.hitRadius = type === 'large' ? EB_HIT_RADIUS_LARGE : EB_HIT_RADIUS_SMALL;
+  bullet.homing = homing;
 }
 
-/** Update bullet and return true if should be culled */
-export function updateEnemyBullet(bullet: EnemyBullet, dt: number): boolean {
+function steerVelocity(
+  vx: number,
+  vy: number,
+  desired: number,
+  maxTurn: number
+): { vx: number; vy: number } {
+  const speed = Math.hypot(vx, vy) || 1;
+  const current = Math.atan2(vy, vx);
+  let diff = desired - current;
+  while (diff > Math.PI) diff -= Math.PI * 2;
+  while (diff < -Math.PI) diff += Math.PI * 2;
+  const step = Math.max(-maxTurn, Math.min(maxTurn, diff));
+  const next = current + step;
+  return { vx: Math.cos(next) * speed, vy: Math.sin(next) * speed };
+}
+
+/**
+ * Update bullet and return true if it should be culled.
+ * Pass the player position so missiles can steer while `homing` remains.
+ */
+export function updateEnemyBullet(
+  bullet: EnemyBullet,
+  dt: number,
+  aimAt?: { x: number; y: number }
+): boolean {
+  if (bullet.homing > 0 && aimAt) {
+    bullet.homing = Math.max(0, bullet.homing - dt);
+    const desired = Math.atan2(aimAt.y - bullet.y, aimAt.x - bullet.x);
+    const maxTurn = ((MISSILE_TURN_RATE * Math.PI) / 180) * dt;
+    const steered = steerVelocity(bullet.vx, bullet.vy, desired, maxTurn);
+    bullet.vx = steered.vx;
+    bullet.vy = steered.vy;
+  }
+
   bullet.prevX = bullet.x;
   bullet.prevY = bullet.y;
   bullet.x += bullet.vx * dt;
   bullet.y += bullet.vy * dt;
 
-  // Cull if off screen
   return bullet.y > LOGICAL_H + 20 || bullet.y < -20 || bullet.x < -20 || bullet.x > LOGICAL_W + 20;
 }
 
@@ -118,8 +159,22 @@ export function getAimedVelocity(
 
 /** Interface for bullet spawning callback */
 export interface BulletSpawner {
-  spawnBullet(x: number, y: number, vx: number, vy: number, type: EnemyBulletType): void;
+  spawnBullet(
+    x: number,
+    y: number,
+    vx: number,
+    vy: number,
+    type: EnemyBulletType,
+    homing?: number
+  ): void;
   getBulletCount(): number;
+}
+
+export interface FirePatternOptions {
+  /** Ring rotation offset in degrees. */
+  rotation?: number;
+  /** Barrel angle in radians for fixed2. Omit to aim straight at the player. */
+  aimAngle?: number;
 }
 
 /**
@@ -133,8 +188,11 @@ export function executeFirePattern(
   playerX: number,
   playerY: number,
   spawner: BulletSpawner,
-  rotationOffset: number = 0
+  rotationOffset: number | FirePatternOptions = 0
 ): void {
+  const options: FirePatternOptions =
+    typeof rotationOffset === 'number' ? { rotation: rotationOffset } : rotationOffset;
+  const rotation = options.rotation ?? 0;
   if (fire.kind === 'none') return;
 
   // Check bullet cap
@@ -237,7 +295,7 @@ export function executeFirePattern(
     case 'ring16': {
       const count = fire.kind === 'ring8' ? 8 : 16;
       const speed = getScaledSpeed('large');
-      const rotRad = (rotationOffset * Math.PI) / 180;
+      const rotRad = (rotation * Math.PI) / 180;
 
       for (let i = 0; i < count; i++) {
         const angle = rotRad + (i * Math.PI * 2) / count;
@@ -253,11 +311,11 @@ export function executeFirePattern(
     }
 
     case 'fixed2': {
-      // Dual parallel shots, tracking player direction
       const speed = getScaledSpeed('small');
-      const angle = Math.atan2(playerY - enemyY, playerX - enemyX);
-      const perpX = Math.cos(angle + Math.PI / 2) * 5;
-      const perpY = Math.sin(angle + Math.PI / 2) * 5;
+      const angle = options.aimAngle ?? Math.atan2(playerY - enemyY, playerX - enemyX);
+      const gap = FIXED2_SEPARATION / 2;
+      const perpX = Math.cos(angle + Math.PI / 2) * gap;
+      const perpY = Math.sin(angle + Math.PI / 2) * gap;
 
       spawner.spawnBullet(
         enemyX + perpX,
@@ -277,10 +335,9 @@ export function executeFirePattern(
     }
 
     case 'missile': {
-      // Tracking missile - simplified as aimed shot
-      const speed = getScaledSpeed('small') * 0.73; // EB_SPEED_MISSILE ratio
+      const speed = EB_SPEED_MISSILE * ENEMY_BULLET_SPEED_SCALE;
       const { vx, vy } = getAimedVelocity(enemyX, enemyY, playerX, playerY, speed);
-      spawner.spawnBullet(enemyX, enemyY, vx, vy, 'small');
+      spawner.spawnBullet(enemyX, enemyY, vx, vy, 'missile', MISSILE_HOMING_TIME);
       break;
     }
   }

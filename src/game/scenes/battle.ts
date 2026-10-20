@@ -1,6 +1,7 @@
 /**
- * Battle scene - P1 Playable MVP
- * Full gameplay with enemies, items, collision, scoring
+ * Battle scene — stage 1 mid-run through the warning.
+ * The orbital boss is intentionally not fought here: after the warning the
+ * run shows STAGE CLEAR. Boss logic stays in stage1.boss for P3.
  */
 
 import type { Scene, SceneContext } from './types';
@@ -13,7 +14,6 @@ import {
   PLAYER_SPEED,
   PLAYER_MARGIN,
   PLAYER_SPAWN_Y,
-  BG_SCROLL_SPEED,
   HITBOX_RADIUS,
   SHOW_HITBOX,
   HITBOX_ALPHA,
@@ -50,8 +50,11 @@ import {
   BANK_OUT_TIME,
   BANK_DEADZONE,
   BANK_HYSTERESIS,
+  WARNING_DURATION,
+  WARNING_BANNER_DELAY,
 } from '@/game/config';
 import { PALETTE, COLOR } from '@/game/palette';
+import { stage1 } from '@/game/levels/stage1';
 
 // Art assets
 import {
@@ -61,6 +64,7 @@ import {
   drawPlayerFlames,
   drawEnemyFlame,
   drawBulletGlow,
+  drawBackground,
   BULLET_GLOW_COLORS,
 } from '@/game/art';
 
@@ -71,14 +75,13 @@ import {
   spawnEnemy,
   updateEnemy,
   damageEnemy,
-  shouldEnemyFire,
+  isGroundEnemy,
   type Enemy,
 } from '@/game/entities/enemy';
 import {
   createEnemyBullet,
   updateEnemyBullet,
   spawnEnemyBullet,
-  executeFirePattern,
   type EnemyBullet,
   type BulletSpawner,
 } from '@/game/entities/enemyBullet';
@@ -96,7 +99,14 @@ import { WaveScheduler } from '@/game/systems/waveScheduler';
 import { inCircle } from '@/game/controls';
 import { createPauseMenu } from '@/game/ui/pauseMenu';
 import { drawControls, drawPauseButton } from '@/game/ui/controlsOverlay';
+import { updateEnemyWeapons } from '@/game/systems/weapons';
 import { getAudioSystem } from '@/game/systems/audio';
+import {
+  Scroller,
+  warningBulletAlpha,
+  backgroundFade,
+  type ScrollFrame,
+} from '@/game/systems/background';
 
 // Explosion FX
 interface Explosion {
@@ -198,7 +208,7 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
 
   // Object pools
   const bulletPool = new ObjectPool(createBullet, 100);
-  const enemyPool = new ObjectPool(createEnemy, 50);
+  const enemyPool = new ObjectPool(createEnemy, 64);
   const enemyBulletPool = new ObjectPool(createEnemyBullet, 200);
   const itemPool = new ObjectPool(createItem, 10);
   const explosionPool: Explosion[] = [];
@@ -206,14 +216,20 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
     explosionPool.push(createExplosion());
   }
 
-  // Wave scheduler
+  // Wave scheduler — full stage, not the MVP subset
   let waveScheduler: WaveScheduler | null = null;
 
   // Timers
   const shotInterval = 1 / FIRE_RATE;
   let timeSinceLastShot = shotInterval;
-  let bgOffset = 0;
   let gameTime = 0;
+  const scroller = new Scroller();
+  let scrollFrame: ScrollFrame = {
+    scroll: 0,
+    tileDelta: 0,
+    fade: backgroundFade(0, stage1.warningAt),
+    starScroll: [0, 0, 0],
+  };
 
   // Input tracking
   let fireHeld = false;
@@ -240,12 +256,37 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
     }
   }
 
+  function drawGunBarrel(ctx: CanvasRenderingContext2D, x: number, y: number, enemy: Enemy): void {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(enemy.aimAngle);
+    if (enemy.type === 'turret2') {
+      ctx.fillStyle = PALETTE[COLOR.DARK_GRAY];
+      ctx.fillRect(4, -5, 14, 2);
+      ctx.fillRect(4, 3, 14, 2);
+    } else {
+      ctx.fillStyle = PALETTE[COLOR.GROUND_DARK_OLIVE];
+      ctx.fillRect(3, -1.5, 12, 3);
+    }
+    ctx.restore();
+  }
+
+  function spawnKillExplosion(enemy: Enemy): void {
+    spawnExplosion(enemy.x, enemy.y);
+    if (enemy.type === 'bomber') {
+      spawnExplosion(enemy.x - 16, enemy.y - 6, 0.06);
+      spawnExplosion(enemy.x + 14, enemy.y + 8, 0.12);
+    } else if (enemy.type === 'medium' || enemy.type === 'turret2') {
+      spawnExplosion(enemy.x + 8, enemy.y - 4, 0.05);
+    }
+  }
+
   // Bullet spawner for enemy fire patterns
   const bulletSpawner: BulletSpawner = {
-    spawnBullet(x, y, vx, vy, type) {
+    spawnBullet(x, y, vx, vy, type, homing = 0) {
       if (enemyBulletPool.getActiveCount() < ENEMY_BULLET_CAP) {
         const bullet = enemyBulletPool.acquire();
-        spawnEnemyBullet(bullet, x, y, vx, vy, type);
+        spawnEnemyBullet(bullet, x, y, vx, vy, type, homing);
       }
     },
     getBulletCount() {
@@ -370,7 +411,7 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
       const killed = damageEnemy(enemy, BOMB_DAMAGE);
       if (killed) {
         state.score += enemy.score;
-        spawnExplosion(enemy.x, enemy.y);
+        spawnKillExplosion(enemy);
         waveScheduler?.recordKill();
         if (enemy.drop) {
           const item = itemPool.acquire();
@@ -531,13 +572,19 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
       itemPool.releaseAll();
       explosionPool.forEach((e) => (e.active = false));
 
-      // Initialize wave scheduler
-      waveScheduler = new WaveScheduler({ mvpOnly: true });
+      // Full wave table, including ground units and the conditional relief ship
+      waveScheduler = new WaveScheduler({ mvpOnly: false });
 
       // Reset timers
       timeSinceLastShot = shotInterval;
-      bgOffset = 0;
       gameTime = 0;
+      scroller.reset();
+      scrollFrame = {
+        scroll: 0,
+        tileDelta: 0,
+        fade: backgroundFade(0, stage1.warningAt),
+        starScroll: [0, 0, 0],
+      };
       fireHeld = false;
       bombPressed = false;
       lastBombInput = false;
@@ -635,8 +682,9 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
         updatePlayerControl(dt, input);
       }
 
-      // Scroll background
-      bgOffset = (bgOffset + BG_SCROLL_SPEED * dt) % 32;
+      scrollFrame = scroller.update(dt, gameTime, stage1.warningAt);
+
+      const warning = gameTime >= stage1.warningAt;
 
       // Update player bullets
       const bulletsToRelease: Bullet[] = [];
@@ -663,54 +711,51 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
         waveScheduler.setPowerLevel(state.power);
         const spawns = waveScheduler.update(dt);
 
-        for (const spawn of spawns) {
-          const enemy = enemyPool.acquire();
-          spawnEnemy(
-            enemy,
-            spawn.type,
-            spawn.x,
-            spawn.y,
-            spawn.move,
-            spawn.canFire ? spawn.fire : { kind: 'none' },
-            spawn.drop,
-            spawn.hp,
-            spawn.score
-          );
+        if (!warning) {
+          for (const spawn of spawns) {
+            const enemy = enemyPool.acquire();
+            spawnEnemy(
+              enemy,
+              spawn.type,
+              spawn.x,
+              spawn.y,
+              spawn.move,
+              spawn.canFire ? spawn.fire : { kind: 'none' },
+              spawn.drop,
+              spawn.hp,
+              spawn.score
+            );
+          }
         }
+      }
 
-        // Check for stage clear
-        if (waveScheduler.isComplete() && enemyPool.getActiveCount() === 0) {
-          state.stageClear = true;
-        }
+      // Boss fight is P3. The warning runs, then the stage clears.
+      if (!state.gameOver && gameTime >= stage1.warningAt + WARNING_DURATION) {
+        state.stageClear = true;
       }
 
       // Update enemies
       const enemiesToRelease: Enemy[] = [];
       enemyPool.forEach((enemy) => {
-        const shouldCull = updateEnemy(enemy, dt, player.x, player.y);
+        const shouldCull = updateEnemy(enemy, dt, player.x, player.y, scrollFrame.tileDelta);
         if (shouldCull) {
           enemiesToRelease.push(enemy);
         } else {
-          // Check if enemy should fire
-          const fireResult = shouldEnemyFire(enemy, dt, player.x, player.y);
-          if (fireResult.shouldFire) {
-            executeFirePattern(
-              fireResult.fireData,
-              enemy.x,
-              enemy.y,
-              player.x,
-              player.y,
-              bulletSpawner
-            );
-          }
+          updateEnemyWeapons(enemy, dt, player.x, player.y, bulletSpawner, !warning);
         }
       });
       enemiesToRelease.forEach((e) => enemyPool.release(e));
 
+      // Warning clears enemy bullets with a fade and no score
+      const bulletAlpha = warningBulletAlpha(gameTime, stage1.warningAt);
+      if (bulletAlpha <= 0) {
+        enemyBulletPool.releaseAll();
+      }
+
       // Update enemy bullets
       const enemyBulletsToRelease: EnemyBullet[] = [];
       enemyBulletPool.forEach((bullet) => {
-        const shouldCull = updateEnemyBullet(bullet, dt);
+        const shouldCull = updateEnemyBullet(bullet, dt, { x: player.x, y: player.y });
         if (shouldCull) {
           enemyBulletsToRelease.push(bullet);
         }
@@ -766,7 +811,7 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
 
             if (killed) {
               state.score += enemy.score;
-              spawnExplosion(enemy.x, enemy.y);
+              spawnKillExplosion(enemy);
               waveScheduler?.recordKill();
               audio.play('enemyExplode');
 
@@ -784,8 +829,8 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
         });
       });
 
-      // Enemy bullets vs player
-      if (isPlayerVulnerable()) {
+      // Enemy bullets vs player. Fading warning bullets do not score and do not hit.
+      if (isPlayerVulnerable() && !warning) {
         enemyBulletPool.forEach((bullet) => {
           if (
             checkPlayerBulletSwept(
@@ -808,8 +853,7 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
       // Enemy body vs player
       if (isPlayerVulnerable()) {
         enemyPool.forEach((enemy) => {
-          // Only air enemies can collide
-          if (enemy.type !== 'tank' && enemy.type !== 'turret2' && enemy.type !== 'missile_car') {
+          if (!isGroundEnemy(enemy.type)) {
             if (checkPlayerEnemyCollision(player.x, player.y, enemy.x, enemy.y, enemy.hitRadius)) {
               killPlayer();
             }
@@ -838,23 +882,11 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
       const renderX = player.prevX + (player.x - player.prevX) * alpha;
       const renderY = player.prevY + (player.y - player.prevY) * alpha;
 
-      // Clear with dark background
-      renderer.clear('#0a0a1a');
+      // Space shows through once the tiles have faded
+      renderer.clear('#070b14');
 
-      // Bomb flash effect
-      if (state.bombFlashTimer > 0) {
-        const flashAlpha = state.bombFlashTimer / 0.15;
-        renderer.fillRect(0, 0, LOGICAL_W, LOGICAL_H, `rgba(255, 255, 255, ${flashAlpha * 0.6})`);
-      }
-
-      // Draw scrolling grid background
-      const gridSize = 32;
-      const gridColor = '#1a1a2e';
-      for (let y = -gridSize + bgOffset; y < LOGICAL_H + gridSize; y += gridSize) {
-        for (let x = 0; x < LOGICAL_W; x += gridSize) {
-          renderer.strokeRect(x, y, gridSize, gridSize, gridColor, 1);
-        }
-      }
+      const ctx = renderer.getContext();
+      drawBackground(ctx, assets.background, scrollFrame, gameTime);
 
       // Draw items
       itemPool.forEach((item) => {
@@ -870,27 +902,54 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
         renderer.drawImage(frame.canvas, ix - frame.anchorX, iy - frame.anchorY);
       });
 
-      // Draw enemies with flames
-      enemyPool.forEach((enemy) => {
+      // Ground units first so aircraft draw over the road
+      const drawEnemy = (enemy: Enemy) => {
         const ex = enemy.prevX + (enemy.x - enemy.prevX) * alpha;
         const ey = enemy.prevY + (enemy.y - enemy.prevY) * alpha;
-
-        // Draw flame
-        const ctx = renderer.getContext();
-        drawEnemyFlame(ctx, ex, ey - enemy.height / 2, gameTime);
-
-        // Draw enemy sprite
-        const sheet =
-          enemy.type === 'medium' ? assets!.enemies.mediumFighter : assets!.enemies.smallFighter;
+        const sheet = assets!.enemies.byType[enemy.type];
         const frame = enemy.hitFlashTimer > 0 ? sheet.hitFlash : sheet.idle;
-        renderer.drawImage(frame.canvas, ex - frame.anchorX, ey - frame.anchorY);
+
+        for (const nozzle of sheet.nozzles) {
+          drawEnemyFlame(ctx, ex + nozzle.x, ey + nozzle.y, gameTime);
+        }
+
+        if (enemy.type === 'drone') {
+          ctx.save();
+          ctx.translate(ex, ey);
+          ctx.rotate(enemy.moveTimer * 2.4);
+          ctx.drawImage(frame.canvas, -frame.anchorX, -frame.anchorY);
+          ctx.restore();
+        } else {
+          renderer.drawImage(frame.canvas, ex - frame.anchorX, ey - frame.anchorY);
+        }
+
+        if (enemy.type === 'tank' || enemy.type === 'turret2') {
+          drawGunBarrel(ctx, ex, ey, enemy);
+        }
+      };
+      enemyPool.forEach((enemy) => {
+        if (isGroundEnemy(enemy.type)) drawEnemy(enemy);
+      });
+      enemyPool.forEach((enemy) => {
+        if (!isGroundEnemy(enemy.type)) drawEnemy(enemy);
       });
 
-      // Draw enemy bullets with glow
-      const ctx = renderer.getContext();
+      const bulletFade = warningBulletAlpha(gameTime, stage1.warningAt);
+      ctx.globalAlpha = bulletFade;
       enemyBulletPool.forEach((bullet) => {
         const bx = bullet.prevX + (bullet.x - bullet.prevX) * alpha;
         const by = bullet.prevY + (bullet.y - bullet.prevY) * alpha;
+
+        if (bullet.type === 'missile') {
+          const frame = assets!.bullets.missile;
+          const ang = Math.atan2(bullet.vy, bullet.vx) + Math.PI / 2;
+          ctx.save();
+          ctx.translate(bx, by);
+          ctx.rotate(ang);
+          ctx.drawImage(frame.canvas, -frame.anchorX, -frame.anchorY);
+          ctx.restore();
+          return;
+        }
 
         drawBulletGlow(ctx, bx, by, bullet.type === 'large' ? 12 : 8, BULLET_GLOW_COLORS.enemy);
         const frame =
@@ -899,6 +958,7 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
             : assets!.bullets.enemyBulletSmall;
         renderer.drawImage(frame.canvas, bx - frame.anchorX, by - frame.anchorY);
       });
+      ctx.globalAlpha = 1;
 
       // Draw player bullets with glow
       bulletPool.forEach((bullet) => {
@@ -954,6 +1014,11 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
         }
       }
 
+      if (state.bombFlashTimer > 0) {
+        const flashAlpha = state.bombFlashTimer / 0.15;
+        renderer.fillRect(0, 0, LOGICAL_W, LOGICAL_H, `rgba(255, 255, 255, ${flashAlpha * 0.35})`);
+      }
+
       // ========================================
       // HUD
       // ========================================
@@ -988,6 +1053,22 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
         renderer.fillText(`Time: ${waveInfo.time.toFixed(1)}s`, 8, hudY + 38, '#888', 8);
       }
 
+      if (
+        !state.stageClear &&
+        !state.gameOver &&
+        gameTime >= stage1.warningAt + WARNING_BANNER_DELAY
+      ) {
+        const blink = Math.floor(gameTime * 6) % 2 === 0;
+        renderer.fillRect(0, LOGICAL_H / 2 - 28, LOGICAL_W, 40, 'rgba(0, 0, 0, 0.45)');
+        renderer.fillText(
+          'WARNING',
+          LOGICAL_W / 2 - 46,
+          LOGICAL_H / 2 - 16,
+          blink ? '#ff4444' : '#ffffff',
+          20
+        );
+      }
+
       // On-screen controls and pause button
       const controlsView = sceneCtx.input.getControlsView();
       if (!pauseMenu.isOpen()) {
@@ -1010,8 +1091,7 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
       // Stage Clear overlay
       if (state.stageClear) {
         renderer.fillRect(0, 0, LOGICAL_W, LOGICAL_H, 'rgba(0, 0, 0, 0.5)');
-        renderer.fillText('STAGE CLEAR', LOGICAL_W / 2 - 60, LOGICAL_H / 2 - 30, '#0f0', 16);
-        renderer.fillText('(MVP)', LOGICAL_W / 2 - 25, LOGICAL_H / 2, '#0f0', 12);
+        renderer.fillText('STAGE CLEAR', LOGICAL_W / 2 - 60, LOGICAL_H / 2 - 20, '#0f0', 16);
         renderer.fillText(
           `Score: ${state.score}`,
           LOGICAL_W / 2 - 45,

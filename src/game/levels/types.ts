@@ -70,6 +70,10 @@ export interface SpawnGroup {
   hp?: number;
   score?: number;
   drops?: SpawnDrop[];
+  /** Extra delay before this group's first spawn, added on top of the wave time. */
+  delay?: number;
+  /** Added to each ship's first-shot delay, multiplied by its index in the group. */
+  fireStagger?: number;
 }
 
 export type StageSection = 'ground' | 'coast' | 'base';

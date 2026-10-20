@@ -1,6 +1,6 @@
 /**
  * Enemy entity system
- * Design doc §6.1: Small fighter (24x24, 3HP), Medium fighter (36x36, 24HP)
+ * Eight stage-1 types. Ground units scroll with the tiles and do not body-kill.
  */
 
 import type { Poolable } from '@/engine/pool';
@@ -10,23 +10,48 @@ import {
   LOGICAL_H,
   SCORE_SMALL_FIGHTER,
   SCORE_MEDIUM_FIGHTER,
+  SCORE_INTERCEPTOR,
+  SCORE_TANK,
+  SCORE_DRONE,
+  SCORE_MISSILE_CAR,
+  SCORE_DUAL_TURRET,
+  SCORE_BOMBER,
   HIT_FLASH_TIME,
+  BG_SCROLL_SPEED,
+  HOVER_ENTER_SPEED,
+  HOVER_EXIT_SPEED,
+  HOVER_DRIFT,
+  SLOW_PUSH_ENTER_SPEED,
+  SLOW_PUSH_EXIT_SPEED,
+  SLOW_PUSH_DRIFT,
+  ORBIT_APPROACH_SPEED,
+  ORBIT_EXIT_SPEED,
+  SIDE_ARC_RADIUS,
+  V_DIVE_EXIT_DEG,
+  TURRET_TURN_RATE,
 } from '@/game/config';
 
-/** Enemy stats by type */
+/** Enemy stats by type. Sizes and HP match the wave table §2. */
 export const ENEMY_STATS: Record<
   EnemyType,
   { hp: number; score: number; width: number; height: number; hitRadius: number }
 > = {
   small: { hp: 3, score: SCORE_SMALL_FIGHTER, width: 24, height: 24, hitRadius: 10 },
   medium: { hp: 24, score: SCORE_MEDIUM_FIGHTER, width: 36, height: 36, hitRadius: 15 },
-  interceptor: { hp: 6, score: 200, width: 28, height: 28, hitRadius: 12 },
-  bomber: { hp: 60, score: 2000, width: 56, height: 48, hitRadius: 24 },
-  drone: { hp: 4, score: 300, width: 20, height: 20, hitRadius: 8 },
-  tank: { hp: 8, score: 200, width: 24, height: 24, hitRadius: 10 },
-  turret2: { hp: 30, score: 1000, width: 32, height: 32, hitRadius: 14 },
-  missile_car: { hp: 12, score: 300, width: 24, height: 32, hitRadius: 12 },
+  interceptor: { hp: 6, score: SCORE_INTERCEPTOR, width: 28, height: 28, hitRadius: 12 },
+  bomber: { hp: 60, score: SCORE_BOMBER, width: 56, height: 48, hitRadius: 24 },
+  drone: { hp: 4, score: SCORE_DRONE, width: 20, height: 20, hitRadius: 8 },
+  tank: { hp: 8, score: SCORE_TANK, width: 24, height: 24, hitRadius: 10 },
+  turret2: { hp: 30, score: SCORE_DUAL_TURRET, width: 32, height: 32, hitRadius: 14 },
+  missile_car: { hp: 12, score: SCORE_MISSILE_CAR, width: 24, height: 32, hitRadius: 12 },
 };
+
+const GROUND_TYPES: ReadonlySet<EnemyType> = new Set(['tank', 'turret2', 'missile_car']);
+
+/** Ground units scroll with the map and do not kill the player on contact. */
+export function isGroundEnemy(type: EnemyType): boolean {
+  return GROUND_TYPES.has(type);
+}
 
 export interface Enemy extends Poolable {
   type: EnemyType;
@@ -41,23 +66,27 @@ export interface Enemy extends Poolable {
   height: number;
   hitRadius: number;
 
-  // Movement state
   move: Move;
   moveTimer: number;
   startX: number;
   startY: number;
   phase: 'enter' | 'hold' | 'exit';
+  /** Orbit angle once the drone is on its circle. */
+  orbitAngle: number;
+  /** Turret / tank barrel angle in radians (0 = right, +y down). */
+  aimAngle: number;
+  /** Accumulated ring-pattern rotation in degrees. */
+  patternRot: number;
 
-  // Fire state
   fire: Fire;
   fireTimer: number;
   shotsFired: number;
   canFire: boolean;
+  /** Shots still queued inside an aimed3burst. */
+  burstLeft: number;
+  burstTimer: number;
 
-  // Visual state
   hitFlashTimer: number;
-
-  // Drop info
   drop: 'P' | 'B' | null;
 }
 
@@ -81,10 +110,15 @@ export function createEnemy(): Enemy {
     startX: 0,
     startY: 0,
     phase: 'enter',
+    orbitAngle: -Math.PI / 2,
+    aimAngle: Math.PI / 2,
+    patternRot: 0,
     fire: { kind: 'none' },
     fireTimer: 0,
     shotsFired: 0,
     canFire: true,
+    burstLeft: 0,
+    burstTimer: 0,
     hitFlashTimer: 0,
     drop: null,
 
@@ -105,10 +139,15 @@ export function createEnemy(): Enemy {
       this.startX = 0;
       this.startY = -30;
       this.phase = 'enter';
+      this.orbitAngle = -Math.PI / 2;
+      this.aimAngle = Math.PI / 2;
+      this.patternRot = 0;
       this.fire = { kind: 'none' };
       this.fireTimer = 0;
       this.shotsFired = 0;
       this.canFire = true;
+      this.burstLeft = 0;
+      this.burstTimer = 0;
       this.hitFlashTimer = 0;
       this.drop = null;
     },
@@ -145,38 +184,75 @@ export function spawnEnemy(
   enemy.startX = x;
   enemy.startY = y;
   enemy.phase = 'enter';
+  enemy.orbitAngle = -Math.PI / 2;
+  enemy.aimAngle = Math.PI / 2;
+  enemy.patternRot = 0;
   enemy.fire = fire;
   enemy.fireTimer = 0;
   enemy.shotsFired = 0;
   enemy.canFire = true;
+  enemy.burstLeft = 0;
+  enemy.burstTimer = 0;
   enemy.hitFlashTimer = 0;
   enemy.drop = drop;
 }
 
-/** Update enemy and return true if should be culled */
-export function updateEnemy(enemy: Enemy, dt: number, _playerX: number, _playerY: number): boolean {
+function wrapPi(rad: number): number {
+  let d = rad;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  return d;
+}
+
+function steerAim(
+  enemy: Enemy,
+  playerX: number,
+  playerY: number,
+  dt: number,
+  degPerSec: number
+): void {
+  const desired = Math.atan2(playerY - enemy.y, playerX - enemy.x);
+  const maxStep = ((degPerSec * Math.PI) / 180) * dt;
+  const diff = wrapPi(desired - enemy.aimAngle);
+  const step = Math.max(-maxStep, Math.min(maxStep, diff));
+  enemy.aimAngle = wrapPi(enemy.aimAngle + step);
+}
+
+/**
+ * Update enemy and return true if it should be culled.
+ * `scrollDelta` is the integer pixel step of the tile map this frame.
+ */
+export function updateEnemy(
+  enemy: Enemy,
+  dt: number,
+  playerX: number,
+  playerY: number,
+  scrollDelta: number = BG_SCROLL_SPEED * dt
+): boolean {
   enemy.prevX = enemy.x;
   enemy.prevY = enemy.y;
   enemy.moveTimer += dt;
 
-  // Update hit flash
   if (enemy.hitFlashTimer > 0) {
     enemy.hitFlashTimer = Math.max(0, enemy.hitFlashTimer - dt);
   }
 
-  // Update movement based on pattern
-  updateEnemyMovement(enemy, dt);
+  updateEnemyMovement(enemy, dt, scrollDelta);
 
-  // Check if off screen (cull)
-  if (enemy.y > LOGICAL_H + 50 || enemy.y < -100 || enemy.x < -100 || enemy.x > LOGICAL_W + 100) {
+  if (enemy.fire.kind === 'fixed2') {
+    steerAim(enemy, playerX, playerY, dt, TURRET_TURN_RATE);
+  } else if (enemy.type === 'tank') {
+    enemy.aimAngle = Math.atan2(playerY - enemy.y, playerX - enemy.x);
+  }
+
+  if (enemy.y > LOGICAL_H + 60 || enemy.y < -120 || enemy.x < -120 || enemy.x > LOGICAL_W + 120) {
     return true;
   }
 
   return false;
 }
 
-/** Update enemy movement based on move pattern */
-function updateEnemyMovement(enemy: Enemy, dt: number): void {
+function updateEnemyMovement(enemy: Enemy, dt: number, scrollDelta: number): void {
   const { move } = enemy;
 
   switch (move.kind) {
@@ -202,111 +278,123 @@ function updateEnemyMovement(enemy: Enemy, dt: number): void {
           enemy.phase = 'exit';
         }
       } else {
-        // Exit at 45 degree angle based on which side of center
-        const dir = enemy.startX < LOGICAL_W / 2 ? -1 : 1;
-        enemy.x += dir * move.speed * dt * 0.7;
-        enemy.y += move.speed * dt * 0.7;
+        const diag = move.speed * Math.cos((V_DIVE_EXIT_DEG * Math.PI) / 180);
+        const mid = LOGICAL_W / 2;
+        let dir = 0;
+        if (enemy.startX < mid - 10) dir = -1;
+        else if (enemy.startX > mid + 10) dir = 1;
+        if (dir === 0) {
+          enemy.y += move.speed * dt;
+        } else {
+          enemy.x += dir * diag * dt;
+          enemy.y += diag * dt;
+        }
       }
       break;
     }
 
     case 'cross': {
-      const dir = move.from === 'topLeft' ? 1 : -1;
-      enemy.x += dir * move.speed * dt * 0.7;
-      enemy.y += move.speed * dt * 0.7;
+      const targetX = move.from === 'topLeft' ? LOGICAL_W + 40 : -40;
+      const targetY = LOGICAL_H + 40;
+      const dx = targetX - enemy.startX;
+      const dy = targetY - enemy.startY;
+      const len = Math.hypot(dx, dy) || 1;
+      enemy.x = enemy.startX + (dx / len) * move.speed * enemy.moveTimer;
+      enemy.y = enemy.startY + (dy / len) * move.speed * enemy.moveTimer;
       break;
     }
 
     case 'hover': {
       if (enemy.phase === 'enter') {
-        // Descend at 120 px/s
-        enemy.y += 120 * dt;
+        enemy.y += HOVER_ENTER_SPEED * dt;
         if (enemy.y >= move.stopY) {
           enemy.y = move.stopY;
           enemy.phase = 'hold';
           enemy.moveTimer = 0;
         }
       } else if (enemy.phase === 'hold') {
-        // Drift left/right slightly
-        enemy.x = enemy.startX + Math.sin(enemy.moveTimer * 2) * 12;
+        enemy.x = enemy.startX + Math.sin(enemy.moveTimer * 2) * HOVER_DRIFT;
         if (enemy.moveTimer >= move.hold) {
           enemy.phase = 'exit';
         }
       } else {
-        // Exit upward at 100 px/s
-        enemy.y -= 100 * dt;
+        enemy.y -= HOVER_EXIT_SPEED * dt;
       }
       break;
     }
 
     case 'side_arc': {
-      // Simplified arc movement
-      if (enemy.phase === 'enter') {
-        const progress = Math.min(1, enemy.moveTimer / 1.5);
-        const arcX = move.side === 'left' ? -140 : 140;
-        enemy.x = enemy.startX + arcX * (1 - Math.cos((progress * Math.PI) / 2));
-        enemy.y = move.y0 + 140 * Math.sin((progress * Math.PI) / 2);
-        if (progress >= 1) {
-          enemy.phase = 'exit';
-          enemy.startX = enemy.x;
-          enemy.startY = enemy.y;
-        }
+      const radius = SIDE_ARC_RADIUS;
+      const arcLen = (Math.PI / 2) * radius;
+      const traveled = enemy.moveTimer * move.speed;
+      const sign = move.side === 'left' ? 1 : -1;
+      if (traveled < arcLen) {
+        const angle = traveled / radius;
+        enemy.x = enemy.startX + sign * radius * Math.sin(angle);
+        enemy.y = enemy.startY + radius * (1 - Math.cos(angle));
+        enemy.phase = 'enter';
       } else {
-        enemy.y += move.speed * dt;
+        const extra = traveled - arcLen;
+        enemy.x = enemy.startX + sign * radius;
+        enemy.y = enemy.startY + radius + extra;
+        enemy.phase = 'exit';
       }
       break;
     }
 
     case 'orbit': {
       if (enemy.phase === 'enter') {
-        // Move to anchor
-        const dx = move.anchor.x - enemy.x;
-        const dy = move.anchor.y - enemy.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > 5) {
-          enemy.x += (dx / dist) * 120 * dt;
-          enemy.y += (dy / dist) * 120 * dt;
-        } else {
+        const destX = move.anchor.x;
+        const destY = move.anchor.y - move.r;
+        const dx = destX - enemy.x;
+        const dy = destY - enemy.y;
+        const dist = Math.hypot(dx, dy);
+        const step = ORBIT_APPROACH_SPEED * dt;
+        if (dist <= step) {
+          enemy.x = destX;
+          enemy.y = destY;
           enemy.phase = 'hold';
           enemy.moveTimer = 0;
+          enemy.orbitAngle = -Math.PI / 2;
+        } else {
+          enemy.x += (dx / dist) * step;
+          enemy.y += (dy / dist) * step;
         }
       } else if (enemy.phase === 'hold') {
-        const angle = (enemy.moveTimer / move.period) * Math.PI * 2;
-        enemy.x = move.anchor.x + Math.cos(angle) * move.r;
-        enemy.y = move.anchor.y + Math.sin(angle) * move.r;
+        enemy.orbitAngle += ((Math.PI * 2) / move.period) * dt;
+        enemy.x = move.anchor.x + Math.cos(enemy.orbitAngle) * move.r;
+        enemy.y = move.anchor.y + Math.sin(enemy.orbitAngle) * move.r;
         if (enemy.moveTimer >= move.hold) {
           enemy.phase = 'exit';
         }
       } else {
-        enemy.y += 90 * dt;
+        enemy.y += ORBIT_EXIT_SPEED * dt;
       }
       break;
     }
 
     case 'slow_push': {
       if (enemy.phase === 'enter') {
-        enemy.y += 30 * dt;
+        enemy.y += SLOW_PUSH_ENTER_SPEED * dt;
         if (enemy.y >= move.stopY) {
           enemy.y = move.stopY;
           enemy.phase = 'hold';
           enemy.moveTimer = 0;
         }
       } else if (enemy.phase === 'hold') {
-        enemy.x = enemy.startX + Math.sin(enemy.moveTimer * 1.5) * 20;
+        enemy.x = enemy.startX + Math.sin(enemy.moveTimer * 1.5) * SLOW_PUSH_DRIFT;
         if (enemy.moveTimer >= move.hold) {
           enemy.phase = 'exit';
         }
       } else {
-        enemy.y += 60 * dt;
+        enemy.y += SLOW_PUSH_EXIT_SPEED * dt;
       }
       break;
     }
 
     case 'ground': {
-      // Ground enemies scroll with background - handled elsewhere
-      if (move.vx) {
-        enemy.x += move.vx * dt;
-      }
+      enemy.y += scrollDelta;
+      if (move.vx) enemy.x += move.vx * dt;
       break;
     }
   }
@@ -316,7 +404,6 @@ function updateEnemyMovement(enemy: Enemy, dt: number): void {
 export function damageEnemy(enemy: Enemy, damage: number): boolean {
   enemy.hp -= damage;
   enemy.hitFlashTimer = HIT_FLASH_TIME;
-
   return enemy.hp <= 0;
 }
 
@@ -331,12 +418,10 @@ export function shouldEnemyFire(
     return { shouldFire: false, fireData: enemy.fire };
   }
 
-  // Only fire when on screen
   if (enemy.y < 8) {
     return { shouldFire: false, fireData: enemy.fire };
   }
 
-  // Check max shots
   const fireConfig = enemy.fire as {
     maxShots?: number;
     interval?: number;
@@ -348,7 +433,6 @@ export function shouldEnemyFire(
     return { shouldFire: false, fireData: enemy.fire };
   }
 
-  // Check atY trigger (fire when reaching specific Y)
   if (fireConfig.atY !== undefined) {
     if (enemy.y >= fireConfig.atY && enemy.canFire) {
       enemy.canFire = false;
@@ -358,7 +442,6 @@ export function shouldEnemyFire(
     return { shouldFire: false, fireData: enemy.fire };
   }
 
-  // Check fire interval
   const interval = fireConfig.interval ?? 2;
   const firstDelay = fireConfig.firstDelay ?? interval;
 
@@ -366,7 +449,7 @@ export function shouldEnemyFire(
 
   const nextFireTime = enemy.shotsFired === 0 ? firstDelay : interval;
   if (enemy.fireTimer >= nextFireTime) {
-    enemy.fireTimer -= interval;
+    enemy.fireTimer -= nextFireTime;
     enemy.shotsFired++;
     return { shouldFire: true, fireData: enemy.fire };
   }

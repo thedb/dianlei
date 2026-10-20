@@ -17,12 +17,16 @@ import type { EnemyAssets } from './enemySprite';
 import type { BulletAssets } from './bulletSprite';
 import type { ItemAssets } from './itemSprite';
 import type { ExplosionAssets } from './explosionSprite';
+import type { BackgroundMaps } from './tiles';
 
 import { createPlayerSpriteSheet } from './playerSprite';
 import { createEnemyAssets } from './enemySprite';
 import { createBulletAssets } from './bulletSprite';
 import { createItemAssets } from './itemSprite';
 import { createExplosionAssets } from './explosionSprite';
+import { createBackgroundMaps } from './tiles';
+
+export { drawBackground } from './tiles';
 
 /** All game sprite assets */
 export interface GameAssets {
@@ -31,6 +35,7 @@ export interface GameAssets {
   bullets: BulletAssets;
   items: ItemAssets;
   explosions: ExplosionAssets;
+  background: BackgroundMaps;
 }
 
 /** Initialize all game assets (call once at boot) */
@@ -41,5 +46,6 @@ export function createGameAssets(): GameAssets {
     bullets: createBulletAssets(),
     items: createItemAssets(),
     explosions: createExplosionAssets(),
+    background: createBackgroundMaps(),
   };
 }

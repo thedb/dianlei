@@ -41,7 +41,7 @@ This document defines the coding conventions and constraints for all AI agents w
 |-------|------|
 | Player | 28×32 |
 | Small fighter | 24×24 |
-| Medium fighter | 36×36 (P1: scaled small fighter; dedicated sprite from P2) |
+| Medium fighter | 36×36 dedicated sprite (P2). Do not scale the 24×24 small fighter |
 | Interceptor | 28×28 |
 | Heavy bomber | 56×48 |
 | Drone | 20×20 |

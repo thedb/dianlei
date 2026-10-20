@@ -4,6 +4,7 @@
 
 import { describe, expect, it, beforeEach } from 'vitest';
 import { WaveScheduler } from './waveScheduler';
+import { getStageEnemyCount } from '@/game/levels/stage1';
 
 describe('WaveScheduler', () => {
   let scheduler: WaveScheduler;
@@ -145,5 +146,44 @@ describe('WaveScheduler spawn requests', () => {
     expect(spawns[0]).toHaveProperty('fire');
     expect(spawns[0]!.move.kind).toBeDefined();
     expect(spawns[0]!.fire.kind).toBeDefined();
+  });
+});
+
+describe('WaveScheduler full stage', () => {
+  function collect(power: number) {
+    const scheduler = new WaveScheduler({ mvpOnly: false });
+    scheduler.setPowerLevel(power);
+    const spawns = [];
+    for (let i = 0; i < 200; i++) spawns.push(...scheduler.update(1));
+    return spawns;
+  }
+
+  it('spawns every enemy type and the full ship count', () => {
+    const spawns = collect(1);
+    expect(spawns).toHaveLength(getStageEnemyCount(true));
+    const types = new Set(spawns.map((s) => s.type));
+    expect(types.size).toBe(8);
+    expect(spawns.filter((s) => s.drop === 'P')).toHaveLength(5);
+    expect(spawns.filter((s) => s.drop === 'B')).toHaveLength(3);
+  });
+
+  it('skips W27 when power is already max and does not count it', () => {
+    const spawns = collect(3);
+    expect(spawns).toHaveLength(getStageEnemyCount(false));
+    expect(spawns.some((s) => s.type === 'tank')).toBe(true);
+    expect(spawns.some((s) => s.type === 'interceptor')).toBe(true);
+  });
+
+  it('keeps interceptors out of the MVP partial wave', () => {
+    const mvp = new WaveScheduler({ mvpOnly: true });
+    const full = new WaveScheduler({ mvpOnly: false });
+    const mvpSpawns = [];
+    const fullSpawns = [];
+    for (let i = 0; i < 140; i++) {
+      mvpSpawns.push(...mvp.update(1));
+      fullSpawns.push(...full.update(1));
+    }
+    expect(mvpSpawns.some((s) => s.type === 'interceptor')).toBe(false);
+    expect(fullSpawns.some((s) => s.type === 'interceptor')).toBe(true);
   });
 });

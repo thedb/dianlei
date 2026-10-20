@@ -277,3 +277,107 @@ export const CONTROL_SCALE_MAX = 1.3;
 
 /** Default control opacity */
 export const CONTROL_OPACITY_DEFAULT = 0.6;
+
+// ============================================================================
+// Movement patterns (wave table §3.1 — speeds fixed by the move kind)
+// ============================================================================
+
+/** Hover: descend, then leave upward */
+export const HOVER_ENTER_SPEED = 120;
+export const HOVER_EXIT_SPEED = 100;
+/** Hover hold drift, pixels either side of the spawn x */
+export const HOVER_DRIFT = 12;
+
+/** Slow push: descend, hold, then leave downward */
+export const SLOW_PUSH_ENTER_SPEED = 30;
+export const SLOW_PUSH_EXIT_SPEED = 60;
+export const SLOW_PUSH_DRIFT = 20;
+
+/** Orbit approach and the downward exit after `hold` */
+export const ORBIT_APPROACH_SPEED = 120;
+export const ORBIT_EXIT_SPEED = 90;
+
+/** Side-entry arc radius before the dive */
+export const SIDE_ARC_RADIUS = 140;
+
+/** V-dive wings leave on this diagonal (degrees) */
+export const V_DIVE_EXIT_DEG = 45;
+
+// ============================================================================
+// Enemy fire details (wave table §3.2)
+// ============================================================================
+
+/** aimed3burst: shots per burst and the gap between them */
+export const AIMED_BURST_COUNT = 3;
+export const AIMED_BURST_GAP = 0.12;
+
+/** fixed2 barrel spacing, and how fast a turret may track (deg/s) */
+export const FIXED2_SEPARATION = 10;
+export const TURRET_TURN_RATE = 60;
+
+/** Missile turn rate while homing (deg/s). Homing time is MISSILE_HOMING_TIME. */
+export const MISSILE_TURN_RATE = 240;
+
+// ============================================================================
+// Stage 1 background sections & warning (wave table §1.1 / §4.5)
+// ============================================================================
+
+/** Ground section ends and the coast section begins (seconds) */
+export const SECTION_GROUND_END = 50;
+
+/** Coast section ends and the base section begins (seconds) */
+export const SECTION_COAST_END = 95;
+
+/** Base section ends when the warning starts (seconds). Matches stage1.warningAt. */
+export const SECTION_BASE_END = 150;
+
+/**
+ * Documented 3-second scenery gaps: blend starts this long before the
+ * boundary and finishes this long after it (0:49–0:52, 1:34–1:37).
+ */
+export const SECTION_BLEND_LEAD = 1;
+export const SECTION_BLEND_TAIL = 2;
+
+/** Map is 23 tiles wide; the 360-wide screen crops this many pixels per side */
+export const MAP_TILES_X = 23;
+export const MAP_CROP_X = 4;
+
+/** Warning scroll ramps from BG_SCROLL_SPEED to this, then the tiles fade */
+export const BG_WARNING_SCROLL = 200;
+
+/** Seconds of the warning spent accelerating and fading the ground tiles */
+export const WARNING_TILE_FADE_NUM = 8;
+export const WARNING_TILE_FADE_DEN = 5;
+export const WARNING_TILE_FADE = WARNING_TILE_FADE_NUM / WARNING_TILE_FADE_DEN;
+
+/** How long the warning sequence lasts after warningAt (2:30–2:35) */
+export const WARNING_DURATION = 5;
+
+/** Enemy bullets fade out over this long at warning start, with no score */
+export const WARNING_BULLET_FADE = 1.2;
+
+/** WARNING banner appears this long after warningAt (2:31) */
+export const WARNING_BANNER_DELAY = 1;
+
+/** Cloud band timings, seconds after warningAt: in-start, in-end, out-start, out-end */
+export const WARNING_CLOUD_IN_START = 0.4;
+export const WARNING_CLOUD_IN_END = 1.2;
+export const WARNING_CLOUD_OUT_START = 2.0;
+export const WARNING_CLOUD_OUT_END = 2.8;
+
+/** Starfield fade-in, seconds after warningAt */
+export const WARNING_STAR_DELAY = 2.0;
+export const WARNING_STAR_FADE = 1.2;
+
+/** Parallax star layers, pixels/second (near layer is fastest) */
+export const STAR_SCROLL_SPEEDS = [16, 42, 88] as const;
+
+/**
+ * Pixels the tiles travel during the warning fade.
+ * Average of the two speeds times the fade length: (v0 + v1) / 2 * T.
+ */
+export function warningTileScrollPx(): number {
+  return (
+    ((BG_SCROLL_SPEED + BG_WARNING_SCROLL) * WARNING_TILE_FADE_NUM) / (2 * WARNING_TILE_FADE_DEN)
+  );
+}
