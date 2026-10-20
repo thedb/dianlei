@@ -7,18 +7,17 @@ import type { Renderer } from '@/engine/renderer';
 import type { InputState } from '@/engine/input';
 import { LOGICAL_W, LOGICAL_H } from '@/game/config';
 import { createSettingsPanel } from '@/game/ui/settingsPanel';
-import { drawButton, drawText, tappedIndex, UI_COLORS, type Rect } from '@/game/ui/widgets';
+import { drawButton, drawText, hitRect, UI_COLORS, type Rect } from '@/game/ui/widgets';
+import { START_BUTTON, drawStartButton, isStartTapped } from '@/game/ui/startButton';
 
-const ITEMS = ['开始游戏', '设置'] as const;
+const ITEM_COUNT = 2;
 
-function itemRects(): Rect[] {
-  return ITEMS.map((_, i) => ({
-    x: LOGICAL_W / 2 - 90,
-    y: LOGICAL_H * 0.56 + i * 56,
-    w: 180,
-    h: 44,
-  }));
-}
+export const SETTINGS_BUTTON: Rect = {
+  x: LOGICAL_W / 2 - 90,
+  y: START_BUTTON.y + START_BUTTON.h + 20,
+  w: 180,
+  h: 44,
+};
 
 export function createTitleScene(ctx: SceneContext): Scene {
   let selected = 0;
@@ -55,11 +54,11 @@ export function createTitleScene(ctx: SceneContext): Scene {
         return null;
       }
 
-      if (input.menuUp) selected = (selected + ITEMS.length - 1) % ITEMS.length;
-      if (input.menuDown) selected = (selected + 1) % ITEMS.length;
+      if (input.menuUp) selected = (selected + ITEM_COUNT - 1) % ITEM_COUNT;
+      if (input.menuDown) selected = (selected + 1) % ITEM_COUNT;
 
-      const tapped = tappedIndex(itemRects(), input.taps);
-      if (tapped >= 0) return choose(tapped);
+      if (isStartTapped(input.taps)) return choose(0);
+      if (input.taps.some((t) => hitRect(SETTINGS_BUTTON, t.x, t.y))) return choose(1);
       if (input.menuConfirm) return choose(selected);
       return null;
     },
@@ -71,10 +70,8 @@ export function createTitleScene(ctx: SceneContext): Scene {
       drawText(c, '电雷', LOGICAL_W / 2, LOGICAL_H / 3, 56, UI_COLORS.accent, 'center');
       drawText(c, 'DIANLEI', LOGICAL_W / 2, LOGICAL_H / 3 + 50, 14, UI_COLORS.dim, 'center');
 
-      itemRects().forEach((r, i) => {
-        const sel = i === selected;
-        drawButton(c, r, ITEMS[i]!, sel, sel && blinkTimer > 0.5 ? UI_COLORS.accent : undefined);
-      });
+      drawStartButton(c, blinkTimer, selected === 0);
+      drawButton(c, SETTINGS_BUTTON, '设置', selected === 1);
 
       drawText(
         c,

@@ -17,6 +17,8 @@ export interface Game {
   pause(): void;
   resume(): void;
   toggleDebug(): void;
+  /** Current scene id (debug / e2e checks) */
+  getSceneId(): string | null;
 }
 
 export function createGame(platform: H5Platform): Game {
@@ -124,6 +126,10 @@ export function createGame(platform: H5Platform): Game {
 
     toggleDebug(): void {
       sceneContext.showDebug = !sceneContext.showDebug;
+    },
+
+    getSceneId(): string | null {
+      return sceneManager.getCurrentScene()?.id ?? null;
     },
   };
 }
