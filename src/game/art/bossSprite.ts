@@ -133,6 +133,15 @@ export function buildBossHull(openCore: boolean): SpriteData {
   fillEllipse(grid, cx - 78, BOSS_HULL_H / 2 + 20, 14, 14, S);
   fillEllipse(grid, cx + 78, BOSS_HULL_H / 2 + 20, 14, 14, S);
 
+  // Light hull dressing. The hitbox stays the 220×140 rectangle.
+  for (let i = -3; i <= 3; i++) {
+    plot(grid, cx + i * 4, 36, LG);
+    plot(grid, cx + i * 4, 96, G);
+  }
+  plot(grid, cx - 6, 46, EV);
+  plot(grid, cx + 5, 46, EV);
+  plot(grid, cx, 24, W);
+
   outline(grid, K);
   return grid;
 }

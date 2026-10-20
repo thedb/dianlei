@@ -81,6 +81,30 @@ describe('stage background', () => {
     expect(coast.some((row) => row.includes(TileId.dock))).toBe(true);
     expect(base.some((row) => row.includes(TileId.runway))).toBe(true);
     expect(base.some((row) => row.includes(TileId.hangar))).toBe(true);
+    expect(ground.some((row) => row.includes(TileId.tree) || row.includes(TileId.treePine))).toBe(
+      true
+    );
+    expect(ground.some((row) => row.includes(TileId.mountain) || row.includes(TileId.rock))).toBe(
+      true
+    );
+    expect(base.some((row) => row.includes(TileId.wall))).toBe(true);
+    let coastLeft = false;
+    let coastRight = false;
+    for (const row of coast) {
+      row.forEach((id, x) => {
+        if (id !== TileId.water && id !== TileId.waterB && id !== TileId.shallow) return;
+        if (x < 8) coastLeft = true;
+        if (x > 14) coastRight = true;
+      });
+    }
+    expect(coastLeft && coastRight).toBe(true);
+    for (const tile of getTilePixels()) {
+      expect(tile).toHaveLength(TILE_SIZE);
+      for (const row of tile) {
+        expect(row).toHaveLength(TILE_SIZE);
+        for (const cell of row) expect(cell).toBeGreaterThanOrEqual(0);
+      }
+    }
 
     const bulletColors = new Set<number>([
       COLOR.BULLET_MAGENTA,
