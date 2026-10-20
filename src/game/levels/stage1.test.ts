@@ -1,14 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { getMvpEnemyCount, getMvpWaves } from './stage1';
 
-/** MVP enemy total from the wave doc before playtest tuning */
-const DOC_MVP_ENEMY_COUNT = 85;
+/** MVP enemy total documented in docs/电雷_第一关波次表_v1.md §1 */
+const DOC_MVP_ENEMY_COUNT = 94;
 
 describe('stage1 MVP waves', () => {
-  it('has about 10% more enemies than the doc baseline', () => {
-    const count = getMvpEnemyCount();
-    expect(count).toBeGreaterThanOrEqual(Math.round(DOC_MVP_ENEMY_COUNT * 1.1));
-    expect(count).toBeLessThanOrEqual(Math.round(DOC_MVP_ENEMY_COUNT * 1.15));
+  it('matches the MVP enemy total in the wave table doc', () => {
+    expect(getMvpEnemyCount()).toBe(DOC_MVP_ENEMY_COUNT);
   });
 
   it('only uses small/medium fighters in fully-MVP waves', () => {
