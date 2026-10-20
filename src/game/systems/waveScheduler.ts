@@ -3,8 +3,9 @@
  * Spawns enemies according to wave data from stage1.ts
  */
 
-import type { Wave, EnemyType, Move, Fire } from '@/game/levels/types';
+import type { Wave, EnemyType, Move, Fire, SpawnGroup } from '@/game/levels/types';
 import { stage1 } from '@/game/levels/stage1';
+import { ENEMY_STATS } from '@/game/entities/enemy';
 
 export interface WaveSchedulerConfig {
   mvpOnly: boolean;
@@ -32,17 +33,17 @@ interface PendingSpawn {
 
 export class WaveScheduler {
   private waves: Wave[];
+  private readonly mvpOnly: boolean;
   private currentWaveIndex: number = 0;
   private pendingSpawns: PendingSpawn[] = [];
   private waveTimer: number = 0;
-  // Reserved for future use
-  // private _totalEnemyCount: number = 0;
   private spawnedCount: number = 0;
   private killedCount: number = 0;
   private stageComplete: boolean = false;
   private powerLevel: number = 1;
 
   constructor(config: WaveSchedulerConfig) {
+    this.mvpOnly = config.mvpOnly;
     if (config.mvpOnly) {
       this.waves = stage1.waves.filter((w) => w.mvp === true || w.mvp === 'partial');
     } else {
@@ -138,20 +139,23 @@ export class WaveScheduler {
     for (let gi = 0; gi < wave.groups.length; gi++) {
       const group = wave.groups[gi]!;
 
-      // For partial MVP waves, only spawn small/medium
-      if (wave.mvp === 'partial' && group.enemy !== 'small' && group.enemy !== 'medium') {
+      // P1 partial waves drop non-fighter groups. The full stage keeps them.
+      if (
+        this.mvpOnly &&
+        wave.mvp === 'partial' &&
+        group.enemy !== 'small' &&
+        group.enemy !== 'medium'
+      ) {
         continue;
       }
 
       for (let i = 0; i < group.count; i++) {
-        const spawnTime = wave.t + (group.interval ?? 0) * i;
+        const spawnTime = wave.t + (group.delay ?? 0) + (group.interval ?? 0) * i;
         const x = group.xs[i % group.xs.length] ?? 180;
-        const y = group.y ?? -20;
+        const y = resolveSpawnY(group);
 
-        // Determine if this enemy should fire
         const canFire = !group.fireOnly || group.fireOnly.includes(i);
 
-        // Check for drop
         let drop: 'P' | 'B' | null = null;
         if (group.drops) {
           const dropInfo = group.drops.find((d) => d.index === i);
@@ -159,6 +163,9 @@ export class WaveScheduler {
             drop = dropInfo.item;
           }
         }
+
+        const stagger = (group.fireStagger ?? 0) * i;
+        const fire = canFire ? withFireStagger(group.fire, stagger) : { kind: 'none' as const };
 
         this.pendingSpawns.push({
           waveId: wave.id,
@@ -170,7 +177,7 @@ export class WaveScheduler {
             x,
             y,
             move: group.move,
-            fire: group.fire,
+            fire,
             canFire,
             drop,
             hp: group.hp,
@@ -196,5 +203,38 @@ export class WaveScheduler {
       killed: this.killedCount,
       pending: this.pendingSpawns.length,
     };
+  }
+}
+
+function resolveSpawnY(group: SpawnGroup): number {
+  if (group.y !== undefined) return group.y;
+  if (group.move.kind === 'side_arc') return group.move.y0;
+  if (group.move.kind === 'ground') {
+    return -Math.ceil(ENEMY_STATS[group.enemy].height / 2) - 1;
+  }
+  return -20;
+}
+
+/** Offset each ship in a group so their first shots don't land on the same frame. */
+function withFireStagger(fire: Fire, extra: number): Fire {
+  if (extra === 0 || fire.kind === 'none') return fire;
+  switch (fire.kind) {
+    case 'ring8':
+    case 'ring16':
+      return fire;
+    case 'fan3':
+    case 'fan5':
+    case 'fan7wide':
+    case 'aimed1':
+    case 'aimed3burst':
+    case 'missile':
+    case 'aimed_fast3':
+    case 'fixed2': {
+      const interval = fire.interval;
+      const base = fire.firstDelay ?? interval ?? 0;
+      return { ...fire, firstDelay: base + extra };
+    }
+    default:
+      return fire;
   }
 }
