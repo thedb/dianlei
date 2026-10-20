@@ -1,0 +1,4 @@
+# Placeholder for asset management (P1+)
+# - sprites.ts (code-generated sprites)
+# - loader.ts (asset loading)
+# - atlas.ts (sprite atlas generation)
