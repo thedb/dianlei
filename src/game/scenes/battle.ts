@@ -93,6 +93,9 @@ import {
   checkItemPickup,
 } from '@/game/systems/collision';
 import { WaveScheduler } from '@/game/systems/waveScheduler';
+import { inCircle } from '@/game/controls';
+import { createPauseMenu } from '@/game/ui/pauseMenu';
+import { drawControls, drawPauseButton } from '@/game/ui/controlsOverlay';
 import { getAudioSystem } from '@/game/systems/audio';
 
 // Explosion FX
@@ -219,6 +222,8 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
 
   // Audio
   const audio = getAudioSystem();
+
+  const pauseMenu = createPauseMenu(sceneCtx.settings);
 
   // Helper to spawn explosion
   function spawnExplosion(x: number, y: number, delay = 0): void {
@@ -478,10 +483,18 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
     }
   }
 
+  function openPause(): void {
+    pauseMenu.open();
+    sceneCtx.input.setControlsEnabled(false);
+  }
+
   return {
     id: 'battle',
 
     enter(): void {
+      pauseMenu.close();
+      sceneCtx.input.setControlsEnabled(true);
+
       // Initialize assets
       assets = createGameAssets();
 
@@ -533,7 +546,12 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
       audio.init();
     },
 
+    onHide(): void {
+      if (!pauseMenu.isOpen() && !state.gameOver && !state.stageClear) openPause();
+    },
+
     exit(): void {
+      pauseMenu.close();
       bulletPool.releaseAll();
       enemyPool.releaseAll();
       enemyBulletPool.releaseAll();
@@ -541,12 +559,30 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
     },
 
     update(dt: number, input: InputState) {
-      gameTime += dt;
-
       // Unlock audio on first input
-      if (input.buttonA || input.buttonB || input.joystickMagnitude > 0.1) {
+      if (input.buttonA || input.buttonB || input.joystickMagnitude > 0.1 || input.taps.length) {
         audio.unlock();
       }
+
+      // Paused: only the menu runs; gameplay state is frozen
+      if (pauseMenu.isOpen()) {
+        const action = pauseMenu.update(input);
+        if (action === 'resume') sceneCtx.input.setControlsEnabled(true);
+        if (action === 'exit') return 'title';
+        return null;
+      }
+
+      if (!state.gameOver && !state.stageClear) {
+        const pauseTapped = input.taps.some((t) =>
+          inCircle(t.x, t.y, sceneCtx.input.getControlsView().layout.pauseButton, 8)
+        );
+        if (input.pausePressed || pauseTapped) {
+          openPause();
+          return null;
+        }
+      }
+
+      gameTime += dt;
 
       // Game over or stage clear - wait for input to return to title
       if (state.gameOver || state.stageClear) {
@@ -952,6 +988,18 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
         renderer.fillText(`Time: ${waveInfo.time.toFixed(1)}s`, 8, hudY + 38, '#888', 8);
       }
 
+      // On-screen controls and pause button
+      const controlsView = sceneCtx.input.getControlsView();
+      if (!pauseMenu.isOpen()) {
+        drawControls(ctx, controlsView, {
+          bDisabled: state.bombs <= 0 || state.bombCooldown > 0,
+        });
+      }
+      drawPauseButton(ctx, controlsView.layout.pauseButton, controlsView.settings.controlOpacity);
+
+      // Pause menu overlay
+      pauseMenu.render(ctx, controlsView, { stage: 1, score: state.score });
+
       // Game Over overlay
       if (state.gameOver) {
         renderer.fillRect(0, 0, LOGICAL_W, LOGICAL_H, 'rgba(0, 0, 0, 0.7)');
@@ -993,6 +1041,8 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
         score: state.score,
         power: state.power,
         lives: state.lives,
+        paused: pauseMenu.isOpen(),
+        gameTime,
       };
     },
   };

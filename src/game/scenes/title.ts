@@ -1,72 +1,95 @@
 /**
- * Title scene - main menu
+ * Title scene - main menu: 开始游戏 / 设置
  */
 
 import type { Scene, SceneContext } from './types';
 import type { Renderer } from '@/engine/renderer';
 import type { InputState } from '@/engine/input';
 import { LOGICAL_W, LOGICAL_H } from '@/game/config';
+import { createSettingsPanel } from '@/game/ui/settingsPanel';
+import { drawButton, drawText, tappedIndex, UI_COLORS, type Rect } from '@/game/ui/widgets';
 
-export function createTitleScene(_ctx: SceneContext): Scene {
+const ITEMS = ['开始游戏', '设置'] as const;
+
+function itemRects(): Rect[] {
+  return ITEMS.map((_, i) => ({
+    x: LOGICAL_W / 2 - 90,
+    y: LOGICAL_H * 0.56 + i * 56,
+    w: 180,
+    h: 44,
+  }));
+}
+
+export function createTitleScene(ctx: SceneContext): Scene {
+  let selected = 0;
+  let inSettings = false;
   let blinkTimer = 0;
-  let showPrompt = true;
+  const settingsPanel = createSettingsPanel(ctx.settings);
+
+  function choose(i: number): 'battle' | null {
+    if (i === 0) return 'battle';
+    inSettings = true;
+    settingsPanel.open();
+    return null;
+  }
 
   return {
     id: 'title',
 
     enter(): void {
+      selected = 0;
+      inSettings = false;
       blinkTimer = 0;
-      showPrompt = true;
+      ctx.input.setControlsEnabled(false);
     },
 
-    exit(): void {},
+    exit(): void {
+      ctx.input.setControlsEnabled(true);
+    },
 
     update(dt: number, input: InputState) {
-      // Blink "Press to Start" text
-      blinkTimer += dt;
-      if (blinkTimer >= 0.5) {
-        blinkTimer = 0;
-        showPrompt = !showPrompt;
+      blinkTimer = (blinkTimer + dt) % 1;
+
+      if (inSettings) {
+        if (settingsPanel.update(input) === 'close') inSettings = false;
+        return null;
       }
 
-      // Start game on any input
-      if (input.buttonA || input.keyFire || input.joystickMagnitude > 0.5) {
-        return 'battle';
-      }
+      if (input.menuUp) selected = (selected + ITEMS.length - 1) % ITEMS.length;
+      if (input.menuDown) selected = (selected + 1) % ITEMS.length;
 
+      const tapped = tappedIndex(itemRects(), input.taps);
+      if (tapped >= 0) return choose(tapped);
+      if (input.menuConfirm) return choose(selected);
       return null;
     },
 
     render(renderer: Renderer, _alpha: number): void {
       renderer.clear('#0a0a1a');
+      const c = renderer.getContext();
 
-      // Title
-      const title = '电雷';
-      const titleSize = 48;
-      renderer.fillText(title, LOGICAL_W / 2 - titleSize, LOGICAL_H / 3, '#00e5ff', titleSize);
+      drawText(c, '电雷', LOGICAL_W / 2, LOGICAL_H / 3, 56, UI_COLORS.accent, 'center');
+      drawText(c, 'DIANLEI', LOGICAL_W / 2, LOGICAL_H / 3 + 50, 14, UI_COLORS.dim, 'center');
 
-      // Subtitle
-      renderer.fillText('DIANLEI', LOGICAL_W / 2 - 35, LOGICAL_H / 3 + 60, '#888', 14);
+      itemRects().forEach((r, i) => {
+        const sel = i === selected;
+        drawButton(c, r, ITEMS[i]!, sel, sel && blinkTimer > 0.5 ? UI_COLORS.accent : undefined);
+      });
 
-      // Start prompt
-      if (showPrompt) {
-        renderer.fillText(
-          'Press A or SPACE to start',
-          LOGICAL_W / 2 - 80,
-          LOGICAL_H * 0.65,
-          '#fff',
-          12
-        );
+      drawText(
+        c,
+        '方向键/WASD 移动  Z/空格 射击  X 炸弹  Esc 暂停',
+        LOGICAL_W / 2,
+        LOGICAL_H - 60,
+        11,
+        '#666',
+        'center'
+      );
+      drawText(c, 'P1.1', LOGICAL_W - 20, LOGICAL_H - 20, 10, '#444', 'right');
+
+      if (inSettings) {
+        settingsPanel.render(c, ctx.input.getControlsView(), '设置');
       }
-
-      // Controls hint
-      renderer.fillText('Controls:', 20, LOGICAL_H - 100, '#666', 10);
-      renderer.fillText('Arrow keys / WASD - Move', 20, LOGICAL_H - 85, '#666', 10);
-      renderer.fillText('Z / SPACE - Fire (A)', 20, LOGICAL_H - 70, '#666', 10);
-      renderer.fillText('X - Bomb (B)', 20, LOGICAL_H - 55, '#666', 10);
-
-      // Version
-      renderer.fillText('P0 - Engine Test', LOGICAL_W - 90, LOGICAL_H - 20, '#444', 10);
     },
   };
 }
