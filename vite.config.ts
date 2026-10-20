@@ -5,6 +5,9 @@ export default defineConfig(({ mode }) => {
   const isProd = mode === 'production';
 
   return {
+    // Use relative paths in production for deployment flexibility
+    // Works under any folder path and in WeChat mini game shell
+    base: isProd ? './' : '/',
     resolve: {
       alias: {
         '@': resolve(__dirname, 'src'),

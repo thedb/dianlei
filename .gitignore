@@ -33,3 +33,4 @@ wx-shell/miniprogramRoot/
 # Temporary
 *.tmp
 *.temp
+.vite/
