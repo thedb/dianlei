@@ -63,6 +63,7 @@ export function createGame(platform: H5Platform): Game {
     settings,
     storage: platform,
     run: { report: null },
+    battleEntry: 'stage',
   };
 
   // Create scene manager and start with boot scene

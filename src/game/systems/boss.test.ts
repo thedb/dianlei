@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { BOMB_BOSS_RATIO, BOSS_ANCHOR_X, BOSS_ENTER_Y } from '@/game/config';
+import {
+  BOMB_BOSS_RATIO,
+  BOSS_ANCHOR_X,
+  BOSS_ENTER_Y,
+  BOSS_HULL_H,
+  HIT_FLASH_TIME,
+  PLAYER_BULLET_SPEED,
+} from '@/game/config';
 import { stage1 } from '@/game/levels/stage1';
 import {
   applyBossBomb,
@@ -24,6 +31,17 @@ function park(): BossRuntime {
   const boss = createBoss(cfg);
   updateBoss(boss, cfg.enterDuration, cfg);
   return boss;
+}
+
+/** Walk a 4×12 shot up from below the hull, one frame at a time. */
+function climb(boss: BossRuntime, x: number, damage: number): ReturnType<typeof resolveBossBullet> {
+  let y = boss.y + BOSS_HULL_H / 2 + 24;
+  let last = resolveBossBullet(boss, { x, y, w: 4, h: 12 }, damage, cfg);
+  for (let i = 0; i < 40 && !last.consumedBullet; i++) {
+    y -= PLAYER_BULLET_SPEED * DT;
+    last = resolveBossBullet(boss, { x, y, w: 4, h: 12 }, damage, cfg);
+  }
+  return last;
 }
 
 function toPhase2(): BossRuntime {
@@ -92,6 +110,47 @@ describe('boss phases', () => {
     expect(hit.consumedBullet).toBe(true);
     expect(left.hp).toBe(130);
     expect(hit.score).toBe(0);
+    expect(boss.hitFlash).toBe(HIT_FLASH_TIME);
+  });
+
+  it('lets a shot climb through the lower hull into a turret or the core', () => {
+    const boss = park();
+    const left = bossPart(boss, 'turretL')!;
+    const lip = {
+      x: left.worldX,
+      y: boss.y + BOSS_HULL_H / 2 - 2,
+      w: 4,
+      h: 12,
+    };
+    const blocked = resolveBossBullet(boss, lip, 10, cfg);
+    expect(blocked.consumedBullet).toBe(false);
+    expect(left.hp).toBe(140);
+
+    const belly = resolveBossBullet(boss, { x: boss.x, y: lip.y, w: 4, h: 12 }, 50, cfg);
+    expect(belly.consumedBullet).toBe(true);
+    expect(left.hp).toBe(140);
+    expect(boss.hitFlash).toBe(0);
+
+    const hit = climb(boss, left.worldX, 10);
+    expect(hit.consumedBullet).toBe(true);
+    expect(left.hp).toBe(130);
+    expect(boss.hitFlash).toBe(HIT_FLASH_TIME);
+
+    const coreFight = toPhase2();
+    const core = bossPart(coreFight, 'core')!;
+    const wing = resolveBossBullet(
+      coreFight,
+      { x: coreFight.x - 78, y: coreFight.y + BOSS_HULL_H / 2 - 2, w: 4, h: 12 },
+      10,
+      cfg
+    );
+    expect(wing.consumedBullet).toBe(true);
+    expect(core.hp).toBe(560);
+
+    const coreHit = climb(coreFight, core.worldX, 10);
+    expect(coreHit.consumedBullet).toBe(true);
+    expect(core.hp).toBe(550);
+    expect(coreFight.hitFlash).toBe(HIT_FLASH_TIME);
   });
 
   it('splits a phase-1 bomb across living turrets and dumps it on the survivor', () => {

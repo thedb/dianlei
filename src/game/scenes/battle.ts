@@ -341,6 +341,11 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
     });
     boss = time >= stage1.boss.enterAt ? createBoss(stage1.boss) : null;
     warningPlayed = time >= stage1.warningAt + WARNING_BANNER_DELAY;
+    scrollFrame = {
+      ...scrollFrame,
+      tileDelta: 0,
+      fade: backgroundFade(gameTime, stage1.warningAt),
+    };
     finishedAt = null;
     shakeLeft = 0;
     state.isDead = false;
@@ -696,6 +701,14 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
       shakeLeft = 0;
       shakeMag = 0;
       shakeDur = 0;
+
+      // Boss practice: Lv3, the normal bomb and life loadout, clock at 2:35.
+      // seek() drops every wave that already passed, so those ships never
+      // enter and do not count toward the kill-rate denominator.
+      if (sceneCtx.battleEntry === 'boss') {
+        state.power = POWER_MAX;
+        jumpTo(stage1.boss.enterAt);
+      }
 
       // Initialize audio
       audio.init();

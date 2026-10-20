@@ -28,6 +28,7 @@ export function createBootScene(ctx: SceneContext): Scene {
 
     update(dt: number, input: InputState) {
       if (isStartTapped(input.taps) || input.menuConfirm) {
+        ctx.battleEntry = 'stage';
         return 'battle';
       }
       timer += dt;

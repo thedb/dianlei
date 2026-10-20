@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createBootScene, BOOT_DURATION } from './boot';
-import { createTitleScene, SETTINGS_BUTTON } from './title';
+import { createTitleScene, BOSS_BUTTON, SETTINGS_BUTTON } from './title';
 import { START_BUTTON } from '@/game/ui/startButton';
 import { createSettingsStore, createMemoryStorage } from '@/game/settings';
 import { computeControlLayout } from '@/game/controls';
@@ -18,6 +18,7 @@ function context(): SceneContext {
     settings,
     storage: createMemoryStorage(),
     run: { report: null },
+    battleEntry: 'stage',
     input: {
       setControlsEnabled: vi.fn(),
       getControlsView: () => ({
@@ -77,6 +78,28 @@ describe('title screen start button', () => {
     expect(
       title.update(DT, makeInput({ taps: [{ x: START_BUTTON.x + 4, y: START_BUTTON.y + 4 }] }))
     ).toBe('battle');
+  });
+
+  it('挑战 Boss starts a boss-practice battle and 开始游戏 stays a full stage', () => {
+    const ctx = context();
+    const title = createTitleScene(ctx);
+    title.enter();
+    const tap = { x: BOSS_BUTTON.x + BOSS_BUTTON.w / 2, y: BOSS_BUTTON.y + BOSS_BUTTON.h / 2 };
+    expect(title.update(DT, makeInput({ taps: [tap] }))).toBe('battle');
+    expect(ctx.battleEntry).toBe('boss');
+
+    title.enter();
+    expect(title.update(DT, makeInput({ taps: [center] }))).toBe('battle');
+    expect(ctx.battleEntry).toBe('stage');
+  });
+
+  it('keyboard down selects 挑战 Boss', () => {
+    const ctx = context();
+    const title = createTitleScene(ctx);
+    title.enter();
+    expect(title.update(DT, makeInput({ menuDown: true }))).toBeNull();
+    expect(title.update(DT, makeInput({ menuConfirm: true }))).toBe('battle');
+    expect(ctx.battleEntry).toBe('boss');
   });
 
   it('设置 opens settings instead of starting', () => {

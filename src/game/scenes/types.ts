@@ -9,6 +9,9 @@ import type { RunReport } from '@/game/systems/score';
 
 export type SceneId = 'boot' | 'title' | 'battle' | 'result' | 'gameover';
 
+/** Full stage, or a boss-practice entry that skips the mid-stage waves. */
+export type BattleEntry = 'stage' | 'boss';
+
 export interface Scene {
   id: SceneId;
   enter(): void;
@@ -29,4 +32,9 @@ export interface SceneContext {
   storage: SettingsStorage;
   /** Last finished run, read by the result and game-over scenes. */
   run: { report: RunReport | null };
+  /**
+   * Written by boot and the title menu before entering battle.
+   * Retry keeps whatever the last start chose.
+   */
+  battleEntry: BattleEntry;
 }

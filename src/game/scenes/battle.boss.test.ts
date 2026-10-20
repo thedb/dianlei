@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { makeInput } from '@/test/fakes';
 import { createMemoryStorage, createSettingsStore } from '@/game/settings';
 import { computeControlLayout } from '@/game/controls';
+import { BOMBS_START, LIVES_START, POWER_MAX } from '@/game/config';
 import { stage1 } from '@/game/levels/stage1';
+import type { BattleEntry } from './types';
 import type { ControlsView } from '@/engine/input';
 import { createBattleScene } from './battle';
 
@@ -24,7 +26,7 @@ vi.mock('@/game/systems/audio', () => {
 
 const DT = 1 / 60;
 
-function setup(showDebug: boolean) {
+function setup(showDebug: boolean, battleEntry: BattleEntry = 'stage') {
   const settings = createSettingsStore(createMemoryStorage());
   const layout = computeControlLayout(settings.get(), { top: 0, bottom: 0 });
   const view: ControlsView = {
@@ -40,6 +42,7 @@ function setup(showDebug: boolean) {
     settings,
     storage: createMemoryStorage(),
     run: { report: null },
+    battleEntry,
     input: { setControlsEnabled: vi.fn(), getControlsView: () => view },
   });
   scene.enter();
@@ -65,6 +68,24 @@ describe('battle boss debug skip', () => {
     scene.update(DT, makeInput({ debugBoss: true }));
     expect(scene.getDebugInfo!().gameTime).toBeCloseTo(DT);
     expect(scene.getDebugInfo!().bossPhase).toBeUndefined();
+  });
+
+  it('挑战 Boss parks at the entrance with Lv3 and spawns no mid-stage ships', () => {
+    const scene = setup(false, 'boss');
+    const info = scene.getDebugInfo!();
+    expect(info.gameTime).toBe(stage1.boss.enterAt);
+    expect(info.bossPhase).toBe('enter');
+    expect(info.power).toBe(POWER_MAX);
+    expect(info.lives).toBe(LIVES_START);
+    expect(info.bombs).toBe(BOMBS_START);
+    expect(info.enemyCount).toBe(0);
+
+    const frames = Math.ceil(stage1.boss.enterDuration / DT) + 1;
+    for (let i = 0; i < frames; i++) scene.update(DT, makeInput());
+    const later = scene.getDebugInfo!();
+    expect(later.enemyCount).toBe(0);
+    expect(later.bossPhase).toBe('phase1');
+    expect(later.gameTime).toBeGreaterThan(stage1.boss.enterAt + stage1.boss.enterDuration);
   });
 
   it('holds fire during the fly-in, then shoots', () => {
