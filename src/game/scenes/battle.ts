@@ -86,7 +86,8 @@ import { createItem, spawnItem, updateItem, isItemFlashing, type Item } from '@/
 
 // Systems
 import {
-  checkPlayerBulletCollision,
+  checkPlayerBulletSwept,
+  isPlayerVulnerable as isVulnerable,
   checkPlayerEnemyCollision,
   checkBulletEnemyCollision,
   checkItemPickup,
@@ -103,7 +104,17 @@ interface Explosion {
   timer: number;
   frameTime: number;
   frameCount: number;
+  delay: number;
 }
+
+/** Player death burst: [dx, dy, delay] — staggered blasts around the wreck */
+const DEATH_BURSTS: ReadonlyArray<readonly [number, number, number]> = [
+  [0, 0, 0],
+  [-7, -5, 0.08],
+  [6, 4, 0.14],
+  [-4, 7, 0.22],
+  [5, -8, 0.3],
+];
 
 function createExplosion(): Explosion {
   return {
@@ -114,6 +125,7 @@ function createExplosion(): Explosion {
     timer: 0,
     frameTime: 0.06,
     frameCount: 4,
+    delay: 0,
   };
 }
 
@@ -209,7 +221,7 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
   const audio = getAudioSystem();
 
   // Helper to spawn explosion
-  function spawnExplosion(x: number, y: number): void {
+  function spawnExplosion(x: number, y: number, delay = 0): void {
     for (const exp of explosionPool) {
       if (!exp.active) {
         exp.active = true;
@@ -217,6 +229,7 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
         exp.y = y;
         exp.frame = 0;
         exp.timer = 0;
+        exp.delay = delay;
         return;
       }
     }
@@ -289,24 +302,47 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
 
   // Handle player death
   function killPlayer(): void {
-    if (state.isDead || state.bombInvincible > 0 || state.respawnInvincible > 0) {
-      return;
-    }
+    if (!isPlayerVulnerable()) return;
 
     state.isDead = true;
     state.lives--;
     state.power = Math.max(1, state.power - DEATH_POWER_LOSS);
     state.respawnTimer = RESPAWN_DELAY;
 
+    state.isFlying = false;
+    player.bank = 0;
+    player.targetBank = 0;
+    player.lastBankFrame = 5;
+    player.velocityY = 0;
+
     // Clear enemy bullets (give player breathing room)
     enemyBulletPool.releaseAll();
 
-    spawnExplosion(player.x, player.y);
-    audio.play('playerExplode');
-
-    if (state.lives <= 0) {
-      state.gameOver = true;
+    // The ship sprite stops drawing this frame; only the explosion remains
+    for (const [dx, dy, delay] of DEATH_BURSTS) {
+      spawnExplosion(player.x + dx, player.y + dy, delay);
     }
+    audio.play('playerExplode');
+  }
+
+  // Bring in a fresh ship from below the screen after the respawn delay
+  function spawnNewShip(): void {
+    state.isDead = false;
+    state.isFlying = true;
+    state.bombs = BOMBS_ON_RESPAWN;
+    state.respawnInvincible = RESPAWN_FLYIN_TIME + RESPAWN_INVINCIBLE_TIME;
+    player.x = LOGICAL_W / 2;
+    player.y = LOGICAL_H + 40;
+    player.prevX = player.x;
+    player.prevY = player.y;
+  }
+
+  function isPlayerControllable(): boolean {
+    return !state.isDead && !state.isFlying;
+  }
+
+  function isPlayerVulnerable(): boolean {
+    return isVulnerable(state);
   }
 
   // Handle bomb activation
@@ -383,6 +419,63 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
   // easeOutQuad for bank animation
   function easeOutQuad(t: number): number {
     return 1 - (1 - t) * (1 - t);
+  }
+
+  // Movement, banking and shooting while the ship is under player control
+  function updatePlayerControl(dt: number, input: InputState): void {
+    // Move player
+    const speed = PLAYER_SPEED * input.joystickMagnitude;
+    player.x += input.joystickX * speed * dt;
+    player.y += input.joystickY * speed * dt;
+    player.velocityY = input.joystickY * input.joystickMagnitude;
+
+    // Clamp to screen bounds
+    player.x = Math.max(PLAYER_MARGIN, Math.min(LOGICAL_W - PLAYER_MARGIN, player.x));
+    player.y = Math.max(PLAYER_MARGIN, Math.min(LOGICAL_H - PLAYER_MARGIN, player.y));
+
+    // Update bank animation
+    player.targetBank = Math.abs(input.joystickX) < BANK_DEADZONE ? 0 : input.joystickX;
+    const bankDiff = player.targetBank - player.bank;
+    const isDeepening =
+      Math.abs(player.targetBank) > Math.abs(player.bank) &&
+      Math.sign(player.targetBank) === Math.sign(player.bank);
+    const bankSpeed = isDeepening ? 1 / BANK_IN_TIME : 1 / BANK_OUT_TIME;
+    const bankStep = bankSpeed * dt;
+
+    if (Math.abs(bankDiff) < bankStep) {
+      player.bank = player.targetBank;
+    } else {
+      player.bank += Math.sign(bankDiff) * bankStep;
+    }
+
+    // Calculate bank frame with hysteresis
+    const displayBank = easeOutQuad(Math.abs(player.bank)) * Math.sign(player.bank);
+    let newBankFrame = getBankFrameIndex(displayBank);
+    const frameDiff = Math.abs(newBankFrame - player.lastBankFrame);
+    if (frameDiff > 0) {
+      const threshold = 0.5 + BANK_HYSTERESIS * 5;
+      const normalized = (displayBank + 1) / 2;
+      const framePos = normalized * 10;
+      if (Math.abs(framePos - newBankFrame) > threshold) {
+        newBankFrame = player.lastBankFrame;
+      }
+    }
+    player.lastBankFrame = newBankFrame;
+
+    // Handle shooting
+    timeSinceLastShot += dt;
+    if (fireHeld) {
+      while (timeSinceLastShot >= shotInterval) {
+        firePlayerBullets();
+        timeSinceLastShot -= shotInterval;
+      }
+    } else if (timeSinceLastShot > shotInterval) {
+      timeSinceLastShot = shotInterval;
+    }
+
+    if (bombPressed) {
+      activateBomb();
+    }
   }
 
   return {
@@ -477,89 +570,37 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
         state.respawnInvincible = Math.max(0, state.respawnInvincible - dt);
       }
 
-      // Handle death/respawn
+      fireHeld = input.buttonA;
+      const bombInput = input.buttonB;
+      bombPressed = bombInput && !lastBombInput;
+      lastBombInput = bombInput;
+
+      // Store previous position (every step, so swept collision and render
+      // interpolation never reach back to a stale position)
+      player.prevX = player.x;
+      player.prevY = player.y;
+
       if (state.isDead) {
         state.respawnTimer -= dt;
         if (state.respawnTimer <= 0) {
-          state.isDead = false;
-          state.isFlying = true;
-          state.bombs = BOMBS_ON_RESPAWN;
-          player.y = LOGICAL_H + 40;
-          player.x = LOGICAL_W / 2;
+          if (state.lives <= 0) {
+            state.gameOver = true;
+            return null;
+          }
+          spawnNewShip();
         }
-        return null;
-      }
-
-      // Handle fly-in after respawn
-      if (state.isFlying) {
+      } else if (state.isFlying) {
         player.y -= ((LOGICAL_H + 40 - PLAYER_SPAWN_Y) / RESPAWN_FLYIN_TIME) * dt;
         if (player.y <= PLAYER_SPAWN_Y) {
           player.y = PLAYER_SPAWN_Y;
           state.isFlying = false;
-          state.respawnInvincible = RESPAWN_INVINCIBLE_TIME;
         }
-        return null;
-      }
-
-      // Store previous position
-      player.prevX = player.x;
-      player.prevY = player.y;
-
-      // Move player
-      const speed = PLAYER_SPEED * input.joystickMagnitude;
-      player.x += input.joystickX * speed * dt;
-      player.y += input.joystickY * speed * dt;
-      player.velocityY = input.joystickY * input.joystickMagnitude;
-
-      // Clamp to screen bounds
-      player.x = Math.max(PLAYER_MARGIN, Math.min(LOGICAL_W - PLAYER_MARGIN, player.x));
-      player.y = Math.max(PLAYER_MARGIN, Math.min(LOGICAL_H - PLAYER_MARGIN, player.y));
-
-      // Update bank animation
-      player.targetBank = Math.abs(input.joystickX) < BANK_DEADZONE ? 0 : input.joystickX;
-      const bankDiff = player.targetBank - player.bank;
-      const isDeepening =
-        Math.abs(player.targetBank) > Math.abs(player.bank) &&
-        Math.sign(player.targetBank) === Math.sign(player.bank);
-      const bankSpeed = isDeepening ? 1 / BANK_IN_TIME : 1 / BANK_OUT_TIME;
-      const bankStep = bankSpeed * dt;
-
-      if (Math.abs(bankDiff) < bankStep) {
-        player.bank = player.targetBank;
       } else {
-        player.bank += Math.sign(bankDiff) * bankStep;
+        updatePlayerControl(dt, input);
       }
-
-      // Calculate bank frame with hysteresis
-      const displayBank = easeOutQuad(Math.abs(player.bank)) * Math.sign(player.bank);
-      let newBankFrame = getBankFrameIndex(displayBank);
-      const frameDiff = Math.abs(newBankFrame - player.lastBankFrame);
-      if (frameDiff > 0) {
-        const threshold = 0.5 + BANK_HYSTERESIS * 5;
-        const normalized = (displayBank + 1) / 2;
-        const framePos = normalized * 10;
-        if (Math.abs(framePos - newBankFrame) > threshold) {
-          newBankFrame = player.lastBankFrame;
-        }
-      }
-      player.lastBankFrame = newBankFrame;
 
       // Scroll background
       bgOffset = (bgOffset + BG_SCROLL_SPEED * dt) % 32;
-
-      // Track fire input
-      fireHeld = input.buttonA;
-
-      // Handle shooting
-      timeSinceLastShot += dt;
-      if (fireHeld) {
-        while (timeSinceLastShot >= shotInterval) {
-          firePlayerBullets();
-          timeSinceLastShot -= shotInterval;
-        }
-      } else if (timeSinceLastShot > shotInterval) {
-        timeSinceLastShot = shotInterval;
-      }
 
       // Update player bullets
       const bulletsToRelease: Bullet[] = [];
@@ -580,15 +621,6 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
         }
       });
       bulletsToRelease.forEach((b) => bulletPool.release(b));
-
-      // Handle bomb input
-      const bombInput = input.buttonB;
-      bombPressed = bombInput && !lastBombInput;
-      lastBombInput = bombInput;
-
-      if (bombPressed) {
-        activateBomb();
-      }
 
       // Update wave scheduler
       if (waveScheduler) {
@@ -661,7 +693,9 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
 
       // Update explosions
       for (const exp of explosionPool) {
-        if (exp.active) {
+        if (exp.active && exp.delay > 0) {
+          exp.delay -= dt;
+        } else if (exp.active) {
           exp.timer += dt;
           if (exp.timer >= exp.frameTime) {
             exp.timer -= exp.frameTime;
@@ -715,10 +749,20 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
       });
 
       // Enemy bullets vs player
-      if (state.bombInvincible <= 0 && state.respawnInvincible <= 0) {
+      if (isPlayerVulnerable()) {
         enemyBulletPool.forEach((bullet) => {
           if (
-            checkPlayerBulletCollision(player.x, player.y, bullet.x, bullet.y, bullet.hitRadius)
+            checkPlayerBulletSwept(
+              player.prevX,
+              player.prevY,
+              player.x,
+              player.y,
+              bullet.prevX,
+              bullet.prevY,
+              bullet.x,
+              bullet.y,
+              bullet.hitRadius
+            )
           ) {
             killPlayer();
           }
@@ -726,7 +770,7 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
       }
 
       // Enemy body vs player
-      if (state.bombInvincible <= 0 && state.respawnInvincible <= 0) {
+      if (isPlayerVulnerable()) {
         enemyPool.forEach((enemy) => {
           // Only air enemies can collide
           if (enemy.type !== 'tank' && enemy.type !== 'turret2' && enemy.type !== 'missile_car') {
@@ -739,7 +783,7 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
 
       // Items vs player
       itemPool.forEach((item) => {
-        if (checkItemPickup(player.x, player.y, item.x, item.y)) {
+        if (isPlayerControllable() && checkItemPickup(player.x, player.y, item.x, item.y)) {
           collectItem(item);
           itemPool.release(item);
         }
@@ -830,10 +874,8 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
         renderer.drawImage(frame.canvas, bx - frame.anchorX, by - frame.anchorY);
       });
 
-      // Draw player (if alive and not in respawn delay)
+      // Draw player: never while dead, so no wreck lingers at the death point
       if (!state.isDead) {
-        // Calculate invincibility blink
-        const shouldDraw = true;
         let playerAlpha = 1;
         if (state.respawnInvincible > 0) {
           const blinkInterval =
@@ -842,48 +884,35 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
           playerAlpha = blinkPhase === 0 ? INVINCIBLE_ALPHA_MAX : INVINCIBLE_ALPHA_MIN;
         }
 
-        if (shouldDraw) {
-          // Draw engine flames
-          const bankFrame = assets.player.bankFrames[player.lastBankFrame]!;
-          ctx.globalAlpha = playerAlpha;
-          drawPlayerFlames(ctx, renderX, renderY, bankFrame.nozzles, player.velocityY, gameTime);
+        const bankFrame = assets.player.bankFrames[player.lastBankFrame]!;
+        ctx.globalAlpha = playerAlpha;
+        drawPlayerFlames(ctx, renderX, renderY, bankFrame.nozzles, player.velocityY, gameTime);
+        renderer.drawImage(
+          bankFrame.canvas,
+          renderX - bankFrame.anchorX,
+          renderY - bankFrame.anchorY
+        );
+        ctx.globalAlpha = 1;
 
-          // Draw player sprite
-          renderer.drawImage(
-            bankFrame.canvas,
-            renderX - bankFrame.anchorX,
-            renderY - bankFrame.anchorY
-          );
+        // Shield during bomb invincibility
+        if (state.bombInvincible > 0) {
+          renderer.strokeCircle(renderX, renderY, 20, 'rgba(0, 229, 255, 0.5)', 2);
+        }
 
-          // Draw shield during bomb invincibility
-          if (state.bombInvincible > 0) {
-            renderer.strokeCircle(renderX, renderY, 20, 'rgba(0, 229, 255, 0.5)', 2);
-          }
-
-          // Draw hitbox
-          if (SHOW_HITBOX) {
-            renderer.fillCircle(
-              renderX,
-              renderY,
-              HITBOX_RADIUS,
-              `rgba(255, 255, 255, ${HITBOX_ALPHA})`
-            );
-            renderer.strokeCircle(
-              renderX,
-              renderY,
-              HITBOX_RADIUS + 1,
-              `rgba(0, 229, 255, ${HITBOX_ALPHA})`,
-              1
-            );
-          }
-
-          ctx.globalAlpha = 1;
+        // Hitbox: drawn solid (not blinking) whenever the ship exists.
+        // White = can be hit, cyan = shown but currently immune.
+        if (SHOW_HITBOX) {
+          const immune = !isPlayerVulnerable();
+          const fill = immune ? 'rgba(0, 229, 255, 0.35)' : `rgba(255, 255, 255, ${HITBOX_ALPHA})`;
+          const ring = immune ? 'rgba(0, 229, 255, 0.9)' : 'rgba(255, 255, 255, 0.9)';
+          renderer.fillCircle(renderX, renderY, HITBOX_RADIUS, fill);
+          renderer.strokeCircle(renderX, renderY, HITBOX_RADIUS + 1, ring, 1);
         }
       }
 
       // Draw explosions
       for (const exp of explosionPool) {
-        if (exp.active && exp.frame < assets.explosions.smallExplosion.length) {
+        if (exp.active && exp.delay <= 0 && exp.frame < assets.explosions.smallExplosion.length) {
           const frame = assets.explosions.smallExplosion[exp.frame]!;
           renderer.drawImage(frame.canvas, exp.x - frame.anchorX, exp.y - frame.anchorY);
         }
