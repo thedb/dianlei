@@ -1,7 +1,7 @@
 /**
- * Battle scene — stage 1 mid-run through the warning.
- * The orbital boss is intentionally not fought here: after the warning the
- * run shows STAGE CLEAR. Boss logic stays in stage1.boss for P3.
+ * Battle scene — stage 1 through the orbital boss.
+ * Warning clears the lane, the battleship fights, then STAGE CLEAR hands off
+ * to the result scene. F2 / F3 (debug on) jump to the warning or the boss.
  */
 
 import type { Scene, SceneContext } from './types';
@@ -50,8 +50,9 @@ import {
   BANK_OUT_TIME,
   BANK_DEADZONE,
   BANK_HYSTERESIS,
-  WARNING_DURATION,
   WARNING_BANNER_DELAY,
+  SHAKE_BIG_INTENSITY,
+  SHAKE_BIG_DURATION,
 } from '@/game/config';
 import { PALETTE, COLOR } from '@/game/palette';
 import { stage1 } from '@/game/levels/stage1';
@@ -65,6 +66,9 @@ import {
   drawEnemyFlame,
   drawBulletGlow,
   drawBackground,
+  drawBossWorld,
+  drawBossHpBar,
+  drawBossLaser,
   BULLET_GLOW_COLORS,
 } from '@/game/art';
 
@@ -82,6 +86,7 @@ import {
   createEnemyBullet,
   updateEnemyBullet,
   spawnEnemyBullet,
+  executeFirePattern,
   type EnemyBullet,
   type BulletSpawner,
 } from '@/game/entities/enemyBullet';
@@ -102,6 +107,20 @@ import { drawControls, drawPauseButton } from '@/game/ui/controlsOverlay';
 import { updateEnemyWeapons } from '@/game/systems/weapons';
 import { getAudioSystem } from '@/game/systems/audio';
 import {
+  applyBossBomb,
+  bossHitsPlayer,
+  bossHpRemaining,
+  bossIntroBarFill,
+  bossLaserHits,
+  bossTotalHp,
+  createBoss,
+  resolveBossBullet,
+  updateBoss,
+  type BossEvents,
+  type BossRuntime,
+} from '@/game/systems/boss';
+import { introBanner, type RunReport } from '@/game/systems/score';
+import {
   Scroller,
   warningBulletAlpha,
   backgroundFade,
@@ -118,6 +137,7 @@ interface Explosion {
   frameTime: number;
   frameCount: number;
   delay: number;
+  scale: number;
 }
 
 /** Player death burst: [dx, dy, delay] — staggered blasts around the wreck */
@@ -139,6 +159,7 @@ function createExplosion(): Explosion {
     frameTime: 0.06,
     frameCount: 4,
     delay: 0,
+    scale: 1,
   };
 }
 
@@ -168,7 +189,7 @@ interface GameState {
   isDead: boolean;
   isFlying: boolean;
   gameOver: boolean;
-  stageClear: boolean;
+  deaths: number;
   nextExtendScore: number;
 }
 
@@ -202,7 +223,7 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
     isDead: false,
     isFlying: false,
     gameOver: false,
-    stageClear: false,
+    deaths: 0,
     nextExtendScore: EXTEND_EVERY,
   };
 
@@ -212,9 +233,16 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
   const enemyBulletPool = new ObjectPool(createEnemyBullet, 200);
   const itemPool = new ObjectPool(createItem, 10);
   const explosionPool: Explosion[] = [];
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 32; i++) {
     explosionPool.push(createExplosion());
   }
+
+  let boss: BossRuntime | null = null;
+  let warningPlayed = false;
+  let finishedAt: number | null = null;
+  let shakeLeft = 0;
+  let shakeMag = 0;
+  let shakeDur = 0;
 
   // Wave scheduler — full stage, not the MVP subset
   let waveScheduler: WaveScheduler | null = null;
@@ -242,7 +270,7 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
   const pauseMenu = createPauseMenu(sceneCtx.settings);
 
   // Helper to spawn explosion
-  function spawnExplosion(x: number, y: number, delay = 0): void {
+  function spawnExplosion(x: number, y: number, delay = 0, scale = 1): void {
     for (const exp of explosionPool) {
       if (!exp.active) {
         exp.active = true;
@@ -251,9 +279,77 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
         exp.frame = 0;
         exp.timer = 0;
         exp.delay = delay;
+        exp.scale = scale;
         return;
       }
     }
+  }
+
+  function triggerShake(intensity: number, duration: number): void {
+    if (shakeLeft > 0 && intensity < shakeMag) return;
+    if (shakeLeft > 0 && intensity === shakeMag && duration <= shakeLeft) return;
+    shakeMag = intensity;
+    shakeDur = duration;
+    shakeLeft = duration;
+  }
+
+  function applyBossEvents(ev: BossEvents): void {
+    if (ev.score) state.score += ev.score;
+    if (ev.convertBullets) {
+      let cleared = 0;
+      enemyBulletPool.forEach(() => cleared++);
+      state.score += cleared * stage1.boss.transition.bulletsToScore;
+      enemyBulletPool.releaseAll();
+    }
+    for (const shot of ev.shots) {
+      executeFirePattern(shot.fire, shot.x, shot.y, player.x, player.y, bulletSpawner, {
+        rotation: shot.rotation,
+      });
+    }
+    if (ev.clearBullets) enemyBulletPool.releaseAll();
+    for (const boom of ev.explosions) {
+      spawnExplosion(boom.x, boom.y, boom.delay, boom.scale);
+    }
+    if (ev.shake) triggerShake(ev.shake.intensity, ev.shake.duration);
+    if (ev.explosions.length > 0) audio.play('enemyExplode');
+  }
+
+  function publishRun(outcome: RunReport['outcome']): void {
+    const info = waveScheduler?.getDebugInfo();
+    sceneCtx.run.report = {
+      outcome,
+      baseScore: state.score,
+      kills: info?.killed ?? 0,
+      spawned: info?.spawned ?? 0,
+      deaths: state.deaths,
+      time: outcome === 'clear' ? (finishedAt ?? gameTime) : gameTime,
+    };
+  }
+
+  /** Debug skip (wave table §8.3). Does not spawn the ships that were jumped over. */
+  function jumpTo(time: number): void {
+    gameTime = time;
+    waveScheduler?.reset();
+    waveScheduler?.setPowerLevel(state.power);
+    waveScheduler?.seek(time);
+    bulletPool.releaseAll();
+    enemyPool.releaseAll();
+    enemyBulletPool.releaseAll();
+    itemPool.releaseAll();
+    explosionPool.forEach((exp) => {
+      exp.active = false;
+    });
+    boss = time >= stage1.boss.enterAt ? createBoss(stage1.boss) : null;
+    warningPlayed = time >= stage1.warningAt + WARNING_BANNER_DELAY;
+    finishedAt = null;
+    shakeLeft = 0;
+    state.isDead = false;
+    state.isFlying = false;
+    state.gameOver = false;
+    state.respawnTimer = 0;
+    if (state.lives <= 0) state.lives = 1;
+    player.y = PLAYER_SPAWN_Y;
+    player.prevY = PLAYER_SPAWN_Y;
   }
 
   function drawGunBarrel(ctx: CanvasRenderingContext2D, x: number, y: number, enemy: Enemy): void {
@@ -352,6 +448,7 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
 
     state.isDead = true;
     state.lives--;
+    state.deaths++;
     state.power = Math.max(1, state.power - DEATH_POWER_LOSS);
     state.respawnTimer = RESPAWN_DELAY;
 
@@ -368,6 +465,7 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
     for (const [dx, dy, delay] of DEATH_BURSTS) {
       spawnExplosion(player.x + dx, player.y + dy, delay);
     }
+    triggerShake(SHAKE_BIG_INTENSITY, SHAKE_BIG_DURATION);
     audio.play('playerExplode');
   }
 
@@ -420,6 +518,8 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
       }
     });
 
+    if (boss) applyBossEvents(applyBossBomb(boss, stage1.boss));
+    triggerShake(SHAKE_BIG_INTENSITY, SHAKE_BIG_DURATION);
     audio.play('bomb');
   }
 
@@ -560,10 +660,12 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
       state.respawnTimer = 0;
       state.respawnInvincible = 0;
       state.isDead = false;
-      state.isFlying = false;
+      state.isFlying = true;
       state.gameOver = false;
-      state.stageClear = false;
+      state.deaths = 0;
       state.nextExtendScore = EXTEND_EVERY;
+      player.y = LOGICAL_H + 40;
+      player.prevY = player.y;
 
       // Reset pools
       bulletPool.releaseAll();
@@ -588,13 +690,20 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
       fireHeld = false;
       bombPressed = false;
       lastBombInput = false;
+      boss = null;
+      warningPlayed = false;
+      finishedAt = null;
+      shakeLeft = 0;
+      shakeMag = 0;
+      shakeDur = 0;
 
       // Initialize audio
       audio.init();
     },
 
     onHide(): void {
-      if (!pauseMenu.isOpen() && !state.gameOver && !state.stageClear) openPause();
+      const showcasing = boss?.phase === 'clear' || boss?.phase === 'done';
+      if (!pauseMenu.isOpen() && !state.gameOver && !showcasing) openPause();
     },
 
     exit(): void {
@@ -619,7 +728,8 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
         return null;
       }
 
-      if (!state.gameOver && !state.stageClear) {
+      const showcasing = boss?.phase === 'clear';
+      if (!state.gameOver && !showcasing) {
         const pauseTapped = input.taps.some((t) =>
           inCircle(t.x, t.y, sceneCtx.input.getControlsView().layout.pauseButton, 8)
         );
@@ -629,15 +739,13 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
         }
       }
 
-      gameTime += dt;
-
-      // Game over or stage clear - wait for input to return to title
-      if (state.gameOver || state.stageClear) {
-        if (input.buttonA || input.buttonB) {
-          return 'title';
-        }
+      if (sceneCtx.showDebug && (input.debugWarning || input.debugBoss)) {
+        jumpTo(input.debugBoss ? stage1.boss.enterAt : stage1.warningAt);
         return null;
       }
+
+      gameTime += dt;
+      if (shakeLeft > 0) shakeLeft = Math.max(0, shakeLeft - dt);
 
       // Update cooldowns
       if (state.bombCooldown > 0) {
@@ -668,7 +776,8 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
         if (state.respawnTimer <= 0) {
           if (state.lives <= 0) {
             state.gameOver = true;
-            return null;
+            publishRun('gameover');
+            return 'gameover';
           }
           spawnNewShip();
         }
@@ -684,7 +793,16 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
 
       scrollFrame = scroller.update(dt, gameTime, stage1.warningAt);
 
-      const warning = gameTime >= stage1.warningAt;
+      const pastWarning = gameTime >= stage1.warningAt;
+      const warningWindow = pastWarning && gameTime < stage1.boss.enterAt;
+      if (
+        !warningPlayed &&
+        gameTime >= stage1.warningAt + WARNING_BANNER_DELAY &&
+        gameTime < stage1.boss.enterAt
+      ) {
+        warningPlayed = true;
+        audio.play('warning');
+      }
 
       // Update player bullets
       const bulletsToRelease: Bullet[] = [];
@@ -711,7 +829,7 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
         waveScheduler.setPowerLevel(state.power);
         const spawns = waveScheduler.update(dt);
 
-        if (!warning) {
+        if (!pastWarning) {
           for (const spawn of spawns) {
             const enemy = enemyPool.acquire();
             spawnEnemy(
@@ -729,9 +847,8 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
         }
       }
 
-      // Boss fight is P3. The warning runs, then the stage clears.
-      if (!state.gameOver && gameTime >= stage1.warningAt + WARNING_DURATION) {
-        state.stageClear = true;
+      if (!boss && gameTime >= stage1.boss.enterAt) {
+        boss = createBoss(stage1.boss);
       }
 
       // Update enemies
@@ -741,14 +858,24 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
         if (shouldCull) {
           enemiesToRelease.push(enemy);
         } else {
-          updateEnemyWeapons(enemy, dt, player.x, player.y, bulletSpawner, !warning);
+          updateEnemyWeapons(enemy, dt, player.x, player.y, bulletSpawner, !pastWarning);
         }
       });
       enemiesToRelease.forEach((e) => enemyPool.release(e));
 
-      // Warning clears enemy bullets with a fade and no score
-      const bulletAlpha = warningBulletAlpha(gameTime, stage1.warningAt);
-      if (bulletAlpha <= 0) {
+      if (boss && boss.phase !== 'done') {
+        const ev = updateBoss(boss, dt, stage1.boss);
+        applyBossEvents(ev);
+        if (boss.phase === 'clear' && finishedAt === null) finishedAt = gameTime;
+        if (ev.enterResult) {
+          publishRun('clear');
+          return 'result';
+        }
+      }
+
+      // Warning fades enemy bullets with no score. Boss shots after enterAt stay.
+      const bulletAlpha = warningWindow ? warningBulletAlpha(gameTime, stage1.warningAt) : 1;
+      if (warningWindow && bulletAlpha <= 0) {
         enemyBulletPool.releaseAll();
       }
 
@@ -792,8 +919,22 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
       // COLLISION DETECTION
       // ========================================
 
-      // Player bullets vs enemies
+      // Player bullets vs the battleship, then the rest of the lane
       bulletPool.forEach((bullet) => {
+        if (boss) {
+          const hit = resolveBossBullet(
+            boss,
+            { x: bullet.x, y: bullet.y, w: bullet.width, h: bullet.height },
+            PLAYER_BULLET_DAMAGE,
+            stage1.boss
+          );
+          if (hit.consumedBullet) {
+            bulletPool.release(bullet);
+            applyBossEvents(hit);
+            return;
+          }
+        }
+
         enemyPool.forEach((enemy) => {
           if (
             checkBulletEnemyCollision(
@@ -829,8 +970,8 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
         });
       });
 
-      // Enemy bullets vs player. Fading warning bullets do not score and do not hit.
-      if (isPlayerVulnerable() && !warning) {
+      // Enemy bullets vs player. Fading warning bullets do not hit.
+      if (isPlayerVulnerable() && !warningWindow) {
         enemyBulletPool.forEach((bullet) => {
           if (
             checkPlayerBulletSwept(
@@ -850,7 +991,13 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
         });
       }
 
-      // Enemy body vs player
+      // Enemy body vs player. The hull kills on contact; its bullets do not hurt it.
+      if (isPlayerVulnerable() && boss && bossHitsPlayer(boss, player.x, player.y)) {
+        killPlayer();
+      }
+      if (isPlayerVulnerable() && boss && bossLaserHits(boss, stage1.boss, player.x, player.y)) {
+        killPlayer();
+      }
       if (isPlayerVulnerable()) {
         enemyPool.forEach((enemy) => {
           if (!isGroundEnemy(enemy.type)) {
@@ -886,6 +1033,15 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
       renderer.clear('#070b14');
 
       const ctx = renderer.getContext();
+      let shakeX = 0;
+      let shakeY = 0;
+      if (shakeLeft > 0 && shakeDur > 0) {
+        const amp = shakeMag * (shakeLeft / shakeDur);
+        shakeX = Math.round(Math.sin(gameTime * 70) * amp);
+        shakeY = Math.round(Math.cos(gameTime * 53) * amp);
+      }
+      ctx.save();
+      if (shakeX !== 0 || shakeY !== 0) ctx.translate(shakeX, shakeY);
       drawBackground(ctx, assets.background, scrollFrame, gameTime);
 
       // Draw items
@@ -934,7 +1090,12 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
         if (!isGroundEnemy(enemy.type)) drawEnemy(enemy);
       });
 
-      const bulletFade = warningBulletAlpha(gameTime, stage1.warningAt);
+      if (boss && assets.boss) {
+        drawBossWorld(ctx, renderer, boss, assets.boss, gameTime);
+      }
+
+      const warningWindow = gameTime >= stage1.warningAt && gameTime < stage1.boss.enterAt;
+      const bulletFade = warningWindow ? warningBulletAlpha(gameTime, stage1.warningAt) : 1;
       ctx.globalAlpha = bulletFade;
       enemyBulletPool.forEach((bullet) => {
         const bx = bullet.prevX + (bullet.x - bullet.prevX) * alpha;
@@ -959,6 +1120,8 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
         renderer.drawImage(frame.canvas, bx - frame.anchorX, by - frame.anchorY);
       });
       ctx.globalAlpha = 1;
+
+      if (boss) drawBossLaser(ctx, boss, stage1.boss, gameTime);
 
       // Draw player bullets with glow
       bulletPool.forEach((bullet) => {
@@ -1010,9 +1173,18 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
       for (const exp of explosionPool) {
         if (exp.active && exp.delay <= 0 && exp.frame < assets.explosions.smallExplosion.length) {
           const frame = assets.explosions.smallExplosion[exp.frame]!;
-          renderer.drawImage(frame.canvas, exp.x - frame.anchorX, exp.y - frame.anchorY);
+          const scale = exp.scale;
+          renderer.drawImage(
+            frame.canvas,
+            exp.x - frame.anchorX * scale,
+            exp.y - frame.anchorY * scale,
+            frame.width * scale,
+            frame.height * scale
+          );
         }
       }
+
+      ctx.restore();
 
       if (state.bombFlashTimer > 0) {
         const flashAlpha = state.bombFlashTimer / 0.15;
@@ -1046,17 +1218,43 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
         10
       );
 
-      // Wave info (debug)
+      // Wave info (debug). F2 jumps to the warning, F3 to the boss.
       if (sceneCtx.showDebug && waveScheduler) {
         const waveInfo = waveScheduler.getDebugInfo();
-        renderer.fillText(`Wave: ${waveInfo.waveId}`, 8, hudY + 28, '#888', 8);
-        renderer.fillText(`Time: ${waveInfo.time.toFixed(1)}s`, 8, hudY + 38, '#888', 8);
+        renderer.fillText(`Wave: ${waveInfo.waveId}`, 8, hudY + 46, '#888', 8);
+        renderer.fillText(
+          `Time: ${gameTime.toFixed(1)}s  ${boss ? boss.phase : ''}`,
+          8,
+          hudY + 56,
+          '#888',
+          8
+        );
+        renderer.fillText('F2 warning  F3 boss', 8, hudY + 66, '#666', 8);
       }
 
+      const intro = boss ? null : introBanner(gameTime);
+      if (intro && !state.gameOver) {
+        const blink = intro !== 'GO' || Math.floor(gameTime * 8) % 2 === 0;
+        renderer.fillText(
+          intro,
+          LOGICAL_W / 2 - intro.length * 6,
+          LOGICAL_H / 2 - 80,
+          blink ? '#fff' : '#7fd',
+          18
+        );
+      }
+
+      const barIntro = bossIntroBarFill(gameTime, stage1.warningAt, stage1.boss.enterAt);
+      let barFill: number | null = barIntro;
+      if (barFill === null && boss && boss.phase !== 'clear' && boss.phase !== 'done') {
+        barFill = bossHpRemaining(boss) / Math.max(1, bossTotalHp(stage1.boss));
+      }
+      if (barFill !== null) drawBossHpBar(ctx, barFill, 48, 32, 264, 8);
+
       if (
-        !state.stageClear &&
         !state.gameOver &&
-        gameTime >= stage1.warningAt + WARNING_BANNER_DELAY
+        gameTime >= stage1.warningAt + WARNING_BANNER_DELAY &&
+        gameTime < stage1.boss.enterAt
       ) {
         const blink = Math.floor(gameTime * 6) % 2 === 0;
         renderer.fillRect(0, LOGICAL_H / 2 - 28, LOGICAL_W, 40, 'rgba(0, 0, 0, 0.45)');
@@ -1081,36 +1279,14 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
       // Pause menu overlay
       pauseMenu.render(ctx, controlsView, { stage: 1, score: state.score });
 
-      // Game Over overlay
-      if (state.gameOver) {
-        renderer.fillRect(0, 0, LOGICAL_W, LOGICAL_H, 'rgba(0, 0, 0, 0.7)');
-        renderer.fillText('GAME OVER', LOGICAL_W / 2 - 50, LOGICAL_H / 2 - 20, '#f00', 16);
-        renderer.fillText('Press A to retry', LOGICAL_W / 2 - 55, LOGICAL_H / 2 + 20, '#fff', 12);
-      }
-
-      // Stage Clear overlay
-      if (state.stageClear) {
-        renderer.fillRect(0, 0, LOGICAL_W, LOGICAL_H, 'rgba(0, 0, 0, 0.5)');
-        renderer.fillText('STAGE CLEAR', LOGICAL_W / 2 - 60, LOGICAL_H / 2 - 20, '#0f0', 16);
-        renderer.fillText(
-          `Score: ${state.score}`,
-          LOGICAL_W / 2 - 45,
-          LOGICAL_H / 2 + 30,
-          '#fff',
-          12
-        );
-        renderer.fillText(
-          'Press A to continue',
-          LOGICAL_W / 2 - 65,
-          LOGICAL_H / 2 + 60,
-          '#fff',
-          10
-        );
+      if (boss?.phase === 'clear') {
+        renderer.fillRect(0, 0, LOGICAL_W, LOGICAL_H, 'rgba(0, 0, 0, 0.55)');
+        renderer.fillText('STAGE CLEAR', LOGICAL_W / 2 - 66, LOGICAL_H / 2 - 16, '#7dff9a', 18);
       }
     },
 
     getDebugInfo(): GameDebugInfo {
-      return {
+      const info: GameDebugInfo = {
         bombs: state.bombs,
         bombCooldown: state.bombCooldown,
         bulletCount: bulletPool.getActiveCount(),
@@ -1124,6 +1300,8 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
         paused: pauseMenu.isOpen(),
         gameTime,
       };
+      if (boss) info.bossPhase = boss.phase;
+      return info;
     },
   };
 }

@@ -6,6 +6,7 @@ import type { Scene, SceneContext } from './types';
 import type { Renderer } from '@/engine/renderer';
 import type { InputState } from '@/engine/input';
 import { LOGICAL_W, LOGICAL_H } from '@/game/config';
+import { readHighScore } from '@/game/highScore';
 import { createSettingsPanel } from '@/game/ui/settingsPanel';
 import { drawButton, drawText, hitRect, UI_COLORS, type Rect } from '@/game/ui/widgets';
 import { START_BUTTON, drawStartButton, isStartTapped } from '@/game/ui/startButton';
@@ -69,20 +70,32 @@ export function createTitleScene(ctx: SceneContext): Scene {
 
       drawText(c, '电雷', LOGICAL_W / 2, LOGICAL_H / 3, 56, UI_COLORS.accent, 'center');
       drawText(c, 'DIANLEI', LOGICAL_W / 2, LOGICAL_H / 3 + 50, 14, UI_COLORS.dim, 'center');
+      const best = readHighScore(ctx.storage);
+      drawText(
+        c,
+        `最高分 ${best.toString().padStart(8, '0')}`,
+        LOGICAL_W / 2,
+        LOGICAL_H / 3 + 78,
+        14,
+        UI_COLORS.dim,
+        'center'
+      );
 
       drawStartButton(c, blinkTimer, selected === 0);
       drawButton(c, SETTINGS_BUTTON, '设置', selected === 1);
 
       drawText(
         c,
-        '方向键/WASD 移动  Z/空格 射击  X 炸弹  Esc 暂停',
+        ctx.showDebug
+          ? '方向键移动  Z射击  X炸弹  Esc暂停  F2预警  F3 BOSS'
+          : '方向键/WASD 移动  Z/空格 射击  X 炸弹  Esc 暂停',
         LOGICAL_W / 2,
         LOGICAL_H - 60,
         11,
         '#666',
         'center'
       );
-      drawText(c, 'P1.1', LOGICAL_W - 20, LOGICAL_H - 20, 10, '#444', 'right');
+      drawText(c, 'P3', LOGICAL_W - 20, LOGICAL_H - 20, 10, '#444', 'right');
 
       if (inSettings) {
         settingsPanel.render(c, ctx.input.getControlsView(), '设置');

@@ -4,7 +4,7 @@
 
 import { describe, expect, it, beforeEach } from 'vitest';
 import { WaveScheduler } from './waveScheduler';
-import { getStageEnemyCount } from '@/game/levels/stage1';
+import { getStageEnemyCount, stage1 } from '@/game/levels/stage1';
 
 describe('WaveScheduler', () => {
   let scheduler: WaveScheduler;
@@ -172,6 +172,23 @@ describe('WaveScheduler full stage', () => {
     expect(spawns).toHaveLength(getStageEnemyCount(false));
     expect(spawns.some((s) => s.type === 'tank')).toBe(true);
     expect(spawns.some((s) => s.type === 'interceptor')).toBe(true);
+  });
+
+  it('seeks to the boss clock without counting ships that never spawned', () => {
+    const scheduler = new WaveScheduler({ mvpOnly: false });
+    scheduler.setPowerLevel(1);
+    scheduler.update(10);
+    const spawned = scheduler.getDebugInfo().spawned;
+    expect(spawned).toBeGreaterThan(0);
+
+    scheduler.seek(stage1.boss.enterAt);
+    expect(scheduler.getDebugInfo().time).toBe(stage1.boss.enterAt);
+    expect(scheduler.getDebugInfo().spawned).toBe(spawned);
+    expect(scheduler.update(1)).toHaveLength(0);
+
+    scheduler.seek(5);
+    expect(scheduler.getDebugInfo().time).toBe(5);
+    expect(scheduler.getDebugInfo().spawned).toBe(0);
   });
 
   it('keeps interceptors out of the MVP partial wave', () => {

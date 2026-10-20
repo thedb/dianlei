@@ -39,6 +39,8 @@ export interface GameDebugInfo {
   paused?: boolean;
   /** Seconds of gameplay simulated (frozen while paused) */
   gameTime?: number;
+  /** Orbital boss phase, when the fight has started */
+  bossPhase?: string;
 }
 
 /**

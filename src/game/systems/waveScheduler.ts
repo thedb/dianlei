@@ -62,6 +62,32 @@ export class WaveScheduler {
     this.powerLevel = 1;
   }
 
+  /**
+   * Jump the timeline without spawning the ships that were skipped.
+   * Kill rate only counts enemies that actually entered (wave table §8.3).
+   */
+  seek(time: number): void {
+    if (time < this.waveTimer) {
+      const power = this.powerLevel;
+      this.reset();
+      this.powerLevel = power;
+    }
+
+    this.waveTimer = time;
+    while (this.currentWaveIndex < this.waves.length) {
+      const wave = this.waves[this.currentWaveIndex];
+      if (!wave || this.waveTimer + 1e-9 < wave.t) break;
+      if (!(wave.condition === 'powerBelowMax' && this.powerLevel >= 3)) {
+        this.scheduleWave(wave);
+      }
+      this.currentWaveIndex++;
+    }
+
+    this.pendingSpawns = this.pendingSpawns.filter((spawn) => spawn.time > this.waveTimer);
+    this.stageComplete =
+      this.currentWaveIndex >= this.waves.length && this.pendingSpawns.length === 0;
+  }
+
   /** Set current player power level (for conditional waves) */
   setPowerLevel(level: number): void {
     this.powerLevel = level;

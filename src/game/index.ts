@@ -61,6 +61,8 @@ export function createGame(platform: H5Platform): Game {
     safeArea,
     input: inputHandler,
     settings,
+    storage: platform,
+    run: { report: null },
   };
 
   // Create scene manager and start with boot scene

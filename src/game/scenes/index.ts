@@ -6,6 +6,7 @@ import type { Scene, SceneId, SceneContext } from './types';
 import { createBootScene } from './boot';
 import { createTitleScene } from './title';
 import { createBattleScene } from './battle';
+import { createDebriefScene } from './debrief';
 
 export type { Scene, SceneId, SceneContext };
 
@@ -17,6 +18,8 @@ export function createSceneManager(ctx: SceneContext) {
   scenes.set('boot', createBootScene(ctx));
   scenes.set('title', createTitleScene(ctx));
   scenes.set('battle', createBattleScene(ctx));
+  scenes.set('result', createDebriefScene(ctx, 'clear'));
+  scenes.set('gameover', createDebriefScene(ctx, 'gameover'));
 
   return {
     start(sceneId: SceneId): void {
