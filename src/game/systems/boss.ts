@@ -371,47 +371,44 @@ export function resolveBossBullet(
   if (!bossBlocksShots(boss)) return ev;
 
   const hittable = damageableParts(boss);
-  let hit: BossPartRuntime | undefined;
-  let best = Infinity;
-  for (const part of hittable) {
-    if (
-      !checkBulletEnemyCollision(
-        bullet.x,
-        bullet.y,
-        bullet.w,
-        bullet.h,
-        part.worldX,
-        part.worldY,
-        part.radius
-      )
-    ) {
-      continue;
-    }
-    const dx = part.worldX - bullet.x;
-    const dy = part.worldY - bullet.y;
-    const dist = dx * dx + dy * dy;
-    if (dist < best) {
-      best = dist;
-      hit = part;
-    }
-  }
 
-  if (hit) {
+  const connect = (part: BossPartRuntime): BossEvents => {
     ev.consumedBullet = true;
-    if (!boss.invulnerable) hurtPart(boss, hit, damage, ev, config);
+    if (!boss.invulnerable) hurtPart(boss, part, damage, ev, config);
     return ev;
-  }
+  };
+
+  const direct = nearestPart(hittable, bullet, (part) =>
+    checkBulletEnemyCollision(
+      bullet.x,
+      bullet.y,
+      bullet.w,
+      bullet.h,
+      part.worldX,
+      part.worldY,
+      part.radius
+    )
+  );
+  if (direct) return connect(direct);
 
   const hull = bossHullRect(boss);
   const left = bullet.x - bullet.w / 2;
   const top = bullet.y - bullet.h / 2;
   if (!rectsOverlap(left, top, bullet.w, bullet.h, hull.x, hull.y, hull.w, hull.h)) return ev;
 
-  // The hull hangs below the turret and core circles. Player shots climb in
-  // from the bottom, so armor must not eat a bullet that is still lined up
-  // with a living weak point. A miss beside those circles still stops here.
-  const reaching = hittable.some((part) => shotStillReaching(bullet, part));
-  if (!reaching) ev.consumedBullet = true;
+  // The nose (part center down to the hull's player-facing edge) is the
+  // weak-point face. A shot into that face damages the nearest living part
+  // immediately, including off-center and 15° streams. Armor above the
+  // part centers still stops a bullet without hurting anything.
+  const faceBottom = hull.y + hull.h;
+  const facing = nearestPart(hittable, bullet, (part) => {
+    const bulletTop = bullet.y - bullet.h / 2;
+    const bulletBottom = bullet.y + bullet.h / 2;
+    return bulletBottom > part.worldY && bulletTop < faceBottom;
+  });
+  if (facing) return connect(facing);
+
+  ev.consumedBullet = true;
   return ev;
 }
 
@@ -797,16 +794,24 @@ function fireFirstDelay(fire: Fire, interval: number): number {
   }
 }
 
-function shotLinedUpWith(bullet: BulletBox, part: BossPartRuntime): boolean {
-  const left = bullet.x - bullet.w / 2;
-  const right = bullet.x + bullet.w / 2;
-  return right > part.worldX - part.radius && left < part.worldX + part.radius;
-}
-
-/** The bullet has not climbed past this part yet. */
-function shotStillReaching(bullet: BulletBox, part: BossPartRuntime): boolean {
-  if (!shotLinedUpWith(bullet, part)) return false;
-  return bullet.y + bullet.h / 2 >= part.worldY - part.radius;
+function nearestPart(
+  parts: readonly BossPartRuntime[],
+  bullet: BulletBox,
+  hits: (part: BossPartRuntime) => boolean
+): BossPartRuntime | undefined {
+  let best: BossPartRuntime | undefined;
+  let bestDist = Infinity;
+  for (const part of parts) {
+    if (!hits(part)) continue;
+    const dx = part.worldX - bullet.x;
+    const dy = part.worldY - bullet.y;
+    const dist = dx * dx + dy * dy;
+    if (!best || dist < bestDist || (dist === bestDist && part.worldX < best.worldX)) {
+      best = part;
+      bestDist = dist;
+    }
+  }
+  return best;
 }
 
 function rectsOverlap(
