@@ -13,7 +13,8 @@
     "format": "prettier --write \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "art:preview": "vite-node scripts/render-player-preview.ts"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
