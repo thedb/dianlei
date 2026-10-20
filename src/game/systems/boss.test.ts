@@ -4,7 +4,9 @@ import {
   BOSS_ANCHOR_X,
   BOSS_ENTER_Y,
   BOSS_HULL_H,
+  BOSS_HULL_W,
   HIT_FLASH_TIME,
+  LV3_SPREAD_DEG,
   PLAYER_BULLET_SPEED,
 } from '@/game/config';
 import { stage1 } from '@/game/levels/stage1';
@@ -33,15 +35,30 @@ function park(): BossRuntime {
   return boss;
 }
 
-/** Walk a 4×12 shot up from below the hull, one frame at a time. */
-function climb(boss: BossRuntime, x: number, damage: number): ReturnType<typeof resolveBossBullet> {
-  let y = boss.y + BOSS_HULL_H / 2 + 24;
-  let last = resolveBossBullet(boss, { x, y, w: 4, h: 12 }, damage, cfg);
-  for (let i = 0; i < 40 && !last.consumedBullet; i++) {
-    y -= PLAYER_BULLET_SPEED * DT;
-    last = resolveBossBullet(boss, { x, y, w: 4, h: 12 }, damage, cfg);
+interface Approach {
+  x: number;
+  y: number;
+  ev: ReturnType<typeof resolveBossBullet>;
+}
+
+/** Step a 4×12 shot until the boss takes it or the path runs out. */
+function approach(
+  boss: BossRuntime,
+  x0: number,
+  y0: number,
+  vx: number,
+  vy: number,
+  damage: number
+): Approach {
+  let x = x0;
+  let y = y0;
+  let ev = resolveBossBullet(boss, { x, y, w: 4, h: 12 }, damage, cfg);
+  for (let i = 0; i < 90 && !ev.consumedBullet; i++) {
+    x += vx * DT;
+    y += vy * DT;
+    ev = resolveBossBullet(boss, { x, y, w: 4, h: 12 }, damage, cfg);
   }
-  return last;
+  return { x, y, ev };
 }
 
 function toPhase2(): BossRuntime {
@@ -113,44 +130,99 @@ describe('boss phases', () => {
     expect(boss.hitFlash).toBe(HIT_FLASH_TIME);
   });
 
-  it('lets a shot climb through the lower hull into a turret or the core', () => {
+  it('counts a nose hit as the nearest living weak point before the bullet reaches the circle', () => {
     const boss = park();
     const left = bossPart(boss, 'turretL')!;
-    const lip = {
-      x: left.worldX,
-      y: boss.y + BOSS_HULL_H / 2 - 2,
-      w: 4,
-      h: 12,
-    };
-    const blocked = resolveBossBullet(boss, lip, 10, cfg);
-    expect(blocked.consumedBullet).toBe(false);
-    expect(left.hp).toBe(140);
+    const right = bossPart(boss, 'turretR')!;
+    const lipY = boss.y + BOSS_HULL_H / 2 - 2;
+    const circleBottom = left.worldY + left.radius;
 
-    const belly = resolveBossBullet(boss, { x: boss.x, y: lip.y, w: 4, h: 12 }, 50, cfg);
-    expect(belly.consumedBullet).toBe(true);
-    expect(left.hp).toBe(140);
-    expect(boss.hitFlash).toBe(0);
-
-    const hit = climb(boss, left.worldX, 10);
-    expect(hit.consumedBullet).toBe(true);
+    const offCenter = resolveBossBullet(
+      boss,
+      { x: left.worldX + 36, y: lipY, w: 4, h: 12 },
+      10,
+      cfg
+    );
+    expect(offCenter.consumedBullet).toBe(true);
+    expect(lipY).toBeGreaterThan(circleBottom);
     expect(left.hp).toBe(130);
+    expect(right.hp).toBe(140);
     expect(boss.hitFlash).toBe(HIT_FLASH_TIME);
+
+    const nose = park();
+    const noseLeft = bossPart(nose, 'turretL')!;
+    const noseRight = bossPart(nose, 'turretR')!;
+    const center = resolveBossBullet(nose, { x: nose.x, y: lipY, w: 4, h: 12 }, 10, cfg);
+    expect(center.consumedBullet).toBe(true);
+    expect(noseLeft.hp + noseRight.hp).toBe(270);
+    expect(nose.hitFlash).toBe(HIT_FLASH_TIME);
+
+    const solo = park();
+    const dead = bossPart(solo, 'turretL')!;
+    resolveBossBullet(solo, { x: dead.worldX, y: dead.worldY, w: 4, h: 12 }, dead.hp, cfg);
+    const survivor = bossPart(solo, 'turretR')!;
+    solo.hitFlash = 0;
+    const redirected = resolveBossBullet(solo, { x: dead.worldX, y: lipY, w: 4, h: 12 }, 10, cfg);
+    expect(redirected.consumedBullet).toBe(true);
+    expect(survivor.hp).toBe(130);
+    expect(solo.hitFlash).toBe(HIT_FLASH_TIME);
 
     const coreFight = toPhase2();
     const core = bossPart(coreFight, 'core')!;
     const wing = resolveBossBullet(
       coreFight,
-      { x: coreFight.x - 78, y: coreFight.y + BOSS_HULL_H / 2 - 2, w: 4, h: 12 },
+      { x: coreFight.x - 100, y: coreFight.y + BOSS_HULL_H / 2 - 2, w: 4, h: 12 },
       10,
       cfg
     );
     expect(wing.consumedBullet).toBe(true);
-    expect(core.hp).toBe(560);
-
-    const coreHit = climb(coreFight, core.worldX, 10);
-    expect(coreHit.consumedBullet).toBe(true);
     expect(core.hp).toBe(550);
     expect(coreFight.hitFlash).toBe(HIT_FLASH_TIME);
+    expect(coreFight.y + BOSS_HULL_H / 2 - 2).toBeGreaterThan(core.worldY + core.radius);
+  });
+
+  it('lands straight, offset, and 15° shots on the nose, and lets a wide miss fly past', () => {
+    const below = (boss: BossRuntime): number => boss.y + BOSS_HULL_H / 2 + 48;
+    const rad = (LV3_SPREAD_DEG * Math.PI) / 180;
+
+    const aimed = park();
+    const left = bossPart(aimed, 'turretL')!;
+    const straight = approach(aimed, left.worldX + 36, below(aimed), 0, -PLAYER_BULLET_SPEED, 1);
+    expect(straight.ev.consumedBullet).toBe(true);
+    expect(straight.y).toBeGreaterThan(left.worldY + left.radius);
+    expect(left.hp).toBe(139);
+    expect(aimed.hitFlash).toBe(HIT_FLASH_TIME);
+
+    const spread = park();
+    const spreadLeft = bossPart(spread, 'turretL')!;
+    const spreadRight = bossPart(spread, 'turretR')!;
+    const angled = approach(
+      spread,
+      spread.x,
+      below(spread),
+      -Math.sin(rad) * PLAYER_BULLET_SPEED,
+      -Math.cos(rad) * PLAYER_BULLET_SPEED,
+      1
+    );
+    expect(angled.ev.consumedBullet).toBe(true);
+    expect(angled.y).toBeGreaterThan(spreadLeft.worldY + spreadLeft.radius);
+    expect(spreadLeft.hp + spreadRight.hp).toBe(279);
+    expect(spread.hitFlash).toBe(HIT_FLASH_TIME);
+
+    const miss = park();
+    const flown = approach(
+      miss,
+      miss.x - BOSS_HULL_W / 2 - 24,
+      below(miss),
+      0,
+      -PLAYER_BULLET_SPEED,
+      50
+    );
+    expect(flown.ev.consumedBullet).toBe(false);
+    expect(flown.y).toBeLessThan(miss.y - BOSS_HULL_H);
+    expect(bossPart(miss, 'turretL')!.hp).toBe(140);
+    expect(bossPart(miss, 'turretR')!.hp).toBe(140);
+    expect(miss.hitFlash).toBe(0);
   });
 
   it('splits a phase-1 bomb across living turrets and dumps it on the survivor', () => {
