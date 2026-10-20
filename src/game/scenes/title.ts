@@ -10,6 +10,7 @@ import { readHighScore } from '@/game/highScore';
 import { createSettingsPanel } from '@/game/ui/settingsPanel';
 import { drawButton, drawText, hitRect, UI_COLORS, type Rect } from '@/game/ui/widgets';
 import { START_BUTTON, drawStartButton, isStartTapped } from '@/game/ui/startButton';
+import { drawHomeBgm, homeBgmHit } from '@/game/ui/homeBgm';
 
 const ITEM_COUNT = 3;
 const MENU_W = 180;
@@ -73,6 +74,16 @@ export function createTitleScene(ctx: SceneContext): Scene {
         return null;
       }
 
+      const bgm = homeBgmHit(input.taps, input.pointers);
+      if (bgm) {
+        if (bgm.kind === 'toggle') {
+          ctx.settings.update({ bgmEnabled: !ctx.settings.get().bgmEnabled });
+        } else {
+          ctx.settings.update({ bgmVolume: bgm.volume });
+        }
+        return null;
+      }
+
       if (input.menuUp) selected = (selected + ITEM_COUNT - 1) % ITEM_COUNT;
       if (input.menuDown) selected = (selected + 1) % ITEM_COUNT;
 
@@ -100,6 +111,8 @@ export function createTitleScene(ctx: SceneContext): Scene {
         'center'
       );
 
+      drawHomeBgm(c, ctx.settings.get());
+
       drawStartButton(c, blinkTimer, selected === 0);
       drawButton(c, BOSS_BUTTON, '挑战 Boss', selected === 1);
       drawButton(c, SETTINGS_BUTTON, '设置', selected === 2);
@@ -115,7 +128,7 @@ export function createTitleScene(ctx: SceneContext): Scene {
         '#666',
         'center'
       );
-      drawText(c, 'P3', LOGICAL_W - 20, LOGICAL_H - 20, 10, '#444', 'right');
+      drawText(c, 'P5', LOGICAL_W - 20, LOGICAL_H - 20, 10, '#444', 'right');
 
       if (inSettings) {
         settingsPanel.render(c, ctx.input.getControlsView(), '设置');

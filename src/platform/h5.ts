@@ -182,7 +182,14 @@ export function createH5Platform(container: HTMLElement): H5Platform {
     },
 
     playAudio(_id: string): void {
-      // Stub - audio not implemented in P0
+      // One-shots go through the game audio system, not clip ids.
+    },
+
+    createAudioContext(): AudioContext | null {
+      const Ctx =
+        window.AudioContext ??
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      return Ctx ? new Ctx() : null;
     },
 
     getStorage<T>(key: string): T | null {

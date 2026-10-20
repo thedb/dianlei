@@ -29,6 +29,9 @@ import {
   SIDE_ARC_RADIUS,
   V_DIVE_EXIT_DEG,
   TURRET_TURN_RATE,
+  TANK_ENTRY_SPEED,
+  TANK_DIAG_VX,
+  TANK_DIAG_CLIMB,
 } from '@/game/config';
 
 /** Enemy stats by type. Sizes and HP match the wave table §2. */
@@ -51,6 +54,11 @@ const GROUND_TYPES: ReadonlySet<EnemyType> = new Set(['tank', 'turret2', 'missil
 /** Ground units scroll with the map and do not kill the player on contact. */
 export function isGroundEnemy(type: EnemyType): boolean {
   return GROUND_TYPES.has(type);
+}
+
+/** Tile query used to keep tanks off river / shallow water. Off-map is not blocked. */
+export interface TerrainQuery {
+  blocksTank(x: number, y: number): boolean;
 }
 
 export interface Enemy extends Poolable {
@@ -227,7 +235,8 @@ export function updateEnemy(
   dt: number,
   playerX: number,
   playerY: number,
-  scrollDelta: number = BG_SCROLL_SPEED * dt
+  scrollDelta: number = BG_SCROLL_SPEED * dt,
+  terrain?: TerrainQuery
 ): boolean {
   enemy.prevX = enemy.x;
   enemy.prevY = enemy.y;
@@ -237,7 +246,7 @@ export function updateEnemy(
     enemy.hitFlashTimer = Math.max(0, enemy.hitFlashTimer - dt);
   }
 
-  updateEnemyMovement(enemy, dt, scrollDelta);
+  updateEnemyMovement(enemy, dt, scrollDelta, terrain);
 
   if (enemy.fire.kind === 'fixed2') {
     steerAim(enemy, playerX, playerY, dt, TURRET_TURN_RATE);
@@ -252,7 +261,42 @@ export function updateEnemy(
   return false;
 }
 
-function updateEnemyMovement(enemy: Enemy, dt: number, scrollDelta: number): void {
+function groundDrive(move: Extract<Move, { kind: 'ground' }>): { vx: number; climb: number } {
+  const entry = move.entry ?? 'top';
+  switch (entry) {
+    case 'left':
+      return { vx: move.vx ?? TANK_ENTRY_SPEED, climb: 0 };
+    case 'right':
+      return { vx: move.vx ?? -TANK_ENTRY_SPEED, climb: 0 };
+    case 'bottomLeft':
+      return { vx: move.vx ?? TANK_DIAG_VX, climb: TANK_DIAG_CLIMB };
+    case 'bottomRight':
+      return { vx: move.vx ?? -TANK_DIAG_VX, climb: TANK_DIAG_CLIMB };
+    default:
+      return { vx: move.vx ?? 0, climb: 0 };
+  }
+}
+
+/** Step toward the nearer dry tile. Stage-1 water is a winding river, not a fixed side. */
+function waterEscapeDir(x: number, y: number, terrain: TerrainQuery): number {
+  let left = 0;
+  let right = 0;
+  for (let d = 8; d <= 220; d += 8) {
+    if (left === 0 && !terrain.blocksTank(x - d, y)) left = d;
+    if (right === 0 && !terrain.blocksTank(x + d, y)) right = d;
+    if (left && right) break;
+  }
+  if (left === 0) return 1;
+  if (right === 0) return -1;
+  return left <= right ? -1 : 1;
+}
+
+function updateEnemyMovement(
+  enemy: Enemy,
+  dt: number,
+  scrollDelta: number,
+  terrain?: TerrainQuery
+): void {
   const { move } = enemy;
 
   switch (move.kind) {
@@ -393,8 +437,22 @@ function updateEnemyMovement(enemy: Enemy, dt: number, scrollDelta: number): voi
     }
 
     case 'ground': {
-      enemy.y += scrollDelta;
-      if (move.vx) enemy.x += move.vx * dt;
+      const { vx, climb } = groundDrive(move);
+      const scrolledY = enemy.y + scrollDelta;
+      if (enemy.type === 'tank' && terrain?.blocksTank(enemy.x, scrolledY)) {
+        enemy.x += waterEscapeDir(enemy.x, scrolledY, terrain) * TANK_ENTRY_SPEED * dt;
+        enemy.y = scrolledY;
+        break;
+      }
+      const nextX = enemy.x + vx * dt;
+      const nextY = scrolledY - climb * dt;
+      if (enemy.type === 'tank' && terrain) {
+        enemy.x = terrain.blocksTank(nextX, scrolledY) ? enemy.x : nextX;
+        enemy.y = terrain.blocksTank(enemy.x, nextY) ? scrolledY : nextY;
+      } else {
+        enemy.x = nextX;
+        enemy.y = nextY;
+      }
       break;
     }
   }

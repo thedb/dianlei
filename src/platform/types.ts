@@ -44,8 +44,14 @@ export interface PlatformAdapter {
   /** Load an image from a URL, returns a promise */
   loadImage(url: string): Promise<HTMLImageElement | ImageBitmap>;
 
-  /** Play audio (stub for now) */
+  /** Play a one-shot by id (stub). Looping BGM is synthesized on the context below. */
   playAudio(id: string): void;
+
+  /**
+   * WebAudio context for synthesized SFX and BGM.
+   * H5 uses AudioContext; WeChat uses wx.createWebAudioContext when present.
+   */
+  createAudioContext(): AudioContext | null;
 
   /** Read from local storage */
   getStorage<T>(key: string): T | null;

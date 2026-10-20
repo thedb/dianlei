@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SECTION_BASE_END } from '@/game/config';
+import type { GroundEntry } from './types';
 import { getMvpEnemyCount, getMvpWaves, getStageEnemyCount, stage1 } from './stage1';
 
 /** MVP enemy total documented in docs/电雷_第一关波次表_v1.md §1 */
@@ -57,6 +58,28 @@ describe('stage1 waves', () => {
         expect(group.xs.length === 1 || group.xs.length >= group.count).toBe(true);
       }
     }
+  });
+
+  it('gives stage-1 tanks every non-top entry and keeps coast tanks off a left-side start', () => {
+    const entries = new Set<GroundEntry>();
+    let tanks = 0;
+    for (const wave of stage1.waves) {
+      for (const group of wave.groups) {
+        if (group.enemy !== 'tank') continue;
+        tanks += group.count;
+        expect(group.move.kind).toBe('ground');
+        if (group.move.kind !== 'ground') continue;
+        const entry = group.move.entry ?? 'top';
+        expect(entry).not.toBe('top');
+        entries.add(entry);
+        if (wave.section === 'coast') {
+          expect(entry === 'right' || entry === 'bottomRight').toBe(true);
+          expect(group.xs.every((x) => x >= 240)).toBe(true);
+        }
+      }
+    }
+    expect(tanks).toBe(14);
+    expect([...entries].sort()).toEqual(['bottomLeft', 'bottomRight', 'left', 'right']);
   });
 
   it('drops the documented P and B carriers', () => {

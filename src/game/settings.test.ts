@@ -6,7 +6,12 @@ import {
   DEFAULT_SETTINGS,
   SETTINGS_STORAGE_KEY,
 } from './settings';
-import { CONTROL_OPACITY_DEFAULT, CONTROL_SCALE_MIN, CONTROL_SCALE_MAX } from './config';
+import {
+  BGM_VOLUME_DEFAULT,
+  CONTROL_OPACITY_DEFAULT,
+  CONTROL_SCALE_MIN,
+  CONTROL_SCALE_MAX,
+} from './config';
 
 describe('settings defaults', () => {
   it('match the design doc', () => {
@@ -16,6 +21,8 @@ describe('settings defaults', () => {
       controlOpacity: CONTROL_OPACITY_DEFAULT,
       controlScale: 1,
       muted: false,
+      bgmEnabled: false,
+      bgmVolume: BGM_VOLUME_DEFAULT,
     });
     expect(CONTROL_OPACITY_DEFAULT).toBe(0.6);
   });
@@ -40,6 +47,8 @@ describe('settings persistence', () => {
       controlOpacity: 0.8,
       controlScale: 1.2,
       muted: true,
+      bgmEnabled: false,
+      bgmVolume: BGM_VOLUME_DEFAULT,
     });
     expect(storage.getStorage(SETTINGS_STORAGE_KEY)).toEqual(b.get());
   });
@@ -65,6 +74,11 @@ describe('settings persistence', () => {
     });
     expect(sanitizeSettings({ controlScale: 9 }).controlScale).toBe(CONTROL_SCALE_MAX);
     expect(sanitizeSettings({ controlOpacity: NaN }).controlOpacity).toBe(CONTROL_OPACITY_DEFAULT);
+    expect(sanitizeSettings({ bgmVolume: 4, bgmEnabled: true })).toMatchObject({
+      bgmVolume: 1,
+      bgmEnabled: true,
+    });
+    expect(sanitizeSettings({ bgmEnabled: 'on' }).bgmEnabled).toBe(false);
     expect(sanitizeSettings(null)).toEqual(DEFAULT_SETTINGS);
     expect(sanitizeSettings('garbage')).toEqual(DEFAULT_SETTINGS);
   });

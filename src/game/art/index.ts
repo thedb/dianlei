@@ -28,7 +28,7 @@ import { createExplosionAssets } from './explosionSprite';
 import { createBackgroundMaps } from './tiles';
 import { createBossAssets } from './bossSprite';
 
-export { drawBackground } from './tiles';
+export { drawBackground, terrainBlocksTank } from './tiles';
 export { drawBossWorld, drawBossHpBar, drawBossLaser } from './bossSprite';
 
 /** All game sprite assets */

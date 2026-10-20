@@ -66,6 +66,7 @@ import {
   drawEnemyFlame,
   drawBulletGlow,
   drawBackground,
+  terrainBlocksTank,
   drawBossWorld,
   drawBossHpBar,
   drawBossLaser,
@@ -877,7 +878,20 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
       // Update enemies
       const enemiesToRelease: Enemy[] = [];
       enemyPool.forEach((enemy) => {
-        const shouldCull = updateEnemy(enemy, dt, player.x, player.y, scrollFrame.tileDelta);
+        const grids = assets?.background?.grids;
+        const shouldCull = updateEnemy(
+          enemy,
+          dt,
+          player.x,
+          player.y,
+          scrollFrame.tileDelta,
+          grids
+            ? {
+                blocksTank: (x, y) =>
+                  terrainBlocksTank(grids, scrollFrame.scroll, scrollFrame.fade, x, y),
+              }
+            : undefined
+        );
         if (shouldCull) {
           enemiesToRelease.push(enemy);
         } else {

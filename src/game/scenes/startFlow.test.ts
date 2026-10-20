@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createBootScene, BOOT_DURATION } from './boot';
 import { createTitleScene, BOSS_BUTTON, SETTINGS_BUTTON } from './title';
 import { START_BUTTON } from '@/game/ui/startButton';
+import { HOME_BGM_TOGGLE, HOME_BGM_TRACK } from '@/game/ui/homeBgm';
 import { createSettingsStore, createMemoryStorage } from '@/game/settings';
 import { computeControlLayout } from '@/game/controls';
 import { makeInput } from '@/test/fakes';
@@ -100,6 +101,23 @@ describe('title screen start button', () => {
     expect(title.update(DT, makeInput({ menuDown: true }))).toBeNull();
     expect(title.update(DT, makeInput({ menuConfirm: true }))).toBe('battle');
     expect(ctx.battleEntry).toBe('boss');
+  });
+
+  it('toggles BGM and sets volume without starting the stage', () => {
+    const ctx = context();
+    const title = createTitleScene(ctx);
+    title.enter();
+    expect(ctx.settings.get().bgmEnabled).toBe(false);
+    const toggle = {
+      x: HOME_BGM_TOGGLE.x + 8,
+      y: HOME_BGM_TOGGLE.y + HOME_BGM_TOGGLE.h / 2,
+    };
+    expect(title.update(DT, makeInput({ taps: [toggle] }))).toBeNull();
+    expect(ctx.settings.get().bgmEnabled).toBe(true);
+    expect(ctx.battleEntry).toBe('stage');
+    const loud = { x: HOME_BGM_TRACK.x + HOME_BGM_TRACK.w - 1, y: HOME_BGM_TRACK.y + 4 };
+    expect(title.update(DT, makeInput({ taps: [loud] }))).toBeNull();
+    expect(ctx.settings.get().bgmVolume).toBeGreaterThan(0.9);
   });
 
   it('设置 opens settings instead of starting', () => {

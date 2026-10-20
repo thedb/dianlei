@@ -1,7 +1,9 @@
 /**
- * Audio system - 8-bit style WebAudio synthesized SFX
- * Design doc §19: Program-generated 8-bit sounds
+ * Audio system - 8-bit style WebAudio synthesized SFX and one looping BGM.
+ * The context comes from the platform adapter (H5 AudioContext / WeChat WebAudio).
  */
+
+import { BGM_STEP_SEC, BGM_STEPS, bgmBusGain, bgmNote } from './bgm';
 
 export type SfxType =
   | 'shoot'
@@ -20,19 +22,69 @@ export interface AudioSystem {
   play(sfx: SfxType): void;
   setMuted(muted: boolean): void;
   isMuted(): boolean;
+  /** Platform factory. Falls back to the global AudioContext when unset. */
+  bindBackend(factory: () => AudioContext | null): void;
+  setBgmEnabled(enabled: boolean): void;
+  setBgmVolume(volume: number): void;
+  /** Keep the chiptune scheduler filled. Safe to call every frame. */
+  tick(): void;
 }
+
+/** Keeps two oscillators from clipping the music bus at volume 1. */
+const BGM_LEVEL = 0.16;
 
 /** Create WebAudio-based sound system */
 export function createAudioSystem(): AudioSystem {
   let audioCtx: AudioContext | null = null;
+  let backend: (() => AudioContext | null) | null = null;
   let muted = false;
   let initialized = false;
+  let bgmEnabled = false;
+  let bgmVolume = 0.6;
+  let bgmGain: GainNode | null = null;
+  let nextNoteTime = 0;
+  let stepIndex = 0;
 
   function ensureContext(): AudioContext | null {
-    if (!audioCtx && typeof AudioContext !== 'undefined') {
-      audioCtx = new AudioContext();
+    if (!audioCtx) {
+      if (backend) audioCtx = backend();
+      else if (typeof AudioContext !== 'undefined') audioCtx = new AudioContext();
     }
     return audioCtx;
+  }
+
+  function musicGain(): number {
+    return bgmBusGain(muted, bgmEnabled, bgmVolume) * BGM_LEVEL;
+  }
+
+  function ensureBgmGain(ctx: AudioContext): GainNode {
+    if (!bgmGain) {
+      bgmGain = ctx.createGain();
+      bgmGain.connect(ctx.destination);
+    }
+    bgmGain.gain.value = musicGain();
+    return bgmGain;
+  }
+
+  function scheduleTone(
+    ctx: AudioContext,
+    bus: GainNode,
+    when: number,
+    frequency: number,
+    type: OscillatorType,
+    duration: number
+  ): void {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(frequency, when);
+    gain.gain.setValueAtTime(0.0001, when);
+    gain.gain.exponentialRampToValueAtTime(1, when + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, when + duration);
+    osc.connect(gain);
+    gain.connect(bus);
+    osc.start(when);
+    osc.stop(when + duration + 0.02);
   }
 
   function playTone(
@@ -190,10 +242,48 @@ export function createAudioSystem(): AudioSystem {
 
     setMuted(m: boolean): void {
       muted = m;
+      if (bgmGain) bgmGain.gain.value = musicGain();
+      if (muted) nextNoteTime = 0;
     },
 
     isMuted(): boolean {
       return muted;
+    },
+
+    bindBackend(factory: () => AudioContext | null): void {
+      backend = factory;
+    },
+
+    setBgmEnabled(enabled: boolean): void {
+      bgmEnabled = enabled;
+      if (bgmGain) bgmGain.gain.value = musicGain();
+      if (!enabled) nextNoteTime = 0;
+    },
+
+    setBgmVolume(volume: number): void {
+      bgmVolume = volume;
+      if (bgmGain) bgmGain.gain.value = musicGain();
+    },
+
+    tick(): void {
+      const ctx = ensureContext();
+      if (!ctx) return;
+      const level = musicGain();
+      if (bgmGain) bgmGain.gain.value = level;
+      if (level <= 0 || ctx.state === 'suspended') {
+        if (level <= 0) nextNoteTime = 0;
+        return;
+      }
+      const bus = ensureBgmGain(ctx);
+      if (nextNoteTime < ctx.currentTime) nextNoteTime = ctx.currentTime + 0.05;
+      const horizon = ctx.currentTime + 0.28;
+      while (nextNoteTime < horizon) {
+        const note = bgmNote(stepIndex);
+        scheduleTone(ctx, bus, nextNoteTime, note.bass, 'triangle', BGM_STEP_SEC * 0.92);
+        scheduleTone(ctx, bus, nextNoteTime, note.lead, 'square', BGM_STEP_SEC * 0.72);
+        stepIndex = (stepIndex + 1) % BGM_STEPS;
+        nextNoteTime += BGM_STEP_SEC;
+      }
     },
   };
 }

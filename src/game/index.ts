@@ -8,7 +8,7 @@ import { createInputHandler, type InputHandler } from '@/engine/input';
 import { createRenderer, type Renderer } from '@/engine/renderer';
 import { createAudioSystem, type AudioSystem } from '@/engine/audio';
 import { createSceneManager, type SceneContext } from './scenes';
-import { createSettingsStore } from './settings';
+import { createSettingsStore, type Settings } from './settings';
 import { getAudioSystem } from './systems/audio';
 
 export interface Game {
@@ -44,8 +44,14 @@ export function createGame(platform: H5Platform): Game {
   // Settings persist through the platform storage hook
   const settings = createSettingsStore(platform);
   const sfx = getAudioSystem();
-  sfx.setMuted(settings.get().muted);
-  settings.subscribe((s) => sfx.setMuted(s.muted));
+  sfx.bindBackend(() => platform.createAudioContext());
+  const applyAudio = (s: Settings): void => {
+    sfx.setMuted(s.muted);
+    sfx.setBgmEnabled(s.bgmEnabled);
+    sfx.setBgmVolume(s.bgmVolume);
+  };
+  applyAudio(settings.get());
+  settings.subscribe(applyAudio);
 
   // The H5 platform already reports touches in logical pixels, so the input
   // handler must not re-apply the letterbox scale/offset
@@ -74,6 +80,16 @@ export function createGame(platform: H5Platform): Game {
     update(dt: number): void {
       inputHandler.update();
       const input = inputHandler.getState();
+      if (
+        input.taps.length > 0 ||
+        input.pointers.length > 0 ||
+        input.menuConfirm ||
+        input.keyFire ||
+        input.keyBomb
+      ) {
+        sfx.unlock();
+      }
+      sfx.tick();
 
       const scene = sceneManager.getCurrentScene();
       if (scene) {

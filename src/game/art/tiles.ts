@@ -627,7 +627,10 @@ function hash(x: number, y: number): number {
 
 export interface MapLayerSpec {
   id: 'ground' | 'coast' | 'base';
-  /** World scroll (px) at which this map's y=0 sits on the top of the screen */
+  /**
+   * World scroll (px) at which this map's logical y=0 sits on the bottom of the screen.
+   * Later rows are ahead of the ship and enter from the top.
+   */
   origin: number;
   rows: number;
 }
@@ -751,7 +754,10 @@ export function renderTileGrid(grid: TileId[][]): OffscreenCanvas | HTMLCanvasEl
     for (let tx = 0; tx < cols; tx++) {
       const tile = tiles[row[tx]!]!;
       const originX = tx * TILE_SIZE;
-      const originY = ty * TILE_SIZE;
+      // Logical row 0 is the start of the section and is stored at the bottom of the
+      // bitmap, each tile still upright. Blitting toward y=0 then brings new terrain
+      // in from the top of the screen and slides the field downward.
+      const originY = (rows - 1 - ty) * TILE_SIZE;
       for (let y = 0; y < TILE_SIZE; y++) {
         const src = tile[y]!;
         const diBase = ((originY + y) * w + originX) * 4;
@@ -808,18 +814,111 @@ const CLOUDS: readonly Cloud[] = [
   { x: 320, y: 520, rx: 64, ry: 14 },
 ];
 
+/**
+ * Screen Y of an upright logical map pixel.
+ * `scroll` 0 puts logical y=0 at the bottom of the view. Increasing `scroll`
+ * moves that pixel downward; pixels ahead of it enter from the top.
+ */
+export function mapPixelScreenY(logicalY: number, scroll: number, viewH = LOGICAL_H): number {
+  const row = Math.floor(logicalY / TILE_SIZE);
+  const inTile = logicalY - row * TILE_SIZE;
+  return scroll + viewH - (row + 1) * TILE_SIZE + inTile;
+}
+
+/** Inverse of `mapPixelScreenY` for a layer-local scroll (world scroll minus the layer origin). */
+export function logicalMapY(screenY: number, localScroll: number, viewH = LOGICAL_H): number {
+  const rel = localScroll + viewH - screenY;
+  if (rel <= 0) return -1;
+  const row = Math.ceil(rel / TILE_SIZE) - 1;
+  const inTile = (row + 1) * TILE_SIZE - rel;
+  return row * TILE_SIZE + inTile;
+}
+
+export function logicalMapX(screenX: number): number {
+  return screenX + MAP_CROP_X;
+}
+
+/**
+ * Source Y into a row-reversed section bitmap.
+ * Logical scroll 0 shows the start of the section (bottom of the bitmap).
+ * Larger scroll moves the window up the bitmap, which slides the field down the screen.
+ */
+export function scrollSourceY(mapHeight: number, logicalScroll: number, viewH = LOGICAL_H): number {
+  const maxY = Math.max(0, mapHeight - viewH);
+  const sy = maxY - Math.floor(logicalScroll);
+  if (sy < 0) return 0;
+  if (sy > maxY) return maxY;
+  return sy;
+}
+
+const WATER_TILES: ReadonlySet<TileId> = new Set([TileId.water, TileId.waterB, TileId.shallow]);
+
+export function isWaterTile(id: TileId): boolean {
+  return WATER_TILES.has(id);
+}
+
+export interface TerrainGrids {
+  ground: TileId[][];
+  coast: TileId[][];
+  base: TileId[][];
+}
+
+/** Later section wins a crossfade tie so coast water applies as soon as the river is visible. */
+export function dominantTerrain(fade: {
+  ground: number;
+  coast: number;
+  base: number;
+}): 'ground' | 'coast' | 'base' | null {
+  let best: 'ground' | 'coast' | 'base' | null = null;
+  let bestA = 0.05;
+  const layers = [
+    ['ground', fade.ground],
+    ['coast', fade.coast],
+    ['base', fade.base],
+  ] as const;
+  for (const [id, alpha] of layers) {
+    if (alpha >= bestA) {
+      best = id;
+      bestA = alpha;
+    }
+  }
+  return best;
+}
+
+/** True when a tank center sits on river / shallow water. Off-map is land (not blocked). */
+export function terrainBlocksTank(
+  grids: TerrainGrids,
+  scroll: number,
+  fade: { ground: number; coast: number; base: number },
+  x: number,
+  y: number
+): boolean {
+  const layer = dominantTerrain(fade);
+  if (!layer) return false;
+  const spec = mapLayerSpecs()[layer];
+  const mapY = logicalMapY(y, scroll - spec.origin);
+  const mapX = logicalMapX(x);
+  if (mapY < 0) return false;
+  const col = Math.floor(mapX / TILE_SIZE);
+  const row = Math.floor(mapY / TILE_SIZE);
+  const grid = grids[layer];
+  const line = grid[row];
+  if (!line || col < 0 || col >= line.length) return false;
+  return isWaterTile(line[col]!);
+}
+
 function blitMap(
   ctx: CanvasRenderingContext2D,
   map: OffscreenCanvas | HTMLCanvasElement,
-  sourceY: number,
+  logicalScroll: number,
   alpha: number
 ): void {
   if (alpha <= 0.01) return;
-  const viewH = LOGICAL_H;
-  const maxY = Math.max(0, map.height - viewH);
-  const sy = Math.max(0, Math.min(maxY, Math.floor(sourceY)));
+  const sy = scrollSourceY(map.height, logicalScroll);
+  ctx.save();
   ctx.globalAlpha = alpha;
-  ctx.drawImage(map, 0, sy, map.width, viewH, -MAP_CROP_X, 0, map.width, viewH);
+  ctx.drawImage(map, 0, sy, map.width, LOGICAL_H, -MAP_CROP_X, 0, map.width, LOGICAL_H);
+  ctx.restore();
 }
 
 /**

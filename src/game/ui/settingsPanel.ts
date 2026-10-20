@@ -33,7 +33,7 @@ interface ChoiceRow<K extends keyof Settings> {
 interface SliderRow {
   kind: 'slider';
   label: string;
-  key: 'controlOpacity' | 'controlScale';
+  key: 'controlOpacity' | 'controlScale' | 'bgmVolume';
   min: number;
   max: number;
   step: number;
@@ -49,6 +49,7 @@ type Row =
   | ChoiceRow<'joystickMode'>
   | ChoiceRow<'buttonLayout'>
   | ChoiceRow<'muted'>
+  | ChoiceRow<'bgmEnabled'>
   | SliderRow
   | ActionRow;
 
@@ -96,13 +97,30 @@ const ROWS: Row[] = [
       { value: true, label: '静音' },
     ],
   },
+  {
+    kind: 'choice',
+    label: '背景音乐',
+    key: 'bgmEnabled',
+    options: [
+      { value: false, label: '关' },
+      { value: true, label: '开' },
+    ],
+  },
+  {
+    kind: 'slider',
+    label: '音乐音量',
+    key: 'bgmVolume',
+    min: 0,
+    max: 1,
+    step: 0.05,
+  },
   { kind: 'action', label: '恢复默认', action: 'reset' },
   { kind: 'action', label: '返回', action: 'back' },
 ];
 
-const PANEL: Rect = { x: 16, y: 64, w: LOGICAL_W - 32, h: 392 };
-const ROW_TOP = PANEL.y + 58;
-const ROW_H = 44;
+const PANEL: Rect = { x: 16, y: 24, w: LOGICAL_W - 32, h: 500 };
+const ROW_TOP = PANEL.y + 40;
+const ROW_H = 40;
 const CONTROL_X = 150;
 const CONTROL_W = PANEL.x + PANEL.w - 16 - CONTROL_X;
 const SLIDER_W = CONTROL_W - 52;

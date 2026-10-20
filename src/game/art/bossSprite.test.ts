@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BOSS_HULL_H, BOSS_HULL_W, BOSS_TURRET_SIZE, PALETTE_SIZE } from '@/game/config';
-import { PALETTE } from '@/game/palette';
+import { COLOR, PALETTE } from '@/game/palette';
+import { opaqueCount } from './pixelDraw';
 import { buildBossHull, buildBossTurret } from './bossSprite';
 
 function expectPalette(grid: number[][]): void {
@@ -26,5 +27,21 @@ describe('boss sprites', () => {
     expectPalette(open);
     expectPalette(turret);
     expect(open).not.toEqual(closed);
+  });
+
+  it('paints gray armor and magenta energy, and opens a bright core', () => {
+    const closed = buildBossHull(false);
+    const open = buildBossHull(true);
+    const used = new Set<number>();
+    for (const row of closed) for (const cell of row) if (cell >= 0) used.add(cell);
+    expect(used.has(COLOR.DARK_GRAY)).toBe(true);
+    expect(used.has(COLOR.BULLET_MAGENTA)).toBe(true);
+    expect(used.has(COLOR.BULLET_DARK)).toBe(true);
+    expect(opaqueCount(closed)).toBeGreaterThan(4000);
+    const core = open[80]?.[110];
+    expect([COLOR.BULLET_CORE, COLOR.WHITE, COLOR.BULLET_PINK, COLOR.BULLET_MAGENTA]).toContain(
+      core
+    );
+    expect(core).not.toBe(closed[80]?.[110]);
   });
 });

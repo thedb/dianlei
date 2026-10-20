@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BG_SCROLL_SPEED, TILE_SIZE, warningTileScrollPx } from '@/game/config';
+import { BG_SCROLL_SPEED, LOGICAL_H, TILE_SIZE, warningTileScrollPx } from '@/game/config';
 import { backgroundFade, scrollSpeedAt, warningBulletAlpha, Scroller } from './background';
 import {
   TileId,
@@ -7,7 +7,12 @@ import {
   buildCoastMap,
   buildGroundMap,
   getTilePixels,
+  isWaterTile,
+  logicalMapY,
   mapLayerSpecs,
+  mapPixelScreenY,
+  scrollSourceY,
+  terrainBlocksTank,
 } from '@/game/art/tiles';
 import { COLOR } from '@/game/palette';
 
@@ -52,6 +57,48 @@ describe('stage background', () => {
     expect(warningBulletAlpha(150.6, WARNING)).toBeGreaterThan(0);
     expect(warningBulletAlpha(150.6, WARNING)).toBeLessThan(1);
     expect(warningBulletAlpha(152, WARNING)).toBe(0);
+  });
+
+  it('moves a fixed map pixel downward and brings the next row in from the top', () => {
+    const start = mapPixelScreenY(0, 0);
+    expect(start).toBe(LOGICAL_H - TILE_SIZE);
+    expect(mapPixelScreenY(TILE_SIZE, 0)).toBeLessThan(start);
+    expect(mapPixelScreenY(0, 10)).toBe(start + 10);
+    expect(mapPixelScreenY(LOGICAL_H, 0)).toBe(-TILE_SIZE);
+    expect(mapPixelScreenY(LOGICAL_H, TILE_SIZE)).toBe(0);
+    const height = 4000;
+    expect(scrollSourceY(height, 0)).toBe(height - LOGICAL_H);
+    expect(scrollSourceY(height, 25)).toBe(height - LOGICAL_H - 25);
+    expect(logicalMapY(start, 0)).toBe(0);
+  });
+
+  it('treats coast river tiles as blocked for tanks and grass as open', () => {
+    const specs = mapLayerSpecs();
+    const coast = buildCoastMap(specs.coast.rows);
+    const grids = {
+      ground: buildGroundMap(4),
+      coast,
+      base: buildBaseMap(4),
+    };
+    const fade = backgroundFade(70, WARNING);
+    const local = 400;
+    const scroll = specs.coast.origin + local;
+    let water: { x: number; y: number } | null = null;
+    let land: { x: number; y: number } | null = null;
+    for (let row = 12; row < 48 && (!water || !land); row++) {
+      for (let col = 0; col < coast[row]!.length; col++) {
+        const id = coast[row]![col]!;
+        const logicalY = row * TILE_SIZE + 8;
+        const screenY = mapPixelScreenY(logicalY, local);
+        const screenX = col * TILE_SIZE + 8 - 4;
+        if (!water && isWaterTile(id)) water = { x: screenX, y: screenY };
+        if (!land && !isWaterTile(id) && id !== TileId.dock) land = { x: screenX, y: screenY };
+      }
+    }
+    expect(water).not.toBeNull();
+    expect(land).not.toBeNull();
+    expect(terrainBlocksTank(grids, scroll, fade, water!.x, water!.y)).toBe(true);
+    expect(terrainBlocksTank(grids, scroll, fade, land!.x, land!.y)).toBe(false);
   });
 
   it('locks ground motion to whole tile pixels', () => {
