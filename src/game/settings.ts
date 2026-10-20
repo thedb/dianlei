@@ -3,7 +3,12 @@
  * (localStorage on H5, wx storage on WeChat).
  */
 
-import { CONTROL_OPACITY_DEFAULT, CONTROL_SCALE_MIN, CONTROL_SCALE_MAX } from '@/game/config';
+import {
+  BGM_VOLUME_DEFAULT,
+  CONTROL_OPACITY_DEFAULT,
+  CONTROL_SCALE_MIN,
+  CONTROL_SCALE_MAX,
+} from '@/game/config';
 
 export type JoystickMode = 'fixed' | 'floating';
 
@@ -18,6 +23,10 @@ export interface Settings {
   /** Control size scale, CONTROL_SCALE_MIN–CONTROL_SCALE_MAX */
   controlScale: number;
   muted: boolean;
+  /** Looping chiptune. Default off; mute still silences it when this is on. */
+  bgmEnabled: boolean;
+  /** 0–1 music bus. Ignored while BGM is off or the master mute is on. */
+  bgmVolume: number;
 }
 
 export const CONTROL_OPACITY_MIN = 0.2;
@@ -29,6 +38,8 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   controlOpacity: CONTROL_OPACITY_DEFAULT,
   controlScale: 1,
   muted: false,
+  bgmEnabled: false,
+  bgmVolume: BGM_VOLUME_DEFAULT,
 };
 
 export const SETTINGS_STORAGE_KEY = 'dianlei.settings.v1';
@@ -78,6 +89,9 @@ export function sanitizeSettings(raw: unknown): Settings {
       CONTROL_SCALE_MAX
     ),
     muted: typeof src['muted'] === 'boolean' ? src['muted'] : DEFAULT_SETTINGS.muted,
+    bgmEnabled:
+      typeof src['bgmEnabled'] === 'boolean' ? src['bgmEnabled'] : DEFAULT_SETTINGS.bgmEnabled,
+    bgmVolume: num(src['bgmVolume'], DEFAULT_SETTINGS.bgmVolume, 0, 1),
   };
 }
 

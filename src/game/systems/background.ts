@@ -104,8 +104,9 @@ export function warningBulletAlpha(t: number, warningAt: number): number {
 }
 
 /**
- * Integrates scroll. Ground units should consume `tileDelta` (integer pixels)
- * so they stay locked to the tile grid.
+ * Integrates scroll. Positive `scroll` / `tileDelta` move the field downward:
+ * new terrain enters from the top. Ground units should consume `tileDelta`
+ * (integer pixels) so they stay locked to the tile grid.
  */
 export class Scroller {
   scroll = 0;

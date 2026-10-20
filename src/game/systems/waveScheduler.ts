@@ -5,6 +5,7 @@
 
 import type { Wave, EnemyType, Move, Fire, SpawnGroup } from '@/game/levels/types';
 import { stage1 } from '@/game/levels/stage1';
+import { LOGICAL_H, LOGICAL_W } from '@/game/config';
 import { ENEMY_STATS } from '@/game/entities/enemy';
 
 export interface WaveSchedulerConfig {
@@ -177,8 +178,7 @@ export class WaveScheduler {
 
       for (let i = 0; i < group.count; i++) {
         const spawnTime = wave.t + (group.delay ?? 0) + (group.interval ?? 0) * i;
-        const x = group.xs[i % group.xs.length] ?? 180;
-        const y = resolveSpawnY(group);
+        const pos = resolveSpawnPosition(group, i);
 
         const canFire = !group.fireOnly || group.fireOnly.includes(i);
 
@@ -200,8 +200,8 @@ export class WaveScheduler {
           time: spawnTime,
           request: {
             type: group.enemy,
-            x,
-            y,
+            x: pos.x,
+            y: pos.y,
             move: group.move,
             fire,
             canFire,
@@ -232,13 +232,35 @@ export class WaveScheduler {
   }
 }
 
-function resolveSpawnY(group: SpawnGroup): number {
-  if (group.y !== undefined) return group.y;
-  if (group.move.kind === 'side_arc') return group.move.y0;
-  if (group.move.kind === 'ground') {
-    return -Math.ceil(ENEMY_STATS[group.enemy].height / 2) - 1;
+/** Screen position for one ship in a group. Ground tanks use `move.entry`. */
+export function resolveSpawnPosition(group: SpawnGroup, index: number): { x: number; y: number } {
+  const laneX = group.xs[index % group.xs.length] ?? 180;
+  if (group.move.kind === 'side_arc') return { x: laneX, y: group.y ?? group.move.y0 };
+  if (group.move.kind === 'ground') return resolveGroundSpawn(group, index, laneX);
+  return { x: laneX, y: group.y ?? -20 };
+}
+
+function resolveGroundSpawn(
+  group: SpawnGroup,
+  _index: number,
+  laneX: number
+): { x: number; y: number } {
+  const move = group.move;
+  if (move.kind !== 'ground') return { x: laneX, y: group.y ?? -20 };
+  const stats = ENEMY_STATS[group.enemy];
+  const halfW = Math.ceil(stats.width / 2);
+  const halfH = Math.ceil(stats.height / 2);
+  switch (move.entry ?? 'top') {
+    case 'left':
+      return { x: -halfW - 2, y: group.y ?? 220 };
+    case 'right':
+      return { x: LOGICAL_W + halfW + 2, y: group.y ?? 220 };
+    case 'bottomLeft':
+    case 'bottomRight':
+      return { x: laneX, y: group.y ?? LOGICAL_H + halfH + 2 };
+    default:
+      return { x: laneX, y: group.y ?? -halfH - 1 };
   }
-  return -20;
 }
 
 /** Offset each ship in a group so their first shots don't land on the same frame. */

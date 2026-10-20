@@ -16,6 +16,12 @@ export type MoveKind =
   | 'slow_push'
   | 'ground';
 
+/**
+ * How a ground unit enters.
+ * `top` scrolls in with the map. Tanks also use the four side and corner entries.
+ */
+export type GroundEntry = 'top' | 'left' | 'right' | 'bottomLeft' | 'bottomRight';
+
 export type FireKind =
   | 'none'
   | 'aimed1'
@@ -39,7 +45,7 @@ export type Move =
   | { kind: 'side_arc'; side: 'left' | 'right'; y0: number; speed: number }
   | { kind: 'orbit'; anchor: { x: number; y: number }; r: number; period: number; hold: number }
   | { kind: 'slow_push'; stopY: number; hold: number }
-  | { kind: 'ground'; vx?: number };
+  | { kind: 'ground'; vx?: number; entry?: GroundEntry };
 
 export type Fire =
   | { kind: 'none' }

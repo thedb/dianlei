@@ -42,6 +42,7 @@ export function createFakePlatform(): FakePlatform {
     now: () => now,
     loadImage: unused,
     playAudio: () => undefined,
+    createAudioContext: () => null,
     getStorage: () => null,
     setStorage: () => undefined,
     onTouchStart: (c) => (cb.start = c),

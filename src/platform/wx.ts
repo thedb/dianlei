@@ -30,6 +30,7 @@ declare const wx: {
   onTouchCancel: (callback: (res: { touches: TouchPoint[] }) => void) => void;
   onHide: (callback: () => void) => void;
   onShow: (callback: () => void) => void;
+  createWebAudioContext?: () => AudioContext;
 };
 
 export function createWxPlatform(): PlatformAdapter {
@@ -106,7 +107,11 @@ export function createWxPlatform(): PlatformAdapter {
     },
 
     playAudio(_id: string): void {
-      // Stub - audio not implemented in P0
+      // One-shots go through the game audio system, not clip ids.
+    },
+
+    createAudioContext(): AudioContext | null {
+      return typeof wx.createWebAudioContext === 'function' ? wx.createWebAudioContext() : null;
     },
 
     getStorage<T>(key: string): T | null {

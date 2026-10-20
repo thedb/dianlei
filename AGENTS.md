@@ -139,9 +139,10 @@ This document defines the coding conventions and constraints for all AI agents w
 ## Audio
 
 ### WebAudio Synthesis
-- 8-bit style SFX generated with WebAudio API
-- Behind platform adapter for WeChat compatibility
-- Respect mute toggle
+- 8-bit style SFX and one looping BGM, both generated with WebAudio API. No binary music files
+- Context comes from the platform adapter (`createAudioContext`: H5 `AudioContext`, WeChat `wx.createWebAudioContext`)
+- BGM defaults **off**. Settings and the title screen share an on/off switch and a 0–100% volume slider, persisted with the other settings
+- The mute toggle silences SFX and BGM
 - Unlock audio context on first user interaction
 
 ## Performance Targets

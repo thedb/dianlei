@@ -24,6 +24,48 @@ describe('enemy movement', () => {
     expect(enemy.x).toBeGreaterThan(72);
   });
 
+  it('drives tanks in from the sides and from the bottom corners', () => {
+    const left = createEnemy();
+    spawnEnemy(left, 'tank', -14, 200, { kind: 'ground', entry: 'left' }, { kind: 'none' });
+    updateEnemy(left, 0.4, 180, 500, 0);
+    expect(left.x).toBeGreaterThan(-14);
+    expect(left.y).toBeCloseTo(200, 5);
+
+    const right = createEnemy();
+    spawnEnemy(right, 'tank', 380, 200, { kind: 'ground', entry: 'right' }, { kind: 'none' });
+    updateEnemy(right, 0.4, 180, 500, 0);
+    expect(right.x).toBeLessThan(380);
+
+    const corner = createEnemy();
+    spawnEnemy(corner, 'tank', 72, 660, { kind: 'ground', entry: 'bottomLeft' }, { kind: 'none' });
+    updateEnemy(corner, 0.4, 180, 500, 0);
+    expect(corner.x).toBeGreaterThan(72);
+    expect(corner.y).toBeLessThan(660);
+  });
+
+  it('will not drive a tank onto water and leaves the river toward the bank', () => {
+    const driver = createEnemy();
+    spawnEnemy(
+      driver,
+      'tank',
+      100,
+      200,
+      { kind: 'ground', entry: 'left', vx: 80 },
+      { kind: 'none' }
+    );
+    const blocks = (x: number): boolean => x >= 120;
+    for (let i = 0; i < 40; i++) {
+      updateEnemy(driver, FIXED_DT, 180, 500, 0, { blocksTank: (x) => blocks(x) });
+    }
+    expect(driver.x).toBeGreaterThan(100);
+    expect(driver.x).toBeLessThan(120);
+
+    const wet = createEnemy();
+    spawnEnemy(wet, 'tank', 40, 200, { kind: 'ground' }, { kind: 'none' });
+    updateEnemy(wet, 0.5, 180, 500, 0, { blocksTank: (x) => x < 80 });
+    expect(wet.x).toBeGreaterThan(40);
+  });
+
   it('leaves a hover ship at stopY, then climbs away', () => {
     const enemy = createEnemy();
     spawnEnemy(enemy, 'medium', 180, -20, { kind: 'hover', stopY: 120, hold: 2 }, { kind: 'none' });
