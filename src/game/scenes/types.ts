@@ -4,7 +4,8 @@
 
 import type { Renderer, GameDebugInfo } from '@/engine/renderer';
 import type { InputState, InputHandler } from '@/engine/input';
-import type { SettingsStore } from '@/game/settings';
+import type { SettingsStore, SettingsStorage } from '@/game/settings';
+import type { RunReport } from '@/game/systems/score';
 
 export type SceneId = 'boot' | 'title' | 'battle' | 'result' | 'gameover';
 
@@ -25,4 +26,7 @@ export interface SceneContext {
   safeArea: { top: number; bottom: number; left: number; right: number };
   input: Pick<InputHandler, 'setControlsEnabled' | 'getControlsView'>;
   settings: SettingsStore;
+  storage: SettingsStorage;
+  /** Last finished run, read by the result and game-over scenes. */
+  run: { report: RunReport | null };
 }

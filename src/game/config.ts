@@ -381,3 +381,34 @@ export function warningTileScrollPx(): number {
     ((BG_SCROLL_SPEED + BG_WARNING_SCROLL) * WARNING_TILE_FADE_NUM) / (2 * WARNING_TILE_FADE_DEN)
   );
 }
+
+// ============================================================================
+// Stage 1 boss & opening (wave table §5, design §6.2 / §7)
+// ============================================================================
+
+/** Battleship anchor x. Drift is ±BossConfig.drift.amp around this. */
+export const BOSS_ANCHOR_X = 180;
+
+/** Y the battleship enters from, above the screen. */
+export const BOSS_ENTER_Y = -70;
+
+export const BOSS_HULL_W = 220;
+export const BOSS_HULL_H = 140;
+
+/** Detached turret sprite, original pixels. */
+export const BOSS_TURRET_SIZE = 40;
+
+/** STAGE CLEAR hold before the result screen. */
+export const BOSS_CLEAR_HOLD = 2;
+
+/** Boss HP bar starts filling this long after warningAt (2:33). */
+export const BOSS_HP_BAR_FILL_START = 3;
+
+/** Initial speed and gravity of a destroyed turret, pixels/second. */
+export const BOSS_TURRET_FALL_SPEED = 30;
+export const BOSS_TURRET_FALL_GRAVITY = 220;
+
+/** Opening cards, seconds from stage start (0:00–0:05). */
+export const INTRO_STAGE_UNTIL = 1.6;
+export const INTRO_READY_UNTIL = 3.6;
+export const INTRO_GO_UNTIL = 4.4;

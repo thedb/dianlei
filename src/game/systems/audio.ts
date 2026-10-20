@@ -11,7 +11,8 @@ export type SfxType =
   | 'bomb'
   | 'itemPickup'
   | 'powerUp'
-  | 'extend';
+  | 'extend'
+  | 'warning';
 
 export interface AudioSystem {
   init(): void;
@@ -176,6 +177,13 @@ export function createAudioSystem(): AudioSystem {
           setTimeout(() => playTone(660, 0.12, 'square', 0.12), 200);
           setTimeout(() => playTone(880, 0.2, 'square', 0.15), 300);
           setTimeout(() => playTone(1100, 0.25, 'square', 0.12), 450);
+          break;
+
+        case 'warning':
+          playTone(660, 0.12, 'square', 0.12);
+          setTimeout(() => playTone(440, 0.16, 'square', 0.12), 140);
+          setTimeout(() => playTone(660, 0.12, 'square', 0.12), 320);
+          setTimeout(() => playTone(440, 0.2, 'square', 0.12), 460);
           break;
       }
     },

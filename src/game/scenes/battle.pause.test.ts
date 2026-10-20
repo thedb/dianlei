@@ -36,6 +36,8 @@ function setup() {
     showDebug: false,
     safeArea: { top: 0, bottom: 0, left: 0, right: 0 },
     settings,
+    storage: createMemoryStorage(),
+    run: { report: null },
     input: { setControlsEnabled, getControlsView: () => view },
   });
   scene.enter();
@@ -48,7 +50,7 @@ describe('battle pause', () => {
   it('freezes gameplay while paused and resumes on Continue', () => {
     const { scene, setControlsEnabled } = setup();
     const fire = makeInput({ buttonA: true, keyFire: true, joystickX: 1, joystickMagnitude: 1 });
-    for (let i = 0; i < 30; i++) scene.update(DT, fire);
+    for (let i = 0; i < 50; i++) scene.update(DT, fire);
     const before = scene.getDebugInfo!();
     expect(before.bulletCount).toBeGreaterThan(0);
 
