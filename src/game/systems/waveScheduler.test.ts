@@ -28,18 +28,14 @@ describe('WaveScheduler', () => {
   });
 
   it('should spawn enemies with interval delays', () => {
-    // W01 has 3 small enemies with interval 0.4
-    // First enemy spawns at t=6.0
+    // W01 small enemies spawn 0.35s apart starting at t=6.0
     const spawn1 = scheduler.update(6.0);
     expect(spawn1).toHaveLength(1);
 
-    // Second enemy at t=6.4
-    const spawn2 = scheduler.update(0.4);
-    expect(spawn2).toHaveLength(1);
+    expect(scheduler.update(0.2)).toHaveLength(0);
+    expect(scheduler.update(0.15)).toHaveLength(1); // t=6.35
 
-    // Third enemy at t=6.8
-    const spawn3 = scheduler.update(0.4);
-    expect(spawn3).toHaveLength(1);
+    expect(scheduler.update(0.35)).toHaveLength(1); // t=6.70
   });
 
   it('should track kill rate', () => {

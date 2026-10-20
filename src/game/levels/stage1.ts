@@ -1,6 +1,10 @@
 /**
  * Stage 1 wave data - MVP waves only (marked ★ in wave table)
  * Full data from docs/电雷_第一关波次表_v1.md
+ *
+ * Playtest tuning (deviates from the doc table): MVP small-fighter formations in
+ * W01/W02/W06/W07/W10/W13/W17/W21 each got +1 ship and slightly shorter spawn
+ * intervals, raising the MVP enemy total from 85 to 94 (~+10%).
  */
 
 import type { StageData } from './types';
@@ -24,9 +28,9 @@ export const stage1: StageData = {
       groups: [
         {
           enemy: 'small',
-          count: 3,
+          count: 4,
           xs: [180],
-          interval: 0.4,
+          interval: 0.35,
           move: { kind: 'straight', speed: 150 },
           fire: { kind: 'none' },
         },
@@ -42,9 +46,9 @@ export const stage1: StageData = {
       groups: [
         {
           enemy: 'small',
-          count: 4,
-          xs: [100, 260, 100, 260],
-          interval: 0.5,
+          count: 5,
+          xs: [100, 260, 100, 260, 180],
+          interval: 0.45,
           move: { kind: 'straight', speed: 150 },
           fire: { kind: 'aimed1', interval: 2, maxShots: 1, atY: 160 },
         },
@@ -96,9 +100,9 @@ export const stage1: StageData = {
       groups: [
         {
           enemy: 'small',
-          count: 6,
+          count: 7,
           xs: [80],
-          interval: 0.3,
+          interval: 0.28,
           move: { kind: 'sine', vy: 130, amp: 50, period: 2.0 },
           fire: { kind: 'none' },
         },
@@ -114,9 +118,9 @@ export const stage1: StageData = {
       groups: [
         {
           enemy: 'small',
-          count: 6,
+          count: 7,
           xs: [280],
-          interval: 0.3,
+          interval: 0.28,
           move: { kind: 'sine', vy: 130, amp: 50, period: 2.0 },
           fire: { kind: 'aimed1', interval: 2, maxShots: 1 },
           fireOnly: [1, 3, 5],
@@ -133,9 +137,9 @@ export const stage1: StageData = {
       groups: [
         {
           enemy: 'small',
-          count: 8,
-          xs: [110, 250, 110, 250, 110, 250, 110, 250],
-          interval: 0.35,
+          count: 9,
+          xs: [110, 250, 110, 250, 110, 250, 110, 250, 180],
+          interval: 0.32,
           move: { kind: 'straight', speed: 170 },
           fire: { kind: 'aimed1', interval: 2, maxShots: 1 },
           fireOnly: [0, 1],
@@ -175,8 +179,8 @@ export const stage1: StageData = {
       groups: [
         {
           enemy: 'small',
-          count: 8,
-          xs: [-12, -12, -12, -12, -12, -12, -12, -12],
+          count: 9,
+          xs: [-12, -12, -12, -12, -12, -12, -12, -12, -12],
           y: 40,
           interval: 0.3,
           move: { kind: 'cross', from: 'topLeft', speed: 160 },
@@ -202,8 +206,8 @@ export const stage1: StageData = {
       groups: [
         {
           enemy: 'small',
-          count: 6,
-          xs: [-12, -12, -12, -12, -12, -12],
+          count: 7,
+          xs: [-12, -12, -12, -12, -12, -12, -12],
           y: 20,
           interval: 0.3,
           move: { kind: 'cross', from: 'topLeft', speed: 170 },
@@ -212,8 +216,8 @@ export const stage1: StageData = {
         },
         {
           enemy: 'small',
-          count: 6,
-          xs: [372, 372, 372, 372, 372, 372],
+          count: 7,
+          xs: [372, 372, 372, 372, 372, 372, 372],
           y: 20,
           interval: 0.3,
           move: { kind: 'cross', from: 'topRight', speed: 170 },
@@ -262,9 +266,9 @@ export const stage1: StageData = {
         },
         {
           enemy: 'small',
-          count: 6,
-          xs: [40, 320, 40, 320, 40, 320],
-          interval: 0.3,
+          count: 7,
+          xs: [40, 320, 40, 320, 40, 320, 40],
+          interval: 0.28,
           move: { kind: 'straight', speed: 160, angle: 15 },
           fire: { kind: 'none' },
         },
