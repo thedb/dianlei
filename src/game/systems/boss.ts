@@ -405,9 +405,13 @@ export function resolveBossBullet(
   const hull = bossHullRect(boss);
   const left = bullet.x - bullet.w / 2;
   const top = bullet.y - bullet.h / 2;
-  if (rectsOverlap(left, top, bullet.w, bullet.h, hull.x, hull.y, hull.w, hull.h)) {
-    ev.consumedBullet = true;
-  }
+  if (!rectsOverlap(left, top, bullet.w, bullet.h, hull.x, hull.y, hull.w, hull.h)) return ev;
+
+  // The hull hangs below the turret and core circles. Player shots climb in
+  // from the bottom, so armor must not eat a bullet that is still lined up
+  // with a living weak point. A miss beside those circles still stops here.
+  const reaching = hittable.some((part) => shotStillReaching(bullet, part));
+  if (!reaching) ev.consumedBullet = true;
   return ev;
 }
 
@@ -791,6 +795,18 @@ function fireFirstDelay(fire: Fire, interval: number): number {
     default:
       return interval;
   }
+}
+
+function shotLinedUpWith(bullet: BulletBox, part: BossPartRuntime): boolean {
+  const left = bullet.x - bullet.w / 2;
+  const right = bullet.x + bullet.w / 2;
+  return right > part.worldX - part.radius && left < part.worldX + part.radius;
+}
+
+/** The bullet has not climbed past this part yet. */
+function shotStillReaching(bullet: BulletBox, part: BossPartRuntime): boolean {
+  if (!shotLinedUpWith(bullet, part)) return false;
+  return bullet.y + bullet.h / 2 >= part.worldY - part.radius;
 }
 
 function rectsOverlap(

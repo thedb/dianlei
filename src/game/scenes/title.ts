@@ -1,5 +1,5 @@
 /**
- * Title scene - main menu: 开始游戏 / 设置
+ * Title scene - main menu: 开始游戏 / 挑战 Boss / 设置
  */
 
 import type { Scene, SceneContext } from './types';
@@ -11,13 +11,24 @@ import { createSettingsPanel } from '@/game/ui/settingsPanel';
 import { drawButton, drawText, hitRect, UI_COLORS, type Rect } from '@/game/ui/widgets';
 import { START_BUTTON, drawStartButton, isStartTapped } from '@/game/ui/startButton';
 
-const ITEM_COUNT = 2;
+const ITEM_COUNT = 3;
+const MENU_W = 180;
+const MENU_H = 44;
+/** Wider than the start button's touch slack so the two hits do not overlap. */
+const MENU_GAP = 16;
+
+export const BOSS_BUTTON: Rect = {
+  x: LOGICAL_W / 2 - MENU_W / 2,
+  y: START_BUTTON.y + START_BUTTON.h + MENU_GAP,
+  w: MENU_W,
+  h: MENU_H,
+};
 
 export const SETTINGS_BUTTON: Rect = {
-  x: LOGICAL_W / 2 - 90,
-  y: START_BUTTON.y + START_BUTTON.h + 20,
-  w: 180,
-  h: 44,
+  x: LOGICAL_W / 2 - MENU_W / 2,
+  y: BOSS_BUTTON.y + BOSS_BUTTON.h + MENU_GAP,
+  w: MENU_W,
+  h: MENU_H,
 };
 
 export function createTitleScene(ctx: SceneContext): Scene {
@@ -27,7 +38,14 @@ export function createTitleScene(ctx: SceneContext): Scene {
   const settingsPanel = createSettingsPanel(ctx.settings);
 
   function choose(i: number): 'battle' | null {
-    if (i === 0) return 'battle';
+    if (i === 0) {
+      ctx.battleEntry = 'stage';
+      return 'battle';
+    }
+    if (i === 1) {
+      ctx.battleEntry = 'boss';
+      return 'battle';
+    }
     inSettings = true;
     settingsPanel.open();
     return null;
@@ -59,7 +77,8 @@ export function createTitleScene(ctx: SceneContext): Scene {
       if (input.menuDown) selected = (selected + 1) % ITEM_COUNT;
 
       if (isStartTapped(input.taps)) return choose(0);
-      if (input.taps.some((t) => hitRect(SETTINGS_BUTTON, t.x, t.y))) return choose(1);
+      if (input.taps.some((t) => hitRect(BOSS_BUTTON, t.x, t.y))) return choose(1);
+      if (input.taps.some((t) => hitRect(SETTINGS_BUTTON, t.x, t.y))) return choose(2);
       if (input.menuConfirm) return choose(selected);
       return null;
     },
@@ -82,7 +101,8 @@ export function createTitleScene(ctx: SceneContext): Scene {
       );
 
       drawStartButton(c, blinkTimer, selected === 0);
-      drawButton(c, SETTINGS_BUTTON, '设置', selected === 1);
+      drawButton(c, BOSS_BUTTON, '挑战 Boss', selected === 1);
+      drawButton(c, SETTINGS_BUTTON, '设置', selected === 2);
 
       drawText(
         c,

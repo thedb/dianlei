@@ -38,6 +38,7 @@ function setup() {
     settings,
     storage: createMemoryStorage(),
     run: { report: null },
+    battleEntry: 'stage',
     input: { setControlsEnabled, getControlsView: () => view },
   });
   scene.enter();

@@ -18,6 +18,7 @@ function context(): SceneContext {
     settings,
     storage,
     run: { report: null },
+    battleEntry: 'stage',
     input: {
       setControlsEnabled: vi.fn(),
       getControlsView: () => ({
