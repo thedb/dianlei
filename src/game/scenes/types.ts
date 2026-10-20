@@ -3,7 +3,8 @@
  */
 
 import type { Renderer, GameDebugInfo } from '@/engine/renderer';
-import type { InputState } from '@/engine/input';
+import type { InputState, InputHandler } from '@/engine/input';
+import type { SettingsStore } from '@/game/settings';
 
 export type SceneId = 'boot' | 'title' | 'battle' | 'result' | 'gameover';
 
@@ -15,9 +16,13 @@ export interface Scene {
   render(renderer: Renderer, alpha: number): void;
   /** Optional method to expose game state for debug overlay */
   getDebugInfo?(): GameDebugInfo;
+  /** App went to background (tab hidden / WeChat onHide) */
+  onHide?(): void;
 }
 
 export interface SceneContext {
   showDebug: boolean;
   safeArea: { top: number; bottom: number; left: number; right: number };
+  input: Pick<InputHandler, 'setControlsEnabled' | 'getControlsView'>;
+  settings: SettingsStore;
 }

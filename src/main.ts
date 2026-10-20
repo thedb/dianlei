@@ -36,10 +36,6 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     game.toggleDebug();
   }
-  if (e.key === 'Escape') {
-    e.preventDefault();
-    game.pause();
-  }
 });
 
 // Prevent default touch behavior

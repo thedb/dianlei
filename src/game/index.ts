@@ -8,6 +8,8 @@ import { createInputHandler, type InputHandler } from '@/engine/input';
 import { createRenderer, type Renderer } from '@/engine/renderer';
 import { createAudioSystem, type AudioSystem } from '@/engine/audio';
 import { createSceneManager, type SceneContext } from './scenes';
+import { createSettingsStore } from './settings';
+import { getAudioSystem } from './systems/audio';
 
 export interface Game {
   start(): void;
@@ -37,9 +39,16 @@ export function createGame(platform: H5Platform): Game {
   const scaleInfo = renderer.getScaleInfo();
   platform.setCanvas(renderer.getCanvas(), scaleInfo.scale);
 
-  // Create input handler
-  const inputHandler: InputHandler = createInputHandler(platform, safeArea.bottom);
-  inputHandler.setScaleFactor(scaleInfo.scale, scaleInfo.offsetX, scaleInfo.offsetY);
+  // Settings persist through the platform storage hook
+  const settings = createSettingsStore(platform);
+  const sfx = getAudioSystem();
+  sfx.setMuted(settings.get().muted);
+  settings.subscribe((s) => sfx.setMuted(s.muted));
+
+  // The H5 platform already reports touches in logical pixels, so the input
+  // handler must not re-apply the letterbox scale/offset
+  const inputHandler: InputHandler = createInputHandler(platform, settings, safeArea);
+  inputHandler.setScaleFactor(1, 0, 0);
 
   // Create audio system
   const audioSystem: AudioSystem = createAudioSystem(platform);
@@ -48,6 +57,8 @@ export function createGame(platform: H5Platform): Game {
   const sceneContext: SceneContext = {
     showDebug: true, // P0 always shows debug
     safeArea,
+    input: inputHandler,
+    settings,
   };
 
   // Create scene manager and start with boot scene
@@ -82,10 +93,11 @@ export function createGame(platform: H5Platform): Game {
     },
   });
 
-  // Handle visibility changes
+  // Backgrounding opens the pause menu (design doc §7); the loop keeps
+  // running so the menu is live when the player returns
   platform.onVisibilityChange((visible) => {
     if (!visible) {
-      loop.pause();
+      sceneManager.getCurrentScene()?.onHide?.();
     }
   });
 

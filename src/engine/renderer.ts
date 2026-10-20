@@ -36,6 +36,9 @@ export interface GameDebugInfo {
   score?: number;
   power?: number;
   lives?: number;
+  paused?: boolean;
+  /** Seconds of gameplay simulated (frozen while paused) */
+  gameTime?: number;
 }
 
 /**

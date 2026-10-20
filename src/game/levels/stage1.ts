@@ -1,10 +1,6 @@
 /**
  * Stage 1 wave data - MVP waves only (marked ★ in wave table)
  * Full data from docs/电雷_第一关波次表_v1.md
- *
- * Playtest tuning (deviates from the doc table): MVP small-fighter formations in
- * W01/W02/W06/W07/W10/W13/W17/W21 each got +1 ship and slightly shorter spawn
- * intervals, raising the MVP enemy total from 85 to 94 (~+10%).
  */
 
 import type { StageData } from './types';
