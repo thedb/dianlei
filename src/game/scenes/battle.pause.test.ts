@@ -21,7 +21,6 @@ vi.mock('@/game/systems/audio', () => {
   return { getAudioSystem: () => sfx, createAudioSystem: () => sfx };
 });
 
-
 function setup() {
   const settings = createSettingsStore(createMemoryStorage());
   const layout = computeControlLayout(settings.get(), { top: 0, bottom: 0 });
