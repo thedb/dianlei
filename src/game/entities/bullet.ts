@@ -13,6 +13,8 @@ export interface Bullet extends Poolable {
   width: number;
   height: number;
   speed: number;
+  vx?: number;
+  vy?: number;
 }
 
 export function createBullet(): Bullet {
@@ -31,6 +33,8 @@ export function createBullet(): Bullet {
       this.y = 0;
       this.prevX = 0;
       this.prevY = 0;
+      delete this.vx;
+      delete this.vy;
     },
   };
 }

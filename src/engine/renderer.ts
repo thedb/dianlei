@@ -13,6 +13,7 @@ export interface Renderer {
   fillCircle(x: number, y: number, radius: number, color: string): void;
   strokeCircle(x: number, y: number, radius: number, color: string, lineWidth?: number): void;
   fillText(text: string, x: number, y: number, color: string, fontSize?: number): void;
+  drawImage(image: CanvasImageSource, x: number, y: number, w?: number, h?: number): void;
   drawDebugOverlay(
     loopInfo: LoopDebugInfo,
     inputInfo: InputDebugInfo,
@@ -30,6 +31,11 @@ export interface GameDebugInfo {
   bulletCount: number;
   fireHeld: boolean;
   bombPressed: boolean;
+  enemyCount?: number;
+  enemyBulletCount?: number;
+  score?: number;
+  power?: number;
+  lives?: number;
 }
 
 /**
@@ -140,6 +146,14 @@ export function createRenderer(options: RendererOptions): Renderer {
       ctx.font = `${fontSize}px monospace`;
       ctx.textBaseline = 'top';
       ctx.fillText(text, Math.floor(x), Math.floor(y));
+    },
+
+    drawImage(image: CanvasImageSource, x: number, y: number, w?: number, h?: number): void {
+      if (w !== undefined && h !== undefined) {
+        ctx.drawImage(image, Math.floor(x), Math.floor(y), w, h);
+      } else {
+        ctx.drawImage(image, Math.floor(x), Math.floor(y));
+      }
     },
 
     drawDebugOverlay(
