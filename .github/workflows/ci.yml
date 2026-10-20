@@ -35,6 +35,16 @@ jobs:
       - name: Build H5
         run: npm run build:h5
 
+      - name: Verify relative asset paths
+        run: |
+          # Fail if index.html contains absolute asset paths (would 404 when deployed to a subfolder)
+          if grep -E '(src|href)="/assets' dist/index.html; then
+            echo "::error::dist/index.html contains absolute asset paths (src=\"/assets or href=\"/assets)."
+            echo "::error::Assets must use relative paths (./assets/) for deployment flexibility."
+            exit 1
+          fi
+          echo "✓ All asset paths are relative"
+
       - name: Build WeChat (type check only)
         run: npm run build:wx
 
@@ -68,11 +78,6 @@ jobs:
         env:
           ASSET_BASE_URL: 'https://cdn.it-consultis.com/vibeCoding/dianlei/assets/'
 
-      - name: Set Cache-Control for index.html
-        run: |
-          # Create a metadata file for ossutil to set headers
-          echo "index.html" > /tmp/html-files.txt
-
       - name: Install ossutil
         run: |
           curl -fsSL https://gosspublic.alicdn.com/ossutil/install.sh | sudo bash
@@ -83,16 +88,18 @@ jobs:
 
       - name: Deploy to Aliyun OSS
         run: |
-          # Upload all files except index.html with default caching (immutable hashed assets)
-          ossutil cp -r dist/ oss://it-consultis/vibeCoding/dianlei/h5/ \
-            --exclude "index.html" \
+          # Upload hashed assets with long cache (immutable, 1 year)
+          # Content-hashed filenames mean the URL changes when content changes
+          ossutil cp -r dist/assets/ oss://it-consultis/vibeCoding/dianlei/h5/assets/ \
+            --meta "Cache-Control:public, max-age=31536000, immutable" \
             --update \
             --jobs 10
 
-          # Upload index.html with no-cache header
+          # Always upload index.html (no --update) with no-cache
+          # This ensures new deployments are immediately visible
           ossutil cp dist/index.html oss://it-consultis/vibeCoding/dianlei/h5/index.html \
             --meta "Cache-Control:no-cache" \
-            --update
+            --force
 
       - name: Output deploy URL
         run: |
