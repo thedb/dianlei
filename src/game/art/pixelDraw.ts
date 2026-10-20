@@ -97,6 +97,33 @@ export function fillPoly(
   }
 }
 
+/**
+ * Recolor the opaque pixels that touch transparency.
+ * Unlike `outline`, this stays inside the existing silhouette.
+ */
+export function rim(grid: SpriteData, color: number): void {
+  const h = grid.length;
+  const w = grid[0]?.length ?? 0;
+  const marks: Array<[number, number]> = [];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (grid[y]![x]! < 0) continue;
+      const edges: Array<[number, number]> = [
+        [x + 1, y],
+        [x - 1, y],
+        [x, y + 1],
+        [x, y - 1],
+      ];
+      const exposed = edges.some(([nx, ny]) => {
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) return true;
+        return grid[ny]![nx]! < 0;
+      });
+      if (exposed) marks.push([x, y]);
+    }
+  }
+  for (const [x, y] of marks) grid[y]![x] = color;
+}
+
 /** One-pixel 4-connected outline painted only into transparent cells. */
 export function outline(grid: SpriteData, color: number): void {
   const h = grid.length;

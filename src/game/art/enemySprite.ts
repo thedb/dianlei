@@ -1,69 +1,42 @@
 /**
- * Enemy sprites — code-drawn, palette indices only.
- * Medium fighter is a real 36×36 (P2). P1 scaled the 24×24 small fighter;
- * do not bring that path back.
+ * Enemy sprites — palette-index pixel art, baked to an offscreen canvas at boot.
  *
- * Air ships are drawn nose-down (toward the player) with engines at the top,
- * so the upward exhaust sits on the nozzles.
+ * Airframes point nose-down (toward the player). Engines sit at the top so the
+ * code-drawn exhaust (design §3.5) leaves upward. Silhouettes follow the
+ * stage-1 sheets: straight small fighter, darker medium gunship, swept
+ * interceptor, four-nacelle bomber, X-rotor drone. Ground units are top-down
+ * olive with the same thin red rim. Hit flash is a code tint of the idle frame.
  */
 
 import { COLOR } from '@/game/palette';
 import type { EnemyType } from '@/game/levels/types';
 import type { SpriteData, SpriteFrame } from './types';
 import { renderSprite, createHitFlashSprite } from './spriteRenderer';
-import { createGrid, fillEllipse, fillPoly, fillRect, outline, plot } from './pixelDraw';
+import { createGrid, plot, rim } from './pixelDraw';
 
-const _ = -1;
 const K = COLOR.BLACK;
 const S = COLOR.SHADOW;
 const DG = COLOR.DARK_GRAY;
+const MG = COLOR.MEDIUM_GRAY;
 const G = COLOR.GRAY;
+const LG = COLOR.LIGHT_GRAY;
+const PG = COLOR.PALE_GRAY;
+const W = COLOR.WHITE;
 
 const EB = COLOR.ENEMY_BLACK;
 const ED = COLOR.ENEMY_DARK_RED;
 const EC = COLOR.ENEMY_CRIMSON;
 const ER = COLOR.ENEMY_RED;
 const EH = COLOR.ENEMY_BRIGHT_RED;
+const EV = COLOR.ENEMY_VIVID_RED;
 
 const OD = COLOR.GROUND_DARK_OLIVE;
 const OL = COLOR.GROUND_OLIVE;
 const OM = COLOR.GROUND_MED_OLIVE;
-const OL2 = COLOR.GROUND_LIGHT_OLIVE;
+const OI = COLOR.GROUND_LIGHT_OLIVE;
 const TN = COLOR.GROUND_TAN;
 const AS = COLOR.TERRAIN_ASPHALT;
-const CC = COLOR.TERRAIN_CONCRETE;
 const DB = COLOR.TERRAIN_DARK_BROWN;
-
-/**
- * Small fighter — 24×24. Nose at the top, engines at the bottom (P1 art).
- * Flame anchor stays at the top edge so the P1 exhaust position is unchanged.
- */
-const SMALL_FIGHTER: SpriteData = [
-  [_, _, _, _, _, _, _, _, _, _, _, K, K, _, _, _, _, _, _, _, _, _, _, _],
-  [_, _, _, _, _, _, _, _, _, _, K, ER, ER, K, _, _, _, _, _, _, _, _, _, _],
-  [_, _, _, _, _, _, _, _, _, K, EC, ER, ER, EC, K, _, _, _, _, _, _, _, _, _],
-  [_, _, _, _, _, _, _, _, K, EC, EC, ER, ER, EC, EC, K, _, _, _, _, _, _, _, _],
-  [_, _, _, _, _, _, _, K, EC, EC, ED, ER, ER, ED, EC, EC, K, _, _, _, _, _, _, _],
-  [_, _, _, _, _, _, K, EC, EC, ED, K, EH, EH, K, ED, EC, EC, K, _, _, _, _, _, _],
-  [_, _, _, _, _, K, EC, EC, ED, K, K, EH, EH, K, K, ED, EC, EC, K, _, _, _, _, _],
-  [_, _, _, _, K, EC, EC, ED, K, DG, K, ER, ER, K, DG, K, ED, EC, EC, K, _, _, _, _],
-  [_, _, _, K, EC, EC, ED, K, DG, G, K, ER, ER, K, G, DG, K, ED, EC, EC, K, _, _, _],
-  [_, _, K, EC, EC, ED, K, DG, G, G, K, ER, ER, K, G, G, DG, K, ED, EC, EC, K, _, _],
-  [_, K, EC, EC, ED, K, K, DG, G, K, K, ER, ER, K, K, G, DG, K, K, ED, EC, EC, K, _],
-  [K, EC, EC, ED, K, K, K, DG, K, K, EC, ER, ER, EC, K, K, DG, K, K, K, ED, EC, EC, K],
-  [K, EC, ED, K, K, K, EC, ED, K, EC, EC, ER, ER, EC, EC, K, ED, EC, K, K, K, ED, EC, K],
-  [K, ED, K, K, K, EC, EC, ED, EC, EC, ED, ER, ER, ED, EC, EC, ED, EC, EC, K, K, K, ED, K],
-  [K, K, K, K, EC, EC, ED, ED, ED, ED, ED, ER, ER, ED, ED, ED, ED, ED, EC, EC, K, K, K, K],
-  [_, K, K, EC, EC, ED, ED, S, S, S, ED, ER, ER, ED, S, S, S, ED, ED, EC, EC, K, K, _],
-  [_, _, K, EC, ED, ED, S, K, K, K, S, ER, ER, S, K, K, K, S, ED, ED, EC, K, _, _],
-  [_, _, K, EC, ED, S, K, _, _, K, S, ER, ER, S, K, _, _, K, S, ED, EC, K, _, _],
-  [_, _, _, K, ED, S, K, _, _, K, ED, ER, ER, ED, K, _, _, K, S, ED, K, _, _, _],
-  [_, _, _, K, ED, K, _, _, _, K, ED, EC, EC, ED, K, _, _, _, K, ED, K, _, _, _],
-  [_, _, _, K, S, K, _, _, _, K, ED, EC, EC, ED, K, _, _, _, K, S, K, _, _, _],
-  [_, _, _, _, K, _, _, _, _, K, S, EC, EC, S, K, _, _, _, _, K, _, _, _, _],
-  [_, _, _, _, _, _, _, _, _, K, K, K, K, K, K, _, _, _, _, _, _, _, _, _],
-  [_, _, _, _, _, _, _, _, _, _, K, K, K, K, _, _, _, _, _, _, _, _, _, _],
-];
 
 export interface EnemyArt {
   pixels: SpriteData;
@@ -75,267 +48,401 @@ function art(pixels: SpriteData, nozzles: ReadonlyArray<{ x: number; y: number }
   return { pixels, nozzles };
 }
 
-/** Relocate a pixel coordinate to the sprite-center frame used at draw time. */
 function nozzleAt(w: number, h: number, px: number, py: number): { x: number; y: number } {
   return { x: px - Math.floor(w / 2), y: py - Math.floor(h / 2) };
 }
 
-/** Medium fighter 36×36. Dark red/black body, thin red outline. Not a scaled small. */
+interface FighterSpec {
+  w: number;
+  h: number;
+  engineRows: number;
+  wingRows: number;
+  wingHalf: number;
+  engineHalf: number;
+  notch: number;
+  sweep: number;
+  noseHalf: number;
+  fuselage: number;
+  /** Crimson/black hull instead of the bright small-fighter red. */
+  dark: boolean;
+}
+
+/**
+ * Top-down fighter. Rear and nozzles are y=0; the nose is the last filled row.
+ * `sweep` pulls the wing tips rearward (small sweep = straight wings).
+ */
+function drawFighter(spec: FighterSpec): SpriteData {
+  const {
+    w,
+    h,
+    engineRows,
+    wingRows,
+    wingHalf,
+    engineHalf,
+    notch,
+    sweep,
+    noseHalf,
+    fuselage,
+    dark,
+  } = spec;
+  const g = createGrid(w, h);
+  const cx = (w - 1) / 2;
+  const body: number = dark ? EC : EH;
+  const root: number = dark ? EB : ED;
+  const edge: number = dark ? EB : EC;
+
+  for (let y = 0; y < h; y++) {
+    let half: number;
+    let notchHere = 0;
+    if (y < engineRows) {
+      half = engineHalf + ((wingHalf - engineHalf) * (y + 1)) / (engineRows + 1);
+      notchHere = notch;
+    } else if (y < engineRows + wingRows) {
+      const t = (y - engineRows) / Math.max(1, wingRows - 1);
+      half = wingHalf - sweep * t * t;
+    } else {
+      const span = Math.max(1, h - 1 - (engineRows + wingRows));
+      const t = (y - (engineRows + wingRows)) / span;
+      const start = wingHalf - sweep;
+      half = start + (noseHalf - start) * Math.pow(t, 0.75);
+    }
+    for (let x = 0; x < w; x++) {
+      const dx = Math.abs(x - cx);
+      if (dx > half) continue;
+      if (notchHere && dx + 0.2 < notchHere) continue;
+      let color = body;
+      if (dx < fuselage) color = root;
+      else if (dx > half - 2.2) color = edge;
+      g[y]![x] = color;
+    }
+  }
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (g[y]![x]! < 0) continue;
+      const dx = Math.abs(x - cx);
+      const below = g[y + 1]?.[x] ?? -1;
+      const below2 = g[y + 2]?.[x] ?? -1;
+      if (below >= 0 && below2 < 0 && dx > fuselage + 0.5) g[y]![x] = EV;
+      if (y < engineRows && dx >= notch - 0.2 && dx <= notch + 1.5) g[y]![x] = K;
+      else if (y < engineRows && dx > notch + 1.5 && dx < engineHalf) g[y]![x] = EB;
+    }
+  }
+
+  const stripe = engineRows + Math.floor(wingRows * 0.4);
+  const stripeRow = g[stripe];
+  if (stripeRow) {
+    for (let x = 0; x < w; x++) {
+      if (stripeRow[x]! < 0) continue;
+      if (Math.abs(x - cx) > fuselage + 1) stripeRow[x] = dark ? ED : EC;
+    }
+  }
+
+  const cy0 = Math.floor(engineRows + wingRows * 0.45);
+  const cy1 = Math.min(h - 5, cy0 + Math.max(4, Math.floor(fuselage * 2)));
+  const left = Math.floor(cx);
+  const right = Math.ceil(cx);
+  for (let y = cy0; y <= cy1; y++) {
+    const fat = y > cy0 + 1 && y < cy1 - 1;
+    plot(g, left, y, fat ? S : DG);
+    plot(g, right, y, fat ? S : DG);
+    plot(g, left - 1, y, DG);
+    plot(g, right + 1, y, MG);
+  }
+  plot(g, left, cy0 + 1, LG);
+  plot(g, right, cy0 + 1, LG);
+
+  rim(g, ER);
+  for (let y = 0; y < engineRows - 1; y++) {
+    for (let x = 0; x < w; x++) {
+      const dx = Math.abs(x - cx);
+      if (dx >= notch - 0.2 && dx <= notch + 1.3 && g[y]![x]! >= 0) g[y]![x] = K;
+    }
+  }
+  return g;
+}
+
+function twinNozzles(g: SpriteData, rows: number): Array<{ x: number; y: number }> {
+  const h = g.length;
+  const w = g[0]?.length ?? 0;
+  const cx = Math.floor(w / 2);
+  const buckets: Array<Array<[number, number]>> = [[], []];
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < w; x++) {
+      if (g[y]![x] !== K) continue;
+      buckets[x < cx ? 0 : 1]!.push([x, y]);
+    }
+  }
+  return buckets
+    .filter((pts) => pts.length > 0)
+    .map((pts) => {
+      const x = pts.reduce((sum, p) => sum + p[0], 0) / pts.length;
+      const y = pts.reduce((sum, p) => sum + p[1], 0) / pts.length;
+      return nozzleAt(w, h, Math.round(x), Math.round(y));
+    });
+}
+
+function drawSmall(): EnemyArt {
+  const pixels = drawFighter({
+    w: 24,
+    h: 24,
+    engineRows: 4,
+    wingRows: 8,
+    wingHalf: 11,
+    engineHalf: 6,
+    notch: 2,
+    sweep: 1.4,
+    noseHalf: 0.45,
+    fuselage: 2.3,
+    dark: false,
+  });
+  return art(pixels, twinNozzles(pixels, 4));
+}
+
+/** Own 36×36 gunship — not a scaled small fighter. Dark hull, thick wing. */
 function drawMedium(): EnemyArt {
-  const w = 36;
-  const h = 36;
-  const g = createGrid(w, h);
-  fillPoly(
-    g,
-    [
-      [3, 12],
-      [33, 12],
-      [34, 18],
-      [24, 22],
-      [20, 20],
-      [16, 22],
-      [2, 18],
-    ],
-    ED
-  );
-  fillPoly(
-    g,
-    [
-      [7, 14],
-      [29, 14],
-      [30, 18],
-      [18, 20],
-      [6, 18],
-    ],
-    EB
-  );
-  fillEllipse(g, 18, 20, 5, 13, ED);
-  fillEllipse(g, 18, 20, 3.2, 11, EB);
-  fillPoly(
-    g,
-    [
-      [15, 30],
-      [21, 30],
-      [18, 35],
-    ],
-    EC
-  );
-  fillRect(g, 13, 3, 4, 7, EB);
-  fillRect(g, 19, 3, 4, 7, EB);
-  fillRect(g, 14, 2, 2, 3, EC);
-  fillRect(g, 20, 2, 2, 3, EC);
-  fillEllipse(g, 18, 16, 2.2, 3.2, S);
-  plot(g, 18, 15, EH);
-  plot(g, 18, 17, DG);
-  for (let y = 8; y <= 28; y += 4) plot(g, 18, y, EC);
-  outline(g, ER);
-  return art(g, [nozzleAt(w, h, 15, 3), nozzleAt(w, h, 21, 3)]);
+  const pixels = drawFighter({
+    w: 36,
+    h: 36,
+    engineRows: 5,
+    wingRows: 14,
+    wingHalf: 16.4,
+    engineHalf: 9,
+    notch: 2.2,
+    sweep: 2.2,
+    noseHalf: 1.2,
+    fuselage: 4.2,
+    dark: true,
+  });
+  return art(pixels, twinNozzles(pixels, 5));
 }
 
-/** Interceptor 28×28. Narrow dart, side intakes, red edge. */
 function drawInterceptor(): EnemyArt {
-  const w = 28;
-  const h = 28;
-  const g = createGrid(w, h);
-  fillPoly(
-    g,
-    [
-      [2, 10],
-      [10, 14],
-      [12, 18],
-      [8, 20],
-      [1, 16],
-    ],
-    ED
-  );
-  fillPoly(
-    g,
-    [
-      [26, 10],
-      [18, 14],
-      [16, 18],
-      [20, 20],
-      [27, 16],
-    ],
-    ED
-  );
-  fillEllipse(g, 14, 15, 3.2, 11, EB);
-  fillEllipse(g, 14, 16, 2, 9, ED);
-  fillPoly(
-    g,
-    [
-      [12, 24],
-      [16, 24],
-      [14, 27],
-    ],
-    EC
-  );
-  fillRect(g, 12, 2, 4, 5, EB);
-  fillRect(g, 13, 1, 2, 2, EC);
-  fillEllipse(g, 14, 13, 1.4, 2.4, S);
-  plot(g, 14, 12, EH);
-  outline(g, ER);
-  return art(g, [nozzleAt(w, h, 14, 2)]);
+  const pixels = drawFighter({
+    w: 28,
+    h: 28,
+    engineRows: 3,
+    wingRows: 11,
+    wingHalf: 13.2,
+    engineHalf: 5,
+    notch: 1.6,
+    sweep: 8.5,
+    noseHalf: 0.4,
+    fuselage: 2,
+    dark: false,
+  });
+  return art(pixels, twinNozzles(pixels, 3));
 }
 
-/** Heavy bomber 56×48. Wide wing, four engines, dark hull. */
 function drawBomber(): EnemyArt {
   const w = 56;
   const h = 48;
   const g = createGrid(w, h);
-  fillPoly(
-    g,
-    [
-      [2, 16],
-      [54, 16],
-      [50, 26],
-      [36, 28],
-      [28, 24],
-      [20, 28],
-      [6, 26],
-    ],
-    ED
-  );
-  fillPoly(
-    g,
-    [
-      [8, 18],
-      [48, 18],
-      [44, 24],
-      [28, 22],
-      [12, 24],
-    ],
-    EB
-  );
-  fillEllipse(g, 28, 26, 6, 16, ED);
-  fillEllipse(g, 28, 27, 4, 13, EB);
-  fillPoly(
-    g,
-    [
-      [24, 40],
-      [32, 40],
-      [28, 46],
-    ],
-    EC
-  );
-  fillPoly(
-    g,
-    [
-      [18, 4],
-      [24, 12],
-      [20, 12],
-    ],
-    ED
-  );
-  fillPoly(
-    g,
-    [
-      [38, 4],
-      [32, 12],
-      [36, 12],
-    ],
-    ED
-  );
-  for (const x of [12, 20, 34, 42]) {
-    fillRect(g, x, 11, 4, 6, S);
-    fillRect(g, x + 1, 9, 2, 3, EC);
+  const cx = 27.5;
+  for (let y = 10; y < 46; y++) {
+    let half: number;
+    if (y < 18) half = 8 + (y - 10) * 0.7;
+    else if (y < 34) half = 14;
+    else half = 14 - (y - 34) * 1.15;
+    half = Math.max(2, half);
+    for (let x = 0; x < w; x++) {
+      const dx = Math.abs(x - cx);
+      if (dx > half) continue;
+      g[y]![x] = dx < 5 ? ED : dx > half - 2 ? EC : EH;
+    }
   }
-  fillEllipse(g, 28, 22, 2.5, 4, DG);
-  plot(g, 28, 20, EH);
-  for (let y = 16; y <= 36; y += 4) plot(g, 28, y, EC);
-  outline(g, ER);
-  return art(g, [nozzleAt(w, h, 14, 11), nozzleAt(w, h, 44, 11)]);
+  for (let y = 16; y <= 28; y++) {
+    for (let x = 4; x <= 51; x++) {
+      if (g[y]![x]! < 0) g[y]![x] = ED;
+    }
+  }
+  const pods: Array<[number, number, number, number]> = [
+    [3, 8, 8, 22],
+    [13, 10, 7, 18],
+    [36, 10, 7, 18],
+    [45, 8, 8, 22],
+  ];
+  for (const [x, y, pw, ph] of pods) {
+    for (let yy = y; yy < y + ph; yy++) {
+      for (let xx = x; xx < x + pw; xx++) {
+        const top = yy < y + 4;
+        const lx = xx - x;
+        g[yy]![xx] = top ? K : lx <= 1 ? EV : lx >= pw - 2 ? ED : EC;
+      }
+    }
+    g[y]![x] = -1;
+    g[y]![x + pw - 1] = -1;
+  }
+  for (let y = 19; y < 27; y++) {
+    for (const x of [11, 12, 20, 21, 34, 35, 43, 44]) plot(g, x, y, EB);
+  }
+  for (let x = 22; x <= 33; x += 2) {
+    plot(g, x, 32, DG);
+    plot(g, x, 33, K);
+    plot(g, x + 1, 32, LG);
+  }
+  plot(g, 27, 40, EV);
+  plot(g, 28, 40, EV);
+  rim(g, ER);
+  const nozzles: Array<{ x: number; y: number }> = [];
+  for (const [x, y, pw] of pods) {
+    for (let xx = x + 2; xx < x + pw - 2; xx++) {
+      plot(g, xx, y + 1, K);
+      plot(g, xx, y + 2, K);
+    }
+    nozzles.push(nozzleAt(w, h, x + Math.floor(pw / 2), y + 1));
+  }
+  return art(g, nozzles);
 }
 
-/** Drone 20×20. Round hub and four arms. The battle scene spins the whole sprite. */
+/** X-quad. The battle scene spins the whole sprite, so the blades read as rotors. */
 function drawDrone(): EnemyArt {
   const w = 20;
   const h = 20;
   const g = createGrid(w, h);
-  fillEllipse(g, 10, 10, 4.2, 4.2, EB);
-  fillEllipse(g, 10, 10, 2.2, 2.2, ED);
-  plot(g, 10, 10, EH);
-  for (const [x, y] of [
-    [3, 3],
-    [14, 3],
-    [3, 14],
-    [14, 14],
-  ] as const) {
-    fillRect(g, x, y, 3, 3, EC);
-    plot(g, x + 1, y + 1, ER);
+  const hubs: Array<[number, number]> = [
+    [4, 4],
+    [15, 4],
+    [4, 15],
+    [15, 15],
+  ];
+  for (const [ax, ay] of hubs) {
+    for (let i = 0; i <= 7; i++) {
+      const x = Math.round(ax + ((9.5 - ax) * i) / 7);
+      const y = Math.round(ay + ((9.5 - ay) * i) / 7);
+      plot(g, x, y, EH);
+      plot(g, x + Math.sign(10 - ax), y, EC);
+      plot(g, x, y + Math.sign(10 - ay), ED);
+    }
+    for (let yy = -2; yy <= 2; yy++) {
+      for (let xx = -4; xx <= 4; xx++) {
+        if ((xx * xx) / 18 + (yy * yy) / 5 <= 1) plot(g, ax + xx, ay + yy, K);
+      }
+    }
+    plot(g, ax, ay, EV);
+    plot(g, ax - 1, ay, MG);
+    plot(g, ax + 1, ay, G);
   }
-  fillRect(g, 9, 4, 2, 3, ED);
-  fillRect(g, 9, 13, 2, 3, ED);
-  fillRect(g, 4, 9, 3, 2, ED);
-  fillRect(g, 13, 9, 3, 2, ED);
-  outline(g, ER);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const dx = x - 9.5;
+      const dy = y - 9.5;
+      const d = dx * dx + dy * dy;
+      if (d <= 18) g[y]![x] = d <= 6 ? EB : EH;
+    }
+  }
+  plot(g, 9, 9, W);
+  plot(g, 10, 9, EV);
+  plot(g, 9, 10, DG);
+  rim(g, ER);
   return art(g, []);
 }
 
-/** Tank 24×24. Olive hull and tracks. The barrel is drawn in code from aimAngle. */
 function drawTank(): EnemyArt {
-  const w = 24;
-  const h = 24;
-  const g = createGrid(w, h);
-  fillRect(g, 2, 3, 4, 18, AS);
-  fillRect(g, 18, 3, 4, 18, AS);
-  for (let y = 4; y < 20; y += 3) {
-    fillRect(g, 2, y, 4, 1, K);
-    fillRect(g, 18, y, 4, 1, K);
+  const g = createGrid(24, 24);
+  for (let y = 2; y <= 21; y++) {
+    for (let x = 1; x <= 22; x++) {
+      const corner = (x < 3 && (y < 4 || y > 19)) || (x > 20 && (y < 4 || y > 19));
+      if (corner) continue;
+      if (x <= 5 || x >= 18) g[y]![x] = y % 2 === 0 ? K : OD;
+      else g[y]![x] = y < 6 ? OI : y > 17 ? OD : OM;
+    }
   }
-  fillRect(g, 6, 4, 12, 16, OL);
-  fillRect(g, 7, 5, 10, 14, OD);
-  fillEllipse(g, 12, 12, 4.2, 4.2, OM);
-  fillEllipse(g, 12, 12, 2.2, 2.2, OL2);
-  plot(g, 12, 12, DB);
-  outline(g, K);
+  for (let y = 3; y <= 20; y += 2) {
+    for (const x of [2, 3, 4, 19, 20, 21]) plot(g, x, y, K);
+  }
+  for (let y = 7; y <= 16; y++) {
+    for (let x = 7; x <= 16; x++) {
+      const dx = x - 11.5;
+      const dy = y - 11.2;
+      if (dx * dx + dy * dy <= 18) g[y]![x] = dx * dx + dy * dy <= 6 ? OI : OL;
+    }
+  }
+  plot(g, 11, 11, DB);
+  plot(g, 12, 11, TN);
+  plot(g, 11, 10, PG);
+  plot(g, 8, 6, W);
+  plot(g, 15, 6, LG);
+  rim(g, ER);
   return art(g, []);
 }
 
-/** Dual turret 32×32. Concrete pit, twin gun bases. Barrels are code-drawn. */
 function drawTurret(): EnemyArt {
-  const w = 32;
-  const h = 32;
-  const g = createGrid(w, h);
-  fillRect(g, 2, 2, 28, 28, CC);
-  fillRect(g, 4, 4, 24, 24, AS);
-  fillRect(g, 6, 6, 20, 20, OD);
-  fillEllipse(g, 16, 16, 7, 7, OL);
-  fillEllipse(g, 16, 16, 4, 4, OM);
-  fillRect(g, 10, 8, 3, 6, DG);
-  fillRect(g, 19, 8, 3, 6, DG);
-  plot(g, 11, 9, K);
-  plot(g, 20, 9, K);
-  outline(g, K);
+  const g = createGrid(32, 32);
+  for (let y = 4; y <= 27; y++) {
+    for (let x = 3; x <= 28; x++) {
+      const chamfer = x + y < 9 || x + (31 - y) < 8 || 31 - x + y < 8 || 31 - x + (31 - y) < 8;
+      if (chamfer) continue;
+      g[y]![x] = y < 8 ? OI : y > 23 ? OD : OL;
+    }
+  }
+  for (let i = 0; i < 4; i++) {
+    const y = 9 + i * 3;
+    for (let x = 6; x <= 12; x++) plot(g, x, y, DG);
+    for (let x = 19; x <= 25; x++) plot(g, x, y, S);
+  }
+  for (let y = 11; y <= 21; y++) {
+    for (let x = 10; x <= 21; x++) {
+      const dx = (x - 15.5) / 6.2;
+      const dy = (y - 16) / 5.2;
+      if (dx * dx + dy * dy <= 1) g[y]![x] = dx * dx + dy * dy < 0.28 ? OI : OM;
+    }
+  }
+  for (const x of [12, 13, 18, 19]) {
+    plot(g, x, 14, K);
+    plot(g, x, 15, DG);
+    plot(g, x, 16, K);
+  }
+  plot(g, 7, 7, PG);
+  plot(g, 24, 7, G);
+  rim(g, ER);
   return art(g, []);
 }
 
-/** Missile car 24×32. Cab toward the bottom of the sprite, two tubes on the bed. */
 function drawMissileCar(): EnemyArt {
-  const w = 24;
-  const h = 32;
-  const g = createGrid(w, h);
-  fillRect(g, 2, 6, 4, 20, AS);
-  fillRect(g, 18, 6, 4, 20, AS);
-  for (let y = 7; y < 25; y += 4) {
-    plot(g, 3, y, K);
-    plot(g, 20, y, K);
+  const g = createGrid(24, 32);
+  for (let y = 2; y <= 28; y++) {
+    for (let x = 5; x <= 18; x++) {
+      g[y]![x] = y < 16 ? OM : y < 22 ? OL : OD;
+    }
   }
-  fillRect(g, 6, 8, 12, 18, OL);
-  fillRect(g, 7, 18, 10, 7, OM);
-  fillRect(g, 8, 20, 8, 4, DG);
-  plot(g, 10, 21, OL2);
-  plot(g, 13, 21, OL2);
-  fillRect(g, 7, 8, 4, 10, TN);
-  fillRect(g, 13, 8, 4, 10, TN);
-  fillRect(g, 8, 6, 2, 3, ER);
-  fillRect(g, 14, 6, 2, 3, ER);
-  outline(g, K);
+  for (let x = 6; x <= 17; x++) plot(g, x, 3, OI);
+  for (const [x, y] of [
+    [8, 5],
+    [13, 5],
+    [8, 9],
+    [13, 9],
+    [8, 13],
+    [13, 13],
+  ] as const) {
+    plot(g, x, y, K);
+    plot(g, x + 1, y, K);
+    plot(g, x, y + 1, DG);
+    plot(g, x + 1, y + 1, MG);
+  }
+  for (let x = 8; x <= 15; x++) {
+    plot(g, x, 20, S);
+    plot(g, x, 21, DG);
+  }
+  plot(g, 9, 20, LG);
+  plot(g, 14, 20, PG);
+  for (const y of [7, 15, 25]) {
+    for (const x of [2, 3, 20, 21]) {
+      plot(g, x, y, K);
+      plot(g, x, y - 1, AS);
+      plot(g, x, y + 1, DG);
+    }
+    plot(g, 3, y, G);
+    plot(g, 20, y, G);
+  }
+  plot(g, 8, 27, TN);
+  plot(g, 15, 27, TN);
+  rim(g, ER);
   return art(g, []);
 }
 
 const BUILDERS: Record<EnemyType, () => EnemyArt> = {
-  small: () => art(SMALL_FIGHTER, [{ x: 0, y: -12 }]),
+  small: drawSmall,
   medium: drawMedium,
   interceptor: drawInterceptor,
   bomber: drawBomber,
