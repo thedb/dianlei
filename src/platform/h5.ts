@@ -68,6 +68,32 @@ export function createH5Platform(container: HTMLElement): H5Platform {
       e.preventDefault();
       touchCancelCallback?.(toTouchPoints(e.touches));
     });
+
+    // Desktop: the mouse acts as one extra touch so menus/controls are clickable
+    const MOUSE_ID = -1;
+    let mouseDown = false;
+    const mousePoint = (e: MouseEvent): TouchPoint[] => {
+      const rect = canvas!.getBoundingClientRect();
+      return [
+        {
+          id: MOUSE_ID,
+          x: (e.clientX - rect.left) / canvasScale,
+          y: (e.clientY - rect.top) / canvasScale,
+        },
+      ];
+    };
+    canvas.addEventListener('mousedown', (e) => {
+      mouseDown = true;
+      touchStartCallback?.(mousePoint(e));
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (mouseDown) touchMoveCallback?.(mousePoint(e));
+    });
+    window.addEventListener('mouseup', () => {
+      if (!mouseDown) return;
+      mouseDown = false;
+      touchEndCallback?.([]);
+    });
   }
 
   return {
