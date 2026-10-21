@@ -73,21 +73,33 @@ describe('weapon registry', () => {
       expect(weaponLevel('vulcan', lv).damage).toBe(PLAYER_BULLET_DAMAGE);
     }
     expect(volley('vulcan', 1)).toEqual([
-      { kind: 'bullet', x: 180, y: 544, vx: 0, vy: -PLAYER_BULLET_SPEED, damage: 1 },
+      {
+        kind: 'bullet',
+        x: 180,
+        y: 544,
+        vx: 0,
+        vy: -PLAYER_BULLET_SPEED,
+        damage: PLAYER_BULLET_DAMAGE,
+      },
     ]);
-    expect(volley('vulcan', 2).map((s) => s.x)).toEqual([180 - LV2_GAP / 2, 180 + LV2_GAP / 2]);
+    expect(PLAYER_BULLET_DAMAGE).toBe(2);
+    const lv2 = volley('vulcan', 2);
+    expect(lv2.map((s) => s.x)).toEqual([180 - LV2_GAP / 2, 180 + LV2_GAP / 2]);
+    for (const s of lv2) expect(s.damage).toBe(2);
     const lv3 = volley('vulcan', 3);
     expect(lv3.map((s) => s.x)).toEqual([180, 176, 184]);
     expect(lv3[1]!.vx).toBeLessThan(0);
     expect(lv3[2]!.vx).toBeGreaterThan(0);
-    for (const s of lv3) expect(Math.hypot(s.vx!, s.vy!)).toBeCloseTo(PLAYER_BULLET_SPEED);
+    for (const s of lv3) {
+      expect(Math.hypot(s.vx!, s.vy!)).toBeCloseTo(PLAYER_BULLET_SPEED);
+      expect(s.damage).toBe(2);
+    }
   });
 
-  it('fires T at 90% of 1/6 main rate for 5× half a main bullet', () => {
-    expect(HOMING_FIRE_RATE).toBeCloseTo((FIRE_RATE / 6) * 0.9);
-    expect(HOMING_FIRE_RATE).toBeCloseTo(1.5);
-    expect(HOMING_DAMAGE).toBe((PLAYER_BULLET_DAMAGE / 2) * 5);
+  it('fires T at the pinned 1.5 volleys/s and 2.5 damage', () => {
+    expect(HOMING_FIRE_RATE).toBe(1.5);
     expect(HOMING_DAMAGE).toBe(2.5);
+    expect(FIRE_RATE).toBe(5);
     expect(HOMING_MAX_LEVEL).toBe(2);
     for (let lv = 1; lv <= HOMING_MAX_LEVEL; lv++) {
       expect(weaponLevel('homing', lv).rate).toBe(HOMING_FIRE_RATE);
@@ -107,7 +119,7 @@ describe('weapon registry', () => {
     expect(two[1]!.x).toBeGreaterThan(180);
   });
 
-  it('holds 10 main volleys and 1.5 sub volleys per second while firing', () => {
+  it('holds 5 main volleys and 1.5 sub volleys per second while firing', () => {
     const dt = 1 / 60;
     const count = (rate: number): number => {
       const interval = 1 / rate;
@@ -116,9 +128,8 @@ describe('weapon registry', () => {
       for (let i = 0; i < 600; i++) clock = stepFireClock(clock, dt, interval, true, () => fired++);
       return fired;
     };
-    expect(count(weaponLevel('vulcan', 1).rate)).toBeGreaterThanOrEqual(100);
-    expect(count(weaponLevel('vulcan', 1).rate)).toBeLessThanOrEqual(101);
-    // Clock starts charged, so the opening frame fires, then every 1/1.5 s: 16 in 10 s.
+    // Clock starts charged, so the opening frame fires, then one volley per interval: 51 in 10 s.
+    expect(count(weaponLevel('vulcan', 1).rate)).toBe(FIRE_RATE * 10 + 1);
     expect(count(weaponLevel('homing', 1).rate)).toBe(16);
   });
 
