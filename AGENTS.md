@@ -53,7 +53,7 @@ This document defines the coding conventions and constraints for all AI agents w
 | Enemy bullet (small) | 6×6 |
 | Enemy bullet (large) | 12×12 |
 | Missile | 6×12 |
-| Items (P/B) | 16×16 |
+| Items (P/B) | 16×18 |
 | Tiles | 16×16 |
 
 ### Code-Generated Effects (NOT baked into sprites)
