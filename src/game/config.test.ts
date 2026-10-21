@@ -13,7 +13,9 @@ import {
   FIRE_RATE,
   PLAYER_BULLET_DAMAGE,
   HOMING_FIRE_RATE,
+  HOMING_FIRE_RATE_SCALE,
   HOMING_DAMAGE,
+  HOMING_DAMAGE_FACTOR,
   HOMING_MAX_LEVEL,
   BOMB_MEDIUM_RATIO,
   BOMB_BOSS_RATIO,
@@ -26,7 +28,13 @@ import {
   DEBUG_HOT_TAPS,
   DEBUG_HOT_WINDOW,
   WEAPON_TEST_BOMBS_MAX,
+  WEAPON_TEST_DAMAGE_MAX,
+  WEAPON_TEST_DAMAGE_MIN,
+  WEAPON_TEST_DAMAGE_STEP,
   WEAPON_TEST_DPS_WINDOW,
+  WEAPON_TEST_RATE_MAX,
+  WEAPON_TEST_RATE_MIN,
+  WEAPON_TEST_RATE_STEP,
   WEAPON_TEST_SUB_MAX,
   WEAPON_TEST_TARGET_H,
   WEAPON_TEST_TARGET_W,
@@ -70,8 +78,14 @@ describe('Game Config', () => {
   });
 
   it('derives the T homing missile from the main weapon', () => {
-    expect(HOMING_FIRE_RATE).toBeCloseTo(FIRE_RATE / 6);
-    expect(HOMING_DAMAGE).toBeCloseTo(PLAYER_BULLET_DAMAGE / 2);
+    expect(FIRE_RATE).toBe(10);
+    expect(PLAYER_BULLET_DAMAGE).toBe(1);
+    expect(HOMING_FIRE_RATE_SCALE).toBe(0.9);
+    expect(HOMING_FIRE_RATE).toBeCloseTo((FIRE_RATE / 6) * HOMING_FIRE_RATE_SCALE);
+    expect(HOMING_FIRE_RATE).toBeCloseTo(1.5);
+    expect(HOMING_DAMAGE_FACTOR).toBe(5);
+    expect(HOMING_DAMAGE).toBe((PLAYER_BULLET_DAMAGE / 2) * HOMING_DAMAGE_FACTOR);
+    expect(HOMING_DAMAGE).toBe(2.5);
     expect(HOMING_MAX_LEVEL).toBe(2);
     expect(DEATH_POWER_LOSS).toBe(1);
     expect(DEATH_SUB_LOSS).toBe(1);
@@ -94,6 +108,16 @@ describe('Game Config', () => {
     expect(WEAPON_TEST_SUB_MAX).toBe(HOMING_MAX_LEVEL);
     expect(WEAPON_TEST_BOMBS_MAX).toBeGreaterThan(0);
     expect(WEAPON_TEST_BOMBS_MAX).toBeLessThanOrEqual(BOMBS_MAX);
+    expect(WEAPON_TEST_RATE_STEP).toBe(0.5);
+    expect(WEAPON_TEST_DAMAGE_STEP).toBe(0.5);
+    expect(WEAPON_TEST_RATE_MIN).toBeGreaterThan(0);
+    expect(WEAPON_TEST_DAMAGE_MIN).toBeGreaterThan(0);
+    expect(WEAPON_TEST_RATE_MAX).toBeGreaterThanOrEqual(FIRE_RATE);
+    expect(WEAPON_TEST_DAMAGE_MAX).toBeGreaterThanOrEqual(HOMING_DAMAGE);
+    expect(WEAPON_TEST_RATE_MIN).toBeLessThanOrEqual(Math.min(FIRE_RATE, HOMING_FIRE_RATE));
+    expect(WEAPON_TEST_DAMAGE_MIN).toBeLessThanOrEqual(
+      Math.min(PLAYER_BULLET_DAMAGE, HOMING_DAMAGE)
+    );
     expect(WEAPON_TEST_TARGET_X).toBe((LOGICAL_W - WEAPON_TEST_TARGET_W) / 2);
     expect(WEAPON_TEST_TARGET_Y).toBeGreaterThanOrEqual(0);
     expect(WEAPON_TEST_TARGET_Y + WEAPON_TEST_TARGET_H).toBeLessThan(80);

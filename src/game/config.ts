@@ -125,11 +125,23 @@ export const LV3_SPREAD_DEG = 15;
 /** Highest T level. Lv1 fires 1 missile per volley, Lv2 fires 2. */
 export const HOMING_MAX_LEVEL = 2;
 
-/** Volleys per second: 1/6 of the main weapon's FIRE_RATE (about 1.67/s) */
-export const HOMING_FIRE_RATE = FIRE_RATE / 6;
+/**
+ * P9: homing volleys are 10% slower than one sixth of FIRE_RATE.
+ * `(FIRE_RATE / 6) * 0.9` is about 1.5 volleys/s.
+ */
+export const HOMING_FIRE_RATE_SCALE = 0.9;
 
-/** Damage per missile: half a main bullet */
-export const HOMING_DAMAGE = PLAYER_BULLET_DAMAGE / 2;
+/** Volleys per second. One sixth of FIRE_RATE, then HOMING_FIRE_RATE_SCALE. */
+export const HOMING_FIRE_RATE = (FIRE_RATE / 6) * HOMING_FIRE_RATE_SCALE;
+
+/**
+ * P9: each missile deals this many times half a main bullet.
+ * The ×5 is the balance change; do not fold it into a bare literal.
+ */
+export const HOMING_DAMAGE_FACTOR = 5;
+
+/** Damage per missile: half a main bullet, times HOMING_DAMAGE_FACTOR (2.5). */
+export const HOMING_DAMAGE = (PLAYER_BULLET_DAMAGE / 2) * HOMING_DAMAGE_FACTOR;
 
 /** Missile flight speed, pixels/second */
 export const HOMING_SPEED = 330;
@@ -544,3 +556,17 @@ export const WEAPON_TEST_TARGET_W = 80;
 export const WEAPON_TEST_TARGET_H = 22;
 export const WEAPON_TEST_TARGET_X = (LOGICAL_W - WEAPON_TEST_TARGET_W) / 2;
 export const WEAPON_TEST_TARGET_Y = 8;
+
+/**
+ * Weapon-test live tune. Session only — stage, boss practice, and the title
+ * demo keep FIRE_RATE / PLAYER_BULLET_DAMAGE / HOMING_*.
+ * Steps are absolute volleys per second and damage per projectile.
+ */
+export const WEAPON_TEST_RATE_STEP = 0.5;
+export const WEAPON_TEST_DAMAGE_STEP = 0.5;
+
+/** Inclusive clamps. Both floors stay above 0 so the fire interval stays finite. */
+export const WEAPON_TEST_RATE_MIN = 0.5;
+export const WEAPON_TEST_RATE_MAX = 30;
+export const WEAPON_TEST_DAMAGE_MIN = 0.5;
+export const WEAPON_TEST_DAMAGE_MAX = 20;
