@@ -54,6 +54,7 @@ import {
   SHAKE_BIG_INTENSITY,
   SHAKE_BIG_DURATION,
 } from '@/game/config';
+import { getStageGrids } from '@/game/art/tiles';
 import { PALETTE, COLOR } from '@/game/palette';
 import { stage1 } from '@/game/levels/stage1';
 
@@ -71,6 +72,7 @@ import {
   drawBossHpBar,
   drawBossLaser,
   BULLET_GLOW_COLORS,
+  SEA_GUN_PIVOT,
 } from '@/game/art';
 
 // Entities
@@ -92,6 +94,19 @@ import {
   type BulletSpawner,
 } from '@/game/entities/enemyBullet';
 import { createItem, spawnItem, updateItem, isItemFlashing, type Item } from '@/game/entities/item';
+import {
+  BuildingScheduler,
+  buildingBlocksTank,
+  buildingOnScreen,
+  bulletHitsBuilding,
+  createBuilding,
+  damageBuilding,
+  rollBuildingDrop,
+  spawnBuilding,
+  updateBuilding,
+  validateBuildingFootprint,
+  type Building,
+} from '@/game/entities/building';
 
 // Systems
 import {
@@ -233,6 +248,8 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
   const enemyPool = new ObjectPool(createEnemy, 64);
   const enemyBulletPool = new ObjectPool(createEnemyBullet, 200);
   const itemPool = new ObjectPool(createItem, 10);
+  const buildingPool = new ObjectPool(createBuilding, 16);
+  const buildingScheduler = new BuildingScheduler(stage1.buildings, stage1.warningAt);
   const explosionPool: Explosion[] = [];
   for (let i = 0; i < 32; i++) {
     explosionPool.push(createExplosion());
@@ -343,6 +360,8 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
     enemyPool.releaseAll();
     enemyBulletPool.releaseAll();
     itemPool.releaseAll();
+    buildingPool.releaseAll();
+    buildingScheduler.reset();
     explosionPool.forEach((exp) => {
       exp.active = false;
     });
@@ -364,11 +383,17 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
     player.prevY = PLAYER_SPAWN_Y;
   }
 
-  function drawGunBarrel(ctx: CanvasRenderingContext2D, x: number, y: number, enemy: Enemy): void {
+  function drawGunBarrel(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    angle: number,
+    twin: boolean
+  ): void {
     ctx.save();
     ctx.translate(x, y);
-    ctx.rotate(enemy.aimAngle);
-    if (enemy.type === 'turret2') {
+    ctx.rotate(angle);
+    if (twin) {
       ctx.fillStyle = PALETTE[COLOR.BLACK];
       ctx.fillRect(2, -6, 16, 4);
       ctx.fillRect(2, 2, 16, 4);
@@ -397,6 +422,24 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
     } else if (enemy.type === 'medium' || enemy.type === 'turret2') {
       spawnExplosion(enemy.x + 8, enemy.y - 4, 0.05);
     }
+  }
+
+  function destroyBuilding(b: Building): void {
+    state.score += b.score;
+    spawnExplosion(b.x, b.y);
+    spawnExplosion(b.x - b.width / 4, b.y + 4, 0.06);
+    spawnExplosion(b.x + b.width / 4, b.y - 4, 0.12);
+    sfx('enemyExplode');
+    const drop = rollBuildingDrop();
+    if (drop) spawnItem(itemPool.acquire(), drop, b.x, b.y);
+  }
+
+  function anyBuildingBlocksTank(x: number, y: number): boolean {
+    let blocked = false;
+    buildingPool.forEach((b) => {
+      if (!blocked && buildingBlocksTank(b, x, y)) blocked = true;
+    });
+    return blocked;
   }
 
   // Bullet spawner for enemy fire patterns
@@ -538,6 +581,10 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
           spawnItem(item, enemy.drop, enemy.x, enemy.y);
         }
       }
+    });
+
+    buildingPool.forEach((b) => {
+      if (buildingOnScreen(b) && damageBuilding(b, BOMB_DAMAGE)) destroyBuilding(b);
     });
 
     if (boss) applyBossEvents(applyBossBomb(boss, stage1.boss));
@@ -694,6 +741,8 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
       enemyPool.releaseAll();
       enemyBulletPool.releaseAll();
       itemPool.releaseAll();
+      buildingPool.releaseAll();
+      buildingScheduler.reset();
       explosionPool.forEach((e) => (e.active = false));
 
       // Full wave table, including ground units and the conditional relief ship
@@ -742,6 +791,7 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
       enemyPool.releaseAll();
       enemyBulletPool.releaseAll();
       itemPool.releaseAll();
+      buildingPool.releaseAll();
     },
 
     update(dt: number, input: InputState) {
@@ -889,22 +939,42 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
         boss = createBoss(stage1.boss);
       }
 
+      // Buildings ride the tile map. Footprints are checked against the real grid on spawn.
+      for (const placement of buildingScheduler.update(scrollFrame.scroll, gameTime)) {
+        if (!validateBuildingFootprint(getStageGrids(), placement)) continue;
+        spawnBuilding(buildingPool.acquire(), placement, scrollFrame.scroll);
+      }
+      const buildingsToRelease: Building[] = [];
+      buildingPool.forEach((b) => {
+        const gone = updateBuilding(
+          b,
+          dt,
+          scrollFrame.scroll,
+          player.x,
+          player.y,
+          bulletSpawner,
+          !pastWarning
+        );
+        if (gone || scrollFrame.fade[b.section] <= 0.01) buildingsToRelease.push(b);
+      });
+      buildingsToRelease.forEach((b) => buildingPool.release(b));
+
       // Update enemies
+      const grids = assets?.background?.grids;
+      const terrain = {
+        blocksTank: (x: number, y: number) =>
+          (grids ? terrainBlocksTank(grids, scrollFrame.scroll, scrollFrame.fade, x, y) : false) ||
+          anyBuildingBlocksTank(x, y),
+      };
       const enemiesToRelease: Enemy[] = [];
       enemyPool.forEach((enemy) => {
-        const grids = assets?.background?.grids;
         const shouldCull = updateEnemy(
           enemy,
           dt,
           player.x,
           player.y,
           scrollFrame.tileDelta,
-          grids
-            ? {
-                blocksTank: (x, y) =>
-                  terrainBlocksTank(grids, scrollFrame.scroll, scrollFrame.fade, x, y),
-              }
-            : undefined
+          terrain
         );
         if (shouldCull) {
           enemiesToRelease.push(enemy);
@@ -1019,6 +1089,15 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
             }
           }
         });
+
+        if (!bullet.active) return;
+        buildingPool.forEach((b) => {
+          if (!bullet.active) return;
+          if (!bulletHitsBuilding(b, bullet.x, bullet.y, bullet.width, bullet.height)) return;
+          bulletPool.release(bullet);
+          if (damageBuilding(b, PLAYER_BULLET_DAMAGE)) destroyBuilding(b);
+          else sfx('enemyHit');
+        });
       });
 
       // Enemy bullets vs player. Fading warning bullets do not hit.
@@ -1095,6 +1174,18 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
       if (shakeX !== 0 || shakeY !== 0) ctx.translate(shakeX, shakeY);
       drawBackground(ctx, assets.background, scrollFrame, gameTime);
 
+      // Buildings sit on the tiles: no interpolation, so they never slip off the grid
+      buildingPool.forEach((b) => {
+        const sheet = assets!.buildings.byType[b.type];
+        const frame = b.wrecked ? sheet.wreck : b.hitFlashTimer > 0 ? sheet.hitFlash : sheet.idle;
+        ctx.globalAlpha = scrollFrame.fade[b.section];
+        renderer.drawImage(frame.canvas, b.x - frame.anchorX, b.y - frame.anchorY);
+        if (b.type === 'sea_gun' && !b.wrecked) {
+          drawGunBarrel(ctx, b.x + SEA_GUN_PIVOT.x, b.y + SEA_GUN_PIVOT.y, b.aimAngle, true);
+        }
+      });
+      ctx.globalAlpha = 1;
+
       // Draw items
       itemPool.forEach((item) => {
         const ix = item.prevX + (item.x - item.prevX) * alpha;
@@ -1131,7 +1222,7 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
         }
 
         if (enemy.type === 'tank' || enemy.type === 'turret2') {
-          drawGunBarrel(ctx, ex, ey, enemy);
+          drawGunBarrel(ctx, ex, ey, enemy.aimAngle, enemy.type === 'turret2');
         }
       };
       enemyPool.forEach((enemy) => {
@@ -1364,6 +1455,7 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
         playerDead: state.isDead,
         activeExplosions: explosionPool.reduce((n, exp) => n + (exp.active ? 1 : 0), 0),
         waveSpawned: waveScheduler?.getDebugInfo().spawned ?? 0,
+        buildingCount: buildingPool.getActiveCount(),
       };
       if (boss) info.bossPhase = boss.phase;
       return info;

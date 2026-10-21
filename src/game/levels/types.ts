@@ -147,10 +147,26 @@ export interface BossConfig {
   };
 }
 
+export type BuildingType = 'pillbox' | 'fuel_depot' | 'radar_station' | 'sea_gun';
+
+/**
+ * A destructible building fixed to the tile map (wave table §4.7).
+ * `row` is the lowest map row of the footprint (rows grow toward the top of the
+ * screen), `col` the leftmost column. Both index the section's own tile grid.
+ */
+export interface BuildingPlacement {
+  id: string;
+  type: BuildingType;
+  section: StageSection;
+  row: number;
+  col: number;
+}
+
 export interface StageData {
   stage: number;
   scrollSpeed: number;
   warningAt: number;
   waves: Wave[];
+  buildings: BuildingPlacement[];
   boss: BossConfig;
 }

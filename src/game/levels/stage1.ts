@@ -670,6 +670,23 @@ export const stage1: StageData = {
     },
   ],
 
+  // Wave table §4.7. Row = lowest footprint row, col = leftmost column, both in
+  // the section's own tile grid. Each one is fully in its section from the
+  // moment it enters the top until it leaves the bottom.
+  buildings: [
+    { id: 'B01', type: 'pillbox', section: 'ground', row: 60, col: 14 },
+    { id: 'B02', type: 'fuel_depot', section: 'ground', row: 69, col: 15 },
+    { id: 'B03', type: 'pillbox', section: 'ground', row: 88, col: 3 },
+    { id: 'B04', type: 'fuel_depot', section: 'ground', row: 101, col: 12 },
+    { id: 'B05', type: 'pillbox', section: 'ground', row: 112, col: 15 },
+    { id: 'B06', type: 'sea_gun', section: 'coast', row: 62, col: 5 },
+    { id: 'B07', type: 'sea_gun', section: 'coast', row: 89, col: 2 },
+    { id: 'B08', type: 'sea_gun', section: 'coast', row: 94, col: 18 },
+    { id: 'B09', type: 'radar_station', section: 'base', row: 56, col: 15 },
+    { id: 'B10', type: 'radar_station', section: 'base', row: 78, col: 3 },
+    { id: 'B11', type: 'radar_station', section: 'base', row: 104, col: 17 },
+  ],
+
   boss: {
     enterAt: 155,
     enterDuration: 3,

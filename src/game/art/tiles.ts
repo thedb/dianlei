@@ -777,15 +777,23 @@ export function renderTileGrid(grid: TileId[][]): OffscreenCanvas | HTMLCanvasEl
 }
 
 let cachedMaps: BackgroundMaps | null = null;
+let cachedGrids: TerrainGrids | null = null;
 
-export function createBackgroundMaps(): BackgroundMaps {
-  if (cachedMaps) return cachedMaps;
+/** Stage 1 tile grids without rendering. Same objects the background bitmaps are drawn from. */
+export function getStageGrids(): TerrainGrids {
+  if (cachedGrids) return cachedGrids;
   const specs = mapLayerSpecs();
-  const grids = {
+  cachedGrids = {
     ground: buildGroundMap(specs.ground.rows),
     coast: buildCoastMap(specs.coast.rows),
     base: buildBaseMap(specs.base.rows),
   };
+  return cachedGrids;
+}
+
+export function createBackgroundMaps(): BackgroundMaps {
+  if (cachedMaps) return cachedMaps;
+  const grids = getStageGrids();
   cachedMaps = {
     ground: renderTileGrid(grids.ground),
     coast: renderTileGrid(grids.coast),

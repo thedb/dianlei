@@ -47,6 +47,8 @@ export interface GameDebugInfo {
   activeExplosions?: number;
   /** Enemies the wave scheduler has actually spawned. */
   waveSpawned?: number;
+  /** Buildings on the map, intact or wrecked. */
+  buildingCount?: number;
 }
 
 /**
