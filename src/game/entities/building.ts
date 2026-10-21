@@ -19,6 +19,7 @@ import {
   SCORE_BUILDING,
   BUILDING_HP,
   BUILDING_DROP_CHANCE,
+  BUILDING_DROP_B_SHARE,
   SEA_GUN_FIRE_INTERVAL,
   BUILDING_FIRE_MIN_Y,
   BUILDING_HIT_INSET,
@@ -162,6 +163,8 @@ export interface Building extends Poolable {
   aimAngle: number;
   fireTimer: number;
   shotsFired: number;
+  /** Seconds until the bomb shockwave reaches this building; negative when none is pending. */
+  bombHitIn: number;
 }
 
 const PLACEHOLDER: BuildingPlacement = {
@@ -189,6 +192,7 @@ export function createBuilding(): Building {
     aimAngle: Math.PI / 2,
     fireTimer: 0,
     shotsFired: 0,
+    bombHitIn: -1,
 
     reset() {
       this.placement = PLACEHOLDER;
@@ -205,6 +209,7 @@ export function createBuilding(): Building {
       this.aimAngle = Math.PI / 2;
       this.fireTimer = 0;
       this.shotsFired = 0;
+      this.bombHitIn = -1;
     },
   };
 }
@@ -226,6 +231,7 @@ export function spawnBuilding(b: Building, p: BuildingPlacement, scroll: number)
   b.aimAngle = Math.PI / 2;
   b.fireTimer = 0;
   b.shotsFired = 0;
+  b.bombHitIn = -1;
 }
 
 function wrapPi(rad: number): number {
@@ -321,11 +327,15 @@ export function buildingBlocksTank(b: Building, x: number, y: number): boolean {
   );
 }
 
+export type BuildingDrop = 'B' | 'T';
+
 /**
  * Drop roll on destroy. `rng` returns [0, 1) and is called once.
- * BUILDING_DROP_CHANCE of wrecks drop a bomb. Buildings never drop P.
+ * BUILDING_DROP_CHANCE of wrecks drop an item, split BUILDING_DROP_B_SHARE bomb
+ * and the rest T homing missile. Buildings never drop P; T comes only from here.
  */
-export function rollBuildingDrop(rng: () => number = Math.random): 'B' | null {
-  if (rng() >= BUILDING_DROP_CHANCE) return null;
-  return 'B';
+export function rollBuildingDrop(rng: () => number = Math.random): BuildingDrop | null {
+  const roll = rng();
+  if (roll >= BUILDING_DROP_CHANCE) return null;
+  return roll < BUILDING_DROP_CHANCE * BUILDING_DROP_B_SHARE ? 'B' : 'T';
 }

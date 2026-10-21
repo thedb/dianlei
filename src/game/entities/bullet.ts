@@ -3,7 +3,7 @@
  */
 
 import type { Poolable } from '@/engine/pool';
-import { PLAYER_BULLET_SPEED } from '@/game/config';
+import { PLAYER_BULLET_DAMAGE, PLAYER_BULLET_SPEED } from '@/game/config';
 
 export interface Bullet extends Poolable {
   x: number;
@@ -13,6 +13,7 @@ export interface Bullet extends Poolable {
   width: number;
   height: number;
   speed: number;
+  damage: number;
   vx?: number;
   vy?: number;
 }
@@ -27,8 +28,10 @@ export function createBullet(): Bullet {
     width: 4,
     height: 12,
     speed: PLAYER_BULLET_SPEED,
+    damage: PLAYER_BULLET_DAMAGE,
 
     reset(): void {
+      this.damage = PLAYER_BULLET_DAMAGE;
       this.x = 0;
       this.y = 0;
       this.prevX = 0;

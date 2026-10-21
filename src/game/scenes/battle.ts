@@ -17,22 +17,18 @@ import {
   HITBOX_RADIUS,
   SHOW_HITBOX,
   HITBOX_ALPHA,
-  FIRE_RATE,
   PLAYER_BULLET_SPEED,
-  PLAYER_BULLET_DAMAGE,
   BOMBS_START,
   BOMBS_MAX,
   BOMBS_ON_RESPAWN,
   BOMB_COOLDOWN,
   BOMB_INVINCIBLE_TIME,
-  BOMB_DAMAGE,
   BOMB_BULLET_SCORE,
+  BOMB_FLASH_TIME,
+  BOMB_WAVE_TIME,
+  HOMING_HIT_SIZE,
   LIVES_START,
   LIVES_MAX,
-  POWER_MAX,
-  LV2_GAP,
-  LV3_SPREAD_DEG,
-  DEATH_POWER_LOSS,
   RESPAWN_DELAY,
   RESPAWN_FLYIN_TIME,
   RESPAWN_INVINCIBLE_TIME,
@@ -43,7 +39,6 @@ import {
   EXTEND_EVERY,
   EXTEND_REPEAT,
   EXTEND_OVERFLOW_SCORE,
-  P_OVERFLOW_SCORE,
   B_OVERFLOW_SCORE,
   ENEMY_BULLET_CAP,
   BANK_IN_TIME,
@@ -73,6 +68,8 @@ import {
   drawBossLaser,
   BULLET_GLOW_COLORS,
   SEA_GUN_PIVOT,
+  drawBombShockwave,
+  drawHomingExhaust,
 } from '@/game/art';
 
 // Entities
@@ -93,7 +90,23 @@ import {
   type EnemyBullet,
   type BulletSpawner,
 } from '@/game/entities/enemyBullet';
-import { createItem, spawnItem, updateItem, isItemFlashing, type Item } from '@/game/entities/item';
+import {
+  ITEM_DEFS,
+  createItem,
+  spawnItem,
+  updateItem,
+  isItemFlashing,
+  type Item,
+  type ItemType,
+} from '@/game/entities/item';
+import {
+  createHomingMissile,
+  pickHomingTarget,
+  spawnHomingMissile,
+  updateHomingMissile,
+  type HomingMissile,
+  type HomingTarget,
+} from '@/game/entities/homingMissile';
 import {
   BuildingScheduler,
   buildingBlocksTank,
@@ -123,11 +136,33 @@ import { drawControls, drawPauseButton } from '@/game/ui/controlsOverlay';
 import { updateEnemyWeapons } from '@/game/systems/weapons';
 import { getAudioSystem } from '@/game/systems/audio';
 import {
+  bombArrives,
+  bombHitBuilding,
+  bombHitEnemy,
+  bombWaveRadius,
+  boxOnScreen,
+  markBombTarget,
+} from '@/game/systems/bomb';
+import {
+  WEAPONS,
+  applyDeathPenalty,
+  applyWeaponPickup,
+  maxOut,
+  resetLoadout,
+  stepFireClock,
+  weaponForItem,
+  weaponLevel,
+  type EquippedWeapon,
+  type Loadout,
+  type WeaponEmitter,
+} from '@/game/systems/playerWeapons';
+import {
   applyBossBomb,
   bossHitsPlayer,
   bossHpRemaining,
   bossIntroBarFill,
   bossLaserHits,
+  bossMissileTargets,
   bossTotalHp,
   createBoss,
   resolveBossBullet,
@@ -191,12 +226,11 @@ interface PlayerState {
   velocityY: number;
 }
 
-// Game state
-interface GameState {
+// Game state. `main` / `sub` are the weapon slots (see playerWeapons.ts).
+interface GameState extends Loadout {
   lives: number;
   bombs: number;
   score: number;
-  power: number;
   bombCooldown: number;
   bombInvincible: number;
   bombFlashTimer: number;
@@ -218,6 +252,15 @@ export interface BattleView {
 export interface BattleScene extends Scene {
   /** Live positions. The title demo reads this to steer; a real run does not. */
   getBattleView(): BattleView;
+  /** Apply a pickup as if the ship had touched it. Used by tests. */
+  grantItem(type: ItemType): void;
+}
+
+interface BombWave {
+  active: boolean;
+  x: number;
+  y: number;
+  t: number;
 }
 
 export function createBattleScene(sceneCtx: SceneContext): BattleScene {
@@ -241,7 +284,8 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
     lives: LIVES_START,
     bombs: BOMBS_START,
     score: 0,
-    power: 1,
+    main: { id: 'vulcan', level: 1 },
+    sub: null,
     bombCooldown: 0,
     bombInvincible: 0,
     bombFlashTimer: 0,
@@ -256,13 +300,16 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
 
   // Object pools
   const bulletPool = new ObjectPool(createBullet, 100);
+  const missilePool = new ObjectPool(createHomingMissile, 24);
+  const homingTargets: HomingTarget[] = [];
+  const bombWave: BombWave = { active: false, x: 0, y: 0, t: 0 };
   const enemyPool = new ObjectPool(createEnemy, 64);
   const enemyBulletPool = new ObjectPool(createEnemyBullet, 200);
   const itemPool = new ObjectPool(createItem, 10);
   const buildingPool = new ObjectPool(createBuilding, 16);
   const buildingScheduler = new BuildingScheduler(stage1.buildings, stage1.warningAt);
   const explosionPool: Explosion[] = [];
-  for (let i = 0; i < 32; i++) {
+  for (let i = 0; i < 48; i++) {
     explosionPool.push(createExplosion());
   }
 
@@ -276,9 +323,10 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
   // Wave scheduler — full stage, not the MVP subset
   let waveScheduler: WaveScheduler | null = null;
 
-  // Timers
-  const shotInterval = 1 / FIRE_RATE;
-  let timeSinceLastShot = shotInterval;
+  // Fire clocks, one per weapon slot
+  const volleyInterval = (w: EquippedWeapon): number => 1 / weaponLevel(w.id, w.level).rate;
+  let mainClock = volleyInterval(state.main);
+  let subClock = 0;
   let gameTime = 0;
   const scroller = new Scroller();
   let scrollFrame: ScrollFrame = {
@@ -365,9 +413,11 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
   function jumpTo(time: number): void {
     gameTime = time;
     waveScheduler?.reset();
-    waveScheduler?.setPowerLevel(state.power);
+    waveScheduler?.setPowerLevel(state.main.level);
     waveScheduler?.seek(time);
     bulletPool.releaseAll();
+    missilePool.releaseAll();
+    bombWave.active = false;
     enemyPool.releaseAll();
     enemyBulletPool.releaseAll();
     itemPool.releaseAll();
@@ -435,6 +485,26 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
     }
   }
 
+  /** Score, explosion, drop and release for an enemy whose HP just reached 0. */
+  function killEnemy(enemy: Enemy): void {
+    state.score += enemy.score;
+    spawnKillExplosion(enemy);
+    waveScheduler?.recordKill();
+    sfx('enemyExplode');
+    if (enemy.drop) spawnItem(itemPool.acquire(), enemy.drop, enemy.x, enemy.y);
+    enemyPool.release(enemy);
+  }
+
+  function hitEnemy(enemy: Enemy, damage: number): void {
+    if (damageEnemy(enemy, damage)) killEnemy(enemy);
+    else sfx('enemyHit');
+  }
+
+  function hitBuilding(b: Building, damage: number): void {
+    if (damageBuilding(b, damage)) destroyBuilding(b);
+    else sfx('enemyHit');
+  }
+
   function destroyBuilding(b: Building): void {
     state.score += b.score;
     spawnExplosion(b.x, b.y);
@@ -466,56 +536,26 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
     },
   };
 
-  // Fire player bullets based on power level
-  function firePlayerBullets(): void {
-    const power = state.power;
-    const bulletY = player.y - 16;
-
-    if (power === 1) {
-      // Single center shot
+  const emitter: WeaponEmitter = {
+    bullet(x, y, vx, vy, damage) {
       const bullet = bulletPool.acquire();
-      bullet.x = player.x;
-      bullet.y = bulletY;
-      bullet.prevX = player.x;
-      bullet.prevY = bulletY;
-    } else if (power === 2) {
-      // Twin shots
-      const gap = LV2_GAP / 2;
-      for (const offsetX of [-gap, gap]) {
-        const bullet = bulletPool.acquire();
-        bullet.x = player.x + offsetX;
-        bullet.y = bulletY;
-        bullet.prevX = player.x + offsetX;
-        bullet.prevY = bulletY;
-      }
-    } else {
-      // Triple spread
-      const angleRad = (LV3_SPREAD_DEG * Math.PI) / 180;
-      // Center
-      const center = bulletPool.acquire();
-      center.x = player.x;
-      center.y = bulletY;
-      center.prevX = player.x;
-      center.prevY = bulletY;
-      // Left spread
-      const left = bulletPool.acquire();
-      left.x = player.x - 4;
-      left.y = bulletY;
-      left.prevX = player.x - 4;
-      left.prevY = bulletY;
-      left.vx = -Math.sin(angleRad) * PLAYER_BULLET_SPEED;
-      left.vy = -Math.cos(angleRad) * PLAYER_BULLET_SPEED;
-      // Right spread
-      const right = bulletPool.acquire();
-      right.x = player.x + 4;
-      right.y = bulletY;
-      right.prevX = player.x + 4;
-      right.prevY = bulletY;
-      right.vx = Math.sin(angleRad) * PLAYER_BULLET_SPEED;
-      right.vy = -Math.cos(angleRad) * PLAYER_BULLET_SPEED;
-    }
+      bullet.x = x;
+      bullet.y = y;
+      bullet.prevX = x;
+      bullet.prevY = y;
+      bullet.vx = vx;
+      bullet.vy = vy;
+      bullet.damage = damage;
+    },
+    missile(x, y, angle, damage) {
+      spawnHomingMissile(missilePool.acquire(), x, y, angle, damage);
+    },
+  };
 
-    sfx('shoot');
+  /** One volley of the weapon in a slot. The title demo goes through here too. */
+  function fireVolley(weapon: EquippedWeapon): void {
+    weaponLevel(weapon.id, weapon.level).fire(player.x, player.y, emitter);
+    if (WEAPONS[weapon.id].slot === 'main') sfx('shoot');
   }
 
   // Handle player death
@@ -525,7 +565,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
     state.isDead = true;
     state.lives--;
     state.deaths++;
-    state.power = Math.max(1, state.power - DEATH_POWER_LOSS);
+    applyDeathPenalty(state);
     state.respawnTimer = RESPAWN_DELAY;
 
     state.isFlying = false;
@@ -565,61 +605,84 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
     return isVulnerable(state);
   }
 
-  // Handle bomb activation
+  // Bomb: clear bullets now, then hit what was on screen as the ring reaches it
   function activateBomb(): void {
     if (state.bombs <= 0 || state.bombCooldown > 0) return;
 
     state.bombs--;
     state.bombCooldown = BOMB_COOLDOWN;
     state.bombInvincible = BOMB_INVINCIBLE_TIME;
-    state.bombFlashTimer = 0.15;
+    state.bombFlashTimer = BOMB_FLASH_TIME;
 
-    // Clear all enemy bullets for score
     let bulletsCleared = 0;
     enemyBulletPool.forEach(() => bulletsCleared++);
     state.score += bulletsCleared * BOMB_BULLET_SCORE;
     enemyBulletPool.releaseAll();
 
-    // Damage all enemies
-    enemyPool.forEach((enemy) => {
-      const killed = damageEnemy(enemy, BOMB_DAMAGE);
-      if (killed) {
-        state.score += enemy.score;
-        spawnKillExplosion(enemy);
-        waveScheduler?.recordKill();
-        if (enemy.drop) {
-          const item = itemPool.acquire();
-          spawnItem(item, enemy.drop, enemy.x, enemy.y);
-        }
-      }
-    });
+    bombWave.active = true;
+    bombWave.x = player.x;
+    bombWave.y = player.y;
+    bombWave.t = 0;
 
+    enemyPool.forEach((enemy) => markBombTarget(enemy, player.x, player.y));
     buildingPool.forEach((b) => {
-      if (buildingOnScreen(b) && damageBuilding(b, BOMB_DAMAGE)) destroyBuilding(b);
+      if (!b.wrecked) markBombTarget(b, player.x, player.y);
     });
 
     if (boss) applyBossEvents(applyBossBomb(boss, stage1.boss));
-    triggerShake(SHAKE_BIG_INTENSITY, SHAKE_BIG_DURATION);
     sfx('bomb');
   }
 
-  // Handle item collection
-  function collectItem(item: Item): void {
-    if (item.type === 'P') {
-      if (state.power < POWER_MAX) {
-        state.power++;
-        sfx('powerUp');
-      } else {
-        state.score += P_OVERFLOW_SCORE;
-        sfx('itemPickup');
-      }
-    } else {
+  /** Resolve bomb hits whose ring arrival time has come. */
+  function updateBombHits(dt: number): void {
+    if (bombWave.active) {
+      bombWave.t += dt;
+      if (bombWave.t >= BOMB_WAVE_TIME) bombWave.active = false;
+    }
+    enemyPool.forEach((enemy) => {
+      if (bombArrives(enemy, dt) && bombHitEnemy(enemy)) killEnemy(enemy);
+    });
+    buildingPool.forEach((b) => {
+      if (bombArrives(b, dt) && bombHitBuilding(b)) destroyBuilding(b);
+    });
+  }
+
+  function collectItem(type: ItemType): void {
+    if (ITEM_DEFS[type].effect === 'bomb') {
       if (state.bombs < BOMBS_MAX) {
         state.bombs++;
-        sfx('itemPickup');
       } else {
         state.score += B_OVERFLOW_SCORE;
-        sfx('itemPickup');
+      }
+      sfx('itemPickup');
+      return;
+    }
+    const weapon = weaponForItem(type);
+    if (!weapon) return;
+    const result = applyWeaponPickup(state, weapon.id);
+    if (result === 'overflow') {
+      state.score += weapon.overflowScore;
+      sfx('itemPickup');
+    } else {
+      sfx('powerUp');
+    }
+    if (weapon.slot === 'sub' && state.sub && (result === 'equip' || result === 'switch')) {
+      subClock = volleyInterval(state.sub);
+    }
+  }
+
+  /** On-screen live things a homing missile may chase. */
+  function collectHomingTargets(): void {
+    homingTargets.length = 0;
+    enemyPool.forEach((enemy) => {
+      if (boxOnScreen(enemy)) homingTargets.push(enemy);
+    });
+    buildingPool.forEach((b) => {
+      if (!b.wrecked && buildingOnScreen(b)) homingTargets.push(b);
+    });
+    if (boss) {
+      for (const part of bossMissileTargets(boss)) {
+        homingTargets.push({ x: part.worldX, y: part.worldY });
       }
     }
   }
@@ -688,15 +751,14 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
     }
     player.lastBankFrame = newBankFrame;
 
-    // Handle shooting
-    timeSinceLastShot += dt;
-    if (fireHeld) {
-      while (timeSinceLastShot >= shotInterval) {
-        firePlayerBullets();
-        timeSinceLastShot -= shotInterval;
-      }
-    } else if (timeSinceLastShot > shotInterval) {
-      timeSinceLastShot = shotInterval;
+    // Main and sub fire together while A is held, each on its own clock
+    const main = state.main;
+    mainClock = stepFireClock(mainClock, dt, volleyInterval(main), fireHeld, () =>
+      fireVolley(main)
+    );
+    const sub = state.sub;
+    if (sub) {
+      subClock = stepFireClock(subClock, dt, volleyInterval(sub), fireHeld, () => fireVolley(sub));
     }
 
     if (bombPressed) {
@@ -733,7 +795,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       state.lives = LIVES_START;
       state.bombs = BOMBS_START;
       state.score = 0;
-      state.power = 1;
+      resetLoadout(state);
       state.bombCooldown = 0;
       state.bombInvincible = 0;
       state.bombFlashTimer = 0;
@@ -749,18 +811,21 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
 
       // Reset pools
       bulletPool.releaseAll();
+      missilePool.releaseAll();
       enemyPool.releaseAll();
       enemyBulletPool.releaseAll();
       itemPool.releaseAll();
       buildingPool.releaseAll();
       buildingScheduler.reset();
       explosionPool.forEach((e) => (e.active = false));
+      bombWave.active = false;
 
       // Full wave table, including ground units and the conditional relief ship
       waveScheduler = new WaveScheduler({ mvpOnly: false });
 
       // Reset timers
-      timeSinceLastShot = shotInterval;
+      mainClock = volleyInterval(state.main);
+      subClock = 0;
       gameTime = 0;
       scroller.reset();
       scrollFrame = {
@@ -783,7 +848,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       // seek() drops every wave that already passed, so those ships never
       // enter and do not count toward the kill-rate denominator.
       if (sceneCtx.battleEntry === 'boss') {
-        state.power = POWER_MAX;
+        maxOut(state.main);
         jumpTo(stage1.boss.enterAt);
       }
 
@@ -799,6 +864,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
     exit(): void {
       pauseMenu.close();
       bulletPool.releaseAll();
+      missilePool.releaseAll();
       enemyPool.releaseAll();
       enemyBulletPool.releaseAll();
       itemPool.releaseAll();
@@ -925,7 +991,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
 
       // Update wave scheduler
       if (waveScheduler) {
-        waveScheduler.setPowerLevel(state.power);
+        waveScheduler.setPowerLevel(state.main.level);
         const spawns = waveScheduler.update(dt);
 
         if (!pastWarning) {
@@ -989,11 +1055,22 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
         );
         if (shouldCull) {
           enemiesToRelease.push(enemy);
-        } else {
+        } else if (enemy.bombHitIn < 0) {
           updateEnemyWeapons(enemy, dt, player.x, player.y, bulletSpawner, !pastWarning);
         }
       });
       enemiesToRelease.forEach((e) => enemyPool.release(e));
+
+      updateBombHits(dt);
+
+      collectHomingTargets();
+      const missilesToRelease: HomingMissile[] = [];
+      missilePool.forEach((m) => {
+        if (updateHomingMissile(m, dt, pickHomingTarget(m.x, m.y, homingTargets))) {
+          missilesToRelease.push(m);
+        }
+      });
+      missilesToRelease.forEach((m) => missilePool.release(m));
 
       if (boss && boss.phase !== 'done') {
         const ev = updateBoss(boss, dt, stage1.boss);
@@ -1057,7 +1134,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
           const hit = resolveBossBullet(
             boss,
             { x: bullet.x, y: bullet.y, w: bullet.width, h: bullet.height },
-            PLAYER_BULLET_DAMAGE,
+            bullet.damage,
             stage1.boss
           );
           if (hit.consumedBullet) {
@@ -1079,25 +1156,9 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
               enemy.hitRadius
             )
           ) {
-            const killed = damageEnemy(enemy, PLAYER_BULLET_DAMAGE);
+            const damage = bullet.damage;
             bulletPool.release(bullet);
-
-            if (killed) {
-              state.score += enemy.score;
-              spawnKillExplosion(enemy);
-              waveScheduler?.recordKill();
-              sfx('enemyExplode');
-
-              // Drop item if carrying
-              if (enemy.drop) {
-                const item = itemPool.acquire();
-                spawnItem(item, enemy.drop, enemy.x, enemy.y);
-              }
-
-              enemyPool.release(enemy);
-            } else {
-              sfx('enemyHit');
-            }
+            hitEnemy(enemy, damage);
           }
         });
 
@@ -1105,9 +1166,43 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
         buildingPool.forEach((b) => {
           if (!bullet.active) return;
           if (!bulletHitsBuilding(b, bullet.x, bullet.y, bullet.width, bullet.height)) return;
+          const damage = bullet.damage;
           bulletPool.release(bullet);
-          if (damageBuilding(b, PLAYER_BULLET_DAMAGE)) destroyBuilding(b);
-          else sfx('enemyHit');
+          hitBuilding(b, damage);
+        });
+      });
+
+      // Homing missiles: same targets as bullets, with a small square hitbox
+      missilePool.forEach((m) => {
+        const size = HOMING_HIT_SIZE;
+        if (boss) {
+          const hit = resolveBossBullet(
+            boss,
+            { x: m.x, y: m.y, w: size, h: size },
+            m.damage,
+            stage1.boss
+          );
+          if (hit.consumedBullet) {
+            missilePool.release(m);
+            applyBossEvents(hit);
+            return;
+          }
+        }
+        enemyPool.forEach((enemy) => {
+          if (!m.active) return;
+          if (!checkBulletEnemyCollision(m.x, m.y, size, size, enemy.x, enemy.y, enemy.hitRadius)) {
+            return;
+          }
+          const damage = m.damage;
+          missilePool.release(m);
+          hitEnemy(enemy, damage);
+        });
+        buildingPool.forEach((b) => {
+          if (!m.active) return;
+          if (!bulletHitsBuilding(b, m.x, m.y, size, size)) return;
+          const damage = m.damage;
+          missilePool.release(m);
+          hitBuilding(b, damage);
         });
       });
 
@@ -1152,7 +1247,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       // Items vs player
       itemPool.forEach((item) => {
         if (isPlayerControllable() && checkItemPickup(player.x, player.y, item.x, item.y)) {
-          collectItem(item);
+          collectItem(item.type);
           itemPool.release(item);
         }
       });
@@ -1201,13 +1296,8 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       itemPool.forEach((item) => {
         const ix = item.prevX + (item.x - item.prevX) * alpha;
         const iy = item.prevY + (item.y - item.prevY) * alpha;
-        const frame = isItemFlashing(item)
-          ? item.type === 'P'
-            ? assets!.items.powerUpFlash
-            : assets!.items.bombFlash
-          : item.type === 'P'
-            ? assets!.items.powerUp
-            : assets!.items.bomb;
+        const sprite = assets!.items.byType[item.type];
+        const frame = isItemFlashing(item) ? sprite.flash : sprite.idle;
         renderer.drawImage(frame.canvas, ix - frame.anchorX, iy - frame.anchorY);
       });
 
@@ -1286,6 +1376,28 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
         renderer.drawImage(frame.canvas, bx - frame.anchorX, by - frame.anchorY);
       });
 
+      missilePool.forEach((m) => {
+        const mx = m.prevX + (m.x - m.prevX) * alpha;
+        const my = m.prevY + (m.y - m.prevY) * alpha;
+        drawHomingExhaust(
+          ctx,
+          mx,
+          my,
+          m.angle,
+          m.trailX,
+          m.trailY,
+          m.trailHead,
+          m.trailCount,
+          gameTime
+        );
+        const frame = assets!.bullets.homingMissile;
+        ctx.save();
+        ctx.translate(Math.round(mx), Math.round(my));
+        ctx.rotate(m.angle + Math.PI / 2);
+        ctx.drawImage(frame.canvas, -frame.anchorX, -frame.anchorY);
+        ctx.restore();
+      });
+
       // Draw player: never while dead, so no wreck lingers at the death point
       if (!state.isDead) {
         let playerAlpha = 1;
@@ -1337,12 +1449,19 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
         }
       }
 
+      if (bombWave.active) {
+        const u = bombWave.t / BOMB_WAVE_TIME;
+        const fade = u < 0.7 ? 1 : Math.max(0, (1 - u) / 0.3);
+        const radius = bombWaveRadius(bombWave.x, bombWave.y, bombWave.t);
+        drawBombShockwave(ctx, bombWave.x, bombWave.y, radius, fade);
+      }
+
       ctx.restore();
 
       if (demo()) return;
 
       if (state.bombFlashTimer > 0) {
-        const flashAlpha = state.bombFlashTimer / 0.15;
+        const flashAlpha = state.bombFlashTimer / BOMB_FLASH_TIME;
         renderer.fillRect(0, 0, LOGICAL_W, LOGICAL_H, `rgba(255, 255, 255, ${flashAlpha * 0.35})`);
       }
 
@@ -1362,7 +1481,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       // Bomb stock: octagon B, bright when owned and dim when empty.
       // Sits under the score line and above the boss bar (y = 32).
       const iconY = hudY + 10;
-      const bombIcon = assets.items.bomb;
+      const bombIcon = assets.items.byType.B.idle;
       const bombStep = bombIcon.width + 1;
       for (let i = 0; i < BOMBS_MAX; i++) {
         ctx.globalAlpha = i < state.bombs ? 1 : 0.4;
@@ -1370,17 +1489,19 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       }
       ctx.globalAlpha = 1;
 
-      // Power level uses the missile-energy icon (same sprite as the P pickup).
-      const missileIcon = assets.items.powerUp;
-      const missileX = LOGICAL_W - missileIcon.width - 32;
-      renderer.drawImage(missileIcon.canvas, missileX, iconY);
-      renderer.fillText(
-        `Lv${state.power}`,
-        missileX + missileIcon.width + 2,
-        iconY + 4,
-        '#fff',
-        10
-      );
+      // Weapon slots: each shows its pickup icon and level. Sub sits left of main.
+      const mainIcon = assets.items.byType[WEAPONS[state.main.id].item].idle;
+      const mainX = LOGICAL_W - mainIcon.width - 32;
+      renderer.drawImage(mainIcon.canvas, mainX, iconY);
+      renderer.fillText(`Lv${state.main.level}`, mainX + mainIcon.width + 2, iconY + 4, '#fff', 10);
+      const subX = mainX - 40;
+      if (state.sub) {
+        const subIcon = assets.items.byType[WEAPONS[state.sub.id].item].idle;
+        renderer.drawImage(subIcon.canvas, subX, iconY);
+        renderer.fillText(`Lv${state.sub.level}`, subX + subIcon.width + 2, iconY + 4, '#fff', 10);
+      } else {
+        renderer.fillText('SUB -', subX, iconY + 4, '#666', 10);
+      }
 
       // Wave info (debug). F2 jumps to the warning, F3 to the boss.
       if (sceneCtx.showDebug && waveScheduler) {
@@ -1449,6 +1570,10 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       }
     },
 
+    grantItem(type: ItemType): void {
+      collectItem(type);
+    },
+
     getBattleView(): BattleView {
       const enemies: { x: number; y: number }[] = [];
       enemyPool.forEach((enemy) => {
@@ -1471,7 +1596,11 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
         enemyCount: enemyPool.getActiveCount(),
         enemyBulletCount: enemyBulletPool.getActiveCount(),
         score: state.score,
-        power: state.power,
+        power: state.main.level,
+        mainWeapon: state.main.id,
+        subWeapon: state.sub?.id ?? null,
+        subLevel: state.sub?.level ?? 0,
+        missileCount: missilePool.getActiveCount(),
         lives: state.lives,
         paused: pauseMenu.isOpen(),
         gameTime,

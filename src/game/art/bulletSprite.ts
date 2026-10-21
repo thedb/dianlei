@@ -84,8 +84,28 @@ const MISSILE: number[][] = [
   [_, _, BD, BD, _, _],
 ];
 
+/**
+ * Player homing missile — 4×8, nose at the top, player cyan so it never reads
+ * as an enemy shot. Drawn rotated to its heading; the exhaust is code-drawn.
+ */
+const HOMING_MISSILE: number[][] = [
+  [_, W, W, _],
+  [_, PC, PC, _],
+  [PM, W, W, PM],
+  [PM, PC, PC, PM],
+  [PD, PC, PC, PD],
+  [PD, PM, PM, PD],
+  [PD, PD, PD, PD],
+  [PD, _, _, PD],
+];
+
+export function homingMissilePixels(): number[][] {
+  return HOMING_MISSILE;
+}
+
 export interface BulletAssets {
   playerBullet: SpriteFrame;
+  homingMissile: SpriteFrame;
   enemyBulletSmall: SpriteFrame;
   enemyBulletLarge: SpriteFrame;
   missile: SpriteFrame;
@@ -95,6 +115,7 @@ export interface BulletAssets {
 export function createBulletAssets(): BulletAssets {
   return {
     playerBullet: renderSprite(PLAYER_BULLET, 0.5, 0.5),
+    homingMissile: renderSprite(HOMING_MISSILE, 0.5, 0.5),
     enemyBulletSmall: renderSprite(ENEMY_BULLET_SMALL, 0.5, 0.5),
     enemyBulletLarge: renderSprite(ENEMY_BULLET_LARGE, 0.5, 0.5),
     missile: renderSprite(MISSILE, 0.5, 0.5),
