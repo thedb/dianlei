@@ -310,11 +310,10 @@ export const TANK_ENTRY_SPEED = 22;
 export const TANK_DIAG_VX = 19;
 
 /**
- * Extra upward speed for a bottom-corner tank entry. 0.8× the previous 50.
- * Equal to the 40px/s downward scroll, so the tank holds its screen Y
- * while still driving up relative to the ground.
+ * Extra upward speed for a bottom-corner tank entry, pixels/second.
+ * Must stay above BG_SCROLL_SPEED or bottom-entry tanks never appear.
  */
-export const TANK_DIAG_CLIMB = 40;
+export const TANK_DIAG_CLIMB = 45;
 
 /** Home / settings BGM slider default. Playback itself starts off. */
 export const BGM_VOLUME_DEFAULT = 0.6;
