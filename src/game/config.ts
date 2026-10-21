@@ -516,3 +516,31 @@ export const BOSS_TURRET_FALL_GRAVITY = 220;
 export const INTRO_STAGE_UNTIL = 1.6;
 export const INTRO_READY_UNTIL = 3.6;
 export const INTRO_GO_UNTIL = 4.4;
+
+// ============================================================================
+// Title debug entry & weapon test (design §7.1, §14.11)
+// ============================================================================
+
+/** Logical-pixel hot zone on the title screen, top-right. */
+export const DEBUG_HOT_SIZE = 48;
+
+/** Taps inside the hot zone that open the debug panel. */
+export const DEBUG_HOT_TAPS = 6;
+
+/** Seconds after the first tap before the hot-zone counter resets. Inclusive. */
+export const DEBUG_HOT_WINDOW = 2;
+
+/** Rolling window for weapon-test DPS, in seconds. */
+export const WEAPON_TEST_DPS_WINDOW = 1;
+
+/** Highest T level the weapon-test panel can set. 0 is off. Same cap as combat. */
+export const WEAPON_TEST_SUB_MAX = HOMING_MAX_LEVEL;
+
+/** Bomb stock the weapon-test panel can set. A real stage still uses BOMBS_MAX. */
+export const WEAPON_TEST_BOMBS_MAX = 3;
+
+/** Fixed immortal target near the top of the weapon-test screen. */
+export const WEAPON_TEST_TARGET_W = 80;
+export const WEAPON_TEST_TARGET_H = 22;
+export const WEAPON_TEST_TARGET_X = (LOGICAL_W - WEAPON_TEST_TARGET_W) / 2;
+export const WEAPON_TEST_TARGET_Y = 8;

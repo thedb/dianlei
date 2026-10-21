@@ -50,7 +50,6 @@ type Row =
   | ChoiceRow<'buttonLayout'>
   | ChoiceRow<'muted'>
   | ChoiceRow<'bgmEnabled'>
-  | ChoiceRow<'debugMode'>
   | SliderRow
   | ActionRow;
 
@@ -115,20 +114,11 @@ const ROWS: Row[] = [
     max: 1,
     step: 0.05,
   },
-  {
-    kind: 'choice',
-    label: '调试模式',
-    key: 'debugMode',
-    options: [
-      { value: false, label: '关' },
-      { value: true, label: '开' },
-    ],
-  },
   { kind: 'action', label: '恢复默认', action: 'reset' },
   { kind: 'action', label: '返回', action: 'back' },
 ];
 
-const PANEL: Rect = { x: 16, y: 24, w: LOGICAL_W - 32, h: 500 };
+const PANEL: Rect = { x: 16, y: 24, w: LOGICAL_W - 32, h: 440 };
 const ROW_TOP = PANEL.y + 40;
 const ROW_H = 40;
 const CONTROL_X = 150;

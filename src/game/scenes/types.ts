@@ -40,7 +40,8 @@ export interface SceneContext {
   /**
    * `attract` is the silent title demo. It runs the same battle scene, but
    * does not play SFX, publish a run, draw the HUD, or respawn after death.
-   * Omitted on a real run.
+   * `weaponTest` is the damage range: same player, loadout, and fire path,
+   * no scroll and no spawns. Omitted on a real run (treated as `play`).
    */
-  playMode?: 'play' | 'attract';
+  playMode?: 'play' | 'attract' | 'weaponTest';
 }

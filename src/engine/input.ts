@@ -48,9 +48,6 @@ export interface InputState {
   menuRight: boolean;
   menuConfirm: boolean;
   menuBack: boolean;
-  /** Edge-triggered H5 debug skips (F2 warning, F3 boss). Ignored unless debug is on. */
-  debugWarning: boolean;
-  debugBoss: boolean;
   /** Touch/click starts this step, in logical pixels */
   taps: ReadonlyArray<{ x: number; y: number }>;
   /** All active pointers, in logical pixels */
@@ -279,8 +276,6 @@ export function createInputHandler(
         menuRight: pressed(['arrowright', 'd']),
         menuConfirm: pressed(CONFIRM_KEYS),
         menuBack: pressed(BACK_KEYS),
-        debugWarning: pressed(['f2']),
-        debugBoss: pressed(['f3']),
         taps: frameTaps,
         pointers: [...activeTouches.values()],
       };
