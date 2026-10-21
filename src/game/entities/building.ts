@@ -214,7 +214,12 @@ export function createBuilding(): Building {
   };
 }
 
-export function spawnBuilding(b: Building, p: BuildingPlacement, scroll: number): void {
+export function spawnBuilding(
+  b: Building,
+  p: BuildingPlacement,
+  scroll: number,
+  hp: number = BUILDING_HP
+): void {
   const { width, height } = buildingSize(p.type);
   const { x, y } = buildingCenter(p, scroll);
   b.placement = p;
@@ -224,7 +229,7 @@ export function spawnBuilding(b: Building, p: BuildingPlacement, scroll: number)
   b.y = y;
   b.width = width;
   b.height = height;
-  b.hp = BUILDING_HP;
+  b.hp = hp;
   b.score = SCORE_BUILDING;
   b.wrecked = false;
   b.hitFlashTimer = 0;

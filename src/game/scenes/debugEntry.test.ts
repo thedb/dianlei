@@ -11,6 +11,7 @@ import {
   createDebugPanel,
 } from '@/game/ui/debugPanel';
 import { START_BUTTON } from '@/game/ui/startButton';
+import { DIFFICULTY_EASY_BUTTON } from '@/game/ui/difficultySelect';
 import { createTitleScene } from './title';
 import type { TitleAttract } from './titleAttract';
 import type { SceneContext } from './types';
@@ -113,6 +114,7 @@ describe('title debug entry', () => {
     expect(title.update(DT, makeInput({ taps: [point(DEBUG_BOSS_BUTTON)] }))).toBe('battle');
     expect(ctx.battleEntry).toBe('boss');
     expect(ctx.playMode).toBe('play');
+    expect(ctx.difficulty).toBe('easy');
   });
 
   it('toggles debug mode without leaving the title', () => {
@@ -138,9 +140,11 @@ describe('title debug entry', () => {
 
     title.enter();
     const start = { x: START_BUTTON.x + 8, y: START_BUTTON.y + 8 };
-    expect(title.update(DT, makeInput({ taps: [start] }))).toBe('battle');
+    expect(title.update(DT, makeInput({ taps: [start] }))).toBeNull();
+    expect(title.update(DT, makeInput({ taps: [point(DIFFICULTY_EASY_BUTTON)] }))).toBe('battle');
     expect(ctx.playMode).toBe('play');
     expect(ctx.battleEntry).toBe('stage');
+    expect(ctx.difficulty).toBe('easy');
   });
 
   it('closes from the button and from Esc, then Start still works', () => {
@@ -157,8 +161,10 @@ describe('title debug entry', () => {
       x: START_BUTTON.x + START_BUTTON.w / 2,
       y: START_BUTTON.y + START_BUTTON.h / 2,
     };
-    expect(title.update(DT, makeInput({ taps: [start] }))).toBe('battle');
+    expect(title.update(DT, makeInput({ taps: [start] }))).toBeNull();
+    expect(title.update(DT, makeInput({ taps: [point(DIFFICULTY_EASY_BUTTON)] }))).toBe('battle');
     expect(ctx.playMode).toBe('play');
+    expect(ctx.difficulty).toBe('easy');
   });
 
   it('ignores taps outside the zone and resets when the 2 second window expires', () => {

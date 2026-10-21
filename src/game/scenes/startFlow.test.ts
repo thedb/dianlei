@@ -25,6 +25,12 @@ vi.mock('@/game/systems/audio', () => {
   return { getAudioSystem: () => sfx, createAudioSystem: () => sfx };
 });
 import { START_BUTTON } from '@/game/ui/startButton';
+import {
+  DIFFICULTY_BACK_BUTTON,
+  DIFFICULTY_EASY_BUTTON,
+  DIFFICULTY_HARD_BUTTON,
+  DIFFICULTY_MEDIUM_BUTTON,
+} from '@/game/ui/difficultySelect';
 import { BGM_VOLUME_DEFAULT } from '@/game/config';
 import { HIGH_SCORE_KEY } from '@/game/highScore';
 import { createSettingsStore, createMemoryStorage } from '@/game/settings';
@@ -59,6 +65,10 @@ function context(): SceneContext {
 
 const center = { x: START_BUTTON.x + START_BUTTON.w / 2, y: START_BUTTON.y + START_BUTTON.h / 2 };
 
+function point(rect: { x: number; y: number; w: number; h: number }) {
+  return { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
+}
+
 function loadingRenderer(): Renderer & { clears: string[]; images: number } {
   const gradient = { addColorStop: () => undefined };
   const ctx = new Proxy(
@@ -89,17 +99,23 @@ function loadingRenderer(): Renderer & { clears: string[]; images: number } {
 }
 
 describe('boot screen start button', () => {
-  it('first tap on 开始游戏 enters battle immediately', () => {
-    const boot = createBootScene(context());
+  it('first tap on 开始游戏 opens difficulty, then Easy starts the stage', () => {
+    const ctx = context();
+    const boot = createBootScene(ctx);
     boot.enter();
-    expect(boot.update(DT, makeInput({ taps: [center] }))).toBe('battle');
+    expect(boot.update(DT, makeInput({ taps: [center] }))).toBeNull();
+    expect(ctx.playMode).toBeUndefined();
+    expect(boot.update(DT, makeInput({ taps: [point(DIFFICULTY_EASY_BUTTON)] }))).toBe('battle');
+    expect(ctx.difficulty).toBe('easy');
+    expect(ctx.playMode).toBe('play');
+    expect(ctx.battleEntry).toBe('stage');
   });
 
   it('accepts taps slightly outside the drawn button', () => {
     const boot = createBootScene(context());
     boot.enter();
     const edge = { x: START_BUTTON.x - 8, y: START_BUTTON.y + START_BUTTON.h + 8 };
-    expect(boot.update(DT, makeInput({ taps: [edge] }))).toBe('battle');
+    expect(boot.update(DT, makeInput({ taps: [edge] }))).toBeNull();
   });
 
   it('ignores taps elsewhere and hands off to the title screen', () => {
@@ -111,10 +127,24 @@ describe('boot screen start button', () => {
     expect(next).toBe('title');
   });
 
-  it('keyboard confirm also starts', () => {
+  it('keyboard confirm opens difficulty, and the next confirm picks Easy', () => {
+    const ctx = context();
+    const boot = createBootScene(ctx);
+    boot.enter();
+    expect(boot.update(DT, makeInput({ menuConfirm: true }))).toBeNull();
+    expect(boot.update(DT, makeInput({ menuConfirm: true }))).toBe('battle');
+    expect(ctx.difficulty).toBe('easy');
+  });
+
+  it('holds the boot timer while difficulty is open and returns to the loader', () => {
     const boot = createBootScene(context());
     boot.enter();
-    expect(boot.update(DT, makeInput({ menuConfirm: true }))).toBe('battle');
+    expect(boot.update(DT, makeInput({ taps: [center] }))).toBeNull();
+    for (let t = 0; t < BOOT_DURATION + 0.2; t += DT) {
+      expect(boot.update(DT, makeInput())).toBeNull();
+    }
+    expect(boot.update(DT, makeInput({ taps: [point(DIFFICULTY_BACK_BUTTON)] }))).toBeNull();
+    expect(boot.update(DT, makeInput())).toBeNull();
   });
 
   it('does not create or draw the attract demo while the boot screen is up', () => {
@@ -152,10 +182,13 @@ describe('boot screen start button', () => {
 });
 
 describe('title screen start button', () => {
-  it('first tap on 开始游戏 enters battle', () => {
-    const title = createTitleScene(context());
+  it('first tap on 开始游戏 opens difficulty and does not start battle', () => {
+    const ctx = context();
+    const title = createTitleScene(ctx);
     title.enter();
-    expect(title.update(DT, makeInput({ taps: [center] }))).toBe('battle');
+    expect(title.update(DT, makeInput({ taps: [center] }))).toBeNull();
+    expect(ctx.playMode).toBeUndefined();
+    expect(ctx.difficulty).toBeUndefined();
   });
 
   it('sits at the same place as the boot button', () => {
@@ -164,7 +197,29 @@ describe('title screen start button', () => {
     title.enter();
     expect(
       title.update(DT, makeInput({ taps: [{ x: START_BUTTON.x + 4, y: START_BUTTON.y + 4 }] }))
-    ).toBe('battle');
+    ).toBeNull();
+  });
+
+  it('Easy, Medium, and Hard start a stage and Back returns to the title', () => {
+    const ctx = context();
+    const title = createTitleScene(ctx);
+    title.enter();
+    title.update(DT, makeInput({ taps: [center] }));
+    expect(title.update(DT, makeInput({ taps: [point(DIFFICULTY_BACK_BUTTON)] }))).toBeNull();
+    expect(ctx.playMode).toBeUndefined();
+
+    title.update(DT, makeInput({ taps: [center] }));
+    expect(title.update(DT, makeInput({ taps: [point(DIFFICULTY_MEDIUM_BUTTON)] }))).toBe('battle');
+    expect(ctx.difficulty).toBe('medium');
+    expect(ctx.battleEntry).toBe('stage');
+    expect(ctx.playMode).toBe('play');
+
+    title.enter();
+    title.update(DT, makeInput({ taps: [center] }));
+    title.update(DT, makeInput({ menuDown: true }));
+    title.update(DT, makeInput({ menuDown: true }));
+    expect(title.update(DT, makeInput({ menuConfirm: true }))).toBe('battle');
+    expect(ctx.difficulty).toBe('hard');
   });
 
   it('the title menu is 开始游戏 and 设置', () => {
@@ -180,9 +235,11 @@ describe('title screen start button', () => {
     expect(ctx.playMode).toBeUndefined();
 
     title.update(DT, makeInput({ menuBack: true }));
-    expect(title.update(DT, makeInput({ taps: [center] }))).toBe('battle');
+    expect(title.update(DT, makeInput({ taps: [center] }))).toBeNull();
+    expect(title.update(DT, makeInput({ taps: [point(DIFFICULTY_EASY_BUTTON)] }))).toBe('battle');
     expect(ctx.battleEntry).toBe('stage');
     expect(ctx.playMode).toBe('play');
+    expect(ctx.difficulty).toBe('easy');
   });
 
   it('keyboard down selects 设置', () => {
@@ -252,6 +309,18 @@ describe('title screen start button', () => {
     expect(title.update(DT, makeInput({ taps: [tap] }))).toBeNull();
     // Now in settings: tapping where 开始游戏 was must not start the game
     expect(title.update(DT, makeInput({ menuBack: true }))).toBeNull();
-    expect(title.update(DT, makeInput({ taps: [center] }))).toBe('battle');
+    expect(title.update(DT, makeInput({ taps: [center] }))).toBeNull();
+    expect(title.update(DT, makeInput({ taps: [point(DIFFICULTY_EASY_BUTTON)] }))).toBe('battle');
+  });
+
+  it('pauses the attract demo while the difficulty overlay is open', () => {
+    const title = createTitleScene(context());
+    title.enter();
+    title.update(DT, makeInput());
+    expect(title.update(DT, makeInput({ taps: [center] }))).toBeNull();
+    const frozen = peekSharedTitleAttract()?.stats().time ?? -1;
+    for (let i = 0; i < 30; i++) title.update(DT, makeInput());
+    expect(peekSharedTitleAttract()?.stats().time).toBe(frozen);
+    expect(title.update(DT, makeInput({ taps: [point(DIFFICULTY_HARD_BUTTON)] }))).toBe('battle');
   });
 });

@@ -27,6 +27,30 @@ function recorder(): { shots: Shot[]; spawner: BulletSpawner } {
 }
 
 describe('enemy fire patterns', () => {
+  it('fires a two-arm spiral of small bullets, distinct from an aimed triple', () => {
+    const spiral = recorder();
+    executeFirePattern(
+      { kind: 'spiral', interval: 0.18, arms: 2, rotStep: 22 },
+      180,
+      120,
+      40,
+      500,
+      spiral.spawner,
+      { rotation: 20 }
+    );
+    expect(spiral.shots).toHaveLength(2);
+    expect(spiral.shots.every((s) => s.type === 'small')).toBe(true);
+    expect(spiral.shots[0]!.vx).not.toBeCloseTo(spiral.shots[1]!.vx);
+
+    const aimed = recorder();
+    executeFirePattern({ kind: 'aimed_fast3', interval: 1.15 }, 180, 120, 40, 500, aimed.spawner);
+    expect(aimed.shots).toHaveLength(3);
+    expect(aimed.shots.every((s) => s.type === 'small')).toBe(true);
+    const spiralSpeed = Math.hypot(spiral.shots[0]!.vx, spiral.shots[0]!.vy);
+    const aimedSpeed = Math.hypot(aimed.shots[0]!.vx, aimed.shots[0]!.vy);
+    expect(aimedSpeed).toBeGreaterThan(spiralSpeed);
+  });
+
   it('fans five small bullets across the spread', () => {
     const { shots, spawner } = recorder();
     executeFirePattern({ kind: 'fan5', spread: 50, interval: 1.8 }, 180, 100, 180, 400, spawner);

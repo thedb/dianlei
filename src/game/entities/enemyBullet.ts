@@ -291,6 +291,23 @@ export function executeFirePattern(
       break;
     }
 
+    case 'spiral': {
+      const arms = Math.max(1, fire.arms);
+      const speed = getScaledSpeed('small');
+      const rotRad = (rotation * Math.PI) / 180;
+      for (let i = 0; i < arms; i++) {
+        const angle = rotRad + (i * Math.PI * 2) / arms;
+        spawner.spawnBullet(
+          enemyX,
+          enemyY,
+          Math.cos(angle) * speed,
+          Math.sin(angle) * speed,
+          'small'
+        );
+      }
+      break;
+    }
+
     case 'ring8':
     case 'ring16': {
       const count = fire.kind === 'ring8' ? 8 : 16;

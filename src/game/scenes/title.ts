@@ -22,6 +22,7 @@ import {
   type Rect,
 } from '@/game/ui/widgets';
 import { START_BUTTON, drawStartButton, isStartTapped } from '@/game/ui/startButton';
+import { createDifficultySelect } from '@/game/ui/difficultySelect';
 import { sharedTitleAttract, type TitleAttract } from './titleAttract';
 
 const ITEM_COUNT = 2;
@@ -41,11 +42,13 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
   let selected = 0;
   let inSettings = false;
   let inDebug = false;
+  let inDifficulty = false;
   let blinkTimer = 0;
   // Shared demo is created in enter. An injected demo stays stopped until then.
   let attract: TitleAttract | null = injected ?? null;
   const settingsPanel = createSettingsPanel(ctx.settings);
   const debugPanel = createDebugPanel();
+  const difficultySelect = createDifficultySelect();
   const hotZone = createDebugHotZone();
 
   function demo(): TitleAttract {
@@ -53,10 +56,10 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
     return attract;
   }
 
-  function startGame(): 'battle' {
-    ctx.playMode = 'play';
-    ctx.battleEntry = 'stage';
-    return 'battle';
+  function openDifficulty(): null {
+    inDifficulty = true;
+    difficultySelect.open();
+    return null;
   }
 
   function openSettings(): null {
@@ -72,6 +75,7 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
       selected = 0;
       inSettings = false;
       inDebug = false;
+      inDifficulty = false;
       blinkTimer = 0;
       hotZone.reset();
       ctx.input.setControlsEnabled(false);
@@ -86,8 +90,10 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
     update(dt: number, input: InputState) {
       blinkTimer = (blinkTimer + dt) % 1;
       const live = demo();
-      if (!live.isRunning()) live.start();
-      live.update(dt);
+      if (!inDifficulty) {
+        if (!live.isRunning()) live.start();
+        live.update(dt);
+      }
 
       if (inSettings) {
         if (settingsPanel.update(input) === 'close') inSettings = false;
@@ -102,9 +108,25 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
         } else if (action === 'boss') {
           ctx.playMode = 'play';
           ctx.battleEntry = 'boss';
+          ctx.difficulty = 'easy';
           return 'battle';
         } else if (action === 'weaponTest') {
           ctx.playMode = 'weaponTest';
+          ctx.battleEntry = 'stage';
+          return 'battle';
+        }
+        return null;
+      }
+
+      if (inDifficulty) {
+        const choice = difficultySelect.update(input);
+        if (choice === 'back') {
+          inDifficulty = false;
+          return null;
+        }
+        if (choice) {
+          ctx.difficulty = choice;
+          ctx.playMode = 'play';
           ctx.battleEntry = 'stage';
           return 'battle';
         }
@@ -123,9 +145,9 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
       if (input.menuUp) selected = (selected + ITEM_COUNT - 1) % ITEM_COUNT;
       if (input.menuDown) selected = (selected + 1) % ITEM_COUNT;
 
-      if (isStartTapped(input.taps)) return startGame();
+      if (isStartTapped(input.taps)) return openDifficulty();
       if (input.taps.some((t) => hitRect(SETTINGS_BUTTON, t.x, t.y))) return openSettings();
-      if (input.menuConfirm) return selected === 0 ? startGame() : openSettings();
+      if (input.menuConfirm) return selected === 0 ? openDifficulty() : openSettings();
       return null;
     },
 
@@ -166,6 +188,8 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
         settingsPanel.render(c, ctx.input.getControlsView(), '设置');
       } else if (inDebug) {
         debugPanel.render(c, ctx.settings.get().debugMode);
+      } else if (inDifficulty) {
+        difficultySelect.render(c);
       }
     },
   };

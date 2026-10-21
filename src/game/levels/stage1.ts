@@ -8,6 +8,15 @@
  * geometry was wrong (V stagger, hover stopY, escort angles).
  */
 
+import {
+  BOSS_PHASE3_AIMED_INTERVAL,
+  BOSS_PHASE3_HP,
+  BOSS_PHASE3_PATTERN_HOLD,
+  BOSS_PHASE3_SPIRAL_ARMS,
+  BOSS_PHASE3_SPIRAL_INTERVAL,
+  BOSS_PHASE3_SPIRAL_ROT,
+  BOSS_PHASE3_TRANSITION,
+} from '@/game/config';
 import type { SpawnGroup, StageData } from './types';
 
 function sideArc(side: 'left' | 'right', y0: number, delay: number, speed: number): SpawnGroup {
@@ -718,6 +727,18 @@ export const stage1: StageData = {
       },
       enrageAtHpRatio: 0.5,
       enrage: { ringInterval: 1.6, laserEvery: 5.5, sweep: 1.2 },
+    },
+    phase3: {
+      hp: BOSS_PHASE3_HP,
+      transition: BOSS_PHASE3_TRANSITION,
+      patternHold: BOSS_PHASE3_PATTERN_HOLD,
+      spiral: {
+        kind: 'spiral',
+        interval: BOSS_PHASE3_SPIRAL_INTERVAL,
+        arms: BOSS_PHASE3_SPIRAL_ARMS,
+        rotStep: BOSS_PHASE3_SPIRAL_ROT,
+      },
+      aimed: { kind: 'aimed_fast3', interval: BOSS_PHASE3_AIMED_INTERVAL },
     },
     death: { duration: 2.5, explosions: 6 },
   },
