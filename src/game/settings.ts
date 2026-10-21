@@ -15,6 +15,32 @@ export type JoystickMode = 'fixed' | 'floating';
 /** `aLow` = A low / B high (design default), `aHigh` = A high / B low */
 export type ButtonLayout = 'aLow' | 'aHigh';
 
+/**
+ * Title-screen backdrop.
+ * `attract` is the live muted stage demo (approach B, default).
+ * `dawn` / `strait` / `base` are the three code-drawn stills (approach A1–A3).
+ */
+export type TitleBackground = 'attract' | 'dawn' | 'strait' | 'base';
+
+export const TITLE_BACKGROUNDS: readonly TitleBackground[] = ['attract', 'dawn', 'strait', 'base'];
+
+export const TITLE_BACKGROUND_LABEL: Record<TitleBackground, string> = {
+  attract: '演示',
+  dawn: '晨袭',
+  strait: '海峡',
+  base: '机库',
+};
+
+export function isTitleBackground(value: unknown): value is TitleBackground {
+  return typeof value === 'string' && (TITLE_BACKGROUNDS as readonly string[]).includes(value);
+}
+
+/** Next backdrop in A/B comparison order: 演示 → 晨袭 → 海峡 → 机库 → 演示. */
+export function cycleTitleBackground(current: TitleBackground): TitleBackground {
+  const i = TITLE_BACKGROUNDS.indexOf(current);
+  return TITLE_BACKGROUNDS[(i + 1) % TITLE_BACKGROUNDS.length] ?? 'attract';
+}
+
 export interface Settings {
   joystickMode: JoystickMode;
   buttonLayout: ButtonLayout;
@@ -27,6 +53,10 @@ export interface Settings {
   bgmEnabled: boolean;
   /** 0–1 music bus. Ignored while BGM is off or the master mute is on. */
   bgmVolume: number;
+  /** Bottom-left FPS / debug overlay, and F2 / F3 battle skips. Default off. */
+  debugMode: boolean;
+  /** Home and boot backdrop. Default is the attract demo. */
+  titleBackground: TitleBackground;
 }
 
 export const CONTROL_OPACITY_MIN = 0.2;
@@ -40,6 +70,8 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   muted: false,
   bgmEnabled: false,
   bgmVolume: BGM_VOLUME_DEFAULT,
+  debugMode: false,
+  titleBackground: 'attract',
 };
 
 export const SETTINGS_STORAGE_KEY = 'dianlei.settings.v1';
@@ -92,6 +124,11 @@ export function sanitizeSettings(raw: unknown): Settings {
     bgmEnabled:
       typeof src['bgmEnabled'] === 'boolean' ? src['bgmEnabled'] : DEFAULT_SETTINGS.bgmEnabled,
     bgmVolume: num(src['bgmVolume'], DEFAULT_SETTINGS.bgmVolume, 0, 1),
+    debugMode:
+      typeof src['debugMode'] === 'boolean' ? src['debugMode'] : DEFAULT_SETTINGS.debugMode,
+    titleBackground: isTitleBackground(src['titleBackground'])
+      ? src['titleBackground']
+      : DEFAULT_SETTINGS.titleBackground,
   };
 }
 

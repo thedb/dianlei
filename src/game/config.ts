@@ -318,6 +318,13 @@ export const TANK_DIAG_CLIMB = 45;
 /** Home / settings BGM slider default. Playback itself starts off. */
 export const BGM_VOLUME_DEFAULT = 0.6;
 
+/**
+ * Title attract loop length, seconds.
+ * Covers the ground section and the start of the coast (through the bomber),
+ * then the demo restarts. Stops before the dense late waves and the boss.
+ */
+export const ATTRACT_LOOP_SECONDS = 72;
+
 // ============================================================================
 // Enemy fire details (wave table §3.2)
 // ============================================================================
