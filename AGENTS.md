@@ -109,7 +109,8 @@ This document defines the coding conventions and constraints for all AI agents w
 ### CI Requirements
 - **CI must stay green** — lint, typecheck, test, build
 - Verify no absolute asset paths in index.html
-- Don't merge PRs — user reviews and merges
+- Milestone PRs merge only after the owner replies 「合并」. Agents do not merge those PRs.
+- Small fixes and docs may be merged directly by the coordinator bot.
 
 ### Deployment
 - OSS bucket: `it-consultis`
@@ -134,7 +135,8 @@ This document defines the coding conventions and constraints for all AI agents w
 ### Branching
 - One PR per milestone
 - Branch naming: `cursor/<milestone>-<suffix>`
-- Agents never merge — user reviews and merges
+- Milestone PRs merge only after the owner replies 「合并」. Agents do not merge those PRs.
+- Small fixes and docs may be merged directly by the coordinator bot.
 
 ## Audio
 

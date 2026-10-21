@@ -118,8 +118,8 @@ npm run dev
 
 ### 生产环境 URL
 
-- H5 版本：`https://cdn.it-consultis.com/vibeCoding/dianlei/h5/index.html`
-- 素材 CDN：`https://cdn.it-consultis.com/vibeCoding/dianlei/assets/`
+- H5 试玩：`https://cdn.it-consultis.com/vibeCoding/dianlei/h5/index.html`
+- 页面引用的脚本在同一前缀下的 `h5/assets/`（文件名带内容哈希）。没有单独的 `vibeCoding/dianlei/assets/` 目录。
 
 ### 手动部署
 
@@ -133,10 +133,15 @@ npm run dev
 |------|------|------|
 | P0 | 工程骨架、Canvas 循环、输入系统 | ✅ 完成 |
 | P1 | 最小可玩版本：玩家、敌机、碰撞 | ✅ 完成 |
-| P2 | 完整关卡：地块背景、所有敌人 | ✅ 完成 |
+| P1.1 | 暂停菜单、设置、本地存档 | ✅ 完成 |
+| P2 | 第一关中段：地块背景、全部道中敌人 | ✅ 完成 |
 | P3 | BOSS、过关结算、Game Over | ✅ 完成 |
-| P4 | 打磨：特效、音频、性能优化 | 待开发 |
-| P5 | 上线准备：合规、包体优化 | 待开发 |
+| P4 | 实际为第一关贴图重画（原计划的打磨只做了一部分） | 见开发记录 |
+| P5 | 实际为卷轴、Boss 贴图、BGM、坦克进场（原计划的上线准备未开始） | 见开发记录 |
+
+## 开发记录
+
+各里程碑的交付、和设计文档 §11 原计划的对照，以及真机试玩之后的跟进，写在 [docs/开发记录_P0-P5.md](docs/开发记录_P0-P5.md)。
 
 ## 技术说明
 
