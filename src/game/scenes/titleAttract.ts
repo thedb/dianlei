@@ -7,9 +7,16 @@
 
 import type { InputState } from '@/engine/input';
 import type { Renderer } from '@/engine/renderer';
-import { ATTRACT_DEATH_FADE, ATTRACT_LOOP_SECONDS, LOGICAL_H, LOGICAL_W } from '@/game/config';
+import {
+  ATTRACT_DEATH_FADE,
+  ATTRACT_LOOP_SECONDS,
+  LOGICAL_H,
+  LOGICAL_W,
+  PLAYER_SPAWN_Y,
+} from '@/game/config';
 import { computeControlLayout } from '@/game/controls';
 import { createMemoryStorage, createSettingsStore } from '@/game/settings';
+import { attractStick, pickAttractPlan, type AttractPlan, type PilotWorld } from './attractPilot';
 import { createBattleScene } from './battle';
 import type { SceneContext } from './types';
 
@@ -56,22 +63,31 @@ const BLANK_INPUT: InputState = {
   pointers: [],
 };
 
+/** World the autopilot aims from. Omitted calls use route 0 at the spawn point. */
+export interface AttractAim {
+  plan: AttractPlan;
+  world: PilotWorld;
+}
+
 /** Scripted stick for the demo. `time` is the battle clock before this step. */
-export function attractInput(time: number, drive: AttractDrive = 'auto'): InputState {
+export function attractInput(
+  time: number,
+  drive: AttractDrive = 'auto',
+  aim?: AttractAim
+): InputState {
   if (drive === 'idle') return BLANK_INPUT;
-  let jx = Math.sin(time * 0.9) * 0.85;
-  let jy = Math.sin(time * 0.5) * 0.28;
-  const hypot = Math.hypot(jx, jy) || 1;
-  const mag = Math.min(1, hypot);
-  if (hypot > 1) {
-    jx /= hypot;
-    jy /= hypot;
-  }
+  const plan = aim?.plan ?? { routeId: 0, seed: 1 };
+  const world = aim?.world ?? {
+    player: { x: LOGICAL_W / 2, y: PLAYER_SPAWN_Y },
+    enemies: [],
+    bullets: [],
+  };
+  const stick = attractStick(plan, time, world);
   return {
     ...BLANK_INPUT,
-    joystickX: jx,
-    joystickY: jy,
-    joystickMagnitude: mag,
+    joystickX: stick.joystickX,
+    joystickY: stick.joystickY,
+    joystickMagnitude: stick.joystickMagnitude,
     buttonA: true,
   };
 }
@@ -101,6 +117,13 @@ function attractContext(): SceneContext {
   };
 }
 
+export interface TitleAttractOptions {
+  /** Route picks. Defaults to Math.random. Each start and restart draws twice. */
+  rng?: () => number;
+  /** Seconds before a living demo restarts. Defaults to ATTRACT_LOOP_SECONDS. */
+  loopSeconds?: number;
+}
+
 export interface TitleAttract {
   start(): void;
   stop(): void;
@@ -108,15 +131,25 @@ export interface TitleAttract {
   update(dt: number): void;
   render(renderer: Renderer, alpha: number): void;
   stats(): AttractStats;
+  /** Route chosen for the run that is on screen. Redrawn on every restart. */
+  plan(): AttractPlan;
+  pilotView(): PilotWorld;
 }
 
-export function createTitleAttract(drive: AttractDrive = 'auto'): TitleAttract {
+export function createTitleAttract(
+  drive: AttractDrive = 'auto',
+  options: TitleAttractOptions = {}
+): TitleAttract {
+  const rng = options.rng ?? Math.random;
+  const loopSeconds = options.loopSeconds ?? ATTRACT_LOOP_SECONDS;
   const battle = createBattleScene(attractContext());
   let running = false;
   let fading = false;
   let fade = 0;
+  let plan: AttractPlan = { routeId: 0, seed: 1 };
 
   function restart(): void {
+    plan = pickAttractPlan(rng);
     fading = false;
     fade = 0;
     battle.enter();
@@ -146,8 +179,9 @@ export function createTitleAttract(drive: AttractDrive = 'auto'): TitleAttract {
       }
 
       const time = battle.getDebugInfo?.().gameTime ?? 0;
+      const world = battle.getBattleView();
       // Scene changes (game over, pause exit) belong to a real run.
-      battle.update(dt, attractInput(time, drive));
+      battle.update(dt, attractInput(time, drive, { plan, world }));
       const info = battle.getDebugInfo?.();
       if (!info) return;
 
@@ -156,7 +190,7 @@ export function createTitleAttract(drive: AttractDrive = 'auto'): TitleAttract {
         fade = Math.min(1, dt / ATTRACT_DEATH_FADE);
         return;
       }
-      if (!info.playerDead && (info.gameTime ?? 0) >= ATTRACT_LOOP_SECONDS) restart();
+      if (!info.playerDead && (info.gameTime ?? 0) >= loopSeconds) restart();
     },
 
     render(renderer: Renderer, alpha: number): void {
@@ -182,6 +216,10 @@ export function createTitleAttract(drive: AttractDrive = 'auto'): TitleAttract {
         sceneId: battle.id,
       };
     },
+
+    plan: () => plan,
+
+    pilotView: () => battle.getBattleView(),
   };
 }
 

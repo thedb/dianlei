@@ -352,11 +352,11 @@ export const MISSILE_TURN_RATE = 240;
 /** Building HP. Same as a small fighter (wave table §2). */
 export const BUILDING_HP = 3;
 
-/** Chance that a destroyed building drops one item */
-export const BUILDING_DROP_CHANCE = 0.5;
-
-/** When a building drops, the share that is B. The rest is P. */
-export const BUILDING_DROP_B_SHARE = 0.7;
+/**
+ * Chance that a destroyed building drops one bomb.
+ * Buildings never drop a power-up.
+ */
+export const BUILDING_DROP_CHANCE = 0.3;
 
 /** Sea gun fixed2 interval, seconds. Ground turrets use 1.6–1.8. */
 export const SEA_GUN_FIRE_INTERVAL = 2.2;
