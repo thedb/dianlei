@@ -128,8 +128,8 @@ describe('weapon registry', () => {
       for (let i = 0; i < 600; i++) clock = stepFireClock(clock, dt, interval, true, () => fired++);
       return fired;
     };
-    // Clock starts charged, so the opening frame fires, then one volley per interval: 51 in 10 s.
-    expect(count(weaponLevel('vulcan', 1).rate)).toBe(FIRE_RATE * 10 + 1);
+    // 600 frames is 10s. The clock starts charged, and that opening shot sits inside the window: 50 volleys.
+    expect(count(weaponLevel('vulcan', 1).rate)).toBe(FIRE_RATE * 10);
     expect(count(weaponLevel('homing', 1).rate)).toBe(16);
   });
 
