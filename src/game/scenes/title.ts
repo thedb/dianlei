@@ -7,9 +7,12 @@ import type { Renderer } from '@/engine/renderer';
 import type { InputState } from '@/engine/input';
 import { LOGICAL_W, LOGICAL_H } from '@/game/config';
 import { readHighScore } from '@/game/highScore';
+import { cycleTitleBackground, TITLE_BACKGROUND_LABEL } from '@/game/settings';
+import { drawStaticTitle, drawTitleScrim } from '@/game/art/titleBackdrop';
 import { createSettingsPanel } from '@/game/ui/settingsPanel';
 import { drawButton, drawText, hitRect, UI_COLORS, type Rect } from '@/game/ui/widgets';
 import { START_BUTTON, drawStartButton, isStartTapped } from '@/game/ui/startButton';
+import { createTitleAttract } from './titleAttract';
 
 const ITEM_COUNT = 3;
 const MENU_W = 180;
@@ -31,11 +34,24 @@ export const SETTINGS_BUTTON: Rect = {
   h: MENU_H,
 };
 
+/** Cycles 演示 / 晨袭 / 海峡 / 机库. Persists with the other settings. */
+export const TITLE_BG_BUTTON: Rect = { x: 8, y: 8, w: 104, h: 22 };
+
 export function createTitleScene(ctx: SceneContext): Scene {
   let selected = 0;
   let inSettings = false;
   let blinkTimer = 0;
   const settingsPanel = createSettingsPanel(ctx.settings);
+  const attract = createTitleAttract();
+
+  function syncAttract(dt: number): void {
+    if (ctx.settings.get().titleBackground === 'attract') {
+      if (!attract.isRunning()) attract.start();
+      attract.update(dt);
+    } else if (attract.isRunning()) {
+      attract.stop();
+    }
+  }
 
   function choose(i: number): 'battle' | null {
     if (i === 0) {
@@ -62,11 +78,13 @@ export function createTitleScene(ctx: SceneContext): Scene {
     },
 
     exit(): void {
+      attract.stop();
       ctx.input.setControlsEnabled(true);
     },
 
     update(dt: number, input: InputState) {
       blinkTimer = (blinkTimer + dt) % 1;
+      syncAttract(dt);
 
       if (inSettings) {
         if (settingsPanel.update(input) === 'close') inSettings = false;
@@ -76,6 +94,12 @@ export function createTitleScene(ctx: SceneContext): Scene {
       if (input.menuUp) selected = (selected + ITEM_COUNT - 1) % ITEM_COUNT;
       if (input.menuDown) selected = (selected + 1) % ITEM_COUNT;
 
+      if (input.taps.some((t) => hitRect(TITLE_BG_BUTTON, t.x, t.y))) {
+        ctx.settings.update({
+          titleBackground: cycleTitleBackground(ctx.settings.get().titleBackground),
+        });
+        return null;
+      }
       if (isStartTapped(input.taps)) return choose(0);
       if (input.taps.some((t) => hitRect(BOSS_BUTTON, t.x, t.y))) return choose(1);
       if (input.taps.some((t) => hitRect(SETTINGS_BUTTON, t.x, t.y))) return choose(2);
@@ -83,9 +107,15 @@ export function createTitleScene(ctx: SceneContext): Scene {
       return null;
     },
 
-    render(renderer: Renderer, _alpha: number): void {
-      renderer.clear('#0a0a1a');
+    render(renderer: Renderer, alpha: number): void {
+      const mode = ctx.settings.get().titleBackground;
+      if (mode === 'attract') attract.render(renderer, alpha);
+      else {
+        renderer.clear('#070b14');
+        drawStaticTitle(renderer.getContext(), mode);
+      }
       const c = renderer.getContext();
+      drawTitleScrim(c);
 
       drawText(c, '电雷', LOGICAL_W / 2, LOGICAL_H / 3, 56, UI_COLORS.accent, 'center');
       drawText(c, 'DIANLEI', LOGICAL_W / 2, LOGICAL_H / 3 + 50, 14, UI_COLORS.dim, 'center');
@@ -103,6 +133,12 @@ export function createTitleScene(ctx: SceneContext): Scene {
       drawStartButton(c, blinkTimer, selected === 0);
       drawButton(c, BOSS_BUTTON, '挑战 Boss', selected === 1);
       drawButton(c, SETTINGS_BUTTON, '设置', selected === 2);
+      drawButton(
+        c,
+        TITLE_BG_BUTTON,
+        `背景 ${TITLE_BACKGROUND_LABEL[ctx.settings.get().titleBackground]}`,
+        false
+      );
 
       drawText(
         c,

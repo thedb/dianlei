@@ -7,14 +7,26 @@ import type { Scene, SceneContext } from './types';
 import type { Renderer } from '@/engine/renderer';
 import type { InputState } from '@/engine/input';
 import { LOGICAL_W, LOGICAL_H } from '@/game/config';
+import { drawStaticTitle, drawTitleScrim } from '@/game/art/titleBackdrop';
 import { drawText, UI_COLORS } from '@/game/ui/widgets';
 import { drawStartButton, isStartTapped } from '@/game/ui/startButton';
+import { createTitleAttract } from './titleAttract';
 
 /** Seconds before the boot screen hands off to the title screen */
 export const BOOT_DURATION = 1.5;
 
 export function createBootScene(ctx: SceneContext): Scene {
   let timer = 0;
+  const attract = createTitleAttract();
+
+  function syncAttract(dt: number): void {
+    if (ctx.settings.get().titleBackground === 'attract') {
+      if (!attract.isRunning()) attract.start();
+      attract.update(dt);
+    } else if (attract.isRunning()) {
+      attract.stop();
+    }
+  }
 
   return {
     id: 'boot',
@@ -22,11 +34,15 @@ export function createBootScene(ctx: SceneContext): Scene {
     enter(): void {
       timer = 0;
       ctx.input.setControlsEnabled(false);
+      if (ctx.settings.get().titleBackground === 'attract') attract.start();
     },
 
-    exit(): void {},
+    exit(): void {
+      attract.stop();
+    },
 
     update(dt: number, input: InputState) {
+      syncAttract(dt);
       if (isStartTapped(input.taps) || input.menuConfirm) {
         ctx.battleEntry = 'stage';
         return 'battle';
@@ -38,9 +54,15 @@ export function createBootScene(ctx: SceneContext): Scene {
       return null;
     },
 
-    render(renderer: Renderer, _alpha: number): void {
-      renderer.clear('#0a0a1a');
+    render(renderer: Renderer, alpha: number): void {
+      const mode = ctx.settings.get().titleBackground;
+      if (mode === 'attract') attract.render(renderer, alpha);
+      else {
+        renderer.clear('#070b14');
+        drawStaticTitle(renderer.getContext(), mode);
+      }
       const c = renderer.getContext();
+      drawTitleScrim(c);
 
       drawText(c, '电雷', LOGICAL_W / 2, LOGICAL_H / 3, 56, UI_COLORS.accent, 'center');
 

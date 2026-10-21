@@ -8,8 +8,11 @@ import { LOGICAL_W, LOGICAL_H, CONTROL_SCALE_MIN, CONTROL_SCALE_MAX } from '@/ga
 import {
   CONTROL_OPACITY_MIN,
   CONTROL_OPACITY_MAX,
+  TITLE_BACKGROUND_LABEL,
+  TITLE_BACKGROUNDS,
   type Settings,
   type SettingsStore,
+  type TitleBackground,
 } from '@/game/settings';
 import { drawControls } from './controlsOverlay';
 import {
@@ -50,6 +53,8 @@ type Row =
   | ChoiceRow<'buttonLayout'>
   | ChoiceRow<'muted'>
   | ChoiceRow<'bgmEnabled'>
+  | ChoiceRow<'debugMode'>
+  | ChoiceRow<'titleBackground'>
   | SliderRow
   | ActionRow;
 
@@ -114,11 +119,29 @@ const ROWS: Row[] = [
     max: 1,
     step: 0.05,
   },
+  {
+    kind: 'choice',
+    label: '调试模式',
+    key: 'debugMode',
+    options: [
+      { value: false, label: '关' },
+      { value: true, label: '开' },
+    ],
+  },
+  {
+    kind: 'choice',
+    label: '标题背景',
+    key: 'titleBackground',
+    options: TITLE_BACKGROUNDS.map((value: TitleBackground) => ({
+      value,
+      label: TITLE_BACKGROUND_LABEL[value],
+    })),
+  },
   { kind: 'action', label: '恢复默认', action: 'reset' },
   { kind: 'action', label: '返回', action: 'back' },
 ];
 
-const PANEL: Rect = { x: 16, y: 24, w: LOGICAL_W - 32, h: 500 };
+const PANEL: Rect = { x: 16, y: 12, w: LOGICAL_W - 32, h: 524 };
 const ROW_TOP = PANEL.y + 40;
 const ROW_H = 40;
 const CONTROL_X = 150;
@@ -297,7 +320,7 @@ export function createSettingsPanel(store: SettingsStore): SettingsPanel {
               opt.label,
               rr.x + rr.w / 2,
               rr.y + rr.h / 2,
-              14,
+              row.options.length > 2 ? 12 : 14,
               active ? UI_COLORS.text : UI_COLORS.dim,
               'center'
             );

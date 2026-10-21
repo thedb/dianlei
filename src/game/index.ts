@@ -61,9 +61,9 @@ export function createGame(platform: H5Platform): Game {
   // Create audio system
   const audioSystem: AudioSystem = createAudioSystem(platform);
 
-  // Scene context
+  // Scene context. The FPS / debug overlay follows the persisted debug switch.
   const sceneContext: SceneContext = {
-    showDebug: true, // P0 always shows debug
+    showDebug: settings.get().debugMode,
     safeArea,
     input: inputHandler,
     settings,
@@ -71,6 +71,9 @@ export function createGame(platform: H5Platform): Game {
     run: { report: null },
     battleEntry: 'stage',
   };
+  settings.subscribe((s) => {
+    sceneContext.showDebug = s.debugMode;
+  });
 
   // Create scene manager and start with boot scene
   const sceneManager = createSceneManager(sceneContext);
@@ -144,7 +147,7 @@ export function createGame(platform: H5Platform): Game {
     },
 
     toggleDebug(): void {
-      sceneContext.showDebug = !sceneContext.showDebug;
+      settings.update({ debugMode: !settings.get().debugMode });
     },
 
     getSceneId(): string | null {

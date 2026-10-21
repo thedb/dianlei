@@ -147,6 +147,12 @@ This document defines the coding conventions and constraints for all AI agents w
 - The mute toggle silences SFX and BGM
 - Unlock audio context on first user interaction
 
+## Settings
+
+- Persisted together under `dianlei.settings.v1` (platform storage). Missing fields on old saves fall back per field
+- **Debug mode defaults off** (`debugMode`). The bottom-left FPS / debug overlay and the F2 / F3 battle skips render only while it is on. Keep the debug code; gate it. F1 toggles this same flag
+- **Title background defaults to attract** (`titleBackground: 'attract'`): a muted Stage 1 demo behind boot and title. It must not spend bombs, lives, or write the high score. Static stills `dawn` / `strait` / `base` (A1–A3) stay selectable from settings and the title 「背景」 chip
+
 ## Performance Targets
 
 - Maintain **60fps** on mid-range mobile devices

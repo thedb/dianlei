@@ -23,6 +23,8 @@ describe('settings defaults', () => {
       muted: false,
       bgmEnabled: false,
       bgmVolume: BGM_VOLUME_DEFAULT,
+      debugMode: false,
+      titleBackground: 'attract',
     });
     expect(CONTROL_OPACITY_DEFAULT).toBe(0.6);
   });
@@ -49,6 +51,8 @@ describe('settings persistence', () => {
       muted: true,
       bgmEnabled: false,
       bgmVolume: BGM_VOLUME_DEFAULT,
+      debugMode: false,
+      titleBackground: 'attract',
     });
     expect(storage.getStorage(SETTINGS_STORAGE_KEY)).toEqual(b.get());
   });
@@ -79,6 +83,14 @@ describe('settings persistence', () => {
       bgmEnabled: true,
     });
     expect(sanitizeSettings({ bgmEnabled: 'on' }).bgmEnabled).toBe(false);
+    expect(sanitizeSettings({ debugMode: 'yes', titleBackground: 'space' })).toMatchObject({
+      debugMode: false,
+      titleBackground: 'attract',
+    });
+    expect(sanitizeSettings({ debugMode: true, titleBackground: 'base' })).toMatchObject({
+      debugMode: true,
+      titleBackground: 'base',
+    });
     expect(sanitizeSettings(null)).toEqual(DEFAULT_SETTINGS);
     expect(sanitizeSettings('garbage')).toEqual(DEFAULT_SETTINGS);
   });
@@ -89,6 +101,22 @@ describe('settings persistence', () => {
     store.update({ joystickMode: 'fixed', muted: true });
     store.reset();
     expect(createSettingsStore(storage).get()).toEqual(DEFAULT_SETTINGS);
+  });
+
+  it('persists debug mode and title background, defaulting both off / attract', () => {
+    const storage = createMemoryStorage();
+    const store = createSettingsStore(storage);
+    expect(store.get().debugMode).toBe(false);
+    expect(store.get().titleBackground).toBe('attract');
+
+    store.update({ debugMode: true, titleBackground: 'strait' });
+    const again = createSettingsStore(storage);
+    expect(again.get().debugMode).toBe(true);
+    expect(again.get().titleBackground).toBe('strait');
+
+    again.reset();
+    expect(createSettingsStore(storage).get().debugMode).toBe(false);
+    expect(createSettingsStore(storage).get().titleBackground).toBe('attract');
   });
 
   it('notifies subscribers with the new settings', () => {
