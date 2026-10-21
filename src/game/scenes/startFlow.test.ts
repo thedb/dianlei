@@ -1,6 +1,26 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createBootScene, BOOT_DURATION } from './boot';
-import { createTitleScene, BOSS_BUTTON, SETTINGS_BUTTON, TITLE_BG_BUTTON } from './title';
+import { createTitleScene, BOSS_BUTTON, SETTINGS_BUTTON } from './title';
+
+vi.mock('@/game/art', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/game/art')>();
+  return { ...actual, createGameAssets: () => ({}) };
+});
+
+vi.mock('@/game/systems/audio', () => {
+  const sfx = {
+    init: () => undefined,
+    unlock: () => undefined,
+    play: () => undefined,
+    setMuted: () => undefined,
+    isMuted: () => false,
+    bindBackend: () => undefined,
+    setBgmEnabled: () => undefined,
+    setBgmVolume: () => undefined,
+    tick: () => undefined,
+  };
+  return { getAudioSystem: () => sfx, createAudioSystem: () => sfx };
+});
 import { START_BUTTON } from '@/game/ui/startButton';
 import { BGM_VOLUME_DEFAULT } from '@/game/config';
 import { HIGH_SCORE_KEY } from '@/game/highScore';
@@ -141,23 +161,6 @@ describe('title screen start button', () => {
     expect(ctx.settings.get().bgmVolume).toBeCloseTo(BGM_VOLUME_DEFAULT + 0.05);
   });
 
-  it('title background chip cycles stills without starting or touching the save', () => {
-    const ctx = context();
-    const title = createTitleScene(ctx);
-    title.enter();
-    const tap = { x: TITLE_BG_BUTTON.x + 8, y: TITLE_BG_BUTTON.y + 8 };
-    expect(title.update(DT, makeInput({ taps: [tap] }))).toBeNull();
-    expect(ctx.settings.get().titleBackground).toBe('dawn');
-    expect(ctx.battleEntry).toBe('stage');
-    expect(title.update(DT, makeInput({ taps: [tap] }))).toBeNull();
-    expect(ctx.settings.get().titleBackground).toBe('strait');
-    expect(title.update(DT, makeInput({ taps: [tap] }))).toBeNull();
-    expect(ctx.settings.get().titleBackground).toBe('base');
-    expect(title.update(DT, makeInput({ taps: [tap] }))).toBeNull();
-    expect(ctx.settings.get().titleBackground).toBe('attract');
-    expect(ctx.storage.getStorage(HIGH_SCORE_KEY)).toBeNull();
-  });
-
   it('attract demo runs on the title screen without writing score or settings', () => {
     const storage = createMemoryStorage();
     const ctx = context();
@@ -165,14 +168,14 @@ describe('title screen start button', () => {
     const title = createTitleScene(ctx);
     title.enter();
     expect(ctx.settings.get().debugMode).toBe(false);
-    expect(ctx.settings.get().titleBackground).toBe('attract');
     for (let i = 0; i < 90; i++) title.update(DT, makeInput());
     expect(storage.getStorage('dianlei.settings.v1')).toBeNull();
     expect(ctx.storage.getStorage(HIGH_SCORE_KEY)).toBeNull();
-    expect(ctx.settings.get()).toMatchObject({ debugMode: false, titleBackground: 'attract' });
+    expect(ctx.settings.get().debugMode).toBe(false);
+    expect(ctx.battleEntry).toBe('stage');
   });
 
-  it('settings can turn debug mode on and pick a static title background', () => {
+  it('settings can turn debug mode on', () => {
     const ctx = context();
     const title = createTitleScene(ctx);
     title.enter();
@@ -182,9 +185,6 @@ describe('title screen start button', () => {
     for (let i = 0; i < 7; i++) title.update(DT, makeInput({ menuDown: true }));
     title.update(DT, makeInput({ menuConfirm: true }));
     expect(ctx.settings.get().debugMode).toBe(true);
-    title.update(DT, makeInput({ menuDown: true }));
-    title.update(DT, makeInput({ menuRight: true }));
-    expect(ctx.settings.get().titleBackground).toBe('dawn');
   });
 
   it('设置 opens settings instead of starting', () => {

@@ -41,6 +41,12 @@ export interface GameDebugInfo {
   gameTime?: number;
   /** Orbital boss phase, when the fight has started */
   bossPhase?: string;
+  /** Ship is in the death explosion and has not respawned. */
+  playerDead?: boolean;
+  /** Explosions still playing, including ones waiting on a delay. */
+  activeExplosions?: number;
+  /** Enemies the wave scheduler has actually spawned. */
+  waveSpawned?: number;
 }
 
 /**

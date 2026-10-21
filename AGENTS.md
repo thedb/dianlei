@@ -151,7 +151,7 @@ This document defines the coding conventions and constraints for all AI agents w
 
 - Persisted together under `dianlei.settings.v1` (platform storage). Missing fields on old saves fall back per field
 - **Debug mode defaults off** (`debugMode`). The bottom-left FPS / debug overlay and the F2 / F3 battle skips render only while it is on. Keep the debug code; gate it. F1 toggles this same flag
-- **Title background defaults to attract** (`titleBackground: 'attract'`): a muted Stage 1 demo behind boot and title. It must not spend bombs, lives, or write the high score. Static stills `dawn` / `strait` / `base` (A1–A3) stay selectable from settings and the title 「背景」 chip
+- **Title and boot always show the Stage 1 attract demo.** It is the real battle scene (`playMode: 'attract'`): same stage data, entity classes, sprites, tiles, bullets, explosions, and config. Only the scripted input and the loop / death-fade / restart are demo-specific. Do not fork art, waves, or combat constants for the title. The demo player dies under the same collision and explosion rules; after that explosion the screen fades to black and the loop restarts. The demo stays silent and must not write the high score or settings. Title buttons stay clickable during the fade. Old saves may still contain `titleBackground`; drop that key on load
 
 ## Performance Targets
 

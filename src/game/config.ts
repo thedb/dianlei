@@ -325,6 +325,9 @@ export const BGM_VOLUME_DEFAULT = 0.6;
  */
 export const ATTRACT_LOOP_SECONDS = 72;
 
+/** Seconds the title demo spends fading to black after the player's death explosion. */
+export const ATTRACT_DEATH_FADE = 0.6;
+
 // ============================================================================
 // Enemy fire details (wave table §3.2)
 // ============================================================================

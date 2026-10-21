@@ -24,7 +24,6 @@ describe('settings defaults', () => {
       bgmEnabled: false,
       bgmVolume: BGM_VOLUME_DEFAULT,
       debugMode: false,
-      titleBackground: 'attract',
     });
     expect(CONTROL_OPACITY_DEFAULT).toBe(0.6);
   });
@@ -52,7 +51,6 @@ describe('settings persistence', () => {
       bgmEnabled: false,
       bgmVolume: BGM_VOLUME_DEFAULT,
       debugMode: false,
-      titleBackground: 'attract',
     });
     expect(storage.getStorage(SETTINGS_STORAGE_KEY)).toEqual(b.get());
   });
@@ -83,14 +81,10 @@ describe('settings persistence', () => {
       bgmEnabled: true,
     });
     expect(sanitizeSettings({ bgmEnabled: 'on' }).bgmEnabled).toBe(false);
-    expect(sanitizeSettings({ debugMode: 'yes', titleBackground: 'space' })).toMatchObject({
+    expect(sanitizeSettings({ debugMode: 'yes', titleBackground: 'dawn' })).toMatchObject({
       debugMode: false,
-      titleBackground: 'attract',
     });
-    expect(sanitizeSettings({ debugMode: true, titleBackground: 'base' })).toMatchObject({
-      debugMode: true,
-      titleBackground: 'base',
-    });
+    expect(sanitizeSettings({ debugMode: true })).toMatchObject({ debugMode: true });
     expect(sanitizeSettings(null)).toEqual(DEFAULT_SETTINGS);
     expect(sanitizeSettings('garbage')).toEqual(DEFAULT_SETTINGS);
   });
@@ -103,20 +97,28 @@ describe('settings persistence', () => {
     expect(createSettingsStore(storage).get()).toEqual(DEFAULT_SETTINGS);
   });
 
-  it('persists debug mode and title background, defaulting both off / attract', () => {
+  it('persists debug mode, defaulting off', () => {
     const storage = createMemoryStorage();
     const store = createSettingsStore(storage);
     expect(store.get().debugMode).toBe(false);
-    expect(store.get().titleBackground).toBe('attract');
 
-    store.update({ debugMode: true, titleBackground: 'strait' });
-    const again = createSettingsStore(storage);
-    expect(again.get().debugMode).toBe(true);
-    expect(again.get().titleBackground).toBe('strait');
+    store.update({ debugMode: true });
+    expect(createSettingsStore(storage).get().debugMode).toBe(true);
 
-    again.reset();
+    store.reset();
     expect(createSettingsStore(storage).get().debugMode).toBe(false);
-    expect(createSettingsStore(storage).get().titleBackground).toBe('attract');
+  });
+
+  it('drops a legacy titleBackground key without keeping it', () => {
+    const storage = createMemoryStorage({
+      [SETTINGS_STORAGE_KEY]: { titleBackground: 'base', muted: true },
+    });
+    const store = createSettingsStore(storage);
+    expect(store.get()).toEqual({ ...DEFAULT_SETTINGS, muted: true });
+    expect(store.get()).not.toHaveProperty('titleBackground');
+    const saved = storage.getStorage<Record<string, unknown>>(SETTINGS_STORAGE_KEY);
+    expect(saved).not.toHaveProperty('titleBackground');
+    expect(saved).toMatchObject({ muted: true, debugMode: false });
   });
 
   it('notifies subscribers with the new settings', () => {
