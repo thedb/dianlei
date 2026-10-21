@@ -11,9 +11,11 @@ export * from './enemySprite';
 export * from './bulletSprite';
 export * from './itemSprite';
 export * from './explosionSprite';
+export * from './buildingSprite';
 
 import type { PlayerSpriteSheet } from './playerSprite';
 import type { EnemyAssets } from './enemySprite';
+import type { BuildingAssets } from './buildingSprite';
 import type { BulletAssets } from './bulletSprite';
 import type { ItemAssets } from './itemSprite';
 import type { ExplosionAssets } from './explosionSprite';
@@ -22,6 +24,7 @@ import type { BossAssets } from './bossSprite';
 
 import { createPlayerSpriteSheet } from './playerSprite';
 import { createEnemyAssets } from './enemySprite';
+import { createBuildingAssets } from './buildingSprite';
 import { createBulletAssets } from './bulletSprite';
 import { createItemAssets } from './itemSprite';
 import { createExplosionAssets } from './explosionSprite';
@@ -35,6 +38,7 @@ export { drawBossWorld, drawBossHpBar, drawBossLaser } from './bossSprite';
 export interface GameAssets {
   player: PlayerSpriteSheet;
   enemies: EnemyAssets;
+  buildings: BuildingAssets;
   bullets: BulletAssets;
   items: ItemAssets;
   explosions: ExplosionAssets;
@@ -47,6 +51,7 @@ export function createGameAssets(): GameAssets {
   return {
     player: createPlayerSpriteSheet(),
     enemies: createEnemyAssets(),
+    buildings: createBuildingAssets(),
     bullets: createBulletAssets(),
     items: createItemAssets(),
     explosions: createExplosionAssets(),

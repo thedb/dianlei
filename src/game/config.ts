@@ -248,6 +248,8 @@ export const SCORE_DUAL_TURRET = 1000;
 export const SCORE_BOMBER = 2000;
 export const SCORE_BOSS_PART = 5000;
 export const SCORE_BOSS_CORE = 30000;
+/** Any destroyed building (pillbox, fuel depot, radar station, sea gun) */
+export const SCORE_BUILDING = 500;
 export const BONUS_KILL_RATE_PER_PCT = 200;
 export const BONUS_KILL_RATE_PERFECT = 10000;
 export const BONUS_NO_DEATH = 30000;
@@ -342,6 +344,31 @@ export const TURRET_TURN_RATE = 60;
 
 /** Missile turn rate while homing (deg/s). Homing time is MISSILE_HOMING_TIME. */
 export const MISSILE_TURN_RATE = 240;
+
+// ============================================================================
+// Destructible buildings (design §6.1.1, wave table §4.7)
+// ============================================================================
+
+/** Building HP. Same as a small fighter (wave table §2). */
+export const BUILDING_HP = 3;
+
+/** Chance that a destroyed building drops one item */
+export const BUILDING_DROP_CHANCE = 0.5;
+
+/** When a building drops, the share that is B. The rest is P. */
+export const BUILDING_DROP_B_SHARE = 0.7;
+
+/** Sea gun fixed2 interval, seconds. Ground turrets use 1.6–1.8. */
+export const SEA_GUN_FIRE_INTERVAL = 2.2;
+
+/** Shots stop until the building's top edge is this far onto the screen */
+export const BUILDING_FIRE_MIN_Y = 8;
+
+/** Bullet hitbox is the footprint shrunk by this much on each side */
+export const BUILDING_HIT_INSET = 2;
+
+/** Tank centers stay this far outside an intact building (half a tank) */
+export const BUILDING_TANK_CLEARANCE = 12;
 
 // ============================================================================
 // Stage 1 background sections & warning (wave table §1.1 / §4.5)

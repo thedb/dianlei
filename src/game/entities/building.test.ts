@@ -1,0 +1,331 @@
+import { describe, expect, it } from 'vitest';
+import {
+  BG_SCROLL_SPEED,
+  BUILDING_DROP_B_SHARE,
+  BUILDING_DROP_CHANCE,
+  BUILDING_HP,
+  LOGICAL_H,
+  SCORE_BUILDING,
+  SCORE_SMALL_FIGHTER,
+  SEA_GUN_FIRE_INTERVAL,
+  TILE_SIZE,
+} from '@/game/config';
+import { stage1 } from '@/game/levels/stage1';
+import type { BuildingPlacement } from '@/game/levels/types';
+import { getStageGrids, mapLayerSpecs, mapPixelScreenY, TileId } from '@/game/art/tiles';
+import { backgroundFade } from '@/game/systems/background';
+import { ENEMY_STATS, createEnemy, spawnEnemy, updateEnemy } from './enemy';
+import type { BulletSpawner } from './enemyBullet';
+import {
+  BUILDING_SPECS,
+  BuildingScheduler,
+  buildingBlocksTank,
+  buildingCenter,
+  buildingExitScroll,
+  buildingSize,
+  buildingSpawnScroll,
+  bulletHitsBuilding,
+  createBuilding,
+  damageBuilding,
+  rollBuildingDrop,
+  spawnBuilding,
+  updateBuilding,
+  validateBuildingFootprint,
+  type Building,
+} from './building';
+
+const DT = 1 / 60;
+const grids = getStageGrids();
+
+function recordingSpawner(): BulletSpawner & { shots: number } {
+  const s = {
+    shots: 0,
+    spawnBullet() {
+      s.shots++;
+    },
+    getBulletCount: () => s.shots,
+  };
+  return s;
+}
+
+function placed(p: BuildingPlacement, scroll: number): Building {
+  const b = createBuilding();
+  b.active = true;
+  spawnBuilding(b, p, scroll);
+  return b;
+}
+
+function sequence(values: number[]): { rng: () => number; calls: () => number } {
+  let i = 0;
+  return { rng: () => values[i++] ?? 0, calls: () => i };
+}
+
+describe('stage 1 building placements', () => {
+  it('uses exactly the four P6 types, with unique ids', () => {
+    const types = new Set(stage1.buildings.map((b) => b.type));
+    expect([...types].sort()).toEqual(['fuel_depot', 'pillbox', 'radar_station', 'sea_gun']);
+    const ids = stage1.buildings.map((b) => b.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('puts pillboxes and depots on the ground, radars at the base, sea guns on the coast', () => {
+    for (const b of stage1.buildings) {
+      const want = {
+        pillbox: 'ground',
+        fuel_depot: 'ground',
+        radar_station: 'base',
+        sea_gun: 'coast',
+      };
+      expect(b.section).toBe(want[b.type]);
+    }
+  });
+
+  it('every footprint passes the terrain check (land on land, water on water, no decor)', () => {
+    for (const p of stage1.buildings) {
+      expect(validateBuildingFootprint(grids, p), p.id).toBe(true);
+    }
+  });
+
+  it('footprints in a section never overlap', () => {
+    const cells = new Set<string>();
+    for (const p of stage1.buildings) {
+      const spec = BUILDING_SPECS[p.type];
+      for (let r = p.row; r < p.row + spec.rows; r++) {
+        for (let c = p.col; c < p.col + spec.cols; c++) {
+          const key = `${p.section}:${r}:${c}`;
+          expect(cells.has(key), key).toBe(false);
+          cells.add(key);
+        }
+      }
+    }
+  });
+
+  it('crosses the whole screen inside its own fully opaque section, before the warning', () => {
+    for (const p of stage1.buildings) {
+      const tIn = buildingSpawnScroll(p) / BG_SCROLL_SPEED;
+      const tOut = buildingExitScroll(p) / BG_SCROLL_SPEED;
+      expect(tIn, p.id).toBeGreaterThan(0);
+      expect(tOut, p.id).toBeLessThan(stage1.warningAt);
+      expect(backgroundFade(tIn, stage1.warningAt)[p.section], p.id).toBe(1);
+      expect(backgroundFade(tOut, stage1.warningAt)[p.section], p.id).toBe(1);
+    }
+  });
+});
+
+describe('footprint validation', () => {
+  const ground = (
+    type: BuildingPlacement['type'],
+    row: number,
+    col: number
+  ): BuildingPlacement => ({
+    id: 'T',
+    type,
+    section: 'ground',
+    row,
+    col,
+  });
+
+  it('rejects decor, roads, water and off-grid footprints', () => {
+    const findTile = (section: 'ground' | 'coast', id: TileId): [number, number] => {
+      const grid = grids[section];
+      for (let r = 0; r < grid.length; r++) {
+        const c = grid[r]!.indexOf(id);
+        if (c >= 0) return [r, c];
+      }
+      throw new Error(`no tile ${id}`);
+    };
+    for (const decor of [TileId.barracks, TileId.bunker, TileId.roadV]) {
+      const [r, c] = findTile('ground', decor);
+      expect(validateBuildingFootprint(grids, ground('pillbox', r, c))).toBe(false);
+    }
+    const [wr, wc] = findTile('coast', TileId.water);
+    expect(
+      validateBuildingFootprint(grids, {
+        id: 'T',
+        type: 'pillbox',
+        section: 'coast',
+        row: wr,
+        col: wc,
+      })
+    ).toBe(false);
+    expect(validateBuildingFootprint(grids, ground('sea_gun', 60, 14))).toBe(false);
+    expect(validateBuildingFootprint(grids, ground('pillbox', -1, 14))).toBe(false);
+    expect(validateBuildingFootprint(grids, ground('fuel_depot', 60, 21))).toBe(false);
+  });
+
+  it('keeps every decor tile out of the land whitelist', () => {
+    const decor = [
+      TileId.barracks,
+      TileId.bunker,
+      TileId.hangar,
+      TileId.hangarRoof,
+      TileId.radar,
+      TileId.pad,
+    ];
+    for (const id of decor) {
+      const grid: TileId[][] = [
+        [id, id, id],
+        [id, id, id],
+      ];
+      const g = { ground: grid, coast: grid, base: grid };
+      expect(validateBuildingFootprint(g, ground('fuel_depot', 0, 0))).toBe(false);
+    }
+  });
+});
+
+describe('building motion', () => {
+  const p = stage1.buildings[0]!;
+
+  it('stays on the tile blit in whole pixels', () => {
+    const { height } = buildingSize(p.type);
+    const origin = mapLayerSpecs()[p.section].origin;
+    for (const scroll of [320, 400.3, 512.75, 777.9]) {
+      const c = buildingCenter(p, scroll);
+      expect(Number.isInteger(c.x)).toBe(true);
+      expect(Number.isInteger(c.y)).toBe(true);
+      const topRow = p.row + BUILDING_SPECS[p.type].rows - 1;
+      const tileTop = mapPixelScreenY(topRow * TILE_SIZE, Math.floor(scroll) - origin);
+      expect(c.y - height / 2).toBe(tileTop);
+    }
+  });
+
+  it('enters at the top edge on its spawn scroll and culls past the bottom', () => {
+    const scroll = buildingSpawnScroll(p);
+    const b = placed(p, scroll);
+    expect(b.y + b.height / 2).toBe(0);
+    const spawner = recordingSpawner();
+    expect(updateBuilding(b, DT, scroll + LOGICAL_H, 180, 560, spawner, true)).toBe(false);
+    expect(updateBuilding(b, DT, buildingExitScroll(p) + 1, 180, 560, spawner, true)).toBe(true);
+  });
+});
+
+describe('building scheduler', () => {
+  it('emits each placement once, in scroll order', () => {
+    const sched = new BuildingScheduler(stage1.buildings, stage1.warningAt);
+    const seen: string[] = [];
+    for (let t = 0; t < stage1.warningAt; t += DT) {
+      for (const p of sched.update(t * BG_SCROLL_SPEED, t)) seen.push(p.id);
+    }
+    expect(seen.sort()).toEqual(stage1.buildings.map((b) => b.id).sort());
+    sched.reset();
+    expect(sched.update(1e9, 0).length).toBe(stage1.buildings.length);
+  });
+
+  it('spawns nothing from the warning on', () => {
+    const sched = new BuildingScheduler(stage1.buildings, stage1.warningAt);
+    expect(sched.update(1e9, stage1.warningAt)).toEqual([]);
+    expect(sched.update(1e9, stage1.boss.enterAt)).toEqual([]);
+  });
+});
+
+describe('building damage and wreck', () => {
+  const p = stage1.buildings[0]!;
+
+  it('has small-fighter HP and its own score', () => {
+    expect(BUILDING_HP).toBe(ENEMY_STATS.small.hp);
+    expect(SCORE_BUILDING).toBeGreaterThan(SCORE_SMALL_FIGHTER);
+  });
+
+  it('turns into a wreck with no hitbox and no tank blocking', () => {
+    const b = placed(p, 600);
+    expect(bulletHitsBuilding(b, b.x, b.y, 4, 12)).toBe(true);
+    expect(buildingBlocksTank(b, b.x + b.width / 2 + 4, b.y)).toBe(true);
+    for (let i = 0; i < BUILDING_HP - 1; i++) expect(damageBuilding(b, 1)).toBe(false);
+    expect(b.hitFlashTimer).toBeGreaterThan(0);
+    expect(damageBuilding(b, 1)).toBe(true);
+    expect(b.wrecked).toBe(true);
+    expect(damageBuilding(b, 1)).toBe(false);
+    expect(bulletHitsBuilding(b, b.x, b.y, 4, 12)).toBe(false);
+    expect(buildingBlocksTank(b, b.x, b.y)).toBe(false);
+  });
+
+  it('misses bullets outside the inset footprint', () => {
+    const b = placed(p, 600);
+    expect(bulletHitsBuilding(b, b.x + b.width / 2 + 3, b.y, 4, 12)).toBe(false);
+  });
+
+  it('stops a tank driving into it, then lets it through once wrecked', () => {
+    const b = placed(p, 600);
+    const tank = createEnemy();
+    spawnEnemy(tank, 'tank', b.x - 80, b.y, { kind: 'ground', entry: 'left' }, { kind: 'none' });
+    const terrain = { blocksTank: (x: number, y: number) => buildingBlocksTank(b, x, y) };
+    for (let i = 0; i < 60 * 6; i++) updateEnemy(tank, DT, 180, 560, 0, terrain);
+    expect(tank.x).toBeLessThanOrEqual(b.x - b.width / 2);
+    damageBuilding(b, BUILDING_HP);
+    for (let i = 0; i < 60 * 6; i++) updateEnemy(tank, DT, 180, 560, 0, terrain);
+    expect(tank.x).toBeGreaterThan(b.x);
+  });
+});
+
+describe('building drops', () => {
+  it('rolls the chance first, then B or P', () => {
+    const none = sequence([BUILDING_DROP_CHANCE]);
+    expect(rollBuildingDrop(none.rng)).toBeNull();
+    expect(none.calls()).toBe(1);
+    expect(rollBuildingDrop(sequence([0, BUILDING_DROP_B_SHARE - 0.001]).rng)).toBe('B');
+    expect(
+      rollBuildingDrop(sequence([BUILDING_DROP_CHANCE - 0.001, BUILDING_DROP_B_SHARE]).rng)
+    ).toBe('P');
+  });
+
+  it('drops half the time, 70% B / 30% P', () => {
+    expect(BUILDING_DROP_CHANCE).toBe(0.5);
+    expect(BUILDING_DROP_B_SHARE).toBe(0.7);
+    let seed = 12345;
+    const rng = () => {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      return seed / 4294967296;
+    };
+    const n = 100000;
+    let drops = 0;
+    let b = 0;
+    for (let i = 0; i < n; i++) {
+      const d = rollBuildingDrop(rng);
+      if (d) drops++;
+      if (d === 'B') b++;
+    }
+    expect(drops / n).toBeCloseTo(0.5, 1);
+    expect(Math.abs(drops / n - 0.5)).toBeLessThan(0.01);
+    expect(Math.abs(b / drops - 0.7)).toBeLessThan(0.01);
+  });
+});
+
+describe('sea gun fire', () => {
+  const sea = stage1.buildings.find((b) => b.type === 'sea_gun')!;
+  const onScreen = buildingSpawnScroll(sea) + 200;
+
+  it('fires a fixed2 pair every SEA_GUN_FIRE_INTERVAL, slower than any ground turret', () => {
+    for (const wave of stage1.waves) {
+      for (const g of wave.groups) {
+        if (g.enemy !== 'turret2' || g.fire.kind !== 'fixed2') continue;
+        expect(SEA_GUN_FIRE_INTERVAL).toBeGreaterThan(g.fire.interval ?? 0);
+      }
+    }
+    const b = placed(sea, onScreen);
+    const spawner = recordingSpawner();
+    const steps = Math.round((SEA_GUN_FIRE_INTERVAL * 3) / DT) + 1;
+    for (let i = 0; i < steps; i++) updateBuilding(b, DT, onScreen, 180, 560, spawner, true);
+    expect(b.shotsFired).toBe(3);
+    expect(spawner.shots).toBe(6);
+  });
+
+  it('holds fire during the warning and once wrecked', () => {
+    const b = placed(sea, onScreen);
+    const spawner = recordingSpawner();
+    for (let i = 0; i < 600; i++) updateBuilding(b, DT, onScreen, 180, 560, spawner, false);
+    expect(spawner.shots).toBe(0);
+    damageBuilding(b, BUILDING_HP);
+    for (let i = 0; i < 600; i++) updateBuilding(b, DT, onScreen, 180, 560, spawner, true);
+    expect(spawner.shots).toBe(0);
+  });
+
+  it('is the only building that fires', () => {
+    for (const p of stage1.buildings.filter((x) => x.type !== 'sea_gun')) {
+      const scroll = buildingSpawnScroll(p) + 200;
+      const b = placed(p, scroll);
+      const spawner = recordingSpawner();
+      for (let i = 0; i < 600; i++) updateBuilding(b, DT, scroll, 180, 560, spawner, true);
+      expect(spawner.shots, p.id).toBe(0);
+    }
+  });
+});
