@@ -8,11 +8,8 @@ import { LOGICAL_W, LOGICAL_H, CONTROL_SCALE_MIN, CONTROL_SCALE_MAX } from '@/ga
 import {
   CONTROL_OPACITY_MIN,
   CONTROL_OPACITY_MAX,
-  TITLE_BACKGROUND_LABEL,
-  TITLE_BACKGROUNDS,
   type Settings,
   type SettingsStore,
-  type TitleBackground,
 } from '@/game/settings';
 import { drawControls } from './controlsOverlay';
 import {
@@ -54,7 +51,6 @@ type Row =
   | ChoiceRow<'muted'>
   | ChoiceRow<'bgmEnabled'>
   | ChoiceRow<'debugMode'>
-  | ChoiceRow<'titleBackground'>
   | SliderRow
   | ActionRow;
 
@@ -128,20 +124,11 @@ const ROWS: Row[] = [
       { value: true, label: '开' },
     ],
   },
-  {
-    kind: 'choice',
-    label: '标题背景',
-    key: 'titleBackground',
-    options: TITLE_BACKGROUNDS.map((value: TitleBackground) => ({
-      value,
-      label: TITLE_BACKGROUND_LABEL[value],
-    })),
-  },
   { kind: 'action', label: '恢复默认', action: 'reset' },
   { kind: 'action', label: '返回', action: 'back' },
 ];
 
-const PANEL: Rect = { x: 16, y: 12, w: LOGICAL_W - 32, h: 524 };
+const PANEL: Rect = { x: 16, y: 24, w: LOGICAL_W - 32, h: 500 };
 const ROW_TOP = PANEL.y + 40;
 const ROW_H = 40;
 const CONTROL_X = 150;

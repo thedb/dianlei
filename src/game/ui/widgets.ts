@@ -3,6 +3,7 @@
  * Chinese labels use the system CJK font until Fusion Pixel Font lands.
  */
 
+import { LOGICAL_H, LOGICAL_W } from '@/game/config';
 import { PALETTE, COLOR } from '@/game/palette';
 
 export interface Rect {
@@ -51,6 +52,20 @@ export function drawText(
 export function drawScrim(ctx: CanvasRenderingContext2D, w: number, h: number): void {
   ctx.fillStyle = UI_COLORS.scrim;
   ctx.fillRect(0, 0, w, h);
+}
+
+/** Dim the attract playfield so the title and boot chrome stay readable. */
+export function drawTitleScrim(ctx: CanvasRenderingContext2D): void {
+  const fade = ctx.createLinearGradient(0, 0, 0, LOGICAL_H);
+  fade.addColorStop(0, 'rgba(4, 8, 18, 0.62)');
+  fade.addColorStop(0.28, 'rgba(4, 8, 18, 0.28)');
+  fade.addColorStop(0.5, 'rgba(4, 8, 18, 0.34)');
+  fade.addColorStop(1, 'rgba(4, 8, 18, 0.66)');
+  ctx.fillStyle = fade;
+  ctx.fillRect(0, 0, LOGICAL_W, LOGICAL_H);
+
+  ctx.fillStyle = 'rgba(4, 8, 18, 0.38)';
+  ctx.fillRect(24, LOGICAL_H / 3 - 48, LOGICAL_W - 48, 150);
 }
 
 export function drawPanel(ctx: CanvasRenderingContext2D, r: Rect): void {

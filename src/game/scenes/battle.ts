@@ -265,8 +265,13 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
   let bombPressed = false;
   let lastBombInput = false;
 
-  // Audio
+  // Audio. The title demo reuses this scene but must stay silent.
   const audio = getAudioSystem();
+  const demo = (): boolean => sceneCtx.playMode === 'attract';
+  function sfx(id: Parameters<typeof audio.play>[0]): void {
+    if (demo()) return;
+    audio.play(id);
+  }
 
   const pauseMenu = createPauseMenu(sceneCtx.settings);
 
@@ -312,10 +317,11 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
       spawnExplosion(boom.x, boom.y, boom.delay, boom.scale);
     }
     if (ev.shake) triggerShake(ev.shake.intensity, ev.shake.duration);
-    if (ev.explosions.length > 0) audio.play('enemyExplode');
+    if (ev.explosions.length > 0) sfx('enemyExplode');
   }
 
   function publishRun(outcome: RunReport['outcome']): void {
+    if (demo()) return;
     const info = waveScheduler?.getDebugInfo();
     sceneCtx.run.report = {
       outcome,
@@ -455,7 +461,7 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
       right.vy = -Math.cos(angleRad) * PLAYER_BULLET_SPEED;
     }
 
-    audio.play('shoot');
+    sfx('shoot');
   }
 
   // Handle player death
@@ -482,7 +488,7 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
       spawnExplosion(player.x + dx, player.y + dy, delay);
     }
     triggerShake(SHAKE_BIG_INTENSITY, SHAKE_BIG_DURATION);
-    audio.play('playerExplode');
+    sfx('playerExplode');
   }
 
   // Bring in a fresh ship from below the screen after the respawn delay
@@ -536,7 +542,7 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
 
     if (boss) applyBossEvents(applyBossBomb(boss, stage1.boss));
     triggerShake(SHAKE_BIG_INTENSITY, SHAKE_BIG_DURATION);
-    audio.play('bomb');
+    sfx('bomb');
   }
 
   // Handle item collection
@@ -544,18 +550,18 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
     if (item.type === 'P') {
       if (state.power < POWER_MAX) {
         state.power++;
-        audio.play('powerUp');
+        sfx('powerUp');
       } else {
         state.score += P_OVERFLOW_SCORE;
-        audio.play('itemPickup');
+        sfx('itemPickup');
       }
     } else {
       if (state.bombs < BOMBS_MAX) {
         state.bombs++;
-        audio.play('itemPickup');
+        sfx('itemPickup');
       } else {
         state.score += B_OVERFLOW_SCORE;
-        audio.play('itemPickup');
+        sfx('itemPickup');
       }
     }
   }
@@ -565,7 +571,7 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
     if (state.score >= state.nextExtendScore) {
       if (state.lives < LIVES_MAX) {
         state.lives++;
-        audio.play('extend');
+        sfx('extend');
       } else {
         state.score += EXTEND_OVERFLOW_SCORE;
       }
@@ -652,8 +658,8 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
       pauseMenu.close();
       sceneCtx.input.setControlsEnabled(true);
 
-      // Initialize assets
-      assets = createGameAssets();
+      // Sprites are immutable. Reuse the bake when the title demo restarts.
+      if (!assets) assets = createGameAssets();
 
       // Reset player
       player.x = LOGICAL_W / 2;
@@ -721,11 +727,11 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
         jumpTo(stage1.boss.enterAt);
       }
 
-      // Initialize audio
-      audio.init();
+      if (!demo()) audio.init();
     },
 
     onHide(): void {
+      if (demo()) return;
       const showcasing = boss?.phase === 'clear' || boss?.phase === 'done';
       if (!pauseMenu.isOpen() && !state.gameOver && !showcasing) openPause();
     },
@@ -739,13 +745,17 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
     },
 
     update(dt: number, input: InputState) {
-      // Unlock audio on first input
-      if (input.buttonA || input.buttonB || input.joystickMagnitude > 0.1 || input.taps.length) {
+      // Unlock audio on first input. The title demo never touches the audio graph.
+      if (
+        !demo() &&
+        (input.buttonA || input.buttonB || input.joystickMagnitude > 0.1 || input.taps.length)
+      ) {
         audio.unlock();
       }
 
-      // Paused: only the menu runs; gameplay state is frozen
-      if (pauseMenu.isOpen()) {
+      // Paused: only the menu runs; gameplay state is frozen.
+      // The title demo has no pause menu.
+      if (!demo() && pauseMenu.isOpen()) {
         const action = pauseMenu.update(input);
         if (action === 'resume') sceneCtx.input.setControlsEnabled(true);
         if (action === 'exit') return 'title';
@@ -753,7 +763,7 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
       }
 
       const showcasing = boss?.phase === 'clear';
-      if (!state.gameOver && !showcasing) {
+      if (!demo() && !state.gameOver && !showcasing) {
         const pauseTapped = input.taps.some((t) =>
           inCircle(t.x, t.y, sceneCtx.input.getControlsView().layout.pauseButton, 8)
         );
@@ -796,14 +806,18 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
       player.prevY = player.y;
 
       if (state.isDead) {
-        state.respawnTimer -= dt;
-        if (state.respawnTimer <= 0) {
-          if (state.lives <= 0) {
-            state.gameOver = true;
-            publishRun('gameover');
-            return 'gameover';
+        // Same death as a real run (life already spent in killPlayer). The title
+        // fades and restarts the demo instead of respawning or going to game over.
+        if (!demo()) {
+          state.respawnTimer -= dt;
+          if (state.respawnTimer <= 0) {
+            if (state.lives <= 0) {
+              state.gameOver = true;
+              publishRun('gameover');
+              return 'gameover';
+            }
+            spawnNewShip();
           }
-          spawnNewShip();
         }
       } else if (state.isFlying) {
         player.y -= ((LOGICAL_H + 40 - PLAYER_SPAWN_Y) / RESPAWN_FLYIN_TIME) * dt;
@@ -825,7 +839,7 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
         gameTime < stage1.boss.enterAt
       ) {
         warningPlayed = true;
-        audio.play('warning');
+        sfx('warning');
       }
 
       // Update player bullets
@@ -991,7 +1005,7 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
               state.score += enemy.score;
               spawnKillExplosion(enemy);
               waveScheduler?.recordKill();
-              audio.play('enemyExplode');
+              sfx('enemyExplode');
 
               // Drop item if carrying
               if (enemy.drop) {
@@ -1001,7 +1015,7 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
 
               enemyPool.release(enemy);
             } else {
-              audio.play('enemyHit');
+              sfx('enemyHit');
             }
           }
         });
@@ -1223,6 +1237,8 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
 
       ctx.restore();
 
+      if (demo()) return;
+
       if (state.bombFlashTimer > 0) {
         const flashAlpha = state.bombFlashTimer / 0.15;
         renderer.fillRect(0, 0, LOGICAL_W, LOGICAL_H, `rgba(255, 255, 255, ${flashAlpha * 0.35})`);
@@ -1345,6 +1361,9 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
         lives: state.lives,
         paused: pauseMenu.isOpen(),
         gameTime,
+        playerDead: state.isDead,
+        activeExplosions: explosionPool.reduce((n, exp) => n + (exp.active ? 1 : 0), 0),
+        waveSpawned: waveScheduler?.getDebugInfo().spawned ?? 0,
       };
       if (boss) info.bossPhase = boss.phase;
       return info;
