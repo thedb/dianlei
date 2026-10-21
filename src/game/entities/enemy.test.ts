@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { FIXED_DT, SIDE_ARC_RADIUS, TURRET_TURN_RATE } from '@/game/config';
+import {
+  FIXED_DT,
+  SIDE_ARC_RADIUS,
+  TANK_DIAG_CLIMB,
+  TANK_DIAG_VX,
+  TANK_ENTRY_SPEED,
+  TURRET_TURN_RATE,
+} from '@/game/config';
 import { ENEMY_STATS, createEnemy, isGroundEnemy, spawnEnemy, updateEnemy } from './enemy';
 
 function step(enemy: ReturnType<typeof createEnemy>, seconds: number, scroll = 0): void {
@@ -22,6 +29,34 @@ describe('enemy movement', () => {
     updateEnemy(enemy, FIXED_DT, 180, 500, 2);
     expect(enemy.y).toBeCloseTo(-10, 5);
     expect(enemy.x).toBeGreaterThan(72);
+  });
+
+  it('drives tanks at no more than half their previous ground speed', () => {
+    expect(TANK_ENTRY_SPEED).toBeLessThanOrEqual(55 / 2);
+    expect(TANK_DIAG_VX).toBeLessThanOrEqual(48 / 2);
+    expect(TANK_DIAG_CLIMB).toBeLessThanOrEqual(100 / 2);
+
+    const side = createEnemy();
+    spawnEnemy(side, 'tank', 0, 200, { kind: 'ground', entry: 'left' }, { kind: 'none' });
+    updateEnemy(side, 1, 180, 500, 0);
+    expect(side.x).toBeCloseTo(TANK_ENTRY_SPEED, 4);
+    expect(side.y).toBeCloseTo(200, 4);
+
+    const diag = createEnemy();
+    spawnEnemy(diag, 'tank', 40, 600, { kind: 'ground', entry: 'bottomLeft' }, { kind: 'none' });
+    updateEnemy(diag, 1, 180, 500, 0);
+    expect(diag.x - 40).toBeCloseTo(TANK_DIAG_VX, 4);
+    expect(600 - diag.y).toBeCloseTo(TANK_DIAG_CLIMB, 4);
+
+    const turret = createEnemy();
+    spawnEnemy(turret, 'turret2', 180, 100, { kind: 'ground' }, { kind: 'none' });
+    updateEnemy(turret, 1, 180, 500, 0);
+    expect(turret.x).toBeCloseTo(180, 5);
+
+    const plane = createEnemy();
+    spawnEnemy(plane, 'small', 0, 0, { kind: 'straight', speed: 150 }, { kind: 'none' });
+    updateEnemy(plane, 1, 180, 500, 0);
+    expect(plane.y).toBeCloseTo(150, 4);
   });
 
   it('drives tanks in from the sides and from the bottom corners', () => {
