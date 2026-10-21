@@ -97,11 +97,13 @@ describe('weapon-test damage log and setters', () => {
     const meter = createDamageMeter();
     meter.record(0, 10);
     meter.record(0.25, PLAYER_BULLET_DAMAGE);
-    expect(meter.total()).toBe(11);
+    const summed = 10 + PLAYER_BULLET_DAMAGE;
+    expect(meter.total()).toBe(summed);
     expect(meter.lastHit()).toBe(PLAYER_BULLET_DAMAGE);
-    expect(meter.dps(0.25)).toBeCloseTo(11 / WEAPON_TEST_DPS_WINDOW);
+    expect(PLAYER_BULLET_DAMAGE).toBe(2);
+    expect(meter.dps(0.25)).toBeCloseTo(summed / WEAPON_TEST_DPS_WINDOW);
     expect(meter.dps(1.25)).toBe(0);
-    expect(meter.total()).toBe(11);
+    expect(meter.total()).toBe(summed);
 
     meter.record(1.25, 4);
     expect(meter.dps(1.25)).toBe(4);
@@ -208,7 +210,9 @@ describe('weapon-test damage log and setters', () => {
   });
 
   it('defaults to the permanent constants, clamps above zero, and resets', () => {
-    expect(formatWeaponTestNumber(FIRE_RATE)).toBe('10');
+    expect(formatWeaponTestNumber(10)).toBe('10');
+    expect(formatWeaponTestNumber(FIRE_RATE)).toBe('5');
+    expect(formatWeaponTestNumber(PLAYER_BULLET_DAMAGE)).toBe('2');
     expect(formatWeaponTestNumber(HOMING_FIRE_RATE)).toBe('1.5');
     expect(formatWeaponTestNumber(HOMING_DAMAGE)).toBe('2.5');
 

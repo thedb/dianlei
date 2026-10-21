@@ -13,9 +13,7 @@ import {
   FIRE_RATE,
   PLAYER_BULLET_DAMAGE,
   HOMING_FIRE_RATE,
-  HOMING_FIRE_RATE_SCALE,
   HOMING_DAMAGE,
-  HOMING_DAMAGE_FACTOR,
   HOMING_MAX_LEVEL,
   BOMB_MEDIUM_RATIO,
   BOMB_BOSS_RATIO,
@@ -77,15 +75,19 @@ describe('Game Config', () => {
     expect(ENEMY_BULLET_CAP).toBe(150);
   });
 
-  it('derives the T homing missile from the main weapon', () => {
-    expect(FIRE_RATE).toBe(10);
-    expect(PLAYER_BULLET_DAMAGE).toBe(1);
-    expect(HOMING_FIRE_RATE_SCALE).toBe(0.9);
-    expect(HOMING_FIRE_RATE).toBeCloseTo((FIRE_RATE / 6) * HOMING_FIRE_RATE_SCALE);
-    expect(HOMING_FIRE_RATE).toBeCloseTo(1.5);
-    expect(HOMING_DAMAGE_FACTOR).toBe(5);
-    expect(HOMING_DAMAGE).toBe((PLAYER_BULLET_DAMAGE / 2) * HOMING_DAMAGE_FACTOR);
+  it('pins vulcan at 5 volleys/s and 2 damage, and pins T at 1.5 / 2.5', () => {
+    expect(FIRE_RATE).toBe(5);
+    expect(PLAYER_BULLET_DAMAGE).toBe(2);
+    // Rate halved and per-bullet damage doubled, so full-hit DPS is unchanged.
+    expect(FIRE_RATE * 1 * PLAYER_BULLET_DAMAGE).toBe(10);
+    expect(FIRE_RATE * 2 * PLAYER_BULLET_DAMAGE).toBe(20);
+    expect(FIRE_RATE * 3 * PLAYER_BULLET_DAMAGE).toBe(30);
+    // T stays at the P9 numbers. It must not scale with the new main values
+    // (that would be (5 / 6) * 0.9 ≈ 0.75 and (2 / 2) * 5 = 5).
+    expect(HOMING_FIRE_RATE).toBe(1.5);
     expect(HOMING_DAMAGE).toBe(2.5);
+    expect(HOMING_FIRE_RATE).not.toBeCloseTo((FIRE_RATE / 6) * 0.9);
+    expect(HOMING_DAMAGE).not.toBe((PLAYER_BULLET_DAMAGE / 2) * 5);
     expect(HOMING_MAX_LEVEL).toBe(2);
     expect(DEATH_POWER_LOSS).toBe(1);
     expect(DEATH_SUB_LOSS).toBe(1);

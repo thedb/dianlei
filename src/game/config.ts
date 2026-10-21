@@ -100,14 +100,18 @@ export const SHAKE_BIG_DURATION = 0.4;
 // §14.4 Firepower
 // ============================================================================
 
-/** Fire rate (shots per second, same for all levels) */
-export const FIRE_RATE = 10;
+/**
+ * Vulcan volleys per second. Same at Lv1–Lv3; a higher level adds bullets.
+ * Full-hit DPS is this times bullets per volley times PLAYER_BULLET_DAMAGE
+ * (Lv1 10, Lv2 20, Lv3 30).
+ */
+export const FIRE_RATE = 5;
 
 /** Player bullet speed */
 export const PLAYER_BULLET_SPEED = 720;
 
-/** Player bullet damage per hit */
-export const PLAYER_BULLET_DAMAGE = 1;
+/** Damage of one vulcan bullet. Lv1 full-hit DPS is FIRE_RATE times this (10). */
+export const PLAYER_BULLET_DAMAGE = 2;
 
 /** Maximum power level */
 export const POWER_MAX = 3;
@@ -126,22 +130,18 @@ export const LV3_SPREAD_DEG = 15;
 export const HOMING_MAX_LEVEL = 2;
 
 /**
- * P9: homing volleys are 10% slower than one sixth of FIRE_RATE.
- * `(FIRE_RATE / 6) * 0.9` is about 1.5 volleys/s.
+ * Homing volleys per second. Pinned at 1.5.
+ * P9 reached 1.5 with `(FIRE_RATE / 6) * 0.9` while FIRE_RATE was 10.
+ * Do not derive this from FIRE_RATE again: the main weapon is now 5/s.
  */
-export const HOMING_FIRE_RATE_SCALE = 0.9;
-
-/** Volleys per second. One sixth of FIRE_RATE, then HOMING_FIRE_RATE_SCALE. */
-export const HOMING_FIRE_RATE = (FIRE_RATE / 6) * HOMING_FIRE_RATE_SCALE;
+export const HOMING_FIRE_RATE = 1.5;
 
 /**
- * P9: each missile deals this many times half a main bullet.
- * The ×5 is the balance change; do not fold it into a bare literal.
+ * Damage per homing missile. Pinned at 2.5.
+ * P9 reached 2.5 with `(PLAYER_BULLET_DAMAGE / 2) * 5` while each main
+ * bullet dealt 1. Do not derive this from PLAYER_BULLET_DAMAGE again.
  */
-export const HOMING_DAMAGE_FACTOR = 5;
-
-/** Damage per missile: half a main bullet, times HOMING_DAMAGE_FACTOR (2.5). */
-export const HOMING_DAMAGE = (PLAYER_BULLET_DAMAGE / 2) * HOMING_DAMAGE_FACTOR;
+export const HOMING_DAMAGE = 2.5;
 
 /** Missile flight speed, pixels/second */
 export const HOMING_SPEED = 330;

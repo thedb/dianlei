@@ -71,19 +71,20 @@ describe('Bullet', () => {
 describe('Fire Rate Timing', () => {
   it('should have correct shot interval', () => {
     const interval = shotInterval(FIRE_RATE);
-    // FIRE_RATE = 10, so interval should be 0.1 seconds
-    expect(interval).toBeCloseTo(0.1);
+    // FIRE_RATE = 5, so the interval is 0.2 seconds
+    expect(FIRE_RATE).toBe(5);
+    expect(interval).toBeCloseTo(0.2);
   });
 
   it('should calculate expected bullet count correctly', () => {
-    // At 10 shots/second, 1 second = 10 bullets
-    expect(expectedBulletCount(1, FIRE_RATE)).toBe(10);
+    // At 5 shots/second, 1 second = 5 bullets
+    expect(expectedBulletCount(1, FIRE_RATE)).toBe(5);
 
-    // 0.5 seconds = 5 bullets
-    expect(expectedBulletCount(0.5, FIRE_RATE)).toBe(5);
+    // 0.5 seconds floors to 2 bullets
+    expect(expectedBulletCount(0.5, FIRE_RATE)).toBe(2);
 
-    // 2 seconds = 20 bullets
-    expect(expectedBulletCount(2, FIRE_RATE)).toBe(20);
+    // 2 seconds = 10 bullets
+    expect(expectedBulletCount(2, FIRE_RATE)).toBe(10);
   });
 
   it('should fire at correct rate over multiple frames', () => {
