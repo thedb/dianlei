@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BG_SCROLL_SPEED,
   FIXED_DT,
   SIDE_ARC_RADIUS,
   TANK_DIAG_CLIMB,
@@ -31,10 +32,11 @@ describe('enemy movement', () => {
     expect(enemy.x).toBeGreaterThan(72);
   });
 
-  it('drives tanks at no more than half their previous ground speed', () => {
-    expect(TANK_ENTRY_SPEED).toBeLessThanOrEqual(55 / 2);
-    expect(TANK_DIAG_VX).toBeLessThanOrEqual(48 / 2);
-    expect(TANK_DIAG_CLIMB).toBeLessThanOrEqual(100 / 2);
+  it('drives tanks slower while bottom-corner tanks still climb on screen', () => {
+    expect(TANK_ENTRY_SPEED).toBe(22);
+    expect(TANK_DIAG_VX).toBe(19);
+    expect(TANK_DIAG_CLIMB).toBe(45);
+    expect(TANK_DIAG_CLIMB).toBeGreaterThan(BG_SCROLL_SPEED);
 
     const side = createEnemy();
     spawnEnemy(side, 'tank', 0, 200, { kind: 'ground', entry: 'left' }, { kind: 'none' });
@@ -47,6 +49,11 @@ describe('enemy movement', () => {
     updateEnemy(diag, 1, 180, 500, 0);
     expect(diag.x - 40).toBeCloseTo(TANK_DIAG_VX, 4);
     expect(600 - diag.y).toBeCloseTo(TANK_DIAG_CLIMB, 4);
+
+    const held = createEnemy();
+    spawnEnemy(held, 'tank', 40, 654, { kind: 'ground', entry: 'bottomLeft' }, { kind: 'none' });
+    updateEnemy(held, 1, 180, 500, BG_SCROLL_SPEED);
+    expect(654 - held.y).toBeCloseTo(TANK_DIAG_CLIMB - BG_SCROLL_SPEED, 4);
 
     const turret = createEnemy();
     spawnEnemy(turret, 'turret2', 180, 100, { kind: 'ground' }, { kind: 'none' });
