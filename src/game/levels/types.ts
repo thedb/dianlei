@@ -34,6 +34,7 @@ export type FireKind =
   | 'fixed2'
   | 'missile'
   | 'aimed_fast3'
+  | 'spiral'
   | 'laser_sweep';
 
 export type Move =
@@ -57,7 +58,8 @@ export type Fire =
       atY?: number;
     }
   | { kind: 'fan3' | 'fan5' | 'fan7wide'; spread: number; interval: number; firstDelay?: number }
-  | { kind: 'ring8' | 'ring16'; interval: number; rotStep: number };
+  | { kind: 'ring8' | 'ring16'; interval: number; rotStep: number }
+  | { kind: 'spiral'; interval: number; arms: number; rotStep: number };
 
 export interface SpawnDrop {
   index: number;
@@ -114,6 +116,17 @@ export interface LaserConfig {
   hitWidth: number;
 }
 
+/** Hard-only final segment. Easy and Medium leave this unused. */
+export interface BossPhase3Config {
+  hp: number;
+  /** Invulnerable beat after the phase-2 core breaks, before the new pattern. */
+  transition: number;
+  /** Seconds on spiral, then the same on aimed, then repeat. */
+  patternHold: number;
+  spiral: { kind: 'spiral'; interval: number; arms: number; rotStep: number };
+  aimed: { kind: 'aimed_fast3'; interval: number };
+}
+
 export interface BossConfig {
   enterAt: number;
   enterDuration: number;
@@ -141,6 +154,8 @@ export interface BossConfig {
       sweep: number;
     };
   };
+  /** Present in the stage data. Only a hard run arms it. */
+  phase3?: BossPhase3Config;
   death: {
     duration: number;
     explosions: number;

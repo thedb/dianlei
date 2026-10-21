@@ -327,7 +327,12 @@ export function drawBossWorld(
 ): void {
   if (boss.phase === 'clear' || boss.phase === 'done') return;
 
-  const open = boss.phase === 'transition' || boss.phase === 'phase2' || boss.phase === 'death';
+  const open =
+    boss.phase === 'transition' ||
+    boss.phase === 'phase2' ||
+    boss.phase === 'transition3' ||
+    boss.phase === 'phase3' ||
+    boss.phase === 'death';
   const hull = open ? assets.hullOpen : assets.hull;
   drawEnemyFlame(ctx, boss.x - 16, boss.y - BOSS_HULL_H / 2 + 6, time);
   drawEnemyFlame(ctx, boss.x + 16, boss.y - BOSS_HULL_H / 2 + 6, time);
@@ -352,12 +357,21 @@ export function drawBossWorld(
   }
 
   const core = bossPart(boss, 'core');
-  if (core && (boss.phase === 'transition' || boss.phase === 'phase2') && core.alive) {
-    const opening = boss.phase === 'transition' ? Math.min(1, boss.phaseTime / 0.5) : 1;
+  const corePhase =
+    boss.phase === 'transition' ||
+    boss.phase === 'phase2' ||
+    boss.phase === 'transition3' ||
+    boss.phase === 'phase3';
+  if (core && corePhase && core.alive) {
+    const opening =
+      boss.phase === 'transition' || boss.phase === 'transition3'
+        ? Math.min(1, boss.phaseTime / 0.5)
+        : 1;
     const pulse = 0.35 + 0.2 * Math.sin(time * 7);
+    const phase3 = boss.phase === 'transition3' || boss.phase === 'phase3';
     ctx.save();
     ctx.globalAlpha = pulse * opening;
-    ctx.fillStyle = PALETTE[COLOR.BULLET_MAGENTA];
+    ctx.fillStyle = PALETTE[phase3 ? COLOR.EXPLOSION_YELLOW : COLOR.BULLET_MAGENTA];
     ctx.beginPath();
     ctx.arc(core.worldX, core.worldY, 16, 0, Math.PI * 2);
     ctx.fill();

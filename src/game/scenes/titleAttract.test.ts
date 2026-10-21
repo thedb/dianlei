@@ -6,6 +6,7 @@ import { stage1 } from '@/game/levels/stage1';
 import { createMemoryStorage, createSettingsStore } from '@/game/settings';
 import { WaveScheduler } from '@/game/systems/waveScheduler';
 import { makeInput } from '@/test/fakes';
+import { DIFFICULTY_EASY_BUTTON } from '@/game/ui/difficultySelect';
 import { START_BUTTON } from '@/game/ui/startButton';
 import { createBattleScene } from './battle';
 import { createTitleScene } from './title';
@@ -198,7 +199,13 @@ describe('title attract demo', () => {
       x: START_BUTTON.x + START_BUTTON.w / 2,
       y: START_BUTTON.y + START_BUTTON.h / 2,
     };
-    expect(title.update(DT, makeInput({ taps: [center] }))).toBe('battle');
+    expect(title.update(DT, makeInput({ taps: [center] }))).toBeNull();
+    expect(attract.stats().fade).toBeGreaterThan(0);
+    const easy = {
+      x: DIFFICULTY_EASY_BUTTON.x + DIFFICULTY_EASY_BUTTON.w / 2,
+      y: DIFFICULTY_EASY_BUTTON.y + DIFFICULTY_EASY_BUTTON.h / 2,
+    };
+    expect(title.update(DT, makeInput({ taps: [easy] }))).toBe('battle');
     expect(attract.stats().fade).toBeGreaterThan(0);
   });
 

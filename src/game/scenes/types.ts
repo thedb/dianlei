@@ -5,6 +5,7 @@
 import type { Renderer, GameDebugInfo } from '@/engine/renderer';
 import type { InputState, InputHandler } from '@/engine/input';
 import type { SettingsStore, SettingsStorage } from '@/game/settings';
+import type { Difficulty } from '@/game/difficulty';
 import type { RunReport } from '@/game/systems/score';
 
 export type SceneId = 'boot' | 'title' | 'battle' | 'result' | 'gameover';
@@ -37,6 +38,12 @@ export interface SceneContext {
    * Retry keeps whatever the last start chose.
    */
   battleEntry: BattleEntry;
+  /**
+   * Chosen on the difficulty overlay for this run, including retry.
+   * Omitted means Easy. Not persisted. Boss practice forces Easy.
+   * The attract demo does not read it.
+   */
+  difficulty?: Difficulty;
   /**
    * `attract` is the silent title demo. It runs the same battle scene, but
    * does not play SFX, publish a run, draw the HUD, or respawn after death.

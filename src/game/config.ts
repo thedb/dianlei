@@ -511,8 +511,40 @@ export const BOSS_HULL_H = 140;
 /** Detached turret sprite, original pixels. */
 export const BOSS_TURRET_SIZE = 40;
 
-/** STAGE CLEAR hold before the result screen. */
-export const BOSS_CLEAR_HOLD = 2;
+/**
+ * After the boss death animation the ship freezes, flies back to the battle
+ * spawn, then leaves through the top before the result screen.
+ * Spawn is `(LOGICAL_W / 2, PLAYER_SPAWN_Y)`, the same point the fly-in parks on.
+ */
+export const VICTORY_EXIT_WAIT = 2;
+/** Scripted return toward the spawn point, pixels/second. */
+export const VICTORY_RETURN_SPEED = 420;
+/** Close enough to the spawn to start the climb, pixels. */
+export const VICTORY_RETURN_ARRIVE = 1.5;
+/** Upward speed at the moment the climb starts, pixels/second. */
+export const VICTORY_FLYOFF_SPEED = 360;
+/** Upward acceleration during the climb, pixels/second². */
+export const VICTORY_FLYOFF_ACCEL = 1600;
+/** The climb ends once the ship is this far above the top edge. */
+export const VICTORY_FLYOFF_MARGIN = 48;
+
+/** Enemy / building / boss HP scale. Easy is the authored table. */
+export const DIFFICULTY_HP_EASY = 1;
+export const DIFFICULTY_HP_MEDIUM = 1.15;
+export const DIFFICULTY_HP_HARD = 1.3;
+
+/**
+ * Hard-only third boss segment (wave table §5.5). Authored before the HP scale,
+ * so a hard run multiplies it by `DIFFICULTY_HP_HARD` with everything else.
+ * Spiral shots are small and slow; aimed volleys are the existing fast triple.
+ */
+export const BOSS_PHASE3_HP = 240;
+export const BOSS_PHASE3_TRANSITION = 1.2;
+export const BOSS_PHASE3_PATTERN_HOLD = 3;
+export const BOSS_PHASE3_SPIRAL_INTERVAL = 0.18;
+export const BOSS_PHASE3_SPIRAL_ARMS = 2;
+export const BOSS_PHASE3_SPIRAL_ROT = 22;
+export const BOSS_PHASE3_AIMED_INTERVAL = 1.15;
 
 /** Boss HP bar starts filling this long after warningAt (2:33). */
 export const BOSS_HP_BAR_FILL_START = 3;

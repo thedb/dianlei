@@ -9,6 +9,7 @@ import {
   LV3_SPREAD_DEG,
   PLAYER_BULLET_SPEED,
 } from '@/game/config';
+import { bossUsesPhase3, prepareBossConfig } from '@/game/difficulty';
 import { stage1 } from '@/game/levels/stage1';
 import {
   applyBossBomb,
@@ -20,6 +21,7 @@ import {
   bossPart,
   bossTotalHp,
   createBoss,
+  releaseBossResult,
   resolveBossBullet,
   splitBombDamage,
   updateBoss,
@@ -381,8 +383,103 @@ describe('boss phases', () => {
     expect(boss.phase).toBe('clear');
 
     const wait = updateBoss(boss, 2, cfg);
-    expect(wait.enterResult).toBe(true);
+    expect(wait.enterResult).toBe(false);
+    expect(boss.phase).toBe('clear');
+    const released = releaseBossResult(boss);
+    expect(released.enterResult).toBe(true);
     expect(boss.phase).toBe('done');
     expect(updateBoss(boss, 1, cfg).enterResult).toBe(false);
+    expect(releaseBossResult(boss).enterResult).toBe(false);
+  });
+});
+
+function killCore(boss: BossRuntime, config: typeof cfg) {
+  const core = bossPart(boss, 'core')!;
+  return resolveBossBullet(boss, { x: core.worldX, y: core.worldY, w: 4, h: 12 }, core.hp, config);
+}
+
+function reachPhase2(config: typeof cfg, phase3: boolean): BossRuntime {
+  const boss = createBoss(config, { phase3 });
+  updateBoss(boss, config.enterDuration, config);
+  const left = bossPart(boss, 'turretL')!;
+  const right = bossPart(boss, 'turretR')!;
+  resolveBossBullet(boss, { x: left.worldX, y: left.worldY, w: 4, h: 12 }, left.hp, config);
+  resolveBossBullet(boss, { x: right.worldX, y: right.worldY, w: 4, h: 12 }, right.hp, config);
+  updateBoss(boss, config.transition.duration, config);
+  return boss;
+}
+
+describe('boss difficulty phases', () => {
+  it('keeps Easy and Medium on the two-phase core kill', () => {
+    expect(bossUsesPhase3('easy')).toBe(false);
+    expect(bossUsesPhase3('medium')).toBe(false);
+    expect(bossUsesPhase3('hard')).toBe(true);
+
+    const easy = reachPhase2(cfg, false);
+    expect(easy.phase3Armed).toBe(false);
+    expect(killCore(easy, cfg).score).toBe(30000);
+    expect(easy.phase).toBe('death');
+
+    const mediumCfg = prepareBossConfig(stage1.boss, 'medium');
+    const medium = reachPhase2(mediumCfg, false);
+    expect(bossPart(medium, 'turretL')!.maxHp).toBeCloseTo(140 * 1.15);
+    expect(bossPart(medium, 'core')!.hp).toBeCloseTo(560 * 1.15);
+    expect(medium.phase3Armed).toBe(false);
+    expect(killCore(medium, mediumCfg).score).toBe(30000);
+    expect(medium.phase).toBe('death');
+    for (let i = 0; i < 8; i++) {
+      const ev = updateBoss(medium, 0.5, mediumCfg);
+      expect(ev.shots.some((shot) => shot.fire.kind === 'spiral')).toBe(false);
+      expect(medium.phase === 'phase3' || medium.phase === 'transition3').toBe(false);
+    }
+  });
+
+  it('opens a hard phase-3 segment that switches spiral then aimed', () => {
+    const hardCfg = prepareBossConfig(stage1.boss, 'hard');
+    const phase3 = hardCfg.phase3!;
+    const boss = reachPhase2(hardCfg, true);
+    expect(boss.phase).toBe('phase2');
+    expect(boss.fightMax).toBeCloseTo((140 + 140 + 560 + 240) * 1.3);
+    expect(bossPart(boss, 'core')!.hp).toBeCloseTo(560 * 1.3);
+
+    const broke = killCore(boss, hardCfg);
+    expect(broke.score).toBe(0);
+    expect(broke.convertBullets).toBe(true);
+    expect(boss.phase).toBe('transition3');
+    expect(boss.invulnerable).toBe(true);
+    expect(bossPart(boss, 'core')!.hp).toBeCloseTo(240 * 1.3);
+    expect(applyBossBomb(boss, hardCfg).score).toBe(0);
+
+    updateBoss(boss, phase3.transition, hardCfg);
+    expect(boss.phase).toBe('phase3');
+    expect(boss.pattern).toBe('spiral');
+    expect(boss.invulnerable).toBe(false);
+
+    const spiral = updateBoss(boss, phase3.spiral.interval, hardCfg);
+    expect(spiral.shots.map((shot) => shot.fire.kind)).toContain('spiral');
+    expect(spiral.shots.some((shot) => shot.fire.kind === 'aimed_fast3')).toBe(false);
+    const rot0 = spiral.shots[0]?.rotation ?? 0;
+
+    const again = updateBoss(boss, phase3.spiral.interval, hardCfg);
+    const rot1 = again.shots.find((shot) => shot.fire.kind === 'spiral')?.rotation ?? rot0;
+    expect(rot1).not.toBe(rot0);
+
+    const remain = phase3.patternHold - phase3.spiral.interval * 2;
+    updateBoss(boss, remain, hardCfg);
+    expect(boss.pattern).toBe('aimed');
+
+    const aimed = updateBoss(boss, phase3.aimed.interval, hardCfg);
+    expect(aimed.shots.some((shot) => shot.fire.kind === 'aimed_fast3')).toBe(true);
+    expect(aimed.shots.some((shot) => shot.fire.kind === 'spiral')).toBe(false);
+
+    const core = bossPart(boss, 'core')!;
+    const death = resolveBossBullet(
+      boss,
+      { x: core.worldX, y: core.worldY, w: 4, h: 12 },
+      core.hp,
+      hardCfg
+    );
+    expect(death.score).toBe(30000);
+    expect(boss.phase).toBe('death');
   });
 });

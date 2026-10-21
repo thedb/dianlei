@@ -8,7 +8,6 @@ import {
   AIMED_BURST_GAP,
   BOMB_BOSS_RATIO,
   BOSS_ANCHOR_X,
-  BOSS_CLEAR_HOLD,
   BOSS_ENTER_Y,
   BOSS_HP_BAR_FILL_START,
   BOSS_HULL_H,
@@ -25,7 +24,16 @@ import {
 import type { BossConfig, BossPartId, Fire, FireKind } from '@/game/levels/types';
 import { checkBulletEnemyCollision, segmentCircleCollision } from '@/game/systems/collision';
 
-export type BossPhase = 'enter' | 'phase1' | 'transition' | 'phase2' | 'death' | 'clear' | 'done';
+export type BossPhase =
+  | 'enter'
+  | 'phase1'
+  | 'transition'
+  | 'phase2'
+  | 'transition3'
+  | 'phase3'
+  | 'death'
+  | 'clear'
+  | 'done';
 
 export interface BossPartRuntime {
   id: BossPartId;
@@ -87,6 +95,15 @@ export interface BossRuntime {
   intervalMulL: number;
   intervalMulR: number;
   resultSent: boolean;
+  /** Hard run only. The phase-3 HP segment is banked until the phase-2 core breaks. */
+  phase3Armed: boolean;
+  phase3Max: number;
+  /** Parts plus the armed phase-3 segment. Bomb damage is 8% of this. */
+  fightMax: number;
+  /** Which phase-3 volley is live. Ignored before phase 3. */
+  pattern: 'spiral' | 'aimed';
+  patternTime: number;
+  spiralRot: number;
 }
 
 export interface BossExplosion {
@@ -186,6 +203,24 @@ export function bossHpRemaining(boss: BossRuntime): number {
   return boss.parts.reduce((sum, part) => sum + Math.max(0, part.hp), 0);
 }
 
+/**
+ * HP bar fill. The phase-3 segment is already in the bar during phases 1–2,
+ * then moves onto the core when that segment becomes the live target.
+ */
+export function bossBarRatio(boss: BossRuntime): number {
+  const max = Math.max(1, boss.fightMax);
+  const banked =
+    boss.phase3Armed &&
+    boss.phase !== 'transition3' &&
+    boss.phase !== 'phase3' &&
+    boss.phase !== 'death' &&
+    boss.phase !== 'clear' &&
+    boss.phase !== 'done'
+      ? boss.phase3Max
+      : 0;
+  return (bossHpRemaining(boss) + banked) / max;
+}
+
 export function bossPart(boss: BossRuntime, id: BossPartId): BossPartRuntime | undefined {
   return boss.parts.find((part) => part.id === id);
 }
@@ -215,7 +250,13 @@ export function bossIntroBarFill(
   return clamp01((gameTime - start) / span);
 }
 
-export function createBoss(config: BossConfig): BossRuntime {
+export interface BossSpawnOptions {
+  /** Arm the hard-only spiral / aimed segment. Easy and Medium leave this false. */
+  phase3?: boolean;
+}
+
+export function createBoss(config: BossConfig, options: BossSpawnOptions = {}): BossRuntime {
+  const phase3Max = options.phase3 && config.phase3 ? config.phase3.hp : 0;
   const boss: BossRuntime = {
     phase: 'enter',
     x: BOSS_ANCHOR_X,
@@ -262,7 +303,14 @@ export function createBoss(config: BossConfig): BossRuntime {
     intervalMulL: 1,
     intervalMulR: 1,
     resultSent: false,
+    phase3Armed: phase3Max > 0,
+    phase3Max,
+    fightMax: 0,
+    pattern: 'spiral',
+    patternTime: 0,
+    spiralRot: 0,
   };
+  boss.fightMax = boss.parts.reduce((sum, part) => sum + part.maxHp, 0) + phase3Max;
   syncParts(boss);
   return boss;
 }
@@ -316,6 +364,28 @@ export function updateBoss(boss: BossRuntime, dt: number, config: BossConfig): B
     boss.driftTime += dt;
     drift(boss, config);
     attackDt = dt;
+  } else if (boss.phase === 'transition3') {
+    boss.phaseTime += dt;
+    boss.driftTime += dt;
+    drift(boss, config);
+    const duration = Math.max(0.0001, config.phase3?.transition ?? 1);
+    if (boss.phaseTime >= duration) {
+      const leftover = boss.phaseTime - duration;
+      boss.phase = 'phase3';
+      boss.phaseTime = leftover;
+      boss.invulnerable = false;
+      boss.pattern = 'spiral';
+      boss.patternTime = 0;
+      boss.spiralRot = 0;
+      boss.guns.ring = freshGun();
+      boss.guns.aimed = freshGun();
+      attackDt = leftover;
+    }
+  } else if (boss.phase === 'phase3') {
+    boss.phaseTime += dt;
+    boss.driftTime += dt;
+    drift(boss, config);
+    attackDt = dt;
   } else if (boss.phase === 'death') {
     boss.phaseTime += dt;
     spawnDueDeathExplosions(boss, config, ev);
@@ -324,12 +394,8 @@ export function updateBoss(boss: BossRuntime, dt: number, config: BossConfig): B
       boss.phaseTime = 0;
     }
   } else if (boss.phase === 'clear') {
+    // The victory fly-off owns the wait. `releaseBossResult` opens the result.
     boss.phaseTime += dt;
-    if (!boss.resultSent && boss.phaseTime >= BOSS_CLEAR_HOLD) {
-      boss.resultSent = true;
-      boss.phase = 'done';
-      ev.enterResult = true;
-    }
   }
 
   fallDebris(boss, dt);
@@ -338,6 +404,17 @@ export function updateBoss(boss: BossRuntime, dt: number, config: BossConfig): B
 
   if (attackDt > 0 && boss.phase === 'phase1') tickPhase1(boss, attackDt, config, ev);
   if (attackDt > 0 && boss.phase === 'phase2') tickPhase2(boss, attackDt, config, ev);
+  if (attackDt > 0 && boss.phase === 'phase3') tickPhase3(boss, attackDt, config, ev);
+  return ev;
+}
+
+/** Death animation is over and the fly-off has left the screen. Opens the result once. */
+export function releaseBossResult(boss: BossRuntime): BossEvents {
+  const ev = emptyBossEvents();
+  if (boss.phase !== 'clear' || boss.resultSent) return ev;
+  boss.resultSent = true;
+  boss.phase = 'done';
+  ev.enterResult = true;
   return ev;
 }
 
@@ -347,14 +424,14 @@ export function applyBossBomb(boss: BossRuntime, config: BossConfig): BossEvents
 
   if (!canTakeDamage(boss)) return ev;
 
-  const amount = bossBombDamage(bossTotalHp(config));
+  const amount = bossBombDamage(boss.fightMax);
   if (boss.phase === 'phase1') {
     const living = boss.parts.filter((part) => part.phase === 1 && part.alive);
     const shares = splitBombDamage(amount, living.length);
     living.forEach((part, index) => {
       hurtPart(boss, part, shares[index] ?? 0, ev, config);
     });
-  } else if (boss.phase === 'phase2') {
+  } else if (boss.phase === 'phase2' || boss.phase === 'phase3') {
     const core = bossPart(boss, 'core');
     if (core) hurtPart(boss, core, amount, ev, config);
   }
@@ -468,6 +545,57 @@ function tickPhase1(boss: BossRuntime, dt: number, config: BossConfig, ev: BossE
   const count = pullShots(boss.guns.hull, dt, interval, first, phase.hull.kind);
   for (let i = 0; i < count; i++) {
     ev.shots.push({ fire: phase.hull, x: boss.x, y: boss.y, rotation: 0 });
+  }
+}
+
+function tickPhase3(boss: BossRuntime, dt: number, config: BossConfig, ev: BossEvents): void {
+  const phase = config.phase3;
+  if (!phase) return;
+  const core = bossPart(boss, 'core');
+  const originX = core?.worldX ?? boss.x;
+  const originY = core?.worldY ?? boss.y;
+  let left = dt;
+  const hold = Math.max(0.05, phase.patternHold);
+
+  for (let guard = 0; guard < 4 && left > 1e-8; guard++) {
+    const untilSwitch = hold - boss.patternTime;
+    const slice = Math.min(left, Math.max(0, untilSwitch));
+    if (slice > 0) {
+      firePhase3Slice(boss, phase, slice, originX, originY, ev);
+      boss.patternTime += slice;
+      left -= slice;
+    }
+    if (boss.patternTime + 1e-9 < hold) return;
+    boss.patternTime = 0;
+    boss.pattern = boss.pattern === 'spiral' ? 'aimed' : 'spiral';
+    boss.guns.ring = freshGun();
+    boss.guns.aimed = freshGun();
+    if (left <= 1e-8) return;
+  }
+}
+
+function firePhase3Slice(
+  boss: BossRuntime,
+  phase: NonNullable<BossConfig['phase3']>,
+  dt: number,
+  originX: number,
+  originY: number,
+  ev: BossEvents
+): void {
+  if (boss.pattern === 'spiral') {
+    const fire = phase.spiral;
+    const count = pullShots(boss.guns.ring, dt, fire.interval, fire.interval, fire.kind);
+    for (let i = 0; i < count; i++) {
+      ev.shots.push({ fire, x: originX, y: originY, rotation: boss.spiralRot });
+      boss.spiralRot += fire.rotStep;
+    }
+    return;
+  }
+  const fire = phase.aimed;
+  const interval = fireInterval(fire);
+  const count = pullShots(boss.guns.aimed, dt, interval, interval, fire.kind);
+  for (let i = 0; i < count; i++) {
+    ev.shots.push({ fire, x: originX, y: originY, rotation: 0 });
   }
 }
 
@@ -663,9 +791,9 @@ function killPart(
   if (!part.alive) return;
   part.alive = false;
   part.hp = 0;
-  ev.score += part.score;
 
   if (part.id === 'turretL' || part.id === 'turretR') {
+    ev.score += part.score;
     part.falling = true;
     part.fallVy = BOSS_TURRET_FALL_SPEED;
     ev.explosions.push({ x: part.worldX, y: part.worldY, delay: 0, size: 'medium' });
@@ -679,7 +807,14 @@ function killPart(
     return;
   }
 
-  if (part.id === 'core') beginDeath(boss, ev, config);
+  if (part.id === 'core') {
+    if (boss.phase === 'phase2' && boss.phase3Armed && config.phase3) {
+      beginPhase3(boss, part, ev, config);
+      return;
+    }
+    ev.score += part.score;
+    beginDeath(boss, ev, config);
+  }
 }
 
 function survivorScale(config: BossConfig): number {
@@ -694,6 +829,29 @@ function beginTransition(boss: BossRuntime, ev: BossEvents): void {
   boss.phaseTime = 0;
   boss.invulnerable = true;
   boss.laser.mode = 'idle';
+  ev.convertBullets = true;
+}
+
+function beginPhase3(
+  boss: BossRuntime,
+  core: BossPartRuntime,
+  ev: BossEvents,
+  config: BossConfig
+): void {
+  const phase = config.phase3;
+  if (!phase || boss.phase !== 'phase2') return;
+  core.alive = true;
+  core.falling = false;
+  core.hp = phase.hp;
+  core.maxHp = phase.hp;
+  boss.phase = 'transition3';
+  boss.phaseTime = 0;
+  boss.invulnerable = true;
+  boss.laser.mode = 'idle';
+  boss.enraged = false;
+  boss.pattern = 'spiral';
+  boss.patternTime = 0;
+  boss.spiralRot = 0;
   ev.convertBullets = true;
 }
 
@@ -730,13 +888,17 @@ function emitDeathExplosion(boss: BossRuntime, index: number, ev: BossEvents): v
 }
 
 function refreshEnrage(boss: BossRuntime, config: BossConfig): void {
+  if (boss.phase !== 'phase2') return;
   const core = bossPart(boss, 'core');
   if (!core) return;
   if (core.hp <= core.maxHp * config.phase2.enrageAtHpRatio) boss.enraged = true;
 }
 
 function canTakeDamage(boss: BossRuntime): boolean {
-  return (boss.phase === 'phase1' || boss.phase === 'phase2') && !boss.invulnerable;
+  return (
+    (boss.phase === 'phase1' || boss.phase === 'phase2' || boss.phase === 'phase3') &&
+    !boss.invulnerable
+  );
 }
 
 function bossBlocksShots(boss: BossRuntime): boolean {
@@ -744,7 +906,9 @@ function bossBlocksShots(boss: BossRuntime): boolean {
     boss.phase === 'enter' ||
     boss.phase === 'phase1' ||
     boss.phase === 'transition' ||
-    boss.phase === 'phase2'
+    boss.phase === 'phase2' ||
+    boss.phase === 'transition3' ||
+    boss.phase === 'phase3'
   );
 }
 
@@ -753,7 +917,7 @@ function bossThreatens(boss: BossRuntime): boolean {
 }
 
 function damageableParts(boss: BossRuntime): BossPartRuntime[] {
-  if (boss.phase === 'phase2') {
+  if (boss.phase === 'phase2' || boss.phase === 'phase3' || boss.phase === 'transition3') {
     return boss.parts.filter((part) => part.phase === 2 && part.alive && !part.falling);
   }
   if (boss.phase === 'enter' || boss.phase === 'phase1' || boss.phase === 'transition') {
@@ -781,7 +945,8 @@ function syncParts(boss: BossRuntime): void {
 
 function fireInterval(fire: Fire): number {
   if (fire.kind === 'none') return 2;
-  if (fire.kind === 'ring8' || fire.kind === 'ring16') return fire.interval;
+  if (fire.kind === 'ring8' || fire.kind === 'ring16' || fire.kind === 'spiral')
+    return fire.interval;
   return fire.interval ?? 2;
 }
 

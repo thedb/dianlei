@@ -49,10 +49,13 @@ import {
   WARNING_BANNER_DELAY,
   SHAKE_BIG_INTENSITY,
   SHAKE_BIG_DURATION,
+  BUILDING_HP,
 } from '@/game/config';
+import { bossUsesPhase3, prepareBossConfig, scaleHp, type Difficulty } from '@/game/difficulty';
 import { getStageGrids } from '@/game/art/tiles';
 import { PALETTE, COLOR } from '@/game/palette';
 import { stage1 } from '@/game/levels/stage1';
+import type { BossConfig } from '@/game/levels/types';
 
 // Art assets
 import {
@@ -86,6 +89,7 @@ import {
 // Entities
 import { createBullet, type Bullet } from '@/game/entities/bullet';
 import {
+  ENEMY_STATS,
   createEnemy,
   spawnEnemy,
   updateEnemy,
@@ -171,18 +175,25 @@ import {
 import { buildingClass, enemyClass } from '@/game/entities/objectClass';
 import {
   applyBossBomb,
+  bossBarRatio,
   bossHitsPlayer,
-  bossHpRemaining,
   bossIntroBarFill,
   bossLaserHits,
   bossMissileTargets,
-  bossTotalHp,
   createBoss,
+  releaseBossResult,
   resolveBossBullet,
   updateBoss,
   type BossEvents,
   type BossRuntime,
 } from '@/game/systems/boss';
+import {
+  createVictoryExit,
+  resetVictoryExit,
+  stepVictoryExit,
+  victoryExitBlocksInput,
+  type VictoryExit,
+} from '@/game/systems/victoryExit';
 import { introBanner, type RunReport } from '@/game/systems/score';
 import {
   Scroller,
@@ -381,6 +392,8 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
   }
 
   let boss: BossRuntime | null = null;
+  let bossCfg: BossConfig = stage1.boss;
+  const victory: VictoryExit = createVictoryExit();
   let warningPlayed = false;
   let finishedAt: number | null = null;
   let shakeLeft = 0;
@@ -569,6 +582,19 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
   }
 
   /** Debug skip (wave table §8.3). Does not spawn the ships that were jumped over. */
+  function runDifficulty(): Difficulty {
+    if (demo() || weaponTest()) return 'easy';
+    return sceneCtx.difficulty ?? 'easy';
+  }
+
+  function armBossConfig(): void {
+    bossCfg = prepareBossConfig(stage1.boss, runDifficulty());
+  }
+
+  function spawnBoss(): BossRuntime {
+    return createBoss(bossCfg, { phase3: bossUsesPhase3(runDifficulty()) });
+  }
+
   function jumpTo(time: number): void {
     gameTime = time;
     waveScheduler?.reset();
@@ -583,7 +609,8 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
     buildingPool.releaseAll();
     buildingScheduler.reset();
     clearFx();
-    boss = time >= stage1.boss.enterAt ? createBoss(stage1.boss) : null;
+    boss = time >= stage1.boss.enterAt ? spawnBoss() : null;
+    resetVictoryExit(victory);
     warningPlayed = time >= stage1.warningAt + WARNING_BANNER_DELAY;
     scrollFrame = {
       ...scrollFrame,
@@ -763,11 +790,11 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
   }
 
   function isPlayerControllable(): boolean {
-    return !state.isDead && !state.isFlying;
+    return !state.isDead && !state.isFlying && !victoryExitBlocksInput(victory.phase);
   }
 
   function isPlayerVulnerable(): boolean {
-    return isVulnerable(state);
+    return isVulnerable(state) && !victoryExitBlocksInput(victory.phase);
   }
 
   // Bomb: clear bullets now, then hit what was on screen as the ring reaches it
@@ -794,7 +821,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       if (!b.wrecked) markBombTarget(b, player.x, player.y);
     });
 
-    if (boss) applyBossEvents(applyBossBomb(boss, stage1.boss));
+    if (boss) applyBossEvents(applyBossBomb(boss, bossCfg));
     sfx('bomb');
   }
 
@@ -1081,6 +1108,8 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       bombPressed = false;
       lastBombInput = false;
       boss = null;
+      armBossConfig();
+      resetVictoryExit(victory);
       warningPlayed = false;
       finishedAt = null;
       shakeLeft = 0;
@@ -1200,6 +1229,10 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
             spawnNewShip();
           }
         }
+      } else if (victoryExitBlocksInput(victory.phase)) {
+        player.bank = 0;
+        player.targetBank = 0;
+        player.velocityY = victory.phase === 'flyoff' ? -1 : 0;
       } else if (state.isFlying) {
         player.y -= ((LOGICAL_H + 40 - PLAYER_SPAWN_Y) / RESPAWN_FLYIN_TIME) * dt;
         if (player.y <= PLAYER_SPAWN_Y) {
@@ -1252,6 +1285,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
         if (!pastWarning) {
           for (const spawn of spawns) {
             const enemy = enemyPool.acquire();
+            const baseHp = spawn.hp ?? ENEMY_STATS[spawn.type].hp;
             spawnEnemy(
               enemy,
               spawn.type,
@@ -1260,7 +1294,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
               spawn.move,
               spawn.canFire ? spawn.fire : { kind: 'none' },
               spawn.drop,
-              spawn.hp,
+              scaleHp(baseHp, runDifficulty()),
               spawn.score
             );
           }
@@ -1268,14 +1302,19 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       }
 
       if (!weaponTest() && !boss && gameTime >= stage1.boss.enterAt) {
-        boss = createBoss(stage1.boss);
+        boss = spawnBoss();
       }
 
       // Buildings ride the tile map. Footprints are checked against the real grid on spawn.
       if (!weaponTest()) {
         for (const placement of buildingScheduler.update(scrollFrame.scroll, gameTime)) {
           if (!validateBuildingFootprint(getStageGrids(), placement)) continue;
-          spawnBuilding(buildingPool.acquire(), placement, scrollFrame.scroll);
+          spawnBuilding(
+            buildingPool.acquire(),
+            placement,
+            scrollFrame.scroll,
+            scaleHp(BUILDING_HP, runDifficulty())
+          );
         }
         const buildingsToRelease: Building[] = [];
         buildingPool.forEach((b) => {
@@ -1330,12 +1369,31 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       missilesToRelease.forEach((m) => missilePool.release(m));
 
       if (boss && boss.phase !== 'done') {
-        const ev = updateBoss(boss, dt, stage1.boss);
+        const ev = updateBoss(boss, dt, bossCfg);
         applyBossEvents(ev);
         if (boss.phase === 'clear' && finishedAt === null) finishedAt = gameTime;
-        if (ev.enterResult) {
-          publishRun('clear');
-          return 'result';
+        if (!demo()) {
+          const cue = stepVictoryExit(
+            victory,
+            boss.phase,
+            dt,
+            player.x,
+            player.y,
+            LOGICAL_W / 2,
+            PLAYER_SPAWN_Y
+          );
+          if (victoryExitBlocksInput(victory.phase)) {
+            player.x = victory.x;
+            player.y = victory.y;
+          }
+          if (cue === 'victory') {
+            const done = releaseBossResult(boss);
+            applyBossEvents(done);
+            if (done.enterResult) {
+              publishRun('clear');
+              return 'result';
+            }
+          }
         }
       }
 
@@ -1410,7 +1468,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
             boss,
             { x: bullet.x, y: bullet.y, w: bullet.width, h: bullet.height },
             bullet.damage,
-            stage1.boss
+            bossCfg
           );
           if (hit.consumedBullet) {
             spawnHitSpark(bullet.x, bullet.y);
@@ -1468,7 +1526,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
             boss,
             { x: m.x, y: m.y, w: size, h: size },
             m.damage,
-            stage1.boss
+            bossCfg
           );
           if (hit.consumedBullet) {
             spawnHitSpark(m.x, m.y);
@@ -1524,7 +1582,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       if (isPlayerVulnerable() && boss && bossHitsPlayer(boss, player.x, player.y)) {
         killPlayer();
       }
-      if (isPlayerVulnerable() && boss && bossLaserHits(boss, stage1.boss, player.x, player.y)) {
+      if (isPlayerVulnerable() && boss && bossLaserHits(boss, bossCfg, player.x, player.y)) {
         killPlayer();
       }
       if (isPlayerVulnerable()) {
@@ -1677,7 +1735,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       });
       ctx.globalAlpha = 1;
 
-      if (boss) drawBossLaser(ctx, boss, stage1.boss, gameTime);
+      if (boss) drawBossLaser(ctx, boss, bossCfg, gameTime);
 
       // Draw player bullets with glow
       bulletPool.forEach((bullet) => {
@@ -1847,7 +1905,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
         const barIntro = bossIntroBarFill(gameTime, stage1.warningAt, stage1.boss.enterAt);
         let barFill: number | null = barIntro;
         if (barFill === null && boss && boss.phase !== 'clear' && boss.phase !== 'done') {
-          barFill = bossHpRemaining(boss) / Math.max(1, bossTotalHp(stage1.boss));
+          barFill = bossBarRatio(boss);
         }
         if (barFill !== null) drawBossHpBar(ctx, barFill, 48, 32, 264, 8);
 
@@ -1880,9 +1938,8 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       // Pause menu overlay
       pauseMenu.render(ctx, controlsView, { stage: 1, score: state.score });
 
-      if (boss?.phase === 'clear') {
-        renderer.fillRect(0, 0, LOGICAL_W, LOGICAL_H, 'rgba(0, 0, 0, 0.55)');
-        renderer.fillText('STAGE CLEAR', LOGICAL_W / 2 - 66, LOGICAL_H / 2 - 16, '#7dff9a', 18);
+      if (boss?.phase === 'clear' && victory.phase === 'wait') {
+        renderer.fillText('STAGE CLEAR', LOGICAL_W / 2 - 66, 72, '#7dff9a', 18);
       }
     },
 
