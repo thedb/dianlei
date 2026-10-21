@@ -183,6 +183,11 @@ import {
   bulletHitsWeaponTarget,
   clampWeaponTestBombs,
   createDamageMeter,
+  createWeaponTestTune,
+  emitWithDamage,
+  formatWeaponTestNumber,
+  resetWeaponTestTune,
+  stepWeaponTestTune,
   weaponTestBombCountRect,
   weaponTestBombDecRect,
   weaponTestBombIncRect,
@@ -191,9 +196,17 @@ import {
   weaponTestResetRect,
   weaponTestRowLabelY,
   weaponTestSubRect,
+  weaponTestTuneDecRect,
+  weaponTestTuneIncRect,
+  weaponTestTuneRow,
+  weaponTestTuneValueRect,
+  weaponTestVolleyDamage,
+  weaponTestVolleyRate,
   WEAPON_TEST_CTRL_PANEL,
   WEAPON_TEST_STATS_PANEL,
   WEAPON_TEST_TARGET,
+  WEAPON_TEST_TUNE_FIELDS,
+  WEAPON_TEST_TUNE_LABEL,
   type WeaponTestCommand,
   type WeaponTestStats,
 } from './weaponTest';
@@ -350,8 +363,16 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
   // Wave scheduler — full stage, not the MVP subset
   let waveScheduler: WaveScheduler | null = null;
 
-  // Fire clocks, one per weapon slot
-  const volleyInterval = (w: EquippedWeapon): number => 1 / weaponLevel(w.id, w.level).rate;
+  // Session-only rate and damage. Stage, boss practice, and attract ignore it.
+  const weaponTune = createWeaponTestTune();
+
+  // Fire clocks, one per weapon slot. Weapon test substitutes the live rate.
+  const volleyInterval = (w: EquippedWeapon): number => {
+    const rate =
+      weaponTestVolleyRate(sceneCtx.playMode === 'weaponTest', weaponTune, w.id) ??
+      weaponLevel(w.id, w.level).rate;
+    return 1 / rate;
+  };
   let mainClock = volleyInterval(state.main);
   let subClock = 0;
   let gameTime = 0;
@@ -387,6 +408,18 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
   function applyWeaponCommand(command: WeaponTestCommand): void {
     if (command.kind === 'reset') {
       damageMeter.reset();
+      resetWeaponTestTune(weaponTune);
+      mainClock = volleyInterval(state.main);
+      if (state.sub) subClock = volleyInterval(state.sub);
+      return;
+    }
+    if (
+      command.kind === 'mainRate' ||
+      command.kind === 'mainDamage' ||
+      command.kind === 'homingRate' ||
+      command.kind === 'homingDamage'
+    ) {
+      stepWeaponTestTune(weaponTune, command.kind, command.delta);
       return;
     }
     if (command.kind === 'main') {
@@ -419,6 +452,10 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       mainLevel: state.main.level,
       subLevel: state.sub?.level ?? 0,
       bombs: state.bombs,
+      mainRate: weaponTune.mainRate,
+      mainDamage: weaponTune.mainDamage,
+      homingRate: weaponTune.homingRate,
+      homingDamage: weaponTune.homingDamage,
     };
   }
 
@@ -629,7 +666,10 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
 
   /** One volley of the weapon in a slot. The title demo goes through here too. */
   function fireVolley(weapon: EquippedWeapon): void {
-    weaponLevel(weapon.id, weapon.level).fire(player.x, player.y, emitter);
+    const level = weaponLevel(weapon.id, weapon.level);
+    const damage = weaponTestVolleyDamage(weaponTest(), weaponTune, weapon.id);
+    const emit = damage === null ? emitter : emitWithDamage(emitter, damage);
+    level.fire(player.x, player.y, emit);
     if (WEAPONS[weapon.id].slot === 'main') sfx('shoot');
   }
 
@@ -898,6 +938,28 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       'center'
     );
     drawButton(ctx, weaponTestBombIncRect(), '+', false);
+    for (const field of WEAPON_TEST_TUNE_FIELDS) {
+      drawText(
+        ctx,
+        WEAPON_TEST_TUNE_LABEL[field],
+        WEAPON_TEST_CTRL_PANEL.x + 8,
+        weaponTestRowLabelY(weaponTestTuneRow(field)),
+        12,
+        UI_COLORS.dim
+      );
+      drawButton(ctx, weaponTestTuneDecRect(field), '-', false);
+      const value = weaponTestTuneValueRect(field);
+      drawText(
+        ctx,
+        formatWeaponTestNumber(stats[field]),
+        value.x + value.w / 2,
+        value.y + value.h / 2,
+        12,
+        UI_COLORS.text,
+        'center'
+      );
+      drawButton(ctx, weaponTestTuneIncRect(field), '+', false);
+    }
     drawButton(ctx, weaponTestResetRect(), '重置', false);
   }
 
@@ -953,7 +1015,8 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       // Full wave table, including ground units and the conditional relief ship
       waveScheduler = new WaveScheduler({ mvpOnly: false });
 
-      // Reset timers
+      // Reset timers. Weapon-test tune returns to the permanent constants.
+      resetWeaponTestTune(weaponTune);
       mainClock = volleyInterval(state.main);
       subClock = 0;
       gameTime = 0;
@@ -995,6 +1058,8 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
 
     exit(): void {
       pauseMenu.close();
+      resetWeaponTestTune(weaponTune);
+      damageMeter.reset();
       bulletPool.releaseAll();
       missilePool.releaseAll();
       enemyPool.releaseAll();

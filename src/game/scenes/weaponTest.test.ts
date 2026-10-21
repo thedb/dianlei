@@ -4,18 +4,33 @@ import { createMemoryStorage, createSettingsStore } from '@/game/settings';
 import { computeControlLayout } from '@/game/controls';
 import {
   BOMBS_START,
+  CONTROL_BOTTOM_PAD,
+  CONTROL_SCALE_MAX,
+  FIRE_RATE,
   HOMING_DAMAGE,
+  HOMING_FIRE_RATE,
+  JOYSTICK_RADIUS,
   LIVES_START,
+  LOGICAL_H,
+  LOGICAL_W,
   PLAYER_BULLET_DAMAGE,
   POWER_MAX,
   RESPAWN_FLYIN_TIME,
   WEAPON_TEST_BOMBS_MAX,
+  WEAPON_TEST_DAMAGE_MAX,
+  WEAPON_TEST_DAMAGE_MIN,
+  WEAPON_TEST_DAMAGE_STEP,
   WEAPON_TEST_DPS_WINDOW,
+  WEAPON_TEST_RATE_MAX,
+  WEAPON_TEST_RATE_MIN,
+  WEAPON_TEST_RATE_STEP,
   WEAPON_TEST_SUB_MAX,
 } from '@/game/config';
 import { HIGH_SCORE_KEY } from '@/game/highScore';
 import { stage1 } from '@/game/levels/stage1';
+import { weaponLevel } from '@/game/systems/playerWeapons';
 import type { ControlsView } from '@/engine/input';
+import type { Rect } from '@/game/ui/widgets';
 import type { SceneContext } from './types';
 import { createBattleScene } from './battle';
 import {
@@ -23,6 +38,11 @@ import {
   clampWeaponTestBombs,
   clampWeaponTestSub,
   createDamageMeter,
+  createWeaponTestTune,
+  emitWithDamage,
+  formatWeaponTestNumber,
+  resetWeaponTestTune,
+  stepWeaponTestTune,
   weaponTargetOnScreen,
   weaponTestBombDecRect,
   weaponTestBombIncRect,
@@ -30,7 +50,16 @@ import {
   weaponTestMainRect,
   weaponTestResetRect,
   weaponTestSubRect,
+  weaponTestTuneDecRect,
+  weaponTestTuneIncRect,
+  weaponTestTuneValueRect,
+  weaponTestVolleyDamage,
+  weaponTestVolleyRate,
+  WEAPON_TEST_CTRL_PANEL,
+  WEAPON_TEST_STATS_PANEL,
   WEAPON_TEST_TARGET,
+  WEAPON_TEST_TUNE_FIELDS,
+  WEAPON_TEST_TUNE_LABEL,
 } from './weaponTest';
 
 vi.mock('@/game/art', async (importOriginal) => {
@@ -126,6 +155,110 @@ describe('weapon-test damage log and setters', () => {
       }
     );
     expect(weaponTestCommandAt(4, 4)).toBeNull();
+  });
+
+  it('steps rate and damage inside the screen and ignores the value cell', () => {
+    const joyTop = LOGICAL_H - CONTROL_BOTTOM_PAD - 8 - 2 * JOYSTICK_RADIUS * CONTROL_SCALE_MAX;
+    expect(WEAPON_TEST_CTRL_PANEL.x).toBeGreaterThanOrEqual(0);
+    expect(WEAPON_TEST_CTRL_PANEL.y).toBeGreaterThan(48 + 12);
+    expect(WEAPON_TEST_CTRL_PANEL.x + WEAPON_TEST_CTRL_PANEL.w).toBeLessThanOrEqual(LOGICAL_W);
+    expect(WEAPON_TEST_CTRL_PANEL.y + WEAPON_TEST_CTRL_PANEL.h).toBeLessThan(joyTop);
+    expect(WEAPON_TEST_STATS_PANEL.x + WEAPON_TEST_STATS_PANEL.w).toBeLessThanOrEqual(
+      WEAPON_TEST_CTRL_PANEL.x
+    );
+
+    const hitTargets: Rect[] = [
+      weaponTestResetRect(),
+      weaponTestBombDecRect(),
+      weaponTestBombIncRect(),
+      ...([1, 2, 3] as const).map((level) => weaponTestMainRect(level)),
+      ...([0, 1, 2] as const).map((level) => weaponTestSubRect(level)),
+    ];
+    for (const field of WEAPON_TEST_TUNE_FIELDS) {
+      const dec = weaponTestTuneDecRect(field);
+      const inc = weaponTestTuneIncRect(field);
+      const value = weaponTestTuneValueRect(field);
+      hitTargets.push(dec, inc);
+      expect(weaponTestCommandAt(tap(dec).x, tap(dec).y)).toEqual({ kind: field, delta: -1 });
+      expect(weaponTestCommandAt(tap(inc).x, tap(inc).y)).toEqual({ kind: field, delta: 1 });
+      expect(weaponTestCommandAt(tap(value).x, tap(value).y)).toBeNull();
+      expect(WEAPON_TEST_TUNE_LABEL[field].length).toBeGreaterThan(0);
+      for (const rect of [dec, inc, value]) {
+        expect(rect.x).toBeGreaterThanOrEqual(WEAPON_TEST_CTRL_PANEL.x);
+        expect(rect.y).toBeGreaterThanOrEqual(WEAPON_TEST_CTRL_PANEL.y);
+        expect(rect.x + rect.w).toBeLessThanOrEqual(
+          WEAPON_TEST_CTRL_PANEL.x + WEAPON_TEST_CTRL_PANEL.w
+        );
+        expect(rect.y + rect.h).toBeLessThanOrEqual(
+          WEAPON_TEST_CTRL_PANEL.y + WEAPON_TEST_CTRL_PANEL.h
+        );
+      }
+    }
+    expect(weaponTestResetRect().y).toBeGreaterThan(weaponTestTuneIncRect('homingDamage').y);
+
+    for (let i = 0; i < hitTargets.length; i++) {
+      for (let j = i + 1; j < hitTargets.length; j++) {
+        const a = hitTargets[i]!;
+        const b = hitTargets[j]!;
+        const separated =
+          a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y;
+        expect(separated, `${i} overlaps ${j}`).toBe(true);
+      }
+    }
+  });
+
+  it('defaults to the permanent constants, clamps above zero, and resets', () => {
+    expect(formatWeaponTestNumber(FIRE_RATE)).toBe('10');
+    expect(formatWeaponTestNumber(HOMING_FIRE_RATE)).toBe('1.5');
+    expect(formatWeaponTestNumber(HOMING_DAMAGE)).toBe('2.5');
+
+    const tune = createWeaponTestTune();
+    expect(tune).toEqual({
+      mainRate: FIRE_RATE,
+      mainDamage: PLAYER_BULLET_DAMAGE,
+      homingRate: HOMING_FIRE_RATE,
+      homingDamage: HOMING_DAMAGE,
+    });
+    expect(weaponTestVolleyRate(false, tune, 'vulcan')).toBeNull();
+    expect(weaponTestVolleyDamage(false, tune, 'homing')).toBeNull();
+    expect(weaponTestVolleyRate(true, tune, 'vulcan')).toBe(FIRE_RATE);
+    expect(weaponTestVolleyDamage(true, tune, 'homing')).toBe(HOMING_DAMAGE);
+
+    stepWeaponTestTune(tune, 'mainRate', 1);
+    stepWeaponTestTune(tune, 'mainDamage', -1);
+    stepWeaponTestTune(tune, 'homingRate', 1);
+    stepWeaponTestTune(tune, 'homingDamage', 1);
+    expect(tune.mainRate).toBe(FIRE_RATE + WEAPON_TEST_RATE_STEP);
+    expect(tune.mainDamage).toBe(PLAYER_BULLET_DAMAGE - WEAPON_TEST_DAMAGE_STEP);
+    expect(tune.homingRate).toBe(HOMING_FIRE_RATE + WEAPON_TEST_RATE_STEP);
+    expect(tune.homingDamage).toBe(HOMING_DAMAGE + WEAPON_TEST_DAMAGE_STEP);
+    expect(weaponTestVolleyRate(true, tune, 'homing')).toBe(tune.homingRate);
+    expect(weaponTestVolleyDamage(true, tune, 'vulcan')).toBe(tune.mainDamage);
+    expect(weaponTestVolleyRate(false, tune, 'homing')).toBeNull();
+
+    for (let i = 0; i < 80; i++) stepWeaponTestTune(tune, 'mainRate', -1);
+    for (let i = 0; i < 80; i++) stepWeaponTestTune(tune, 'homingDamage', 1);
+    expect(tune.mainRate).toBe(WEAPON_TEST_RATE_MIN);
+    expect(tune.homingDamage).toBe(WEAPON_TEST_DAMAGE_MAX);
+    expect(tune.mainRate).toBeGreaterThan(0);
+    expect(tune.homingDamage).toBeGreaterThan(0);
+
+    const shots: number[] = [];
+    const emit = emitWithDamage(
+      {
+        bullet: (_x, _y, _vx, _vy, damage) => shots.push(damage),
+        missile: (_x, _y, _angle, damage) => shots.push(damage),
+      },
+      4
+    );
+    emit.bullet(0, 0, 0, -1, 1);
+    emit.missile(0, 0, 0, 0.5);
+    expect(shots).toEqual([4, 4]);
+
+    resetWeaponTestTune(tune);
+    expect(tune).toEqual(createWeaponTestTune());
+    expect(WEAPON_TEST_RATE_MIN).toBeLessThanOrEqual(WEAPON_TEST_RATE_MAX);
+    expect(WEAPON_TEST_DAMAGE_MIN).toBeLessThanOrEqual(WEAPON_TEST_DAMAGE_MAX);
   });
 });
 
@@ -297,6 +430,146 @@ describe('weapon-test battle', () => {
     expect(scene.getWeaponTestStats()).toBeNull();
     expect(scene.update(DT, makeInput())).toBeNull();
     expect(run.report).toBeNull();
+  });
+
+  it('applies live vulcan and homing damage on the immortal target', () => {
+    const { scene } = setup();
+    flyIn(scene);
+    expect(scene.getWeaponTestStats()).toMatchObject({
+      mainRate: FIRE_RATE,
+      mainDamage: PLAYER_BULLET_DAMAGE,
+      homingRate: HOMING_FIRE_RATE,
+      homingDamage: HOMING_DAMAGE,
+    });
+
+    scene.update(DT, makeInput({ taps: [tap(weaponTestTuneIncRect('mainDamage'))] }));
+    const vulcan = PLAYER_BULLET_DAMAGE + WEAPON_TEST_DAMAGE_STEP;
+    expect(scene.getWeaponTestStats()?.mainDamage).toBe(vulcan);
+    scene.update(DT, makeInput({ buttonA: true }));
+    for (let i = 0; i < 70; i++) scene.update(DT, makeInput());
+    expect(scene.getWeaponTestStats()?.lastHit).toBe(vulcan);
+    expect(scene.getWeaponTestStats()?.totalDamage).toBe(vulcan);
+
+    scene.update(DT, makeInput({ taps: [tap(weaponTestTuneIncRect('homingDamage'))] }));
+    scene.update(DT, makeInput({ taps: [tap(weaponTestSubRect(1))] }));
+    const homing = HOMING_DAMAGE + WEAPON_TEST_DAMAGE_STEP;
+    expect(scene.getWeaponTestStats()?.homingDamage).toBe(homing);
+    const before = scene.getWeaponTestStats()!.totalDamage;
+    scene.update(DT, makeInput({ buttonA: true }));
+    for (let i = 0; i < Math.ceil(2.2 / DT); i++) scene.update(DT, makeInput());
+    const after = scene.getWeaponTestStats()!;
+    expect(after.lastHit).toBe(homing);
+    expect(after.totalDamage - before).toBeCloseTo(vulcan + homing);
+    expect(weaponLevel('vulcan', 1).damage).toBe(PLAYER_BULLET_DAMAGE);
+    expect(weaponLevel('homing', 1).damage).toBe(HOMING_DAMAGE);
+    expect(weaponLevel('vulcan', 1).rate).toBe(FIRE_RATE);
+    expect(weaponLevel('homing', 1).rate).toBe(HOMING_FIRE_RATE);
+  });
+
+  it('applies live fire rates while A is held', () => {
+    const { scene } = setup();
+    flyIn(scene);
+    const steps = Math.round((FIRE_RATE - 2) / WEAPON_TEST_RATE_STEP);
+    for (let i = 0; i < steps; i++) {
+      scene.update(DT, makeInput({ taps: [tap(weaponTestTuneDecRect('mainRate'))] }));
+    }
+    expect(scene.getWeaponTestStats()?.mainRate).toBe(2);
+
+    const gaps: number[] = [];
+    let last = -1;
+    let prev = scene.getDebugInfo!().bulletCount;
+    for (let i = 0; i < 90; i++) {
+      scene.update(DT, makeInput({ buttonA: true }));
+      const now = scene.getDebugInfo!().bulletCount;
+      if (now > prev) {
+        if (last >= 0) gaps.push(i - last);
+        last = i;
+      }
+      prev = now;
+    }
+    expect(gaps[0]).toBe(30);
+    expect(gaps[1]).toBe(30);
+
+    for (let i = 0; i < Math.ceil(1 / DT); i++) scene.update(DT, makeInput());
+    scene.update(DT, makeInput({ taps: [tap(weaponTestTuneIncRect('homingRate'))] }));
+    expect(scene.getWeaponTestStats()?.homingRate).toBeCloseTo(
+      HOMING_FIRE_RATE + WEAPON_TEST_RATE_STEP
+    );
+    scene.update(DT, makeInput({ taps: [tap(weaponTestSubRect(1))] }));
+    const missileGaps: number[] = [];
+    last = -1;
+    prev = scene.getDebugInfo!().missileCount ?? 0;
+    for (let i = 0; i < 70; i++) {
+      scene.update(DT, makeInput({ buttonA: true }));
+      const now = scene.getDebugInfo!().missileCount ?? 0;
+      if (now > prev) {
+        if (last >= 0) missileGaps.push(i - last);
+        last = i;
+      }
+      prev = now;
+    }
+    expect(missileGaps[0]).toBe(30);
+    expect(weaponLevel('homing', 1).rate).toBe(HOMING_FIRE_RATE);
+  });
+
+  it('reset restores the tune and the damage meter without touching P, T, or bombs', () => {
+    const { scene } = setup();
+    flyIn(scene);
+    scene.update(DT, makeInput({ taps: [tap(weaponTestMainRect(3))] }));
+    scene.update(DT, makeInput({ taps: [tap(weaponTestSubRect(2))] }));
+    scene.update(DT, makeInput({ taps: [tap(weaponTestBombIncRect())] }));
+    scene.update(DT, makeInput({ taps: [tap(weaponTestTuneIncRect('mainRate'))] }));
+    scene.update(DT, makeInput({ taps: [tap(weaponTestTuneDecRect('homingDamage'))] }));
+    scene.update(DT, makeInput({ buttonA: true }));
+    for (let i = 0; i < 70; i++) scene.update(DT, makeInput());
+    expect(scene.getWeaponTestStats()!.totalDamage).toBeGreaterThan(0);
+
+    const bombs = scene.getWeaponTestStats()!.bombs;
+    scene.update(DT, makeInput({ taps: [tap(weaponTestResetRect())] }));
+    expect(scene.getWeaponTestStats()).toMatchObject({
+      totalDamage: 0,
+      lastHit: 0,
+      dps: 0,
+      mainLevel: POWER_MAX,
+      subLevel: 2,
+      bombs,
+      mainRate: FIRE_RATE,
+      mainDamage: PLAYER_BULLET_DAMAGE,
+      homingRate: HOMING_FIRE_RATE,
+      homingDamage: HOMING_DAMAGE,
+    });
+  });
+
+  it('clears the tune on exit and again when the mode is entered', () => {
+    const { scene } = setup();
+    flyIn(scene);
+    scene.update(DT, makeInput({ taps: [tap(weaponTestMainRect(2))] }));
+    scene.update(DT, makeInput({ taps: [tap(weaponTestTuneIncRect('mainDamage'))] }));
+    scene.update(DT, makeInput({ buttonA: true }));
+    expect(scene.getWeaponTestStats()?.mainDamage).toBe(
+      PLAYER_BULLET_DAMAGE + WEAPON_TEST_DAMAGE_STEP
+    );
+
+    scene.exit();
+    expect(scene.getWeaponTestStats()).toMatchObject({
+      totalDamage: 0,
+      mainLevel: 2,
+      mainDamage: PLAYER_BULLET_DAMAGE,
+      mainRate: FIRE_RATE,
+      homingDamage: HOMING_DAMAGE,
+      homingRate: HOMING_FIRE_RATE,
+    });
+
+    scene.enter();
+    expect(scene.getWeaponTestStats()).toMatchObject({
+      totalDamage: 0,
+      mainLevel: 1,
+      subLevel: 0,
+      mainDamage: PLAYER_BULLET_DAMAGE,
+      mainRate: FIRE_RATE,
+      homingDamage: HOMING_DAMAGE,
+      homingRate: HOMING_FIRE_RATE,
+    });
   });
 
   it('leaves for the title from pause 返回标题 without a second confirm', () => {
