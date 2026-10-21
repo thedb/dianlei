@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   BG_SCROLL_SPEED,
-  BUILDING_DROP_CHANCE,
-  BUILDING_DROP_B_SHARE,
   BUILDING_HP,
+  HOMING_MAX_LEVEL,
   LOGICAL_H,
   SCORE_BUILDING,
   SCORE_SMALL_FIGHTER,
@@ -26,8 +25,8 @@ import {
   buildingSpawnScroll,
   bulletHitsBuilding,
   createBuilding,
+  chooseBuildingDrop,
   damageBuilding,
-  rollBuildingDrop,
   spawnBuilding,
   updateBuilding,
   validateBuildingFootprint,
@@ -53,11 +52,6 @@ function placed(p: BuildingPlacement, scroll: number): Building {
   b.active = true;
   spawnBuilding(b, p, scroll);
   return b;
-}
-
-function sequence(values: number[]): { rng: () => number; calls: () => number } {
-  let i = 0;
-  return { rng: () => values[i++] ?? 0, calls: () => i };
 }
 
 describe('stage 1 building placements', () => {
@@ -258,41 +252,25 @@ describe('building damage and wreck', () => {
 });
 
 describe('building drops', () => {
-  it('rolls once: nothing, then B for the lower half of the drop chance, T for the upper', () => {
-    const split = BUILDING_DROP_CHANCE * BUILDING_DROP_B_SHARE;
-    const none = sequence([BUILDING_DROP_CHANCE]);
-    expect(rollBuildingDrop(none.rng)).toBeNull();
-    expect(none.calls()).toBe(1);
-    const lastT = sequence([BUILDING_DROP_CHANCE - 0.001]);
-    expect(rollBuildingDrop(lastT.rng)).toBe('T');
-    expect(lastT.calls()).toBe(1);
-    expect(rollBuildingDrop(sequence([split]).rng)).toBe('T');
-    expect(rollBuildingDrop(sequence([split - 0.001]).rng)).toBe('B');
-    expect(rollBuildingDrop(sequence([0]).rng)).toBe('B');
+  it('always drops T until the live homing slot is at max, then only B', () => {
+    expect(chooseBuildingDrop(null)).toBe('T');
+    const sub: { id: 'homing' | 'vulcan'; level: number } = { id: 'homing', level: 0 };
+    expect(chooseBuildingDrop(sub)).toBe('T');
+    sub.level = 1;
+    expect(chooseBuildingDrop(sub)).toBe('T');
+    sub.level = HOMING_MAX_LEVEL;
+    expect(chooseBuildingDrop(sub)).toBe('B');
+    sub.id = 'vulcan';
+    expect(chooseBuildingDrop(sub)).toBe('T');
   });
 
-  it('drops 30% of the time, split 50/50 between B and T, never P', () => {
-    expect(BUILDING_DROP_CHANCE).toBe(0.3);
-    expect(BUILDING_DROP_B_SHARE).toBe(0.5);
-    let seed = 12345;
-    const rng = () => {
-      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-      return seed / 4294967296;
-    };
-    const n = 100000;
-    let bombs = 0;
-    let homing = 0;
-    let other = 0;
-    for (let i = 0; i < n; i++) {
-      const dropped: string | null = rollBuildingDrop(rng);
-      if (dropped === 'B') bombs++;
-      else if (dropped === 'T') homing++;
-      else if (dropped !== null) other++;
-    }
-    expect(other).toBe(0);
-    expect(Math.abs((bombs + homing) / n - 0.3)).toBeLessThan(0.01);
-    expect(Math.abs(bombs / n - 0.15)).toBeLessThan(0.01);
-    expect(Math.abs(homing / n - 0.15)).toBeLessThan(0.01);
+  it('reads the slot object it is given, so a later level change is the next drop', () => {
+    const sub = { id: 'homing' as const, level: 1 };
+    expect(chooseBuildingDrop(sub)).toBe('T');
+    sub.level = HOMING_MAX_LEVEL;
+    expect(chooseBuildingDrop(sub)).toBe('B');
+    sub.level = 1;
+    expect(chooseBuildingDrop(sub)).toBe('T');
   });
 
   it('is the only source of T: wave-table carriers drop only P and B', () => {

@@ -122,6 +122,7 @@ describe('battle weapon slots', () => {
     scene.grantItem('P');
     scene.grantItem('T');
     scene.grantItem('T');
+    expect(scene.getDebugInfo!().buildingDrop).toBe('B');
 
     const dieOnce = (): void => {
       for (let i = 0; i < Math.ceil(30 / DT); i++) {
@@ -138,11 +139,25 @@ describe('battle weapon slots', () => {
     dieOnce();
     expect(scene.getDebugInfo!().power).toBe(1);
     expect(scene.getDebugInfo!().subLevel).toBe(1);
+    expect(scene.getDebugInfo!().buildingDrop).toBe('T');
     respawn();
     dieOnce();
     expect(scene.getDebugInfo!().power).toBe(1);
     expect(scene.getDebugInfo!().subWeapon).toBeNull();
     expect(scene.getDebugInfo!().subLevel).toBe(0);
+    expect(scene.getDebugInfo!().buildingDrop).toBe('T');
+  });
+
+  it('building drop follows the live sub slot, including an empty one', () => {
+    const scene = setup();
+    expect(scene.getDebugInfo!().buildingDrop).toBe('T');
+    scene.grantItem('T');
+    expect(scene.getDebugInfo!().subLevel).toBe(1);
+    expect(scene.getDebugInfo!().buildingDrop).toBe('T');
+    scene.grantItem('T');
+    expect(scene.getDebugInfo!().buildingDrop).toBe('B');
+    scene.grantItem('T');
+    expect(scene.getDebugInfo!().buildingDrop).toBe('B');
   });
 
   it('the title demo runs the same weapon code as a real run', () => {

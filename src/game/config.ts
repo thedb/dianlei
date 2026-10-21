@@ -414,13 +414,10 @@ export const MISSILE_TURN_RATE = 240;
 export const BUILDING_HP = 3;
 
 /**
- * Chance that a destroyed building drops an item.
- * Buildings never drop a power-up (P).
+ * Building drops are not a chance. `chooseBuildingDrop` in `entities/building.ts`
+ * always returns one item from the live sub slot: T until homing is at
+ * HOMING_MAX_LEVEL, then B. There is no BUILDING_DROP_CHANCE.
  */
-export const BUILDING_DROP_CHANCE = 0.3;
-
-/** Share of building drops that are a bomb (B). The rest are the T homing missile. */
-export const BUILDING_DROP_B_SHARE = 0.5;
 
 /** Sea gun fixed2 interval, seconds. Ground turrets use 1.6–1.8. */
 export const SEA_GUN_FIRE_INTERVAL = 2.2;

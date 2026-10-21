@@ -71,6 +71,16 @@ import {
   SEA_GUN_PIVOT,
   drawBombShockwave,
   drawHomingExhaust,
+  EXPLOSION_FRAME_TIME,
+  EXPLOSION_POOL_SIZE,
+  HIT_SPARK_FRAME_COUNT,
+  HIT_SPARK_FRAME_TIME,
+  HIT_SPARK_POOL_SIZE,
+  PLAYER_DEATH_EXPLOSION,
+  explosionDrawKey,
+  explosionFrameCount,
+  explosionKindForSize,
+  type ExplosionKind,
 } from '@/game/art';
 
 // Entities
@@ -113,9 +123,9 @@ import {
   buildingBlocksTank,
   buildingOnScreen,
   bulletHitsBuilding,
+  chooseBuildingDrop,
   createBuilding,
   damageBuilding,
-  rollBuildingDrop,
   spawnBuilding,
   updateBuilding,
   validateBuildingFootprint,
@@ -158,6 +168,7 @@ import {
   type Loadout,
   type WeaponEmitter,
 } from '@/game/systems/playerWeapons';
+import { buildingClass, enemyClass } from '@/game/entities/objectClass';
 import {
   applyBossBomb,
   bossHitsPlayer,
@@ -211,7 +222,7 @@ import {
   type WeaponTestStats,
 } from './weaponTest';
 
-// Explosion FX
+// Explosion FX. `kind` picks the baked small / medium / large frame set.
 interface Explosion {
   active: boolean;
   x: number;
@@ -221,7 +232,15 @@ interface Explosion {
   frameTime: number;
   frameCount: number;
   delay: number;
-  scale: number;
+  kind: ExplosionKind;
+}
+
+interface HitSpark {
+  active: boolean;
+  x: number;
+  y: number;
+  frame: number;
+  timer: number;
 }
 
 /** Player death burst: [dx, dy, delay] — staggered blasts around the wreck */
@@ -240,11 +259,15 @@ function createExplosion(): Explosion {
     y: 0,
     frame: 0,
     timer: 0,
-    frameTime: 0.06,
-    frameCount: 4,
+    frameTime: EXPLOSION_FRAME_TIME,
+    frameCount: explosionFrameCount('small'),
     delay: 0,
-    scale: 1,
+    kind: 'small',
   };
+}
+
+function createHitSpark(): HitSpark {
+  return { active: false, x: 0, y: 0, frame: 0, timer: 0 };
 }
 
 // Player state
@@ -349,8 +372,12 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
   const buildingPool = new ObjectPool(createBuilding, 16);
   const buildingScheduler = new BuildingScheduler(stage1.buildings, stage1.warningAt);
   const explosionPool: Explosion[] = [];
-  for (let i = 0; i < 48; i++) {
+  for (let i = 0; i < EXPLOSION_POOL_SIZE; i++) {
     explosionPool.push(createExplosion());
+  }
+  const sparkPool: HitSpark[] = [];
+  for (let i = 0; i < HIT_SPARK_POOL_SIZE; i++) {
+    sparkPool.push(createHitSpark());
   }
 
   let boss: BossRuntime | null = null;
@@ -463,8 +490,13 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
     exitMode: () => (weaponTest() ? 'immediate' : 'confirm'),
   });
 
-  // Helper to spawn explosion
-  function spawnExplosion(x: number, y: number, delay = 0, scale = 1): void {
+  function clearFx(): void {
+    for (const exp of explosionPool) exp.active = false;
+    for (const spark of sparkPool) spark.active = false;
+  }
+
+  // Helper to spawn explosion. Native frame size; kind selects the raster.
+  function spawnExplosion(x: number, y: number, kind: ExplosionKind, delay = 0): void {
     for (const exp of explosionPool) {
       if (!exp.active) {
         exp.active = true;
@@ -473,7 +505,22 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
         exp.frame = 0;
         exp.timer = 0;
         exp.delay = delay;
-        exp.scale = scale;
+        exp.kind = kind;
+        exp.frameCount = explosionFrameCount(kind);
+        return;
+      }
+    }
+  }
+
+  /** Impact puff for a player bullet or homing missile. Separate pool from deaths. */
+  function spawnHitSpark(x: number, y: number): void {
+    for (const spark of sparkPool) {
+      if (!spark.active) {
+        spark.active = true;
+        spark.x = x;
+        spark.y = y;
+        spark.frame = 0;
+        spark.timer = 0;
         return;
       }
     }
@@ -502,7 +549,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
     }
     if (ev.clearBullets) enemyBulletPool.releaseAll();
     for (const boom of ev.explosions) {
-      spawnExplosion(boom.x, boom.y, boom.delay, boom.scale);
+      spawnExplosion(boom.x, boom.y, boom.size, boom.delay);
     }
     if (ev.shake) triggerShake(ev.shake.intensity, ev.shake.duration);
     if (ev.explosions.length > 0) sfx('enemyExplode');
@@ -535,9 +582,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
     itemPool.releaseAll();
     buildingPool.releaseAll();
     buildingScheduler.reset();
-    explosionPool.forEach((exp) => {
-      exp.active = false;
-    });
+    clearFx();
     boss = time >= stage1.boss.enterAt ? createBoss(stage1.boss) : null;
     warningPlayed = time >= stage1.warningAt + WARNING_BANNER_DELAY;
     scrollFrame = {
@@ -588,12 +633,13 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
   }
 
   function spawnKillExplosion(enemy: Enemy): void {
-    spawnExplosion(enemy.x, enemy.y);
+    const kind = explosionKindForSize(enemyClass(enemy.type).size);
+    spawnExplosion(enemy.x, enemy.y, kind);
     if (enemy.type === 'bomber') {
-      spawnExplosion(enemy.x - 16, enemy.y - 6, 0.06);
-      spawnExplosion(enemy.x + 14, enemy.y + 8, 0.12);
+      spawnExplosion(enemy.x - 16, enemy.y - 6, kind, 0.06);
+      spawnExplosion(enemy.x + 14, enemy.y + 8, kind, 0.12);
     } else if (enemy.type === 'medium' || enemy.type === 'turret2') {
-      spawnExplosion(enemy.x + 8, enemy.y - 4, 0.05);
+      spawnExplosion(enemy.x + 8, enemy.y - 4, kind, 0.05);
     }
   }
 
@@ -607,24 +653,28 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
     enemyPool.release(enemy);
   }
 
-  function hitEnemy(enemy: Enemy, damage: number): void {
+  function hitEnemy(enemy: Enemy, damage: number, x: number, y: number): void {
+    spawnHitSpark(x, y);
     if (damageEnemy(enemy, damage)) killEnemy(enemy);
     else sfx('enemyHit');
   }
 
-  function hitBuilding(b: Building, damage: number): void {
+  function hitBuilding(b: Building, damage: number, x: number, y: number): void {
+    spawnHitSpark(x, y);
     if (damageBuilding(b, damage)) destroyBuilding(b);
     else sfx('enemyHit');
   }
 
   function destroyBuilding(b: Building): void {
     state.score += b.score;
-    spawnExplosion(b.x, b.y);
-    spawnExplosion(b.x - b.width / 4, b.y + 4, 0.06);
-    spawnExplosion(b.x + b.width / 4, b.y - 4, 0.12);
+    const kind = explosionKindForSize(buildingClass(b.type).size);
+    spawnExplosion(b.x, b.y, kind);
+    spawnExplosion(b.x - b.width / 4, b.y + 4, kind, 0.06);
+    spawnExplosion(b.x + b.width / 4, b.y - 4, kind, 0.12);
     sfx('enemyExplode');
-    const drop = rollBuildingDrop();
-    if (drop) spawnItem(itemPool.acquire(), drop, b.x, b.y);
+    // Live slot. Read state.sub here, not a copy taken when the scene started.
+    const drop = chooseBuildingDrop(state.sub);
+    spawnItem(itemPool.acquire(), drop, b.x, b.y);
   }
 
   function anyBuildingBlocksTank(x: number, y: number): boolean {
@@ -694,7 +744,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
 
     // The ship sprite stops drawing this frame; only the explosion remains
     for (const [dx, dy, delay] of DEATH_BURSTS) {
-      spawnExplosion(player.x + dx, player.y + dy, delay);
+      spawnExplosion(player.x + dx, player.y + dy, PLAYER_DEATH_EXPLOSION, delay);
     }
     triggerShake(SHAKE_BIG_INTENSITY, SHAKE_BIG_DURATION);
     sfx('playerExplode');
@@ -1009,7 +1059,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       itemPool.releaseAll();
       buildingPool.releaseAll();
       buildingScheduler.reset();
-      explosionPool.forEach((e) => (e.active = false));
+      clearFx();
       bombWave.active = false;
 
       // Full wave table, including ground units and the conditional relief ship
@@ -1066,6 +1116,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       enemyBulletPool.releaseAll();
       itemPool.releaseAll();
       buildingPool.releaseAll();
+      clearFx();
     },
 
     update(dt: number, input: InputState) {
@@ -1314,7 +1365,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       });
       itemsToRelease.forEach((i) => itemPool.release(i));
 
-      // Update explosions
+      // Update explosions and hit sparks
       for (const exp of explosionPool) {
         if (exp.active && exp.delay > 0) {
           exp.delay -= dt;
@@ -1329,6 +1380,15 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
           }
         }
       }
+      for (const spark of sparkPool) {
+        if (!spark.active) continue;
+        spark.timer += dt;
+        if (spark.timer >= HIT_SPARK_FRAME_TIME) {
+          spark.timer -= HIT_SPARK_FRAME_TIME;
+          spark.frame++;
+          if (spark.frame >= HIT_SPARK_FRAME_COUNT) spark.active = false;
+        }
+      }
 
       // ========================================
       // COLLISION DETECTION
@@ -1340,6 +1400,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
         if (weaponTest()) {
           if (bulletHitsWeaponTarget(bullet.x, bullet.y, bullet.width, bullet.height)) {
             damageMeter.record(gameTime, bullet.damage);
+            spawnHitSpark(bullet.x, bullet.y);
             bulletPool.release(bullet);
           }
           return;
@@ -1352,6 +1413,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
             stage1.boss
           );
           if (hit.consumedBullet) {
+            spawnHitSpark(bullet.x, bullet.y);
             bulletPool.release(bullet);
             applyBossEvents(hit);
             return;
@@ -1371,8 +1433,10 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
             )
           ) {
             const damage = bullet.damage;
+            const hx = bullet.x;
+            const hy = bullet.y;
             bulletPool.release(bullet);
-            hitEnemy(enemy, damage);
+            hitEnemy(enemy, damage, hx, hy);
           }
         });
 
@@ -1381,8 +1445,10 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
           if (!bullet.active) return;
           if (!bulletHitsBuilding(b, bullet.x, bullet.y, bullet.width, bullet.height)) return;
           const damage = bullet.damage;
+          const hx = bullet.x;
+          const hy = bullet.y;
           bulletPool.release(bullet);
-          hitBuilding(b, damage);
+          hitBuilding(b, damage, hx, hy);
         });
       });
 
@@ -1392,6 +1458,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
         if (weaponTest()) {
           if (bulletHitsWeaponTarget(m.x, m.y, size, size)) {
             damageMeter.record(gameTime, m.damage);
+            spawnHitSpark(m.x, m.y);
             missilePool.release(m);
           }
           return;
@@ -1404,6 +1471,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
             stage1.boss
           );
           if (hit.consumedBullet) {
+            spawnHitSpark(m.x, m.y);
             missilePool.release(m);
             applyBossEvents(hit);
             return;
@@ -1415,15 +1483,19 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
             return;
           }
           const damage = m.damage;
+          const hx = m.x;
+          const hy = m.y;
           missilePool.release(m);
-          hitEnemy(enemy, damage);
+          hitEnemy(enemy, damage, hx, hy);
         });
         buildingPool.forEach((b) => {
           if (!m.active) return;
           if (!bulletHitsBuilding(b, m.x, m.y, size, size)) return;
           const damage = m.damage;
+          const hx = m.x;
+          const hy = m.y;
           missilePool.release(m);
-          hitBuilding(b, damage);
+          hitBuilding(b, damage, hx, hy);
         });
       });
 
@@ -1675,19 +1747,20 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
         }
       }
 
-      // Draw explosions
-      for (const exp of explosionPool) {
-        if (exp.active && exp.delay <= 0 && exp.frame < assets.explosions.smallExplosion.length) {
-          const frame = assets.explosions.smallExplosion[exp.frame]!;
-          const scale = exp.scale;
-          renderer.drawImage(
-            frame.canvas,
-            exp.x - frame.anchorX * scale,
-            exp.y - frame.anchorY * scale,
-            frame.width * scale,
-            frame.height * scale
-          );
+      // Hit sparks, then the size-matched explosion frames (native pixels, no scale-up).
+      const sparks = assets.explosions?.hitSpark;
+      if (sparks) {
+        for (const spark of sparkPool) {
+          if (!spark.active || spark.frame >= sparks.length) continue;
+          const frame = sparks[spark.frame]!;
+          renderer.drawImage(frame.canvas, spark.x - frame.anchorX, spark.y - frame.anchorY);
         }
+      }
+      for (const exp of explosionPool) {
+        const frames = assets.explosions?.[explosionDrawKey(exp.kind)];
+        if (!exp.active || exp.delay > 0 || !frames || exp.frame >= frames.length) continue;
+        const frame = frames[exp.frame]!;
+        renderer.drawImage(frame.canvas, exp.x - frame.anchorX, exp.y - frame.anchorY);
       }
 
       if (bombWave.active) {
@@ -1861,6 +1934,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
         activeExplosions: explosionPool.reduce((n, exp) => n + (exp.active ? 1 : 0), 0),
         waveSpawned: waveScheduler?.getDebugInfo().spawned ?? 0,
         buildingCount: buildingPool.getActiveCount(),
+        buildingDrop: chooseBuildingDrop(state.sub),
       };
       if (boss) info.bossPhase = boss.phase;
       return info;

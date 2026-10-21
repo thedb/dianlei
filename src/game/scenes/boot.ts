@@ -1,7 +1,12 @@
 /**
  * Boot scene - loading animation with a tappable 开始游戏 button.
  * Tapping starts stage 1 directly; otherwise it moves on to the title screen.
- * The same attract battle runs behind the chrome.
+ *
+ * Gate: this is a pre-title loading state. It must not create, update, or
+ * render the attract demo or any stage / battle background. The frame is a
+ * black clear plus this chrome. The attract starts in title.enter, only after
+ * boot has finished and the title scene is current. Returning to the title
+ * uses that same enter; nothing here keeps a battle running underneath.
  */
 
 import type { Scene, SceneContext } from './types';
@@ -10,14 +15,12 @@ import type { InputState } from '@/engine/input';
 import { LOGICAL_W, LOGICAL_H } from '@/game/config';
 import { drawText, drawTitleScrim, UI_COLORS } from '@/game/ui/widgets';
 import { drawStartButton, isStartTapped } from '@/game/ui/startButton';
-import { sharedTitleAttract } from './titleAttract';
 
 /** Seconds before the boot screen hands off to the title screen */
 export const BOOT_DURATION = 1.5;
 
 export function createBootScene(ctx: SceneContext): Scene {
   let timer = 0;
-  const attract = sharedTitleAttract();
 
   return {
     id: 'boot',
@@ -25,16 +28,13 @@ export function createBootScene(ctx: SceneContext): Scene {
     enter(): void {
       timer = 0;
       ctx.input.setControlsEnabled(false);
-      attract.start();
     },
 
     exit(): void {
-      attract.stop();
+      timer = 0;
     },
 
     update(dt: number, input: InputState) {
-      if (!attract.isRunning()) attract.start();
-      attract.update(dt);
       if (isStartTapped(input.taps) || input.menuConfirm) {
         ctx.playMode = 'play';
         ctx.battleEntry = 'stage';
@@ -47,8 +47,8 @@ export function createBootScene(ctx: SceneContext): Scene {
       return null;
     },
 
-    render(renderer: Renderer, alpha: number): void {
-      attract.render(renderer, alpha);
+    render(renderer: Renderer): void {
+      renderer.clear('#000');
       const c = renderer.getContext();
       drawTitleScrim(c);
 
