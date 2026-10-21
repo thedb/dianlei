@@ -31,10 +31,10 @@ describe('enemy movement', () => {
     expect(enemy.x).toBeGreaterThan(72);
   });
 
-  it('drives tanks at no more than half their previous ground speed', () => {
-    expect(TANK_ENTRY_SPEED).toBeLessThanOrEqual(55 / 2);
-    expect(TANK_DIAG_VX).toBeLessThanOrEqual(48 / 2);
-    expect(TANK_DIAG_CLIMB).toBeLessThanOrEqual(100 / 2);
+  it('drives tanks at 80% of the previous ground speed', () => {
+    expect(TANK_ENTRY_SPEED).toBe(22);
+    expect(TANK_DIAG_VX).toBe(19);
+    expect(TANK_DIAG_CLIMB).toBe(40);
 
     const side = createEnemy();
     spawnEnemy(side, 'tank', 0, 200, { kind: 'ground', entry: 'left' }, { kind: 'none' });
@@ -47,6 +47,11 @@ describe('enemy movement', () => {
     updateEnemy(diag, 1, 180, 500, 0);
     expect(diag.x - 40).toBeCloseTo(TANK_DIAG_VX, 4);
     expect(600 - diag.y).toBeCloseTo(TANK_DIAG_CLIMB, 4);
+
+    const held = createEnemy();
+    spawnEnemy(held, 'tank', 40, 654, { kind: 'ground', entry: 'bottomLeft' }, { kind: 'none' });
+    updateEnemy(held, 1, 180, 500, 40);
+    expect(held.y).toBeCloseTo(654, 4);
 
     const turret = createEnemy();
     spawnEnemy(turret, 'turret2', 180, 100, { kind: 'ground' }, { kind: 'none' });

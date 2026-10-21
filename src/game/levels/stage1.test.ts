@@ -83,7 +83,7 @@ describe('stage1 waves', () => {
     for (const wave of stage1.waves) {
       for (const group of wave.groups) {
         if (group.enemy !== 'tank' || group.move.kind !== 'ground') continue;
-        if (group.move.vx !== undefined) expect(Math.abs(group.move.vx)).toBeLessThanOrEqual(15);
+        if (group.move.vx !== undefined) expect(Math.abs(group.move.vx)).toBeLessThanOrEqual(12);
       }
     }
   });
