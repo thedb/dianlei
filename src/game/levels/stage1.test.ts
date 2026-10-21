@@ -80,6 +80,12 @@ describe('stage1 waves', () => {
     }
     expect(tanks).toBe(14);
     expect([...entries].sort()).toEqual(['bottomLeft', 'bottomRight', 'left', 'right']);
+    for (const wave of stage1.waves) {
+      for (const group of wave.groups) {
+        if (group.enemy !== 'tank' || group.move.kind !== 'ground') continue;
+        if (group.move.vx !== undefined) expect(Math.abs(group.move.vx)).toBeLessThanOrEqual(15);
+      }
+    }
   });
 
   it('drops the documented P and B carriers', () => {

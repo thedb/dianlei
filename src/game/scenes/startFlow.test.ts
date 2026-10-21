@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createBootScene, BOOT_DURATION } from './boot';
 import { createTitleScene, BOSS_BUTTON, SETTINGS_BUTTON } from './title';
 import { START_BUTTON } from '@/game/ui/startButton';
-import { HOME_BGM_TOGGLE, HOME_BGM_TRACK } from '@/game/ui/homeBgm';
+import { BGM_VOLUME_DEFAULT } from '@/game/config';
 import { createSettingsStore, createMemoryStorage } from '@/game/settings';
 import { computeControlLayout } from '@/game/controls';
 import { makeInput } from '@/test/fakes';
@@ -103,21 +103,41 @@ describe('title screen start button', () => {
     expect(ctx.battleEntry).toBe('boss');
   });
 
-  it('toggles BGM and sets volume without starting the stage', () => {
+  it('does not change volume or BGM from the title screen', () => {
     const ctx = context();
     const title = createTitleScene(ctx);
     title.enter();
     expect(ctx.settings.get().bgmEnabled).toBe(false);
-    const toggle = {
-      x: HOME_BGM_TOGGLE.x + 8,
-      y: HOME_BGM_TOGGLE.y + HOME_BGM_TOGGLE.h / 2,
-    };
-    expect(title.update(DT, makeInput({ taps: [toggle] }))).toBeNull();
-    expect(ctx.settings.get().bgmEnabled).toBe(true);
+    expect(ctx.settings.get().bgmVolume).toBe(BGM_VOLUME_DEFAULT);
+    // Former home BGM toggle (y=312) and volume track (x=144..312).
+    expect(title.update(DT, makeInput({ taps: [{ x: 40, y: 327 }] }))).toBeNull();
+    expect(
+      title.update(
+        DT,
+        makeInput({
+          taps: [{ x: 300, y: 327 }],
+          pointers: [{ id: 1, x: 310, y: 327, startX: 200, startY: 327 }],
+        })
+      )
+    ).toBeNull();
+    expect(ctx.settings.get().bgmEnabled).toBe(false);
+    expect(ctx.settings.get().bgmVolume).toBe(BGM_VOLUME_DEFAULT);
     expect(ctx.battleEntry).toBe('stage');
-    const loud = { x: HOME_BGM_TRACK.x + HOME_BGM_TRACK.w - 1, y: HOME_BGM_TRACK.y + 4 };
-    expect(title.update(DT, makeInput({ taps: [loud] }))).toBeNull();
-    expect(ctx.settings.get().bgmVolume).toBeGreaterThan(0.9);
+  });
+
+  it('changes BGM only after opening settings', () => {
+    const ctx = context();
+    const title = createTitleScene(ctx);
+    title.enter();
+    title.update(DT, makeInput({ menuDown: true }));
+    title.update(DT, makeInput({ menuDown: true }));
+    expect(title.update(DT, makeInput({ menuConfirm: true }))).toBeNull();
+    for (let i = 0; i < 5; i++) title.update(DT, makeInput({ menuDown: true }));
+    title.update(DT, makeInput({ menuConfirm: true }));
+    expect(ctx.settings.get().bgmEnabled).toBe(true);
+    title.update(DT, makeInput({ menuDown: true }));
+    title.update(DT, makeInput({ menuRight: true }));
+    expect(ctx.settings.get().bgmVolume).toBeCloseTo(BGM_VOLUME_DEFAULT + 0.05);
   });
 
   it('设置 opens settings instead of starting', () => {

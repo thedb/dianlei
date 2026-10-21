@@ -303,17 +303,20 @@ export const SIDE_ARC_RADIUS = 140;
 /** V-dive wings leave on this diagonal (degrees) */
 export const V_DIVE_EXIT_DEG = 45;
 
-/** Tank side-entry drive speed, pixels/second */
-export const TANK_ENTRY_SPEED = 55;
+/**
+ * Tank side-entry drive speed, pixels/second.
+ * Half of the previous 55 so ground tanks stay well below aircraft speed.
+ */
+export const TANK_ENTRY_SPEED = 27;
 
-/** Horizontal speed of a bottom-corner tank entry */
-export const TANK_DIAG_VX = 48;
+/** Horizontal speed of a bottom-corner tank entry. Half of the previous 48. */
+export const TANK_DIAG_VX = 24;
 
 /**
- * Extra upward speed for a bottom-corner tank entry.
+ * Extra upward speed for a bottom-corner tank entry. Half of the previous 100.
  * Combined with the 40px/s downward scroll, the tank still climbs onto the field.
  */
-export const TANK_DIAG_CLIMB = 100;
+export const TANK_DIAG_CLIMB = 50;
 
 /** Home / settings BGM slider default. Playback itself starts off. */
 export const BGM_VOLUME_DEFAULT = 0.6;

@@ -56,6 +56,22 @@ describe('pause menu', () => {
     expect(pause.getView()).toBe('menu');
   });
 
+  it('toggles BGM and volume inside settings while BGM stays off by default', () => {
+    const { pause, store } = menu();
+    expect(store.get().bgmEnabled).toBe(false);
+    pause.open();
+    pause.update(makeInput({ menuDown: true }));
+    pause.update(makeInput({ menuConfirm: true }));
+    expect(pause.getView()).toBe('settings');
+    for (let i = 0; i < 5; i++) pause.update(makeInput({ menuDown: true }));
+    pause.update(makeInput({ menuConfirm: true }));
+    expect(store.get().bgmEnabled).toBe(true);
+    pause.update(makeInput({ menuDown: true }));
+    const before = store.get().bgmVolume;
+    pause.update(makeInput({ menuRight: true }));
+    expect(store.get().bgmVolume).toBeCloseTo(before + 0.05);
+  });
+
   it('adjusts sliders with left/right in steps and clamps', () => {
     const { pause, store } = menu();
     pause.open();

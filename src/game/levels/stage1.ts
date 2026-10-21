@@ -463,7 +463,7 @@ export const stage1: StageData = {
           xs: [40],
           y: 210,
           interval: 0.8,
-          move: { kind: 'ground', entry: 'left', vx: 30 },
+          move: { kind: 'ground', entry: 'left', vx: 15 },
           fire: { kind: 'aimed1', interval: 2.4 },
         },
       ],
