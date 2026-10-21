@@ -57,7 +57,8 @@ This document defines the coding conventions and constraints for all AI agents w
 | Enemy bullet (small) | 6×6 |
 | Enemy bullet (large) | 12×12 |
 | Missile | 6×12 |
-| Items (P/B) | 16×18 |
+| Player homing missile (T) | 4×8 |
+| Items (P/B/T) | 16×18 |
 | Tiles | 16×16 |
 
 ### Code-Generated Effects (NOT baked into sprites)
@@ -66,6 +67,8 @@ This document defines the coding conventions and constraints for all AI agents w
 - Hit flash (white tint overlay)
 - Shield effects
 - Particles
+- Bomb shockwave ring (palette pixel blocks)
+- Homing missile exhaust trail
 
 ### Sprite Drawing
 - Sprites defined as pixel arrays/strings with palette indices
@@ -84,6 +87,26 @@ This document defines the coding conventions and constraints for all AI agents w
 - Bullets, enemies, explosions, particles must use `ObjectPool`
 - Pre-allocate pools at scene enter
 - Release objects when off-screen or destroyed
+
+### Size Classes
+- Every shootable object declares a size class (`small` / `medium` / `large`) and a category (`air` / `ground` / `building` / `boss`) in `src/game/entities/objectClass.ts`. Nothing else may hard-code per-type size checks
+- small: small, drone, interceptor, tank, missile_car, every building. medium: medium, bomber, turret2, future mini-bosses. large: the Boss
+
+### Bomb
+- Hits only objects on screen at the moment of the bomb. Off-screen enemies and buildings are untouched
+- Small dies outright (normal score, drop, explosion). Medium loses `BOMB_MEDIUM_RATIO` (50%) of MAX HP. Boss loses `BOMB_BOSS_RATIO` (8%)
+- A pixel shockwave ring grows from the ship and reaches the farthest corner in `BOMB_WAVE_TIME`; each target resolves when the ring reaches it, so small kills chain
+- No bomb screen shake for now (backlog item in design doc §13)
+- Rules live in `src/game/systems/bomb.ts`
+
+### Weapons
+- Weapon definitions live in the registry in `src/game/systems/playerWeapons.ts`: id, slot (`main` | `sub`), item letter (also the icon), max level, and rate / damage / fire function per level. Add weapons there, never as branches in the battle scene
+- `GameState` holds `main {id, level}` and `sub {id, level} | null`. The slots never affect each other. Both fire while A is held, each on its own clock
+- Pickup: same weapon +1 level up to max, then overflow score; another weapon of the same slot switches and keeps the clamped level; an empty sub slot equips at Lv1
+- Death: main −1 (min Lv1), sub −1 (may become none)
+- Items are table-driven (`ITEM_DEFS` in `entities/item.ts`, `ITEM_PIXELS` in `art/itemSprite.ts`)
+- Buildings drop 30%, split 50/50 B and T. T comes only from buildings. Wave-table P / B carriers do not change
+- The title demo uses the same weapon code paths. No demo-specific weapon logic
 
 ### Level Data
 - Wave data in `src/game/levels/` using TypeScript types
