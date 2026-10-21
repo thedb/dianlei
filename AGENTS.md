@@ -48,6 +48,10 @@ This document defines the coding conventions and constraints for all AI agents w
 | Tank | 24×24 |
 | Turret | 32×32 |
 | Missile car | 24×32 |
+| Pillbox | 32×32 |
+| Fuel depot | 48×32 |
+| Radar station | 32×32 |
+| Sea gun | 32×32 (twin barrels code-drawn) |
 | Boss | ~220×140 |
 | Player bullet | 4×12 |
 | Enemy bullet (small) | 6×6 |
