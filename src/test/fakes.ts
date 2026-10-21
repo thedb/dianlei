@@ -85,8 +85,6 @@ export function makeInput(patch: Partial<InputState> = {}): InputState {
     menuRight: false,
     menuConfirm: false,
     menuBack: false,
-    debugWarning: false,
-    debugBoss: false,
     taps: [],
     pointers: [],
     ...patch,

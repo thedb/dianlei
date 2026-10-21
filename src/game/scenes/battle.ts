@@ -1,7 +1,8 @@
 /**
  * Battle scene — stage 1 through the orbital boss.
  * Warning clears the lane, the battleship fights, then STAGE CLEAR hands off
- * to the result scene. F2 / F3 (debug on) jump to the warning or the boss.
+ * to the result scene. Boss practice is battleEntry 'boss'.
+ * playMode 'weaponTest' reuses this scene with no scroll and no spawns.
  */
 
 import type { Scene, SceneContext } from './types';
@@ -133,6 +134,7 @@ import { WaveScheduler } from '@/game/systems/waveScheduler';
 import { inCircle } from '@/game/controls';
 import { createPauseMenu } from '@/game/ui/pauseMenu';
 import { drawControls, drawPauseButton } from '@/game/ui/controlsOverlay';
+import { drawButton, drawPanel, drawText, UI_COLORS } from '@/game/ui/widgets';
 import { updateEnemyWeapons } from '@/game/systems/weapons';
 import { getAudioSystem } from '@/game/systems/audio';
 import {
@@ -177,6 +179,24 @@ import {
   backgroundFade,
   type ScrollFrame,
 } from '@/game/systems/background';
+import {
+  bulletHitsWeaponTarget,
+  clampWeaponTestBombs,
+  createDamageMeter,
+  weaponTestBombCountRect,
+  weaponTestBombDecRect,
+  weaponTestBombIncRect,
+  weaponTestCommandAt,
+  weaponTestMainRect,
+  weaponTestResetRect,
+  weaponTestRowLabelY,
+  weaponTestSubRect,
+  WEAPON_TEST_CTRL_PANEL,
+  WEAPON_TEST_STATS_PANEL,
+  WEAPON_TEST_TARGET,
+  type WeaponTestCommand,
+  type WeaponTestStats,
+} from './weaponTest';
 
 // Explosion FX
 interface Explosion {
@@ -254,6 +274,13 @@ export interface BattleScene extends Scene {
   getBattleView(): BattleView;
   /** Apply a pickup as if the ship had touched it. Used by tests. */
   grantItem(type: ItemType): void;
+  /** Null outside weapon test. */
+  getWeaponTestStats(): WeaponTestStats | null;
+  /**
+   * Weapon test only. Applies the same death as a hit. The next update
+   * returns to the title and does not publish a run.
+   */
+  applyTestDeath(): boolean;
 }
 
 interface BombWave {
@@ -344,12 +371,60 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
   // Audio. The title demo reuses this scene but must stay silent.
   const audio = getAudioSystem();
   const demo = (): boolean => sceneCtx.playMode === 'attract';
+  const weaponTest = (): boolean => sceneCtx.playMode === 'weaponTest';
+  const damageMeter = createDamageMeter();
+
   function sfx(id: Parameters<typeof audio.play>[0]): void {
     if (demo()) return;
     audio.play(id);
   }
 
-  const pauseMenu = createPauseMenu(sceneCtx.settings);
+  function leaveToTitle(): 'title' {
+    sceneCtx.playMode = 'play';
+    return 'title';
+  }
+
+  function applyWeaponCommand(command: WeaponTestCommand): void {
+    if (command.kind === 'reset') {
+      damageMeter.reset();
+      return;
+    }
+    if (command.kind === 'main') {
+      const def = weaponForItem('P');
+      if (!def) return;
+      state.main.id = def.id;
+      state.main.level = Math.max(1, Math.min(def.maxLevel, command.level));
+      return;
+    }
+    if (command.kind === 'sub') {
+      if (command.level <= 0) {
+        state.sub = null;
+        return;
+      }
+      const def = weaponForItem('T');
+      if (!def) return;
+      const arming = state.sub?.id !== def.id;
+      state.sub = { id: def.id, level: Math.max(1, Math.min(def.maxLevel, command.level)) };
+      if (arming) subClock = volleyInterval(state.sub);
+      return;
+    }
+    state.bombs = clampWeaponTestBombs(state.bombs + command.delta);
+  }
+
+  function weaponTestStats(): WeaponTestStats {
+    return {
+      totalDamage: damageMeter.total(),
+      dps: damageMeter.dps(gameTime),
+      lastHit: damageMeter.lastHit(),
+      mainLevel: state.main.level,
+      subLevel: state.sub?.level ?? 0,
+      bombs: state.bombs,
+    };
+  }
+
+  const pauseMenu = createPauseMenu(sceneCtx.settings, {
+    exitMode: () => (weaponTest() ? 'immediate' : 'confirm'),
+  });
 
   // Helper to spawn explosion
   function spawnExplosion(x: number, y: number, delay = 0, scale = 1): void {
@@ -674,6 +749,13 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
   /** On-screen live things a homing missile may chase. */
   function collectHomingTargets(): void {
     homingTargets.length = 0;
+    if (weaponTest()) {
+      homingTargets.push({
+        x: WEAPON_TEST_TARGET.x + WEAPON_TEST_TARGET.w / 2,
+        y: WEAPON_TEST_TARGET.y + WEAPON_TEST_TARGET.h / 2,
+      });
+      return;
+    }
     enemyPool.forEach((enemy) => {
       if (boxOnScreen(enemy)) homingTargets.push(enemy);
     });
@@ -771,6 +853,54 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
     sceneCtx.input.setControlsEnabled(false);
   }
 
+  function drawWeaponTestHud(ctx: CanvasRenderingContext2D): void {
+    const stats = weaponTestStats();
+    drawPanel(ctx, WEAPON_TEST_STATS_PANEL);
+    const textX = WEAPON_TEST_STATS_PANEL.x + 10;
+    let textY = WEAPON_TEST_STATS_PANEL.y + 16;
+    const line = (text: string): void => {
+      drawText(ctx, text, textX, textY, 13, UI_COLORS.text);
+      textY += 22;
+    };
+    line('武器测试');
+    line(`总伤害 ${stats.totalDamage}`);
+    line(`DPS ${stats.dps.toFixed(1)}`);
+    line(`主武器 Lv${stats.mainLevel}`);
+    line(stats.subLevel === 0 ? '副武器 无' : `副武器 Lv${stats.subLevel}`);
+    line(`上次 ${stats.lastHit}`);
+
+    drawPanel(ctx, WEAPON_TEST_CTRL_PANEL);
+    (['P', 'T', 'B'] as const).forEach((label, row) => {
+      drawText(
+        ctx,
+        label,
+        WEAPON_TEST_CTRL_PANEL.x + 8,
+        weaponTestRowLabelY(row),
+        13,
+        UI_COLORS.dim
+      );
+    });
+    ([1, 2, 3] as const).forEach((level) => {
+      drawButton(ctx, weaponTestMainRect(level), String(level), stats.mainLevel === level);
+    });
+    drawButton(ctx, weaponTestSubRect(0), '关', stats.subLevel === 0);
+    drawButton(ctx, weaponTestSubRect(1), '1', stats.subLevel === 1);
+    drawButton(ctx, weaponTestSubRect(2), '2', stats.subLevel === 2);
+    drawButton(ctx, weaponTestBombDecRect(), '-', false);
+    const count = weaponTestBombCountRect();
+    drawText(
+      ctx,
+      String(stats.bombs),
+      count.x + count.w / 2,
+      count.y + count.h / 2,
+      14,
+      UI_COLORS.text,
+      'center'
+    );
+    drawButton(ctx, weaponTestBombIncRect(), '+', false);
+    drawButton(ctx, weaponTestResetRect(), '重置', false);
+  }
+
   return {
     id: 'battle',
 
@@ -843,11 +973,13 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       shakeLeft = 0;
       shakeMag = 0;
       shakeDur = 0;
+      damageMeter.reset();
 
       // Boss practice: Lv3, the normal bomb and life loadout, clock at 2:35.
       // seek() drops every wave that already passed, so those ships never
       // enter and do not count toward the kill-rate denominator.
-      if (sceneCtx.battleEntry === 'boss') {
+      // Weapon test keeps the fresh loadout and does not jump.
+      if (!weaponTest() && sceneCtx.battleEntry === 'boss') {
         maxOut(state.main);
         jumpTo(stage1.boss.enterAt);
       }
@@ -885,9 +1017,13 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       if (!demo() && pauseMenu.isOpen()) {
         const action = pauseMenu.update(input);
         if (action === 'resume') sceneCtx.input.setControlsEnabled(true);
-        if (action === 'exit') return 'title';
+        if (action === 'exit') return leaveToTitle();
         return null;
       }
+
+      // Weapon test has no enemy fire. A death still leaves for the title
+      // without a run report, result scene, or game over.
+      if (weaponTest() && state.isDead) return leaveToTitle();
 
       const showcasing = boss?.phase === 'clear';
       if (!demo() && !state.gameOver && !showcasing) {
@@ -900,9 +1036,11 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
         }
       }
 
-      if (sceneCtx.showDebug && (input.debugWarning || input.debugBoss)) {
-        jumpTo(input.debugBoss ? stage1.boss.enterAt : stage1.warningAt);
-        return null;
+      if (weaponTest()) {
+        for (const tap of input.taps) {
+          const command = weaponTestCommandAt(tap.x, tap.y);
+          if (command) applyWeaponCommand(command);
+        }
       }
 
       gameTime += dt;
@@ -956,11 +1094,12 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
         updatePlayerControl(dt, input);
       }
 
-      scrollFrame = scroller.update(dt, gameTime, stage1.warningAt);
+      if (!weaponTest()) scrollFrame = scroller.update(dt, gameTime, stage1.warningAt);
 
-      const pastWarning = gameTime >= stage1.warningAt;
+      const pastWarning = !weaponTest() && gameTime >= stage1.warningAt;
       const warningWindow = pastWarning && gameTime < stage1.boss.enterAt;
       if (
+        !weaponTest() &&
         !warningPlayed &&
         gameTime >= stage1.warningAt + WARNING_BANNER_DELAY &&
         gameTime < stage1.boss.enterAt
@@ -989,8 +1128,8 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       });
       bulletsToRelease.forEach((b) => bulletPool.release(b));
 
-      // Update wave scheduler
-      if (waveScheduler) {
+      // Update wave scheduler. Weapon test keeps the clock and fires nothing.
+      if (waveScheduler && !weaponTest()) {
         waveScheduler.setPowerLevel(state.main.level);
         const spawns = waveScheduler.update(dt);
 
@@ -1012,29 +1151,31 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
         }
       }
 
-      if (!boss && gameTime >= stage1.boss.enterAt) {
+      if (!weaponTest() && !boss && gameTime >= stage1.boss.enterAt) {
         boss = createBoss(stage1.boss);
       }
 
       // Buildings ride the tile map. Footprints are checked against the real grid on spawn.
-      for (const placement of buildingScheduler.update(scrollFrame.scroll, gameTime)) {
-        if (!validateBuildingFootprint(getStageGrids(), placement)) continue;
-        spawnBuilding(buildingPool.acquire(), placement, scrollFrame.scroll);
+      if (!weaponTest()) {
+        for (const placement of buildingScheduler.update(scrollFrame.scroll, gameTime)) {
+          if (!validateBuildingFootprint(getStageGrids(), placement)) continue;
+          spawnBuilding(buildingPool.acquire(), placement, scrollFrame.scroll);
+        }
+        const buildingsToRelease: Building[] = [];
+        buildingPool.forEach((b) => {
+          const gone = updateBuilding(
+            b,
+            dt,
+            scrollFrame.scroll,
+            player.x,
+            player.y,
+            bulletSpawner,
+            !pastWarning
+          );
+          if (gone || scrollFrame.fade[b.section] <= 0.01) buildingsToRelease.push(b);
+        });
+        buildingsToRelease.forEach((b) => buildingPool.release(b));
       }
-      const buildingsToRelease: Building[] = [];
-      buildingPool.forEach((b) => {
-        const gone = updateBuilding(
-          b,
-          dt,
-          scrollFrame.scroll,
-          player.x,
-          player.y,
-          bulletSpawner,
-          !pastWarning
-        );
-        if (gone || scrollFrame.fade[b.section] <= 0.01) buildingsToRelease.push(b);
-      });
-      buildingsToRelease.forEach((b) => buildingPool.release(b));
 
       // Update enemies
       const grids = assets?.background?.grids;
@@ -1128,8 +1269,16 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       // COLLISION DETECTION
       // ========================================
 
-      // Player bullets vs the battleship, then the rest of the lane
+      // Player bullets vs the battleship, then the rest of the lane.
+      // Weapon test only feeds the immortal target.
       bulletPool.forEach((bullet) => {
+        if (weaponTest()) {
+          if (bulletHitsWeaponTarget(bullet.x, bullet.y, bullet.width, bullet.height)) {
+            damageMeter.record(gameTime, bullet.damage);
+            bulletPool.release(bullet);
+          }
+          return;
+        }
         if (boss) {
           const hit = resolveBossBullet(
             boss,
@@ -1175,6 +1324,13 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       // Homing missiles: same targets as bullets, with a small square hitbox
       missilePool.forEach((m) => {
         const size = HOMING_HIT_SIZE;
+        if (weaponTest()) {
+          if (bulletHitsWeaponTarget(m.x, m.y, size, size)) {
+            damageMeter.record(gameTime, m.damage);
+            missilePool.release(m);
+          }
+          return;
+        }
         if (boss) {
           const hit = resolveBossBullet(
             boss,
@@ -1278,7 +1434,27 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       }
       ctx.save();
       if (shakeX !== 0 || shakeY !== 0) ctx.translate(shakeX, shakeY);
-      drawBackground(ctx, assets.background, scrollFrame, gameTime);
+      if (weaponTest()) {
+        ctx.fillStyle = PALETTE[COLOR.SHADOW];
+        ctx.fillRect(0, 0, LOGICAL_W, LOGICAL_H);
+        ctx.fillStyle = PALETTE[COLOR.ENEMY_BRIGHT_RED];
+        ctx.fillRect(
+          WEAPON_TEST_TARGET.x,
+          WEAPON_TEST_TARGET.y,
+          WEAPON_TEST_TARGET.w,
+          WEAPON_TEST_TARGET.h
+        );
+        ctx.strokeStyle = PALETTE[COLOR.WHITE];
+        ctx.lineWidth = 1;
+        ctx.strokeRect(
+          WEAPON_TEST_TARGET.x + 0.5,
+          WEAPON_TEST_TARGET.y + 0.5,
+          WEAPON_TEST_TARGET.w - 1,
+          WEAPON_TEST_TARGET.h - 1
+        );
+      } else {
+        drawBackground(ctx, assets.background, scrollFrame, gameTime);
+      }
 
       // Buildings sit on the tiles: no interpolation, so they never slip off the grid
       buildingPool.forEach((b) => {
@@ -1465,91 +1641,93 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
         renderer.fillRect(0, 0, LOGICAL_W, LOGICAL_H, `rgba(255, 255, 255, ${flashAlpha * 0.35})`);
       }
 
-      // ========================================
-      // HUD
-      // ========================================
-      const hudY = 4;
-
-      // Score
-      renderer.fillText(`SCORE: ${state.score.toString().padStart(8, '0')}`, 8, hudY, '#fff', 10);
-
-      // Lives (plane icons)
-      const livesText = 'x' + state.lives;
-      renderer.fillText('♦', LOGICAL_W - 90, hudY, PALETTE[COLOR.PLAYER_CYAN], 10);
-      renderer.fillText(livesText, LOGICAL_W - 80, hudY, '#fff', 10);
-
-      // Bomb stock: octagon B, bright when owned and dim when empty.
-      // Sits under the score line and above the boss bar (y = 32).
-      const iconY = hudY + 10;
-      const bombIcon = assets.items.byType.B.idle;
-      const bombStep = bombIcon.width + 1;
-      for (let i = 0; i < BOMBS_MAX; i++) {
-        ctx.globalAlpha = i < state.bombs ? 1 : 0.4;
-        renderer.drawImage(bombIcon.canvas, 6 + i * bombStep, iconY);
-      }
-      ctx.globalAlpha = 1;
-
-      // Weapon slots: each shows its pickup icon and level. Sub sits left of main.
-      const mainIcon = assets.items.byType[WEAPONS[state.main.id].item].idle;
-      const mainX = LOGICAL_W - mainIcon.width - 32;
-      renderer.drawImage(mainIcon.canvas, mainX, iconY);
-      renderer.fillText(`Lv${state.main.level}`, mainX + mainIcon.width + 2, iconY + 4, '#fff', 10);
-      const subX = mainX - 40;
-      if (state.sub) {
-        const subIcon = assets.items.byType[WEAPONS[state.sub.id].item].idle;
-        renderer.drawImage(subIcon.canvas, subX, iconY);
-        renderer.fillText(`Lv${state.sub.level}`, subX + subIcon.width + 2, iconY + 4, '#fff', 10);
+      if (weaponTest()) {
+        drawWeaponTestHud(ctx);
       } else {
-        renderer.fillText('SUB -', subX, iconY + 4, '#666', 10);
-      }
+        // ========================================
+        // HUD
+        // ========================================
+        const hudY = 4;
 
-      // Wave info (debug). F2 jumps to the warning, F3 to the boss.
-      if (sceneCtx.showDebug && waveScheduler) {
-        const waveInfo = waveScheduler.getDebugInfo();
-        renderer.fillText(`Wave: ${waveInfo.waveId}`, 8, hudY + 46, '#888', 8);
+        // Score
+        renderer.fillText(`SCORE: ${state.score.toString().padStart(8, '0')}`, 8, hudY, '#fff', 10);
+
+        // Lives (plane icons)
+        const livesText = 'x' + state.lives;
+        renderer.fillText('♦', LOGICAL_W - 90, hudY, PALETTE[COLOR.PLAYER_CYAN], 10);
+        renderer.fillText(livesText, LOGICAL_W - 80, hudY, '#fff', 10);
+
+        // Bomb stock: octagon B, bright when owned and dim when empty.
+        // Sits under the score line and above the boss bar (y = 32).
+        const iconY = hudY + 10;
+        const bombIcon = assets.items.byType.B.idle;
+        const bombStep = bombIcon.width + 1;
+        for (let i = 0; i < BOMBS_MAX; i++) {
+          ctx.globalAlpha = i < state.bombs ? 1 : 0.4;
+          renderer.drawImage(bombIcon.canvas, 6 + i * bombStep, iconY);
+        }
+        ctx.globalAlpha = 1;
+
+        // Weapon slots: each shows its pickup icon and level. Sub sits left of main.
+        const mainIcon = assets.items.byType[WEAPONS[state.main.id].item].idle;
+        const mainX = LOGICAL_W - mainIcon.width - 32;
+        renderer.drawImage(mainIcon.canvas, mainX, iconY);
         renderer.fillText(
-          `Time: ${gameTime.toFixed(1)}s  ${boss ? boss.phase : ''}`,
-          8,
-          hudY + 56,
-          '#888',
-          8
+          `Lv${state.main.level}`,
+          mainX + mainIcon.width + 2,
+          iconY + 4,
+          '#fff',
+          10
         );
-        renderer.fillText('F2 warning  F3 boss', 8, hudY + 66, '#666', 8);
-      }
+        const subX = mainX - 40;
+        if (state.sub) {
+          const subIcon = assets.items.byType[WEAPONS[state.sub.id].item].idle;
+          renderer.drawImage(subIcon.canvas, subX, iconY);
+          renderer.fillText(
+            `Lv${state.sub.level}`,
+            subX + subIcon.width + 2,
+            iconY + 4,
+            '#fff',
+            10
+          );
+        } else {
+          renderer.fillText('SUB -', subX, iconY + 4, '#666', 10);
+        }
 
-      const intro = boss ? null : introBanner(gameTime);
-      if (intro && !state.gameOver) {
-        const blink = intro !== 'GO' || Math.floor(gameTime * 8) % 2 === 0;
-        renderer.fillText(
-          intro,
-          LOGICAL_W / 2 - intro.length * 6,
-          LOGICAL_H / 2 - 80,
-          blink ? '#fff' : '#7fd',
-          18
-        );
-      }
+        const intro = boss ? null : introBanner(gameTime);
+        if (intro && !state.gameOver) {
+          const blink = intro !== 'GO' || Math.floor(gameTime * 8) % 2 === 0;
+          renderer.fillText(
+            intro,
+            LOGICAL_W / 2 - intro.length * 6,
+            LOGICAL_H / 2 - 80,
+            blink ? '#fff' : '#7fd',
+            18
+          );
+        }
 
-      const barIntro = bossIntroBarFill(gameTime, stage1.warningAt, stage1.boss.enterAt);
-      let barFill: number | null = barIntro;
-      if (barFill === null && boss && boss.phase !== 'clear' && boss.phase !== 'done') {
-        barFill = bossHpRemaining(boss) / Math.max(1, bossTotalHp(stage1.boss));
-      }
-      if (barFill !== null) drawBossHpBar(ctx, barFill, 48, 32, 264, 8);
+        const barIntro = bossIntroBarFill(gameTime, stage1.warningAt, stage1.boss.enterAt);
+        let barFill: number | null = barIntro;
+        if (barFill === null && boss && boss.phase !== 'clear' && boss.phase !== 'done') {
+          barFill = bossHpRemaining(boss) / Math.max(1, bossTotalHp(stage1.boss));
+        }
+        if (barFill !== null) drawBossHpBar(ctx, barFill, 48, 32, 264, 8);
 
-      if (
-        !state.gameOver &&
-        gameTime >= stage1.warningAt + WARNING_BANNER_DELAY &&
-        gameTime < stage1.boss.enterAt
-      ) {
-        const blink = Math.floor(gameTime * 6) % 2 === 0;
-        renderer.fillRect(0, LOGICAL_H / 2 - 28, LOGICAL_W, 40, 'rgba(0, 0, 0, 0.45)');
-        renderer.fillText(
-          'WARNING',
-          LOGICAL_W / 2 - 46,
-          LOGICAL_H / 2 - 16,
-          blink ? '#ff4444' : '#ffffff',
-          20
-        );
+        if (
+          !state.gameOver &&
+          gameTime >= stage1.warningAt + WARNING_BANNER_DELAY &&
+          gameTime < stage1.boss.enterAt
+        ) {
+          const blink = Math.floor(gameTime * 6) % 2 === 0;
+          renderer.fillRect(0, LOGICAL_H / 2 - 28, LOGICAL_W, 40, 'rgba(0, 0, 0, 0.45)');
+          renderer.fillText(
+            'WARNING',
+            LOGICAL_W / 2 - 46,
+            LOGICAL_H / 2 - 16,
+            blink ? '#ff4444' : '#ffffff',
+            20
+          );
+        }
       }
 
       // On-screen controls and pause button
@@ -1584,6 +1762,16 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
         bullets.push({ x: bullet.x, y: bullet.y, vx: bullet.vx, vy: bullet.vy });
       });
       return { player: { x: player.x, y: player.y }, enemies, bullets };
+    },
+
+    getWeaponTestStats(): WeaponTestStats | null {
+      return weaponTest() ? weaponTestStats() : null;
+    },
+
+    applyTestDeath(): boolean {
+      if (!weaponTest() || !isPlayerVulnerable()) return false;
+      killPlayer();
+      return true;
     },
 
     getDebugInfo(): GameDebugInfo {

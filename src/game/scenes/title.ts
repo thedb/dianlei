@@ -1,6 +1,7 @@
 /**
- * Title scene - main menu: 开始游戏 / 挑战 Boss / 设置
+ * Title scene - main menu: 开始游戏 / 设置
  * The live stage demo runs behind the chrome.
+ * A hidden top-right hot zone opens the debug panel; the demo keeps running.
  */
 
 import type { Scene, SceneContext } from './types';
@@ -8,6 +9,8 @@ import type { Renderer } from '@/engine/renderer';
 import type { InputState } from '@/engine/input';
 import { LOGICAL_W, LOGICAL_H } from '@/game/config';
 import { readHighScore } from '@/game/highScore';
+import { createDebugHotZone } from '@/game/ui/debugHotZone';
+import { createDebugPanel } from '@/game/ui/debugPanel';
 import { createSettingsPanel } from '@/game/ui/settingsPanel';
 import {
   drawButton,
@@ -20,22 +23,15 @@ import {
 import { START_BUTTON, drawStartButton, isStartTapped } from '@/game/ui/startButton';
 import { sharedTitleAttract, type TitleAttract } from './titleAttract';
 
-const ITEM_COUNT = 3;
+const ITEM_COUNT = 2;
 const MENU_W = 180;
 const MENU_H = 44;
 /** Wider than the start button's touch slack so the two hits do not overlap. */
 const MENU_GAP = 16;
 
-export const BOSS_BUTTON: Rect = {
-  x: LOGICAL_W / 2 - MENU_W / 2,
-  y: START_BUTTON.y + START_BUTTON.h + MENU_GAP,
-  w: MENU_W,
-  h: MENU_H,
-};
-
 export const SETTINGS_BUTTON: Rect = {
   x: LOGICAL_W / 2 - MENU_W / 2,
-  y: BOSS_BUTTON.y + BOSS_BUTTON.h + MENU_GAP,
+  y: START_BUTTON.y + START_BUTTON.h + MENU_GAP,
   w: MENU_W,
   h: MENU_H,
 };
@@ -46,18 +42,19 @@ export function createTitleScene(
 ): Scene {
   let selected = 0;
   let inSettings = false;
+  let inDebug = false;
   let blinkTimer = 0;
   const settingsPanel = createSettingsPanel(ctx.settings);
+  const debugPanel = createDebugPanel();
+  const hotZone = createDebugHotZone();
 
-  function choose(i: number): 'battle' | null {
-    if (i === 0) {
-      ctx.battleEntry = 'stage';
-      return 'battle';
-    }
-    if (i === 1) {
-      ctx.battleEntry = 'boss';
-      return 'battle';
-    }
+  function startGame(): 'battle' {
+    ctx.playMode = 'play';
+    ctx.battleEntry = 'stage';
+    return 'battle';
+  }
+
+  function openSettings(): null {
     inSettings = true;
     settingsPanel.open();
     return null;
@@ -69,7 +66,9 @@ export function createTitleScene(
     enter(): void {
       selected = 0;
       inSettings = false;
+      inDebug = false;
       blinkTimer = 0;
+      hotZone.reset();
       ctx.input.setControlsEnabled(false);
       attract.start();
     },
@@ -89,13 +88,38 @@ export function createTitleScene(
         return null;
       }
 
+      if (inDebug) {
+        const action = debugPanel.update(input);
+        if (action === 'close') inDebug = false;
+        else if (action === 'toggleDebug') {
+          ctx.settings.update({ debugMode: !ctx.settings.get().debugMode });
+        } else if (action === 'boss') {
+          ctx.playMode = 'play';
+          ctx.battleEntry = 'boss';
+          return 'battle';
+        } else if (action === 'weaponTest') {
+          ctx.playMode = 'weaponTest';
+          ctx.battleEntry = 'stage';
+          return 'battle';
+        }
+        return null;
+      }
+
+      hotZone.advance(dt);
+      for (const tap of input.taps) {
+        if (hotZone.tap(tap.x, tap.y)) {
+          inDebug = true;
+          debugPanel.open();
+          return null;
+        }
+      }
+
       if (input.menuUp) selected = (selected + ITEM_COUNT - 1) % ITEM_COUNT;
       if (input.menuDown) selected = (selected + 1) % ITEM_COUNT;
 
-      if (isStartTapped(input.taps)) return choose(0);
-      if (input.taps.some((t) => hitRect(BOSS_BUTTON, t.x, t.y))) return choose(1);
-      if (input.taps.some((t) => hitRect(SETTINGS_BUTTON, t.x, t.y))) return choose(2);
-      if (input.menuConfirm) return choose(selected);
+      if (isStartTapped(input.taps)) return startGame();
+      if (input.taps.some((t) => hitRect(SETTINGS_BUTTON, t.x, t.y))) return openSettings();
+      if (input.menuConfirm) return selected === 0 ? startGame() : openSettings();
       return null;
     },
 
@@ -118,14 +142,11 @@ export function createTitleScene(
       );
 
       drawStartButton(c, blinkTimer, selected === 0);
-      drawButton(c, BOSS_BUTTON, '挑战 Boss', selected === 1);
-      drawButton(c, SETTINGS_BUTTON, '设置', selected === 2);
+      drawButton(c, SETTINGS_BUTTON, '设置', selected === 1);
 
       drawText(
         c,
-        ctx.showDebug
-          ? '方向键移动  Z射击  X炸弹  Esc暂停  F2预警  F3 BOSS'
-          : '方向键/WASD 移动  Z/空格 射击  X 炸弹  Esc 暂停',
+        '方向键/WASD 移动  Z/空格 射击  X 炸弹  Esc 暂停',
         LOGICAL_W / 2,
         LOGICAL_H - 60,
         11,
@@ -136,6 +157,8 @@ export function createTitleScene(
 
       if (inSettings) {
         settingsPanel.render(c, ctx.input.getControlsView(), '设置');
+      } else if (inDebug) {
+        debugPanel.render(c, ctx.settings.get().debugMode);
       }
     },
   };

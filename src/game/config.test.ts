@@ -22,6 +22,16 @@ import {
   BUILDING_DROP_B_SHARE,
   DEATH_POWER_LOSS,
   DEATH_SUB_LOSS,
+  DEBUG_HOT_SIZE,
+  DEBUG_HOT_TAPS,
+  DEBUG_HOT_WINDOW,
+  WEAPON_TEST_BOMBS_MAX,
+  WEAPON_TEST_DPS_WINDOW,
+  WEAPON_TEST_SUB_MAX,
+  WEAPON_TEST_TARGET_H,
+  WEAPON_TEST_TARGET_W,
+  WEAPON_TEST_TARGET_X,
+  WEAPON_TEST_TARGET_Y,
 } from './config';
 
 describe('Game Config', () => {
@@ -74,5 +84,18 @@ describe('Game Config', () => {
     expect(BOMB_WAVE_TIME).toBeLessThanOrEqual(0.5);
     expect(BUILDING_DROP_CHANCE).toBe(0.3);
     expect(BUILDING_DROP_B_SHARE).toBe(0.5);
+  });
+
+  it('keeps the hidden debug entry and weapon-test caps in range', () => {
+    expect(DEBUG_HOT_SIZE).toBe(48);
+    expect(DEBUG_HOT_TAPS).toBe(6);
+    expect(DEBUG_HOT_WINDOW).toBe(2);
+    expect(WEAPON_TEST_DPS_WINDOW).toBe(1);
+    expect(WEAPON_TEST_SUB_MAX).toBe(HOMING_MAX_LEVEL);
+    expect(WEAPON_TEST_BOMBS_MAX).toBeGreaterThan(0);
+    expect(WEAPON_TEST_BOMBS_MAX).toBeLessThanOrEqual(BOMBS_MAX);
+    expect(WEAPON_TEST_TARGET_X).toBe((LOGICAL_W - WEAPON_TEST_TARGET_W) / 2);
+    expect(WEAPON_TEST_TARGET_Y).toBeGreaterThanOrEqual(0);
+    expect(WEAPON_TEST_TARGET_Y + WEAPON_TEST_TARGET_H).toBeLessThan(80);
   });
 });

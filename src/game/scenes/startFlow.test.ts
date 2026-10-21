@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createBootScene, BOOT_DURATION } from './boot';
-import { createTitleScene, BOSS_BUTTON, SETTINGS_BUTTON } from './title';
+import { createTitleScene, SETTINGS_BUTTON } from './title';
 
 vi.mock('@/game/art', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/game/art')>();
@@ -102,26 +102,32 @@ describe('title screen start button', () => {
     ).toBe('battle');
   });
 
-  it('挑战 Boss starts a boss-practice battle and 开始游戏 stays a full stage', () => {
+  it('the title menu is 开始游戏 and 设置', () => {
     const ctx = context();
     const title = createTitleScene(ctx);
     title.enter();
-    const tap = { x: BOSS_BUTTON.x + BOSS_BUTTON.w / 2, y: BOSS_BUTTON.y + BOSS_BUTTON.h / 2 };
-    expect(title.update(DT, makeInput({ taps: [tap] }))).toBe('battle');
-    expect(ctx.battleEntry).toBe('boss');
+    const tap = {
+      x: SETTINGS_BUTTON.x + SETTINGS_BUTTON.w / 2,
+      y: SETTINGS_BUTTON.y + SETTINGS_BUTTON.h / 2,
+    };
+    expect(title.update(DT, makeInput({ taps: [tap] }))).toBeNull();
+    expect(ctx.battleEntry).toBe('stage');
+    expect(ctx.playMode).toBeUndefined();
 
-    title.enter();
+    title.update(DT, makeInput({ menuBack: true }));
     expect(title.update(DT, makeInput({ taps: [center] }))).toBe('battle');
     expect(ctx.battleEntry).toBe('stage');
+    expect(ctx.playMode).toBe('play');
   });
 
-  it('keyboard down selects 挑战 Boss', () => {
+  it('keyboard down selects 设置', () => {
     const ctx = context();
     const title = createTitleScene(ctx);
     title.enter();
     expect(title.update(DT, makeInput({ menuDown: true }))).toBeNull();
-    expect(title.update(DT, makeInput({ menuConfirm: true }))).toBe('battle');
-    expect(ctx.battleEntry).toBe('boss');
+    expect(title.update(DT, makeInput({ menuConfirm: true }))).toBeNull();
+    expect(ctx.battleEntry).toBe('stage');
+    expect(ctx.playMode).toBeUndefined();
   });
 
   it('does not change volume or BGM from the title screen', () => {
@@ -151,7 +157,6 @@ describe('title screen start button', () => {
     const title = createTitleScene(ctx);
     title.enter();
     title.update(DT, makeInput({ menuDown: true }));
-    title.update(DT, makeInput({ menuDown: true }));
     expect(title.update(DT, makeInput({ menuConfirm: true }))).toBeNull();
     for (let i = 0; i < 5; i++) title.update(DT, makeInput({ menuDown: true }));
     title.update(DT, makeInput({ menuConfirm: true }));
@@ -173,18 +178,6 @@ describe('title screen start button', () => {
     expect(ctx.storage.getStorage(HIGH_SCORE_KEY)).toBeNull();
     expect(ctx.settings.get().debugMode).toBe(false);
     expect(ctx.battleEntry).toBe('stage');
-  });
-
-  it('settings can turn debug mode on', () => {
-    const ctx = context();
-    const title = createTitleScene(ctx);
-    title.enter();
-    title.update(DT, makeInput({ menuDown: true }));
-    title.update(DT, makeInput({ menuDown: true }));
-    expect(title.update(DT, makeInput({ menuConfirm: true }))).toBeNull();
-    for (let i = 0; i < 7; i++) title.update(DT, makeInput({ menuDown: true }));
-    title.update(DT, makeInput({ menuConfirm: true }));
-    expect(ctx.settings.get().debugMode).toBe(true);
   });
 
   it('设置 opens settings instead of starting', () => {

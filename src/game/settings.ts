@@ -27,7 +27,7 @@ export interface Settings {
   bgmEnabled: boolean;
   /** 0–1 music bus. Ignored while BGM is off or the master mute is on. */
   bgmVolume: number;
-  /** Bottom-left FPS / debug overlay, and F2 / F3 battle skips. Default off. */
+  /** Bottom-left FPS / input / getDebugInfo overlay. Default off. No hotkeys. */
   debugMode: boolean;
 }
 

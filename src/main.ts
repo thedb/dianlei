@@ -30,14 +30,6 @@ setSafeAreaVars();
 const platform = createH5Platform(container);
 const game = createGame(platform);
 
-// Handle keyboard shortcuts
-window.addEventListener('keydown', (e) => {
-  if (e.key === 'F1') {
-    e.preventDefault();
-    game.toggleDebug();
-  }
-});
-
 // Prevent default touch behavior
 document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
 

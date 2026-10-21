@@ -18,6 +18,8 @@ import {
 
 export type PauseView = 'closed' | 'menu' | 'confirmExit' | 'settings';
 export type PauseAction = 'resume' | 'exit' | null;
+/** Weapon test leaves at once. A stage run asks before discarding the run. */
+export type PauseExitMode = 'confirm' | 'immediate';
 
 export interface PauseMenu {
   open(): void;
@@ -33,14 +35,13 @@ export interface PauseMenu {
   ): void;
 }
 
-const MENU_ITEMS = ['继续游戏', '游戏设置', '退出'] as const;
 const CONFIRM_ITEMS = ['确认退出', '取消'] as const;
 
 const MENU_PANEL: Rect = { x: 50, y: 190, w: LOGICAL_W - 100, h: 250 };
 const CONFIRM_PANEL: Rect = { x: 40, y: 230, w: LOGICAL_W - 80, h: 170 };
 
 function menuButtons(): Rect[] {
-  return MENU_ITEMS.map((_, i) => ({
+  return [0, 1, 2].map((i) => ({
     x: MENU_PANEL.x + 30,
     y: MENU_PANEL.y + 60 + i * 52,
     w: MENU_PANEL.w - 60,
@@ -58,11 +59,19 @@ function confirmButtons(): Rect[] {
   }));
 }
 
-export function createPauseMenu(store: SettingsStore): PauseMenu {
+export function createPauseMenu(
+  store: SettingsStore,
+  options: { exitMode?: () => PauseExitMode } = {}
+): PauseMenu {
   let view: PauseView = 'closed';
   let menuSel = 0;
   let confirmSel = 1;
   const settings = createSettingsPanel(store);
+
+  function menuItems(): readonly [string, string, string] {
+    const leaving = options.exitMode?.() === 'immediate' ? '返回标题' : '退出';
+    return ['继续游戏', '游戏设置', leaving];
+  }
 
   function chooseMenu(i: number): PauseAction {
     if (i === 0) {
@@ -72,6 +81,9 @@ export function createPauseMenu(store: SettingsStore): PauseMenu {
     if (i === 1) {
       view = 'settings';
       settings.open();
+    } else if (options.exitMode?.() === 'immediate') {
+      view = 'closed';
+      return 'exit';
     } else {
       view = 'confirmExit';
       confirmSel = 1;
@@ -109,8 +121,8 @@ export function createPauseMenu(store: SettingsStore): PauseMenu {
             view = 'closed';
             return 'resume';
           }
-          if (input.menuUp) menuSel = (menuSel + MENU_ITEMS.length - 1) % MENU_ITEMS.length;
-          if (input.menuDown) menuSel = (menuSel + 1) % MENU_ITEMS.length;
+          if (input.menuUp) menuSel = (menuSel + menuItems().length - 1) % menuItems().length;
+          if (input.menuDown) menuSel = (menuSel + 1) % menuItems().length;
           const tapped = tappedIndex(menuButtons(), input.taps);
           if (tapped >= 0) return chooseMenu(tapped);
           if (input.menuConfirm) return chooseMenu(menuSel);
@@ -148,7 +160,8 @@ export function createPauseMenu(store: SettingsStore): PauseMenu {
       if (view === 'menu') {
         drawPanel(ctx, MENU_PANEL);
         drawText(ctx, '暂停', LOGICAL_W / 2, MENU_PANEL.y + 30, 22, UI_COLORS.accent, 'center');
-        menuButtons().forEach((r, i) => drawButton(ctx, r, MENU_ITEMS[i]!, i === menuSel));
+        const items = menuItems();
+        menuButtons().forEach((r, i) => drawButton(ctx, r, items[i]!, i === menuSel));
         drawText(
           ctx,
           `第 ${info.stage} 关    分数 ${info.score}`,

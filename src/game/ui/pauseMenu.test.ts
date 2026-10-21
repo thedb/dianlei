@@ -40,6 +40,15 @@ describe('pause menu', () => {
     expect(pause.update(makeInput({ menuConfirm: true }))).toBe('exit');
   });
 
+  it('武器测试的返回标题离开，不再弹出确认', () => {
+    const store = createSettingsStore(createMemoryStorage());
+    const pause = createPauseMenu(store, { exitMode: () => 'immediate' });
+    pause.open();
+    pause.update(makeInput({ menuUp: true }));
+    expect(pause.update(makeInput({ menuConfirm: true }))).toBe('exit');
+    expect(pause.getView()).toBe('closed');
+  });
+
   it('opens settings, applies changes immediately, and goes back', () => {
     const { pause, store } = menu();
     pause.open();

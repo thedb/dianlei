@@ -36,6 +36,7 @@ export function createBootScene(ctx: SceneContext): Scene {
       if (!attract.isRunning()) attract.start();
       attract.update(dt);
       if (isStartTapped(input.taps) || input.menuConfirm) {
+        ctx.playMode = 'play';
         ctx.battleEntry = 'stage';
         return 'battle';
       }

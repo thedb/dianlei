@@ -57,8 +57,6 @@ const BLANK_INPUT: InputState = {
   menuRight: false,
   menuConfirm: false,
   menuBack: false,
-  debugWarning: false,
-  debugBoss: false,
   taps: [],
   pointers: [],
 };
