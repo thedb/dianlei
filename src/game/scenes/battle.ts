@@ -1241,17 +1241,26 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
       renderer.fillText('♦', LOGICAL_W - 90, hudY, PALETTE[COLOR.PLAYER_CYAN], 10);
       renderer.fillText(livesText, LOGICAL_W - 80, hudY, '#fff', 10);
 
-      // Bombs
-      const bombsText = '●'.repeat(state.bombs) + '○'.repeat(BOMBS_MAX - state.bombs);
-      renderer.fillText('B:', 8, hudY + 14, '#ff0', 10);
-      renderer.fillText(bombsText, 26, hudY + 14, state.bombs > 0 ? '#ff0' : '#666', 10);
+      // Bomb stock: octagon B, bright when owned and dim when empty.
+      // Sits under the score line and above the boss bar (y = 32).
+      const iconY = hudY + 10;
+      const bombIcon = assets.items.bomb;
+      const bombStep = bombIcon.width + 1;
+      for (let i = 0; i < BOMBS_MAX; i++) {
+        ctx.globalAlpha = i < state.bombs ? 1 : 0.4;
+        renderer.drawImage(bombIcon.canvas, 6 + i * bombStep, iconY);
+      }
+      ctx.globalAlpha = 1;
 
-      // Power level
+      // Power level uses the missile-energy icon (same sprite as the P pickup).
+      const missileIcon = assets.items.powerUp;
+      const missileX = LOGICAL_W - missileIcon.width - 32;
+      renderer.drawImage(missileIcon.canvas, missileX, iconY);
       renderer.fillText(
-        `PWR: Lv${state.power}`,
-        LOGICAL_W - 60,
-        hudY + 14,
-        PALETTE[COLOR.PLAYER_CYAN],
+        `Lv${state.power}`,
+        missileX + missileIcon.width + 2,
+        iconY + 4,
+        '#fff',
         10
       );
 
