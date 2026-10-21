@@ -6,6 +6,7 @@
  */
 
 import type { Poolable } from '@/engine/pool';
+import { WEAPONS, type EquippedWeapon } from '@/game/systems/playerWeapons';
 import type { BuildingPlacement, BuildingType, StageSection } from '@/game/levels/types';
 import type { BulletSpawner } from '@/game/entities/enemyBullet';
 import { executeFirePattern } from '@/game/entities/enemyBullet';
@@ -18,8 +19,7 @@ import {
   TURRET_TURN_RATE,
   SCORE_BUILDING,
   BUILDING_HP,
-  BUILDING_DROP_CHANCE,
-  BUILDING_DROP_B_SHARE,
+  HOMING_MAX_LEVEL,
   SEA_GUN_FIRE_INTERVAL,
   BUILDING_FIRE_MIN_Y,
   BUILDING_HIT_INSET,
@@ -330,12 +330,13 @@ export function buildingBlocksTank(b: Building, x: number, y: number): boolean {
 export type BuildingDrop = 'B' | 'T';
 
 /**
- * Drop roll on destroy. `rng` returns [0, 1) and is called once.
- * BUILDING_DROP_CHANCE of wrecks drop an item, split BUILDING_DROP_B_SHARE bomb
- * and the rest T homing missile. Buildings never drop P; T comes only from here.
+ * The one item a destroyed building drops.
+ * Pass the live sub slot (`state.sub` at the moment of the kill). A copy taken
+ * earlier in the run is stale: equipping or leveling T must change the next drop.
+ * No sub, level 0, or T below HOMING_MAX_LEVEL → T. Homing already at max → B.
+ * Buildings never drop P. Wave-table carriers still drop only P and B.
  */
-export function rollBuildingDrop(rng: () => number = Math.random): BuildingDrop | null {
-  const roll = rng();
-  if (roll >= BUILDING_DROP_CHANCE) return null;
-  return roll < BUILDING_DROP_CHANCE * BUILDING_DROP_B_SHARE ? 'B' : 'T';
+export function chooseBuildingDrop(sub: EquippedWeapon | null): BuildingDrop {
+  if (sub !== null && sub.id === WEAPONS.homing.id && sub.level >= HOMING_MAX_LEVEL) return 'B';
+  return 'T';
 }

@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { Renderer } from '@/engine/renderer';
 import { createBootScene, BOOT_DURATION } from './boot';
+import { createSceneManager } from './index';
 import { createTitleScene, SETTINGS_BUTTON } from './title';
+import { peekSharedTitleAttract, resetSharedTitleAttractForTests } from './titleAttract';
 
 vi.mock('@/game/art', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/game/art')>();
@@ -56,6 +59,35 @@ function context(): SceneContext {
 
 const center = { x: START_BUTTON.x + START_BUTTON.w / 2, y: START_BUTTON.y + START_BUTTON.h / 2 };
 
+function loadingRenderer(): Renderer & { clears: string[]; images: number } {
+  const gradient = { addColorStop: () => undefined };
+  const ctx = new Proxy(
+    {},
+    {
+      get(_target, prop) {
+        if (prop === 'createLinearGradient' || prop === 'createRadialGradient')
+          return () => gradient;
+        return () => undefined;
+      },
+      set() {
+        return true;
+      },
+    }
+  );
+  const renderer = {
+    clears: [] as string[],
+    images: 0,
+    clear(color: string) {
+      this.clears.push(color);
+    },
+    drawImage() {
+      this.images += 1;
+    },
+    getContext: () => ctx,
+  };
+  return renderer as unknown as Renderer & { clears: string[]; images: number };
+}
+
 describe('boot screen start button', () => {
   it('first tap on 开始游戏 enters battle immediately', () => {
     const boot = createBootScene(context());
@@ -83,6 +115,39 @@ describe('boot screen start button', () => {
     const boot = createBootScene(context());
     boot.enter();
     expect(boot.update(DT, makeInput({ menuConfirm: true }))).toBe('battle');
+  });
+
+  it('does not create or draw the attract demo while the boot screen is up', () => {
+    resetSharedTitleAttractForTests();
+    const manager = createSceneManager(context());
+    manager.start('boot');
+    expect(peekSharedTitleAttract()).toBeNull();
+
+    const renderer = loadingRenderer();
+    let scene = manager.getCurrentScene();
+    expect(scene?.id).toBe('boot');
+    for (let i = 0; i < 200 && scene?.id === 'boot'; i++) {
+      const next = scene.update(DT, makeInput());
+      scene.render(renderer, 1);
+      if (next) {
+        expect(next).toBe('title');
+        expect(peekSharedTitleAttract()).toBeNull();
+        manager.transition(next);
+        scene = manager.getCurrentScene();
+      }
+    }
+
+    expect(scene?.id).toBe('title');
+    expect(peekSharedTitleAttract()?.isRunning()).toBe(true);
+    expect(renderer.clears.length).toBeGreaterThan(0);
+    expect(renderer.clears.every((color) => color === '#000')).toBe(true);
+    expect(renderer.images).toBe(0);
+
+    manager.transition('battle');
+    expect(peekSharedTitleAttract()?.isRunning()).toBe(false);
+    manager.transition('title');
+    expect(peekSharedTitleAttract()?.isRunning()).toBe(true);
+    resetSharedTitleAttractForTests();
   });
 });
 

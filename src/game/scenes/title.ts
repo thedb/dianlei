@@ -1,6 +1,7 @@
 /**
  * Title scene - main menu: 开始游戏 / 设置
- * The live stage demo runs behind the chrome.
+ * The live stage demo starts here, in enter, once this scene is current.
+ * Boot and any earlier loading frame do not create it.
  * A hidden top-right hot zone opens the debug panel; the demo keeps running.
  */
 
@@ -36,17 +37,21 @@ export const SETTINGS_BUTTON: Rect = {
   h: MENU_H,
 };
 
-export function createTitleScene(
-  ctx: SceneContext,
-  attract: TitleAttract = sharedTitleAttract()
-): Scene {
+export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Scene {
   let selected = 0;
   let inSettings = false;
   let inDebug = false;
   let blinkTimer = 0;
+  // Shared demo is created in enter. An injected demo stays stopped until then.
+  let attract: TitleAttract | null = injected ?? null;
   const settingsPanel = createSettingsPanel(ctx.settings);
   const debugPanel = createDebugPanel();
   const hotZone = createDebugHotZone();
+
+  function demo(): TitleAttract {
+    if (!attract) attract = sharedTitleAttract();
+    return attract;
+  }
 
   function startGame(): 'battle' {
     ctx.playMode = 'play';
@@ -70,18 +75,19 @@ export function createTitleScene(
       blinkTimer = 0;
       hotZone.reset();
       ctx.input.setControlsEnabled(false);
-      attract.start();
+      demo().start();
     },
 
     exit(): void {
-      attract.stop();
+      attract?.stop();
       ctx.input.setControlsEnabled(true);
     },
 
     update(dt: number, input: InputState) {
       blinkTimer = (blinkTimer + dt) % 1;
-      if (!attract.isRunning()) attract.start();
-      attract.update(dt);
+      const live = demo();
+      if (!live.isRunning()) live.start();
+      live.update(dt);
 
       if (inSettings) {
         if (settingsPanel.update(input) === 'close') inSettings = false;
@@ -124,7 +130,8 @@ export function createTitleScene(
     },
 
     render(renderer: Renderer, alpha: number): void {
-      attract.render(renderer, alpha);
+      if (attract?.isRunning()) attract.render(renderer, alpha);
+      else renderer.clear('#000');
       const c = renderer.getContext();
       drawTitleScrim(c);
 

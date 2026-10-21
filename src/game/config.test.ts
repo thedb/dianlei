@@ -18,8 +18,6 @@ import {
   BOMB_MEDIUM_RATIO,
   BOMB_BOSS_RATIO,
   BOMB_WAVE_TIME,
-  BUILDING_DROP_CHANCE,
-  BUILDING_DROP_B_SHARE,
   DEATH_POWER_LOSS,
   DEATH_SUB_LOSS,
   DEBUG_HOT_SIZE,
@@ -93,13 +91,12 @@ describe('Game Config', () => {
     expect(DEATH_SUB_LOSS).toBe(1);
   });
 
-  it('keeps the bomb and building drop rules in range', () => {
+  it('keeps the bomb rules in range', () => {
     expect(BOMB_MEDIUM_RATIO).toBe(0.5);
     expect(BOMB_BOSS_RATIO).toBe(0.08);
     expect(BOMB_WAVE_TIME).toBeGreaterThanOrEqual(0.3);
     expect(BOMB_WAVE_TIME).toBeLessThanOrEqual(0.5);
-    expect(BUILDING_DROP_CHANCE).toBe(0.3);
-    expect(BUILDING_DROP_B_SHARE).toBe(0.5);
+    expect(ENEMY_BULLET_CAP).toBe(150);
   });
 
   it('keeps the hidden debug entry and weapon-test caps in range', () => {

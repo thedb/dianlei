@@ -1,8 +1,10 @@
 /**
- * Title / boot attract mode.
+ * Title attract mode.
  * The world is a real battle scene (same stage data, entities, sprites, and
  * rules). Only the scripted stick and the loop / death-fade / restart live here.
  * The demo never writes a run report, high score, or settings, and it plays no SFX.
+ * Boot does not construct this. The shared instance is created on the first
+ * title enter, and render draws nothing until start().
  */
 
 import type { InputState } from '@/engine/input';
@@ -192,6 +194,10 @@ export function createTitleAttract(
     },
 
     render(renderer: Renderer, alpha: number): void {
+      if (!running) {
+        renderer.clear('#000');
+        return;
+      }
       battle.render(renderer, alpha);
       if (fade > 0) {
         renderer.fillRect(0, 0, LOGICAL_W, LOGICAL_H, `rgba(0, 0, 0, ${fade})`);
@@ -223,8 +229,22 @@ export function createTitleAttract(
 
 let shared: TitleAttract | null = null;
 
-/** One battle scene for boot and title, so the sprite bake is not duplicated. */
+/**
+ * One battle scene for the title, so the sprite bake is not duplicated.
+ * Not called from boot. The first title enter creates it.
+ */
 export function sharedTitleAttract(): TitleAttract {
   if (!shared) shared = createTitleAttract('auto');
   return shared;
+}
+
+/** The shared demo, or null while boot / loading has not entered the title. */
+export function peekSharedTitleAttract(): TitleAttract | null {
+  return shared;
+}
+
+/** Test isolation. Stops the demo so the next title enter creates a fresh one. */
+export function resetSharedTitleAttractForTests(): void {
+  shared?.stop();
+  shared = null;
 }

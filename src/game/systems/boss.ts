@@ -92,8 +92,9 @@ export interface BossRuntime {
 export interface BossExplosion {
   x: number;
   y: number;
-  scale: number;
   delay: number;
+  /** Turret pop is medium. The death sequence is the large multi-blast. */
+  size: 'medium' | 'large';
 }
 
 export interface BossShot {
@@ -667,7 +668,7 @@ function killPart(
   if (part.id === 'turretL' || part.id === 'turretR') {
     part.falling = true;
     part.fallVy = BOSS_TURRET_FALL_SPEED;
-    ev.explosions.push({ x: part.worldX, y: part.worldY, scale: 2, delay: 0 });
+    ev.explosions.push({ x: part.worldX, y: part.worldY, delay: 0, size: 'medium' });
     ev.shake = { intensity: SHAKE_SMALL_INTENSITY, duration: SHAKE_SMALL_DURATION };
     if (part.id === 'turretL') boss.intervalMulR = survivorScale(config);
     else boss.intervalMulL = survivorScale(config);
@@ -723,8 +724,8 @@ function emitDeathExplosion(boss: BossRuntime, index: number, ev: BossEvents): v
   ev.explosions.push({
     x: boss.x + spot[0],
     y: boss.y + spot[1],
-    scale: 4,
     delay: 0,
+    size: 'large',
   });
 }
 
