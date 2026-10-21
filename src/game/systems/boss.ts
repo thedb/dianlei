@@ -360,6 +360,12 @@ export function applyBossBomb(boss: BossRuntime, config: BossConfig): BossEvents
   return ev;
 }
 
+/** Weak points a homing missile may lock onto: only parts that can take damage now. */
+export function bossMissileTargets(boss: BossRuntime): BossPartRuntime[] {
+  if (!canTakeDamage(boss)) return [];
+  return damageableParts(boss);
+}
+
 /** Player bullet against turrets, the core, or the invulnerable hull. */
 export function resolveBossBullet(
   boss: BossRuntime,

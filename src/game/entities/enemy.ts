@@ -5,6 +5,7 @@
 
 import type { Poolable } from '@/engine/pool';
 import type { EnemyType, Move, Fire } from '@/game/levels/types';
+import { ENEMY_CLASS } from '@/game/entities/objectClass';
 import {
   LOGICAL_W,
   LOGICAL_H,
@@ -49,11 +50,9 @@ export const ENEMY_STATS: Record<
   missile_car: { hp: 12, score: SCORE_MISSILE_CAR, width: 24, height: 32, hitRadius: 12 },
 };
 
-const GROUND_TYPES: ReadonlySet<EnemyType> = new Set(['tank', 'turret2', 'missile_car']);
-
 /** Ground units scroll with the map and do not kill the player on contact. */
 export function isGroundEnemy(type: EnemyType): boolean {
-  return GROUND_TYPES.has(type);
+  return ENEMY_CLASS[type].category === 'ground';
 }
 
 /** Tile query used to keep tanks off river / shallow water. Off-map is not blocked. */
@@ -96,6 +95,8 @@ export interface Enemy extends Poolable {
 
   hitFlashTimer: number;
   drop: 'P' | 'B' | null;
+  /** Seconds until the bomb shockwave reaches this enemy; negative when none is pending. */
+  bombHitIn: number;
 }
 
 /** Create enemy factory for pool */
@@ -129,6 +130,7 @@ export function createEnemy(): Enemy {
     burstTimer: 0,
     hitFlashTimer: 0,
     drop: null,
+    bombHitIn: -1,
 
     reset() {
       this.type = 'small';
@@ -158,6 +160,7 @@ export function createEnemy(): Enemy {
       this.burstTimer = 0;
       this.hitFlashTimer = 0;
       this.drop = null;
+      this.bombHitIn = -1;
     },
   };
 }
@@ -203,6 +206,7 @@ export function spawnEnemy(
   enemy.burstTimer = 0;
   enemy.hitFlashTimer = 0;
   enemy.drop = drop;
+  enemy.bombHitIn = -1;
 }
 
 function wrapPi(rad: number): number {

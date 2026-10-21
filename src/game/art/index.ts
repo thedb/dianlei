@@ -12,6 +12,7 @@ export * from './bulletSprite';
 export * from './itemSprite';
 export * from './explosionSprite';
 export * from './buildingSprite';
+export * from './weaponFx';
 
 import type { PlayerSpriteSheet } from './playerSprite';
 import type { EnemyAssets } from './enemySprite';

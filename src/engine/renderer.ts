@@ -34,7 +34,15 @@ export interface GameDebugInfo {
   enemyCount?: number;
   enemyBulletCount?: number;
   score?: number;
+  /** Main weapon level */
   power?: number;
+  mainWeapon?: string;
+  /** Sub weapon id, or null while the sub slot is empty */
+  subWeapon?: string | null;
+  /** Sub weapon level, 0 while empty */
+  subLevel?: number;
+  /** Player homing missiles in flight */
+  missileCount?: number;
   lives?: number;
   paused?: boolean;
   /** Seconds of gameplay simulated (frozen while paused) */

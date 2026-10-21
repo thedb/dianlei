@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   BG_SCROLL_SPEED,
   BUILDING_DROP_CHANCE,
+  BUILDING_DROP_B_SHARE,
   BUILDING_HP,
   LOGICAL_H,
   SCORE_BUILDING,
@@ -257,18 +258,22 @@ describe('building damage and wreck', () => {
 });
 
 describe('building drops', () => {
-  it('rolls once and drops a bomb or nothing', () => {
+  it('rolls once: nothing, then B for the lower half of the drop chance, T for the upper', () => {
+    const split = BUILDING_DROP_CHANCE * BUILDING_DROP_B_SHARE;
     const none = sequence([BUILDING_DROP_CHANCE]);
     expect(rollBuildingDrop(none.rng)).toBeNull();
     expect(none.calls()).toBe(1);
-    const bomb = sequence([BUILDING_DROP_CHANCE - 0.001]);
-    expect(rollBuildingDrop(bomb.rng)).toBe('B');
-    expect(bomb.calls()).toBe(1);
+    const lastT = sequence([BUILDING_DROP_CHANCE - 0.001]);
+    expect(rollBuildingDrop(lastT.rng)).toBe('T');
+    expect(lastT.calls()).toBe(1);
+    expect(rollBuildingDrop(sequence([split]).rng)).toBe('T');
+    expect(rollBuildingDrop(sequence([split - 0.001]).rng)).toBe('B');
     expect(rollBuildingDrop(sequence([0]).rng)).toBe('B');
   });
 
-  it('drops a bomb 30% of the time and never a power-up', () => {
+  it('drops 30% of the time, split 50/50 between B and T, never P', () => {
     expect(BUILDING_DROP_CHANCE).toBe(0.3);
+    expect(BUILDING_DROP_B_SHARE).toBe(0.5);
     let seed = 12345;
     const rng = () => {
       seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
@@ -276,14 +281,26 @@ describe('building drops', () => {
     };
     const n = 100000;
     let bombs = 0;
+    let homing = 0;
     let other = 0;
     for (let i = 0; i < n; i++) {
       const dropped: string | null = rollBuildingDrop(rng);
       if (dropped === 'B') bombs++;
+      else if (dropped === 'T') homing++;
       else if (dropped !== null) other++;
     }
     expect(other).toBe(0);
-    expect(Math.abs(bombs / n - 0.3)).toBeLessThan(0.01);
+    expect(Math.abs((bombs + homing) / n - 0.3)).toBeLessThan(0.01);
+    expect(Math.abs(bombs / n - 0.15)).toBeLessThan(0.01);
+    expect(Math.abs(homing / n - 0.15)).toBeLessThan(0.01);
+  });
+
+  it('is the only source of T: wave-table carriers drop only P and B', () => {
+    for (const wave of stage1.waves) {
+      for (const g of wave.groups) {
+        for (const d of g.drops ?? []) expect(['P', 'B']).toContain(d.item);
+      }
+    }
   });
 });
 

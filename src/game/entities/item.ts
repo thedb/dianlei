@@ -1,6 +1,6 @@
 /**
  * Item entity system
- * Design doc §5.6: P bounces around, B falls down
+ * Design doc §5.6: weapon items (P, T) bounce around, B falls down
  */
 
 import type { Poolable } from '@/engine/pool';
@@ -12,7 +12,26 @@ import {
   ITEM_B_FALL_SPEED,
 } from '@/game/config';
 
-export type ItemType = 'P' | 'B';
+/**
+ * Pickup letters. Weapon letters map to a weapon through the weapon registry
+ * (`systems/playerWeapons.ts`); B is the bomb stock.
+ */
+export type ItemType = 'P' | 'B' | 'T';
+
+/** How the pickup moves: weapon capsules bounce around, bombs fall. */
+export type ItemMotion = 'bounce' | 'fall';
+
+export interface ItemDef {
+  type: ItemType;
+  effect: 'weapon' | 'bomb';
+  motion: ItemMotion;
+}
+
+export const ITEM_DEFS: Readonly<Record<ItemType, ItemDef>> = {
+  P: { type: 'P', effect: 'weapon', motion: 'bounce' },
+  T: { type: 'T', effect: 'weapon', motion: 'bounce' },
+  B: { type: 'B', effect: 'bomb', motion: 'fall' },
+};
 
 export interface Item extends Poolable {
   type: ItemType;
@@ -64,8 +83,8 @@ export function spawnItem(item: Item, type: ItemType, x: number, y: number): voi
   item.lifetime = 0;
   item.flashTimer = 0;
 
-  if (type === 'P') {
-    // P item bounces around - start with random diagonal velocity
+  if (ITEM_DEFS[type].motion === 'bounce') {
+    // Weapon items bounce around - start with random diagonal velocity
     const angle = Math.random() * Math.PI * 2;
     item.vx = Math.cos(angle) * ITEM_P_SPEED;
     item.vy = Math.sin(angle) * ITEM_P_SPEED;
@@ -83,8 +102,8 @@ export function updateItem(item: Item, dt: number): boolean {
   item.lifetime += dt;
   item.flashTimer += dt;
 
-  if (item.type === 'P') {
-    // P item bounces off walls
+  if (ITEM_DEFS[item.type].motion === 'bounce') {
+    // Weapon items bounce off walls
     item.x += item.vx * dt;
     item.y += item.vy * dt;
 

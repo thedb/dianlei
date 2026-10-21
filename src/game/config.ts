@@ -119,6 +119,38 @@ export const LV2_GAP = 10;
 export const LV3_SPREAD_DEG = 15;
 
 // ============================================================================
+// §14.4.1 Sub weapon: T homing missile
+// ============================================================================
+
+/** Highest T level. Lv1 fires 1 missile per volley, Lv2 fires 2. */
+export const HOMING_MAX_LEVEL = 2;
+
+/** Volleys per second: 1/6 of the main weapon's FIRE_RATE (about 1.67/s) */
+export const HOMING_FIRE_RATE = FIRE_RATE / 6;
+
+/** Damage per missile: half a main bullet */
+export const HOMING_DAMAGE = PLAYER_BULLET_DAMAGE / 2;
+
+/** Missile flight speed, pixels/second */
+export const HOMING_SPEED = 330;
+
+/** Maximum turn rate while steering toward a target, degrees/second */
+export const HOMING_TURN_RATE = 270;
+
+/** Seconds before an unspent missile is removed, so it never circles forever */
+export const HOMING_LIFETIME = 2.5;
+
+/** Lv2 launch offsets: missiles leave each wing this far from center, angled outward */
+export const HOMING_LV2_OFFSET_X = 8;
+export const HOMING_LV2_SPLAY_DEG = 20;
+
+/** Square hitbox side used against enemies, buildings and the boss */
+export const HOMING_HIT_SIZE = 6;
+
+/** Sub-weapon levels lost on death. Lv0 means the slot is empty. */
+export const DEATH_SUB_LOSS = 1;
+
+// ============================================================================
 // §14.5 Lives, Bombs & Invincibility
 // ============================================================================
 
@@ -149,11 +181,28 @@ export const BOMB_INVINCIBLE_TIME = 1.0;
 /** Bomb cooldown between uses */
 export const BOMB_COOLDOWN = 1.0;
 
-/** Bomb damage to regular enemies */
-export const BOMB_DAMAGE = 40;
+/**
+ * Share of MAX HP a bomb takes from a medium-class object. Small-class objects
+ * die outright; the boss (large) uses BOMB_BOSS_RATIO. Off-screen objects are
+ * never hit.
+ */
+export const BOMB_MEDIUM_RATIO = 0.5;
 
 /** Bomb damage ratio to boss HP */
 export const BOMB_BOSS_RATIO = 0.08;
+
+/**
+ * Seconds the bomb shockwave takes to reach the farthest screen corner.
+ * Each target is hit when the ring reaches it, so small kills explode as a
+ * chain spread over at most this long.
+ */
+export const BOMB_WAVE_TIME = 0.4;
+
+/** Shockwave band thickness, logical pixels */
+export const BOMB_WAVE_BAND = 6;
+
+/** White flash after a bomb, seconds */
+export const BOMB_FLASH_TIME = 0.15;
 
 /** Score per bullet cleared by bomb */
 export const BOMB_BULLET_SCORE = 10;
@@ -353,10 +402,13 @@ export const MISSILE_TURN_RATE = 240;
 export const BUILDING_HP = 3;
 
 /**
- * Chance that a destroyed building drops one bomb.
- * Buildings never drop a power-up.
+ * Chance that a destroyed building drops an item.
+ * Buildings never drop a power-up (P).
  */
 export const BUILDING_DROP_CHANCE = 0.3;
+
+/** Share of building drops that are a bomb (B). The rest are the T homing missile. */
+export const BUILDING_DROP_B_SHARE = 0.5;
 
 /** Sea gun fixed2 interval, seconds. Ground turrets use 1.6–1.8. */
 export const SEA_GUN_FIRE_INTERVAL = 2.2;

@@ -1,12 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { COLOR, PALETTE } from '@/game/palette';
 import type { SpriteData } from './types';
-import { ITEM_SPRITE_H, ITEM_SPRITE_W, bombEnergyPixels, missileEnergyPixels } from './itemSprite';
+import {
+  ITEM_PIXELS,
+  ITEM_SPRITE_H,
+  ITEM_SPRITE_W,
+  bombEnergyPixels,
+  homingEnergyPixels,
+  missileEnergyPixels,
+} from './itemSprite';
+import { ITEM_DEFS } from '@/game/entities/item';
 
 const bomb = bombEnergyPixels();
 const bombFlash = bombEnergyPixels(true);
 const missile = missileEnergyPixels();
 const missileFlash = missileEnergyPixels(true);
+const homing = homingEnergyPixels();
+const homingFlash = homingEnergyPixels(true);
 
 function opaqueRun(row: readonly number[]): number {
   let n = 0;
@@ -130,5 +140,68 @@ describe('bomb and missile energy icons', () => {
     expect(countColor(missile, gold)).toBeGreaterThan(countColor(missile, steel));
     expect(countColor(missile, new Set([COLOR.BULLET_DARK]))).toBeGreaterThan(8);
     expect(mask(bomb)).not.toEqual(mask(missile));
+  });
+});
+
+describe('T homing capsule', () => {
+  it('has a sprite pair for every item letter', () => {
+    expect(new Set(Object.keys(ITEM_PIXELS))).toEqual(new Set(Object.keys(ITEM_DEFS)));
+    expect(ITEM_PIXELS.T.idle).toBe(homing);
+    expect(ITEM_PIXELS.T.flash).toBe(homingFlash);
+  });
+
+  it('fits the item grid with palette colors and flashes in place', () => {
+    for (const grid of [homing, homingFlash]) {
+      expect(grid).toHaveLength(ITEM_SPRITE_H);
+      for (const row of grid) {
+        expect(row).toHaveLength(ITEM_SPRITE_W);
+        for (const cell of row) {
+          expect(cell === -1 || (Number.isInteger(cell) && cell < PALETTE.length)).toBe(true);
+        }
+      }
+    }
+    expect(mask(homingFlash)).toEqual(mask(homing));
+  });
+
+  it('is a symmetric straight-sided capsule, not the octagon or the missile', () => {
+    for (const row of homing) {
+      const bits = row.map((cell) => cell >= 0);
+      expect(bits).toEqual([...bits].reverse());
+    }
+    // Straight sides: every body row from 2 to 15 is the same width.
+    for (let y = 2; y <= 15; y++) expect(opaqueRun(homing[y]!)).toBe(12);
+    // Round ends, no spark or flame.
+    expect(opaqueRun(homing[0]!)).toBeLessThan(opaqueRun(homing[1]!));
+    expect(opaqueRun(homing[17]!)).toBeLessThan(opaqueRun(homing[16]!));
+    expect(mask(homing)).not.toEqual(mask(bomb));
+    expect(mask(homing)).not.toEqual(mask(missile));
+  });
+
+  it('draws a readable white T', () => {
+    for (let y = 3; y <= 4; y++) {
+      for (let x = 5; x <= 10; x++) expect(homing[y]![x]).toBe(COLOR.WHITE);
+      expect(homing[y]![4]).not.toBe(COLOR.WHITE);
+      expect(homing[y]![11]).not.toBe(COLOR.WHITE);
+    }
+    for (let y = 5; y <= 12; y++) {
+      expect(homing[y]![7]).toBe(COLOR.WHITE);
+      expect(homing[y]![8]).toBe(COLOR.WHITE);
+      expect(homing[y]![5]).not.toBe(COLOR.WHITE);
+      expect(homing[y]![10]).not.toBe(COLOR.WHITE);
+    }
+  });
+
+  it('reads teal: cyan body with a green rim, no gold', () => {
+    const cyan = new Set<number>([COLOR.PLAYER_MED_CYAN, COLOR.PLAYER_DARK_CYAN]);
+    const green = new Set<number>([COLOR.TERRAIN_LIGHT_GRASS]);
+    const gold = new Set<number>([
+      COLOR.EXPLOSION_YELLOW,
+      COLOR.EXPLOSION_ORANGE_YELLOW,
+      COLOR.EXPLOSION_ORANGE,
+    ]);
+    expect(countColor(homing, cyan)).toBeGreaterThan(60);
+    expect(countColor(homing, green)).toBeGreaterThan(10);
+    expect(countColor(homing, gold)).toBe(0);
+    expect(countColor(bomb, green)).toBe(0);
   });
 });
