@@ -19,7 +19,6 @@ import {
   SCORE_BUILDING,
   BUILDING_HP,
   BUILDING_DROP_CHANCE,
-  BUILDING_DROP_B_SHARE,
   SEA_GUN_FIRE_INTERVAL,
   BUILDING_FIRE_MIN_Y,
   BUILDING_HIT_INSET,
@@ -323,11 +322,10 @@ export function buildingBlocksTank(b: Building, x: number, y: number): boolean {
 }
 
 /**
- * Drop roll on destroy: BUILDING_DROP_CHANCE for one item, then
- * BUILDING_DROP_B_SHARE of those are B and the rest P.
- * `rng` returns [0, 1) and is called once, or twice when an item drops.
+ * Drop roll on destroy. `rng` returns [0, 1) and is called once.
+ * BUILDING_DROP_CHANCE of wrecks drop a bomb. Buildings never drop P.
  */
-export function rollBuildingDrop(rng: () => number = Math.random): 'P' | 'B' | null {
+export function rollBuildingDrop(rng: () => number = Math.random): 'B' | null {
   if (rng() >= BUILDING_DROP_CHANCE) return null;
-  return rng() < BUILDING_DROP_B_SHARE ? 'B' : 'P';
+  return 'B';
 }

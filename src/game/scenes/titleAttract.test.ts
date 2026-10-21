@@ -64,17 +64,24 @@ function battleContext(playMode: 'play' | 'attract'): SceneContext {
 describe('title attract demo', () => {
   it('tracks a real battle scene driven by the same stage waves and factories', () => {
     playSfx.mockClear();
-    const attract = createTitleAttract('auto');
+    const attract = createTitleAttract('auto', { rng: () => 0 });
     const ctx = battleContext('attract');
     const battle = createBattleScene(ctx);
     const waves = new WaveScheduler({ mvpOnly: false });
     attract.start();
     battle.enter();
+    expect(attract.plan().routeId).toBe(0);
 
     const steps = Math.ceil(8 / DT);
     for (let i = 0; i < steps; i++) {
       const time = battle.getDebugInfo?.().gameTime ?? 0;
-      const input = attractInput(time, 'auto');
+      const world = battle.getBattleView();
+      const demoWorld = attract.pilotView();
+      expect(demoWorld.player.x).toBe(world.player.x);
+      expect(demoWorld.player.y).toBe(world.player.y);
+      expect(demoWorld.enemies.length).toBe(world.enemies.length);
+      expect(demoWorld.bullets.length).toBe(world.bullets.length);
+      const input = attractInput(time, 'auto', { plan: attract.plan(), world });
       attract.update(DT);
       battle.update(DT, input);
       waves.update(DT);
@@ -196,12 +203,91 @@ describe('title attract demo', () => {
   });
 
   it('restarts at the loop point without reaching the boss', () => {
-    const attract = createTitleAttract('auto');
+    const attract = createTitleAttract('auto', { rng: () => 0 });
     attract.start();
     const steps = Math.ceil((ATTRACT_LOOP_SECONDS + 2) / DT);
-    for (let i = 0; i < steps; i++) attract.update(DT);
-    expect(attract.stats().time).toBeGreaterThanOrEqual(0);
+    let maxTime = 0;
+    for (let i = 0; i < steps; i++) {
+      attract.update(DT);
+      maxTime = Math.max(maxTime, attract.stats().time);
+    }
+    expect(maxTime).toBeLessThan(ATTRACT_LOOP_SECONDS);
     expect(attract.stats().time).toBeLessThan(ATTRACT_LOOP_SECONDS);
     expect(attract.stats().sceneId).toBe('battle');
+  });
+
+  it('picks a new route when the loop restarts a living ship', () => {
+    let n = 0;
+    const rng = () => {
+      n += 1;
+      if (n <= 2) return 0;
+      if (n === 3) return 2 / 6 + 0.01;
+      return 0.1;
+    };
+    const loopSeconds = 8;
+    const attract = createTitleAttract('auto', { rng, loopSeconds });
+    attract.start();
+    expect(attract.plan().routeId).toBe(0);
+
+    let looped = false;
+    for (let i = 0; i < Math.ceil((loopSeconds + 2) / DT) && !looped; i++) {
+      const before = attract.stats();
+      attract.update(DT);
+      const after = attract.stats();
+      if (!before.playerDead && before.time >= loopSeconds - DT * 2 && after.time < 1) {
+        looped = true;
+        expect(after.playerDead).toBe(false);
+        expect(after.fade).toBe(0);
+      }
+    }
+    expect(looped).toBe(true);
+    expect(attract.plan().routeId).toBe(2);
+  });
+
+  it('picks a new route after the death fade restarts the demo', () => {
+    let n = 0;
+    const rng = () => {
+      n += 1;
+      if (n === 1) return 0;
+      if (n === 2) return 0.2;
+      if (n === 3) return 0.5;
+      return 0.3;
+    };
+    const attract = createTitleAttract('idle', { rng });
+    attract.start();
+    expect(attract.plan().routeId).toBe(0);
+
+    let restarted = false;
+    for (let i = 0; i < Math.ceil(16 / DT) && !restarted; i++) {
+      attract.update(DT);
+      const demo = attract.stats();
+      if (
+        attract.plan().routeId !== 0 &&
+        demo.fade === 0 &&
+        demo.time < 1 &&
+        demo.lives === LIVES_START
+      ) {
+        restarted = true;
+      }
+    }
+    expect(restarted).toBe(true);
+    expect(attract.plan().routeId).toBe(3);
+  });
+
+  it('fires while the autopilot steers and never spends a bomb', () => {
+    const input = attractInput(1.2, 'auto', {
+      plan: { routeId: 1, seed: 4 },
+      world: {
+        player: { x: 300, y: 450 },
+        enemies: [{ x: 80, y: 100 }],
+        bullets: [],
+      },
+    });
+    expect(input.buttonA).toBe(true);
+    expect(input.buttonB).toBe(false);
+    expect(input.keyBomb).toBe(false);
+    expect(input.joystickMagnitude).toBeGreaterThan(0);
+    expect(input.joystickMagnitude).toBeLessThanOrEqual(1);
+    expect(attractInput(1.2, 'idle').buttonA).toBe(false);
   });
 });

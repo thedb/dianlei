@@ -209,7 +209,18 @@ interface GameState {
   nextExtendScore: number;
 }
 
-export function createBattleScene(sceneCtx: SceneContext): Scene {
+export interface BattleView {
+  player: { x: number; y: number };
+  enemies: { x: number; y: number }[];
+  bullets: { x: number; y: number; vx: number; vy: number }[];
+}
+
+export interface BattleScene extends Scene {
+  /** Live positions. The title demo reads this to steer; a real run does not. */
+  getBattleView(): BattleView;
+}
+
+export function createBattleScene(sceneCtx: SceneContext): BattleScene {
   // Assets (initialized in enter)
   let assets: GameAssets | null = null;
 
@@ -1436,6 +1447,18 @@ export function createBattleScene(sceneCtx: SceneContext): Scene {
         renderer.fillRect(0, 0, LOGICAL_W, LOGICAL_H, 'rgba(0, 0, 0, 0.55)');
         renderer.fillText('STAGE CLEAR', LOGICAL_W / 2 - 66, LOGICAL_H / 2 - 16, '#7dff9a', 18);
       }
+    },
+
+    getBattleView(): BattleView {
+      const enemies: { x: number; y: number }[] = [];
+      enemyPool.forEach((enemy) => {
+        enemies.push({ x: enemy.x, y: enemy.y });
+      });
+      const bullets: { x: number; y: number; vx: number; vy: number }[] = [];
+      enemyBulletPool.forEach((bullet) => {
+        bullets.push({ x: bullet.x, y: bullet.y, vx: bullet.vx, vy: bullet.vy });
+      });
+      return { player: { x: player.x, y: player.y }, enemies, bullets };
     },
 
     getDebugInfo(): GameDebugInfo {

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   BG_SCROLL_SPEED,
-  BUILDING_DROP_B_SHARE,
   BUILDING_DROP_CHANCE,
   BUILDING_HP,
   LOGICAL_H,
@@ -258,35 +257,33 @@ describe('building damage and wreck', () => {
 });
 
 describe('building drops', () => {
-  it('rolls the chance first, then B or P', () => {
+  it('rolls once and drops a bomb or nothing', () => {
     const none = sequence([BUILDING_DROP_CHANCE]);
     expect(rollBuildingDrop(none.rng)).toBeNull();
     expect(none.calls()).toBe(1);
-    expect(rollBuildingDrop(sequence([0, BUILDING_DROP_B_SHARE - 0.001]).rng)).toBe('B');
-    expect(
-      rollBuildingDrop(sequence([BUILDING_DROP_CHANCE - 0.001, BUILDING_DROP_B_SHARE]).rng)
-    ).toBe('P');
+    const bomb = sequence([BUILDING_DROP_CHANCE - 0.001]);
+    expect(rollBuildingDrop(bomb.rng)).toBe('B');
+    expect(bomb.calls()).toBe(1);
+    expect(rollBuildingDrop(sequence([0]).rng)).toBe('B');
   });
 
-  it('drops half the time, 70% B / 30% P', () => {
-    expect(BUILDING_DROP_CHANCE).toBe(0.5);
-    expect(BUILDING_DROP_B_SHARE).toBe(0.7);
+  it('drops a bomb 30% of the time and never a power-up', () => {
+    expect(BUILDING_DROP_CHANCE).toBe(0.3);
     let seed = 12345;
     const rng = () => {
       seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
       return seed / 4294967296;
     };
     const n = 100000;
-    let drops = 0;
-    let b = 0;
+    let bombs = 0;
+    let other = 0;
     for (let i = 0; i < n; i++) {
-      const d = rollBuildingDrop(rng);
-      if (d) drops++;
-      if (d === 'B') b++;
+      const dropped: string | null = rollBuildingDrop(rng);
+      if (dropped === 'B') bombs++;
+      else if (dropped !== null) other++;
     }
-    expect(drops / n).toBeCloseTo(0.5, 1);
-    expect(Math.abs(drops / n - 0.5)).toBeLessThan(0.01);
-    expect(Math.abs(b / drops - 0.7)).toBeLessThan(0.01);
+    expect(other).toBe(0);
+    expect(Math.abs(bombs / n - 0.3)).toBeLessThan(0.01);
   });
 });
 
