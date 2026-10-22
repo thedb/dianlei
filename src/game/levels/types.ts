@@ -2,6 +2,8 @@
  * Stage/level data types from wave table §8.1
  */
 
+import type { PatternSpec } from '@/game/systems/danmaku';
+
 export type EnemyType =
   'small' | 'medium' | 'interceptor' | 'bomber' | 'drone' | 'tank' | 'turret2' | 'missile_car';
 
@@ -22,21 +24,6 @@ export type MoveKind =
  */
 export type GroundEntry = 'top' | 'left' | 'right' | 'bottomLeft' | 'bottomRight';
 
-export type FireKind =
-  | 'none'
-  | 'aimed1'
-  | 'aimed3burst'
-  | 'fan3'
-  | 'fan5'
-  | 'fan7wide'
-  | 'ring8'
-  | 'ring16'
-  | 'fixed2'
-  | 'missile'
-  | 'aimed_fast3'
-  | 'spiral'
-  | 'laser_sweep';
-
 export type Move =
   | { kind: 'straight'; speed: number; angle?: number }
   | { kind: 'sine'; vy: number; amp: number; period: number }
@@ -48,20 +35,29 @@ export type Move =
   | { kind: 'slow_push'; stopY: number; hold: number }
   | { kind: 'ground'; vx?: number; entry?: GroundEntry };
 
+/** Shot timing shared by every non-ring fire. */
+interface ShotTiming {
+  interval?: number;
+  firstDelay?: number;
+  maxShots?: number;
+  atY?: number;
+  /** Flight speed in pixels/second. Omit to use the pattern's default. */
+  speed?: number;
+}
+
+/**
+ * How a shooter fires. Named kinds are rows in `FIRE_PRESETS`
+ * (`systems/danmaku.ts`); `pattern` carries its own parameters.
+ */
 export type Fire =
   | { kind: 'none' }
-  | {
-      kind: 'aimed1' | 'aimed3burst' | 'missile' | 'aimed_fast3' | 'fixed2';
-      interval?: number;
-      firstDelay?: number;
-      maxShots?: number;
-      atY?: number;
-      /** Flight speed in pixels/second. Omit to use the kind's default. */
-      speed?: number;
-    }
+  | ({ kind: 'aimed1' | 'aimed3burst' | 'missile' | 'aimed_fast3' | 'fixed2' } & ShotTiming)
   | { kind: 'fan3' | 'fan5' | 'fan7wide'; spread: number; interval: number; firstDelay?: number }
   | { kind: 'ring8' | 'ring16'; interval: number; rotStep: number }
-  | { kind: 'spiral'; interval: number; arms: number; rotStep: number; speed?: number };
+  | { kind: 'spiral'; interval: number; arms: number; rotStep: number; speed?: number }
+  | ({ kind: 'pattern'; pattern: PatternSpec; spread?: number; rotStep?: number } & ShotTiming);
+
+export type FireKind = Fire['kind'];
 
 export interface SpawnDrop {
   index: number;
