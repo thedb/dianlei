@@ -5,10 +5,10 @@
  */
 
 import { BOSS_HULL_H, BOSS_HULL_W, BOSS_TURRET_SIZE, LOGICAL_H } from '@/game/config';
-import type { BossConfig } from '@/game/levels/types';
 import { PALETTE, COLOR } from '@/game/palette';
 import type { BossHpBarLayout, BossRuntime } from '@/game/systems/boss';
-import { bossPart, bossRingLaserPhase } from '@/game/systems/boss';
+import { bossActiveLaser, bossLook } from '@/game/systems/boss';
+import { laserSweepRadians } from '@/game/systems/danmaku';
 import type { SpriteData, SpriteFrame } from './types';
 import { createGrid, fillEllipse, fillPoly, fillRect, outline, plot } from './pixelDraw';
 import { renderSprite } from './spriteRenderer';
@@ -302,49 +302,62 @@ export function buildBossTurret(): SpriteData {
 export interface BossAssets {
   hull: SpriteFrame;
   hullOpen: SpriteFrame;
-  turret: SpriteFrame;
+  /** Part sprites keyed by `BossPartDef.sprite`. */
+  parts: Record<string, SpriteFrame>;
 }
 
-export function createBossAssets(): BossAssets {
-  return {
+/** Boss art registry, keyed by `BossDef.art`. A new boss adds one builder here. */
+export const BOSS_ART: Readonly<Record<string, () => BossAssets>> = {
+  orbital: () => ({
     hull: renderSprite(buildBossHull(false)),
     hullOpen: renderSprite(buildBossHull(true)),
-    turret: renderSprite(buildBossTurret()),
-  };
+    parts: { turret: renderSprite(buildBossTurret()) },
+  }),
+};
+
+/** Bake every registered boss. */
+export function createBossAssets(): Record<string, BossAssets> {
+  const out: Record<string, BossAssets> = {};
+  for (const [key, build] of Object.entries(BOSS_ART)) out[key] = build();
+  return out;
 }
 
 export interface BossDraw {
   drawImage(image: CanvasImageSource, x: number, y: number, w?: number, h?: number): void;
 }
 
-/** Hull, turrets, engine flame, and the opening core. The laser is drawn separately. */
+const GLOW_COLOR = {
+  magenta: COLOR.BULLET_MAGENTA,
+  yellow: COLOR.EXPLOSION_YELLOW,
+} as const;
+
+/** Hull, part sprites, engine flame, and the phase glow. The laser is drawn separately. */
 export function drawBossWorld(
   ctx: CanvasRenderingContext2D,
   draw: BossDraw,
   boss: BossRuntime,
-  assets: BossAssets,
+  bosses: Readonly<Record<string, BossAssets>>,
   time: number
 ): void {
-  if (boss.phase === 'clear' || boss.phase === 'done') return;
+  const look = bossLook(boss);
+  const assets = bosses[boss.def.art];
+  if (!look || !assets) return;
 
-  const open =
-    boss.phase === 'transition' ||
-    boss.phase === 'phase2' ||
-    boss.phase === 'transition3' ||
-    boss.phase === 'phase3' ||
-    boss.phase === 'death';
+  const open = look.hull === 'open';
   const hull = open ? assets.hullOpen : assets.hull;
-  drawEnemyFlame(ctx, boss.x - 16, boss.y - BOSS_HULL_H / 2 + 6, time);
-  drawEnemyFlame(ctx, boss.x + 16, boss.y - BOSS_HULL_H / 2 + 6, time);
+  const top = boss.y - boss.def.hull.h / 2;
+  drawEnemyFlame(ctx, boss.x - 16, top + 6, time);
+  drawEnemyFlame(ctx, boss.x + 16, top + 6, time);
   draw.drawImage(hull.canvas, boss.x - hull.anchorX, boss.y - hull.anchorY);
 
   for (const part of boss.parts) {
-    if (part.id === 'core') continue;
+    if (!part.sprite) continue;
     if (!part.alive && !part.falling) {
       if (open) drawSocketSparks(ctx, part.worldX, part.worldY, time);
       continue;
     }
-    const frame = assets.turret;
+    const frame = assets.parts[part.sprite];
+    if (!frame) continue;
     draw.drawImage(frame.canvas, part.worldX - frame.anchorX, part.worldY - frame.anchorY);
   }
 
@@ -356,29 +369,19 @@ export function drawBossWorld(
     ctx.restore();
   }
 
-  const core = bossPart(boss, 'core');
-  const corePhase =
-    boss.phase === 'transition' ||
-    boss.phase === 'phase2' ||
-    boss.phase === 'transition3' ||
-    boss.phase === 'phase3';
-  if (core && corePhase && core.alive) {
-    const opening =
-      boss.phase === 'transition' || boss.phase === 'transition3'
-        ? Math.min(1, boss.phaseTime / 0.5)
-        : 1;
+  const glow = look.glow;
+  if (glow) {
     const pulse = 0.35 + 0.2 * Math.sin(time * 7);
-    const phase3 = boss.phase === 'transition3' || boss.phase === 'phase3';
     ctx.save();
-    ctx.globalAlpha = pulse * opening;
-    ctx.fillStyle = PALETTE[phase3 ? COLOR.EXPLOSION_YELLOW : COLOR.BULLET_MAGENTA];
+    ctx.globalAlpha = pulse * glow.opening;
+    ctx.fillStyle = PALETTE[GLOW_COLOR[glow.color]];
     ctx.beginPath();
-    ctx.arc(core.worldX, core.worldY, 16, 0, Math.PI * 2);
+    ctx.arc(glow.part.worldX, glow.part.worldY, 16, 0, Math.PI * 2);
     ctx.fill();
-    ctx.globalAlpha = 0.85 * opening;
+    ctx.globalAlpha = 0.85 * glow.opening;
     ctx.fillStyle = PALETTE[COLOR.BULLET_CORE];
     ctx.beginPath();
-    ctx.arc(core.worldX, core.worldY, 5, 0, Math.PI * 2);
+    ctx.arc(glow.part.worldX, glow.part.worldY, 5, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
@@ -402,37 +405,37 @@ function drawSocketSparks(ctx: CanvasRenderingContext2D, x: number, y: number, t
   ctx.restore();
 }
 
+/** The current phase's telegraph line or sweeping beam, from its origin part. */
 export function drawBossLaser(
   ctx: CanvasRenderingContext2D,
   boss: BossRuntime,
-  config: BossConfig,
   time: number
 ): void {
-  if (!bossRingLaserPhase(boss, config) || boss.laser.mode === 'idle') return;
-  const core = bossPart(boss, 'core');
-  if (!core) return;
-  const ang = Math.PI / 2 + (boss.laser.angleDeg * Math.PI) / 180;
+  const active = bossActiveLaser(boss);
+  if (!active) return;
+  const ang = laserSweepRadians(active.state);
   const len = LOGICAL_H;
-  const x2 = core.worldX + Math.cos(ang) * len;
-  const y2 = core.worldY + Math.sin(ang) * len;
+  const { originX, originY } = active;
+  const x2 = originX + Math.cos(ang) * len;
+  const y2 = originY + Math.sin(ang) * len;
   ctx.save();
   ctx.lineCap = 'round';
   ctx.strokeStyle = PALETTE[COLOR.BULLET_PINK];
-  if (boss.laser.mode === 'telegraph') {
+  if (active.state.mode === 'telegraph') {
     ctx.globalAlpha = Math.floor(time * 16) % 2 === 0 ? 0.9 : 0.25;
     ctx.lineWidth = 2;
   } else {
     ctx.globalAlpha = 0.95;
-    ctx.lineWidth = config.phase2.laser.width;
+    ctx.lineWidth = active.spec.width;
     ctx.beginPath();
-    ctx.moveTo(core.worldX, core.worldY);
+    ctx.moveTo(originX, originY);
     ctx.lineTo(x2, y2);
     ctx.stroke();
     ctx.strokeStyle = PALETTE[COLOR.BULLET_CORE];
-    ctx.lineWidth = Math.max(2, config.phase2.laser.width * 0.35);
+    ctx.lineWidth = Math.max(2, active.spec.width * 0.35);
   }
   ctx.beginPath();
-  ctx.moveTo(core.worldX, core.worldY);
+  ctx.moveTo(originX, originY);
   ctx.lineTo(x2, y2);
   ctx.stroke();
   ctx.restore();
@@ -443,8 +446,8 @@ function clampUnit(v: number): number {
 }
 
 /**
- * Top HUD bar. Easy and Medium are one red fill. Hard reserves a yellow slot
- * on the right for the phase-3 segment; damage to phases 1–2 does not eat it.
+ * Top HUD bar. One red fill, plus a yellow slot on the right when the boss has
+ * an armed extra phase (Hard phase 3); damage to the main phases does not eat it.
  */
 export function drawBossHpBar(
   ctx: CanvasRenderingContext2D,
@@ -455,8 +458,8 @@ export function drawBossHpBar(
   h = 8
 ): void {
   const mainFill = clampUnit(layout.mainFill);
-  const phase3Fill = clampUnit(layout.phase3Fill);
-  const phase3Span = clampUnit(layout.phase3Span);
+  const phase3Fill = clampUnit(layout.extraFill);
+  const phase3Span = clampUnit(layout.extraSpan);
   ctx.fillStyle = '#000000';
   ctx.fillRect(x, y, w, h);
 

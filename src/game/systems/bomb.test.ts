@@ -7,7 +7,7 @@ import {
   LOGICAL_H,
   LOGICAL_W,
 } from '@/game/config';
-import { stage1 } from '@/game/levels/stage1';
+import { getStage } from '@/game/levels/registry';
 import { ENEMY_STATS } from '@/game/entities/enemy';
 import { BOSS_CLASS, enemyClass } from '@/game/entities/objectClass';
 import type { EnemyType } from '@/game/levels/types';
@@ -25,6 +25,8 @@ import {
   boxOnScreen,
 } from './bomb';
 import { applyBossBomb, bossHpRemaining, bossTotalHp, createBoss, updateBoss } from './boss';
+
+const stage1 = getStage('1');
 
 const cfg = stage1.boss;
 
@@ -84,9 +86,9 @@ describe('bomb damage by size class', () => {
     expect(bombDamage('large', 840, 840)).toBe(0);
     expect(BOMB_BOSS_RATIO).toBe(0.08);
     const boss = createBoss(cfg);
-    updateBoss(boss, cfg.enterDuration, cfg);
+    updateBoss(boss, cfg.enterDuration);
     const before = bossHpRemaining(boss);
-    applyBossBomb(boss, cfg);
+    applyBossBomb(boss);
     expect(before - bossHpRemaining(boss)).toBe(Math.round(bossTotalHp(cfg) * BOMB_BOSS_RATIO));
   });
 });
