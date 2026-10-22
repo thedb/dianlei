@@ -463,14 +463,14 @@ export const LAND_A_CHUNKS = 11;
 export const LAND_A_SEED = 7;
 
 /**
- * 陆地B and 海面A (P13). 9 × 640 px = 5760 px. A map preview runs
+ * 陆地B and 河流A. 9 × 640 px = 5760 px. A map preview runs
  * (5760 − 640) / BG_SCROLL_SPEED = 128 s, a little shorter than 陆地A's 160 s.
- * Stage 1 does not reference either map.
+ * Stage 1 does not reference either map. P14 keeps this length.
  */
 export const LAND_B_CHUNKS = 9;
 export const LAND_B_SEED = 13;
-export const SEA_A_CHUNKS = 9;
-export const SEA_A_SEED = 21;
+export const RIVER_A_CHUNKS = 9;
+export const RIVER_A_SEED = 21;
 
 /** 宇宙A is a starfield with no tiles. 地图预览 plays it this long. */
 export const SPACE_A_PREVIEW_SECONDS = 24;

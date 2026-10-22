@@ -24,10 +24,10 @@ import {
 const WARNING = 150;
 const stage1 = buildStageTrack(getStage('1'));
 
-/** 陆地A → 海面A at 45 s → 陆地B at 90 s, the old three-section run. */
+/** 陆地A → 河流A at 45 s → 陆地B at 90 s, a three-map crossfade fixture. */
 function threeMapTrack(): BackgroundTrack {
   const at = [0, 45, 90];
-  const ids = ['landA', 'seaA', 'landB'];
+  const ids = ['landA', 'riverA', 'landB'];
   return {
     label: 'test',
     layers: ids.map((id, i) => ({

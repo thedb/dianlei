@@ -6,14 +6,14 @@ import {
   LOGICAL_H,
   MAP_CHUNK_ROWS,
   MAP_TILES_X,
-  SEA_A_CHUNKS,
+  RIVER_A_CHUNKS,
   TILE_SIZE,
 } from '@/game/config';
 import { TILE_COUNT, TileId } from '@/game/art/tiles';
 import { getStage } from '@/game/levels/registry';
 import { AIRFIELD_SPINE, LAND_B_LIBRARY, LAND_B_SPEC } from './landB';
 import { LAND_A_LIBRARY, LAND_A_SPEC } from './landA';
-import { SEA_A_LIBRARY, SEA_A_SPEC, SEA_EDGE_COLS } from './seaA';
+import { RIVER_A_LIBRARY, RIVER_A_SPEC, RIVER_EDGE_COLS } from './riverA';
 import {
   ROAD_COL,
   STREAM_COLS,
@@ -49,7 +49,7 @@ describe('map registry', () => {
     expect(listMaps().map((m) => [m.id, m.label, m.kind])).toEqual([
       ['landA', '陆地A', 'tiles'],
       ['landB', '陆地B', 'tiles'],
-      ['seaA', '海面A', 'tiles'],
+      ['riverA', '河流A', 'tiles'],
       ['spaceA', '宇宙A', 'starfield'],
     ]);
   });
@@ -74,8 +74,8 @@ describe('map registry', () => {
     expect(getStage('1').maps).toEqual({ run: [{ map: 'landA', at: 0 }], boss: 'spaceA' });
   });
 
-  it('gives 陆地B and 海面A cloud shadows and a preview a bit shorter than 陆地A', () => {
-    for (const id of ['landB', 'seaA'] as const) {
+  it('gives 陆地B and 河流A cloud shadows and a preview a bit shorter than 陆地A', () => {
+    for (const id of ['landB', 'riverA'] as const) {
       const map = getTileMap(id);
       expect(map.cloudShadows).toBe(true);
       expect(map.rows).toBe(9 * MAP_CHUNK_ROWS);
@@ -210,6 +210,9 @@ describe('terrain mask', () => {
     expect(tileTerrain(TileId.wreck)).toBe('feature');
     expect(tileTerrain(TileId.dock)).toBe('feature');
     expect(tileTerrain(TileId.bunker)).toBe('feature');
+    expect(tileTerrain(TileId.planeTL)).toBe('feature');
+    expect(tileTerrain(TileId.wheel)).toBe('feature');
+    expect(tileTerrain(TileId.hut)).toBe('feature');
   });
 
   it('looks up cells and footprints, null off the grid', () => {
@@ -237,6 +240,35 @@ describe('terrain mask', () => {
     expect(counts.water).toBeGreaterThan(200);
   });
 });
+
+function countHouseTiles(grid: TileGrid, r0 = 0, r1 = grid.length): number {
+  const ids = [
+    TileId.houseRedTL,
+    TileId.houseRedTR,
+    TileId.houseRedBL,
+    TileId.houseRedBR,
+    TileId.houseBrownTL,
+    TileId.houseBrownTR,
+    TileId.houseBrownBL,
+    TileId.houseBrownBR,
+  ];
+  return ids.reduce((n, id) => n + countTile(grid, id, r0, r1), 0);
+}
+
+/** Complete 2×2 parked fighters whose lower row is inside `[r0, r1)`. */
+function countPlanes(grid: TileGrid, r0: number, r1: number): number {
+  let n = 0;
+  for (let r = r0; r < r1 - 1; r++) {
+    for (let c = 0; c < MAP_TILES_X - 1; c++) {
+      if (grid[r]![c] !== TileId.planeBL) continue;
+      if (grid[r]![c + 1] !== TileId.planeBR) continue;
+      if (grid[r + 1]![c] !== TileId.planeTL) continue;
+      if (grid[r + 1]![c + 1] !== TileId.planeTR) continue;
+      n++;
+    }
+  }
+  return n;
+}
 
 function countTile(grid: TileGrid, id: TileId, r0 = 0, r1 = grid.length): number {
   let n = 0;
@@ -341,7 +373,7 @@ function expectSpine(
 describe('陆地B airfield', () => {
   const grid = getMapGrid('landB');
 
-  it('tells outskirts, then the airfield, then the ruins', () => {
+  it('tells outskirts, then the runway, then forest', () => {
     expect(LAND_B_SPEC.slots).toHaveLength(LAND_B_CHUNKS);
     expect(planChunks(LAND_B_SPEC).map((p) => `${p.chunk}${p.flip ? ':flip' : ''}`)).toEqual([
       'fenceLine',
@@ -350,9 +382,9 @@ describe('陆地B airfield', () => {
       'runwayHangars',
       'towerApron',
       'runwayBatteries',
-      'craterApron',
-      'trenchLine:flip',
-      'battlefield',
+      'hutWoods:flip',
+      'deepWoods',
+      'ruinWoods',
     ]);
     expect(composeChunks(LAND_B_SPEC)).toEqual(grid);
     expect(planChunks(LAND_B_SPEC).some((p) => p.flip)).toBe(true);
@@ -366,7 +398,19 @@ describe('陆地B airfield', () => {
       () => [...AIRFIELD_SPINE],
       () => []
     );
-    expect(grid.some((row) => row.some((id) => wet(id)))).toBe(false);
+    expect(countTile(grid, TileId.lake, 0, 200)).toBe(0);
+    expect(countTile(grid, TileId.lake, 240, 360)).toBe(0);
+    let widest = 0;
+    for (let r = 200; r < 240; r++) {
+      let n = 0;
+      for (const id of grid[r]!) if (id === TileId.lake) n++;
+      if (r % MAP_CHUNK_ROWS === 0 || r % MAP_CHUNK_ROWS === MAP_CHUNK_ROWS - 1) {
+        expect(n, `edge row ${r}`).toBe(0);
+      }
+      widest = Math.max(widest, n);
+    }
+    expect(widest).toBeGreaterThanOrEqual(18);
+    expect(countTile(grid, TileId.lake, 200, 240)).toBeGreaterThan(70);
   });
 
   it('is meadow outside, concrete in the core, and scorched at the end', () => {
@@ -381,26 +425,60 @@ describe('陆地B airfield', () => {
     );
   });
 
-  it('keeps the airfield props and the ruin props', () => {
+  it('parks complete fighters on the apron and keeps them off the forest', () => {
+    expect(countPlanes(grid, 80, 240)).toBeGreaterThanOrEqual(12);
+    expect(countPlanes(grid, 240, 360)).toBe(0);
+    expect(tileTerrain(TileId.planeBL)).toBe('feature');
+  });
+
+  it('keeps the airfield props, and the forest third free of orderly buildings', () => {
     expect(countTile(grid, TileId.runway)).toBeGreaterThan(200);
     expect(countTile(grid, TileId.hangar, 120, 240)).toBeGreaterThan(40);
     expect(countTile(grid, TileId.wall)).toBeGreaterThan(20);
     expect(countTile(grid, TileId.radar)).toBeGreaterThan(2);
     expect(countTile(grid, TileId.bunker)).toBeGreaterThan(4);
-    expect(countTile(grid, TileId.crater, 240, 360)).toBeGreaterThan(15);
-    expect(countTile(grid, TileId.trench, 240, 360)).toBeGreaterThan(10);
+    expect(countTile(grid, TileId.bush, 0, 120)).toBeGreaterThan(8);
+    const military = [
+      TileId.hangar,
+      TileId.hangarRoof,
+      TileId.barracks,
+      TileId.bunker,
+      TileId.radar,
+      TileId.wall,
+      TileId.gate,
+      TileId.street,
+      TileId.pad,
+      TileId.runway,
+    ];
+    for (const id of military) expect(countTile(grid, id, 240, 360), `tile ${id}`).toBe(0);
+    expect(countTile(grid, TileId.forest, 240, 360)).toBeGreaterThan(500);
+    expect(countTile(grid, TileId.hut, 240, 360)).toBeGreaterThanOrEqual(5);
+    expect(countHouseTiles(grid, 240, 360)).toBeGreaterThanOrEqual(8);
+    expect(countTile(grid, TileId.crater, 240, 360)).toBeGreaterThan(12);
     expect(countTile(grid, TileId.wreck, 240, 360)).toBeGreaterThan(6);
     expect(countTile(grid, TileId.snag, 240, 360)).toBeGreaterThan(8);
-    expect(countTile(grid, TileId.bush, 0, 120)).toBeGreaterThan(8);
+    const spine = new Set<number>(AIRFIELD_SPINE);
+    let offSpine = 0;
+    for (let r = 241; r < 359; r++) {
+      if (r % MAP_CHUNK_ROWS === 0 || r % MAP_CHUNK_ROWS === MAP_CHUNK_ROWS - 1) continue;
+      let roads = 0;
+      for (let c = 0; c < MAP_TILES_X; c++) {
+        if (grid[r]![c] !== TileId.road && grid[r]![c] !== TileId.street) continue;
+        roads++;
+        if (!spine.has(c)) offSpine++;
+      }
+      expect(roads, `row ${r}`).toBeLessThan(12);
+    }
+    expect(offSpine).toBeGreaterThan(15);
   });
 });
 
-describe('海面A canal', () => {
-  const grid = getMapGrid('seaA');
+describe('河流A channel', () => {
+  const grid = getMapGrid('riverA');
 
   it('runs forest mouth, bends, docks and a lake, then back to center', () => {
-    expect(SEA_A_SPEC.slots).toHaveLength(SEA_A_CHUNKS);
-    expect(planChunks(SEA_A_SPEC).map((p) => p.chunk)).toEqual([
+    expect(RIVER_A_SPEC.slots).toHaveLength(RIVER_A_CHUNKS);
+    expect(planChunks(RIVER_A_SPEC).map((p) => p.chunk)).toEqual([
       'forestMouth',
       'lakeCenter',
       'bendLeft',
@@ -411,9 +489,9 @@ describe('海面A canal', () => {
       'lakeRight',
       'forestHead',
     ]);
-    expect(composeChunks(SEA_A_SPEC)).toEqual(grid);
-    const edges = planChunks(SEA_A_SPEC).map((inst) => {
-      const def = SEA_A_LIBRARY.find((d) => d.id === inst.chunk)!;
+    expect(composeChunks(RIVER_A_SPEC)).toEqual(grid);
+    const edges = planChunks(RIVER_A_SPEC).map((inst) => {
+      const def = RIVER_A_LIBRARY.find((d) => d.id === inst.chunk)!;
       return chunkEdges(def, inst.flip);
     });
     expect(edges).toEqual([
@@ -430,17 +508,19 @@ describe('海面A canal', () => {
   });
 
   it('joins the canal on the five-tile slots and keeps one waterway', () => {
-    expect(SEA_EDGE_COLS.left).toHaveLength(5);
-    expect(SEA_EDGE_COLS.right).toEqual(
-      [...SEA_EDGE_COLS.left].map((c) => MAP_TILES_X - 1 - c).reverse()
+    expect(RIVER_EDGE_COLS.left).toEqual([1, 2, 3, 4, 5]);
+    expect(RIVER_EDGE_COLS.center).toEqual([9, 10, 11, 12, 13]);
+    expect(RIVER_EDGE_COLS.right).toEqual([17, 18, 19, 20, 21]);
+    expect(RIVER_EDGE_COLS.right).toEqual(
+      [...RIVER_EDGE_COLS.left].map((c) => MAP_TILES_X - 1 - c).reverse()
     );
     expectSpine(
-      SEA_A_LIBRARY,
-      SEA_A_SPEC,
+      RIVER_A_LIBRARY,
+      RIVER_A_SPEC,
       () => [],
       (edges, which) => {
         const side = which === 'bottom' ? edges.bottom : edges.top;
-        return side === 'none' ? [] : [...SEA_EDGE_COLS[side]];
+        return side === 'none' ? [] : [...RIVER_EDGE_COLS[side]];
       }
     );
     assertOneWaterway(grid);
@@ -452,12 +532,31 @@ describe('海面A canal', () => {
     expect(lake).toBeGreaterThan(mouth);
   });
 
-  it('lines the canal with forest, docks, a bridge and a gun pit', () => {
+  it('lines the river with forest, docks, a bridge, hamlets, wheels and fields', () => {
     expect(countTile(grid, TileId.forest)).toBeGreaterThan(100);
     expect(countTile(grid, TileId.oak)).toBeGreaterThan(8);
     expect(countTile(grid, TileId.dock)).toBeGreaterThan(4);
     expect(countTile(grid, TileId.bridge)).toBeGreaterThan(6);
     expect(countTile(grid, TileId.bunker)).toBeGreaterThan(1);
+    expect(countHouseTiles(grid)).toBeGreaterThanOrEqual(24);
+    expect(countTile(grid, TileId.wheel)).toBeGreaterThanOrEqual(4);
+    expect(countTile(grid, TileId.shed)).toBeGreaterThanOrEqual(2);
+    const crops =
+      countTile(grid, TileId.cropGreen) +
+      countTile(grid, TileId.cropWheat) +
+      countTile(grid, TileId.cropPlowed);
+    expect(crops).toBeGreaterThan(40);
+    grid.forEach((row, r) =>
+      row.forEach((id, c) => {
+        if (id !== TileId.wheel) return;
+        const touch =
+          grid[r]![c - 1] === TileId.lake ||
+          grid[r]![c + 1] === TileId.lake ||
+          grid[r - 1]?.[c] === TileId.lake ||
+          grid[r + 1]?.[c] === TileId.lake;
+        expect(touch, `wheel ${c},${r}`).toBe(true);
+      })
+    );
     expect(grid.some((row) => row.some((id) => isStreamTile(id)))).toBe(true);
   });
 });
@@ -492,15 +591,14 @@ describe('tracks', () => {
     expect(run.layers.map((l) => l.map.id)).toEqual(['landA']);
   });
 
-  it('lists every map and then 第一关全程 for 地图预览', () => {
+  it('lists every map for 地图预览 and omits the stage run', () => {
     expect(listMapPreviews()).toEqual([
       { target: 'map:landA', label: '陆地A' },
       { target: 'map:landB', label: '陆地B' },
-      { target: 'map:seaA', label: '海面A' },
+      { target: 'map:riverA', label: '河流A' },
       { target: 'map:spaceA', label: '宇宙A' },
-      { target: 'stage:1', label: '第一关全程' },
     ]);
-    expect(buildPreviewTrack('map:seaA').layers[0]!.map.id).toBe('seaA');
+    expect(buildPreviewTrack('map:riverA').layers[0]!.map.id).toBe('riverA');
     expect(buildPreviewTrack('stage:1').label).toBe('第一关全程');
     expect(buildPreviewTrack(undefined).label).toBe('第一关全程');
   });

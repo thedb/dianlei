@@ -3,7 +3,7 @@
  * 地图预览, the background renderer, and tests ask here.
  *
  * Adding a map: write its `MapDef` (a chunk library plus `composeChunks` for a
- * new tile map, like `landA.ts` / `landB.ts` / `seaA.ts`), add it to `MAPS`,
+ * new tile map, like `landA.ts` / `landB.ts` / `riverA.ts`), add it to `MAPS`,
  * and reference its id from a stage's `maps.run` (or `maps.boss` for a
  * starfield). 地图预览 lists it automatically. Stage 1's run stays `landA`.
  */
@@ -12,7 +12,7 @@ import { MAP_CHUNK_ROWS, SPACE_A_PREVIEW_SECONDS } from '@/game/config';
 import { composeChunks } from './chunks';
 import { LAND_A_SPEC } from './landA';
 import { LAND_B_SPEC } from './landB';
-import { SEA_A_SPEC } from './seaA';
+import { RIVER_A_SPEC } from './riverA';
 import type { MapDef, StarfieldMapDef, TileGrid, TileMapDef } from './types';
 
 export const LAND_A: TileMapDef = {
@@ -25,8 +25,8 @@ export const LAND_A: TileMapDef = {
 };
 
 /**
- * Military airfield (P13). Preview and future stages only — stage 1 stays on 陆地A.
- * Outskirts, runway core, then ruins. See `landB.ts`.
+ * Military airfield (P13, polished in P14). Preview and future stages only —
+ * stage 1 stays on 陆地A. Outskirts, runway, drainage, then forest. See `landB.ts`.
  */
 export const LAND_B: TileMapDef = {
   id: 'landB',
@@ -38,15 +38,15 @@ export const LAND_B: TileMapDef = {
 };
 
 /**
- * Inland canal and forest banks (P13). Preview and future stages only.
- * The canal joins on a fixed left / right / center slot. See `seaA.ts`.
+ * Inland river and bank hamlets (P14, was 海面A). Preview and future stages only.
+ * The channel joins on a fixed left / right / center slot. See `riverA.ts`.
  */
-export const SEA_A: TileMapDef = {
-  id: 'seaA',
-  label: '海面A',
+export const RIVER_A: TileMapDef = {
+  id: 'riverA',
+  label: '河流A',
   kind: 'tiles',
-  rows: SEA_A_SPEC.slots.length * MAP_CHUNK_ROWS,
-  build: () => composeChunks(SEA_A_SPEC),
+  rows: RIVER_A_SPEC.slots.length * MAP_CHUNK_ROWS,
+  build: () => composeChunks(RIVER_A_SPEC),
   cloudShadows: true,
 };
 
@@ -58,7 +58,7 @@ export const SPACE_A: StarfieldMapDef = {
   previewSeconds: SPACE_A_PREVIEW_SECONDS,
 };
 
-const MAPS: readonly MapDef[] = [LAND_A, LAND_B, SEA_A, SPACE_A];
+const MAPS: readonly MapDef[] = [LAND_A, LAND_B, RIVER_A, SPACE_A];
 
 export function listMaps(): readonly MapDef[] {
   return MAPS;

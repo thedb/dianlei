@@ -3,7 +3,7 @@
  * Pure (no canvas), so tests can read pixels.
  *
  * Legacy tiles (ids below `TileId.meadow`) are copied as is. 陆地A tiles, and
- * the same tiles on 陆地B / 海面A, are finished per neighbour:
+ * the same tiles on 陆地B / 河流A, are finished per neighbour:
  * - roads / streets get a band that joins the neighbouring road tiles,
  * - lake water shades from foam to deep by distance to the shore, and land
  *   next to it gets a sand rim,

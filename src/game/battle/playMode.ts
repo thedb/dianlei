@@ -7,9 +7,9 @@
  *   report, and the ship stays dead so the title can fade and restart.
  * - `weaponTest`: the damage range. Same player, loadout, and fire path, no
  *   world (scroll, waves, buildings, boss), one immortal target.
- * - `mapPreview`: 地图预览. The ship flies over one map (or a stage's whole
- *   pre-boss map run) with no waves, buildings, or boss, and the scene leaves
- *   for the title when the track ends.
+ * - `mapPreview`: 地图预览. The ship flies over one registered map with no
+ *   waves, buildings, or boss, and the scene leaves for the title when the
+ *   track ends. The debug list does not offer a whole-stage row.
  */
 
 import type { Difficulty } from '@/game/difficulty';

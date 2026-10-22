@@ -8,12 +8,12 @@
  * `none`, `left`, `right`, or `center`. Mirroring swaps left and right; center
  * stays. Column sets are per map: 陆地A uses 3-wide `STREAM_COLS` plus a
  * one-tile road at `ROAD_COL`; 陆地B uses a wider runway spine and no water;
- * 海面A uses its own 5-wide canal table and no road on the edge row.
+ * 河流A uses its own 5-wide channel table and no road on the edge row.
  * Nothing else may touch row 0 or the last row with road or water.
  */
 
 import { MAP_CHUNK_ROWS, MAP_TILES_X } from '@/game/config';
-import { TileId, HOUSE_BROWN, HOUSE_RED } from '@/game/art/tiles';
+import { TileId, HOUSE_BROWN, HOUSE_RED, PLANE } from '@/game/art/tiles';
 import { createRng, type Rng } from '@/engine/rng';
 import type { TileGrid } from './types';
 
@@ -26,7 +26,7 @@ export type EdgeColumns = Readonly<Record<Exclude<StreamSide, 'none'>, readonly 
 
 /**
  * 陆地A stream columns (3 tiles). `center` is the third slot; 陆地A itself
- * only uses left, right, and none. 海面A passes a wider table to `sealEdges`.
+ * only uses left, right, and none. 河流A passes a wider table to `sealEdges`.
  */
 export const STREAM_COLS: EdgeColumns = {
   left: [2, 3, 4],
@@ -143,7 +143,7 @@ export function planChunks(spec: ChunkMapSpec): ChunkInstance[] {
 
 /** Tiles that are one quarter of a wider sprite swap with their mirror twin. */
 const MIRROR = new Map<TileId, TileId>();
-for (const [tl, tr, bl, br] of [HOUSE_RED, HOUSE_BROWN]) {
+for (const [tl, tr, bl, br] of [HOUSE_RED, HOUSE_BROWN, PLANE]) {
   MIRROR.set(tl, tr).set(tr, tl).set(bl, br).set(br, bl);
 }
 
