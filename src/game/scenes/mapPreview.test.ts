@@ -165,13 +165,12 @@ describe('地图预览 entry on the title', () => {
     return title;
   }
 
-  it('lists 陆地A, 陆地B, 海面A, 宇宙A, 第一关全程, then 返回', () => {
+  it('lists 陆地A, 陆地B, 河流A, 宇宙A, then 返回', () => {
     expect(MAP_PREVIEW_ROWS.map((r) => r.title)).toEqual([
       '陆地A',
       '陆地B',
-      '海面A',
+      '河流A',
       '宇宙A',
-      '第一关全程',
       '返回',
     ]);
   });
@@ -183,11 +182,11 @@ describe('地图预览 entry on the title', () => {
     const frozen = attract.updates();
     expect(title.update(DT, makeInput())).toBeNull();
     expect(attract.updates()).toBe(frozen);
-    expect(title.update(DT, makeInput({ taps: [point(mapPreviewButton('map:seaA'))] }))).toBe(
+    expect(title.update(DT, makeInput({ taps: [point(mapPreviewButton('map:riverA'))] }))).toBe(
       'battle'
     );
     expect(ctx.playMode).toBe('mapPreview');
-    expect(ctx.previewMap).toBe('map:seaA');
+    expect(ctx.previewMap).toBe('map:riverA');
     expect(ctx.battleEntry).toBe('stage');
     expect(ctx.storage.getStorage(SETTINGS_STORAGE_KEY)).toBeNull();
   });
@@ -199,10 +198,7 @@ describe('地图预览 entry on the title', () => {
     expect(title.update(DT, makeInput({ taps: [point(DEBUG_MAP_BUTTON)] }))).toBeNull();
     expect(title.update(DT, makeInput({ menuBack: true }))).toBeNull();
     expect(title.update(DT, makeInput({ taps: [point(DEBUG_MAP_BUTTON)] }))).toBeNull();
-    expect(title.update(DT, makeInput({ taps: [point(mapPreviewButton('stage:1'))] }))).toBe(
-      'battle'
-    );
-    expect(ctx.previewMap).toBe('stage:1');
-    expect(ctx.playMode).toBe('mapPreview');
+    expect(title.update(DT, makeInput({ menuBack: true }))).toBeNull();
+    expect(ctx.playMode).not.toBe('mapPreview');
   });
 });

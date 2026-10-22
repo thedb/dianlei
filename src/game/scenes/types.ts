@@ -54,9 +54,9 @@ export interface SceneContext {
    */
   challengeStage?: string;
   /**
-   * 地图预览 target from the debug panel (`maps/preview.ts`): `map:<id>` for
-   * one map asset, `stage:<id>` for a stage's whole pre-boss map run. Only
-   * `playMode: 'mapPreview'` reads it. Not persisted.
+   * 地图预览 target from the debug panel (`maps/preview.ts`): `map:<id>`.
+   * The list is one row per map. Only `playMode: 'mapPreview'` reads it.
+   * Not persisted.
    */
   previewMap?: string;
   /**

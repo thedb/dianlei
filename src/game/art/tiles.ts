@@ -5,7 +5,9 @@
  *
  * Ids 0–32 are the original stage-1 tiles (runway, hangar, dock, bunker, …).
  * Ids 33–58 are the 陆地A set. Ids 59–63 are the P13 ruin set (scorch, crater,
- * trench, wreck, snag), used by 陆地B.
+ * trench, wreck, snag). Ids 64–69 are the P14 props: a 2×2 parked plane,
+ * a water wheel, and a thatched hut. Planes, wheels, and huts are map
+ * decoration only.
  */
 
 import { COLOR } from '@/game/palette';
@@ -100,11 +102,20 @@ export const TileId = {
   trench: 61,
   wreck: 62,
   snag: 63,
+  planeTL: 64,
+  planeTR: 65,
+  planeBL: 66,
+  planeBR: 67,
+  wheel: 68,
+  hut: 69,
 } as const;
 
 export type TileId = (typeof TileId)[keyof typeof TileId];
 
-export const TILE_COUNT = 64;
+export const TILE_COUNT = 70;
+
+/** Screen quadrants of a 2×2 parked plane: top-left, top-right, bottom-left, bottom-right. */
+export const PLANE = [TileId.planeTL, TileId.planeTR, TileId.planeBL, TileId.planeBR] as const;
 
 function grassTile(base: number, light: number, dark: number, phase: number): SpriteData {
   const g = createGrid(TILE_SIZE, TILE_SIZE, base);
@@ -572,6 +583,98 @@ function houseSprite(
   });
 }
 
+/** Thick bar from (x0, y0) to (x1, y1). `half` is the half-width in pixels. */
+function bar(
+  g: SpriteData,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  half: number,
+  color: number
+): void {
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const mag = Math.hypot(dx, dy) || 1;
+  const px = (-dy / mag) * half;
+  const py = (dx / mag) * half;
+  fillPoly(
+    g,
+    [
+      [x0 + px, y0 + py],
+      [x1 + px, y1 + py],
+      [x1 - px, y1 - py],
+      [x0 - px, y0 - py],
+    ],
+    color
+  );
+}
+
+/**
+ * 32×32 fighter parked at 45°, nose toward the top-right. The apron under it
+ * is concrete; only the aircraft pixels stand up and cast a shadow.
+ */
+function planeSprite(): { pixels: SpriteData; tall: boolean[][] } {
+  const S = TILE_SIZE * 2;
+  const base = createGrid(S, S, CC);
+  for (let i = 0; i < S; i++) {
+    if (i % 16 !== 15) continue;
+    for (let k = 0; k < S; k++) {
+      base[i]![k] = CD;
+      base[k]![i] = CD;
+    }
+  }
+  return overlay(base, tallMask(S, S), (g) => {
+    // Wings cross the fuselage on the other diagonal. Nose is top-right.
+    bar(g, 5, 5, 27, 27, 2.6, COLOR.SHADOW);
+    bar(g, 6, 6, 26, 26, 1.6, CD);
+    bar(g, 7, 18, 15, 26, 1.4, COLOR.DARK_GRAY);
+    bar(g, 8, 19, 14, 25, 0.8, CD);
+    bar(g, 7, 25, 25, 7, 3.2, COLOR.SHADOW);
+    bar(g, 8, 24, 24, 8, 2.2, GR);
+    bar(g, 12, 20, 22, 10, 1.0, CL);
+    fillEllipse(g, 20.5, 11.5, 2.5, 2.1, COLOR.PLAYER_DARK_CYAN);
+    fillEllipse(g, 19.6, 10.8, 1.4, 1.1, COLOR.PLAYER_MED_CYAN);
+    plot(g, 25, 7, COLOR.PALE_GRAY);
+    plot(g, 24, 8, CL);
+  });
+}
+
+/** Water wheel seen from above: paddles around a wooden hub, on a grass bank. */
+function wheelTile(): { pixels: SpriteData; tall: boolean[][] } {
+  return overlay(meadowTile(M, ML, MD, 8), tallMask(TILE_SIZE, TILE_SIZE), (g) => {
+    for (let i = 0; i < 8; i++) {
+      const a = (Math.PI / 4) * i;
+      const x = 8 + Math.cos(a) * 5.2;
+      const y = 8 + Math.sin(a) * 5.2;
+      fillRect(g, x - 1.2, y - 1.2, 2.4, 2.4, DI);
+    }
+    fillEllipse(g, 8, 8.2, 5.4, 5.4, DI);
+    fillEllipse(g, 7.8, 7.8, 4.4, 4.4, BR);
+    fillEllipse(g, 7.6, 7.6, 2.6, 2.6, BL);
+    fillEllipse(g, 7.4, 7.4, 1.2, 1.2, DI);
+    plot(g, 8, 3, BL);
+    plot(g, 12, 8, BL);
+    plot(g, 8, 13, DI);
+    plot(g, 3, 8, DI);
+  });
+}
+
+/** One-tile thatched hut. Smaller and rounder than a 2×2 house or a shed. */
+function hutTile(): { pixels: SpriteData; tall: boolean[][] } {
+  return overlay(meadowTile(M, ML, MD, 9), tallMask(TILE_SIZE, TILE_SIZE), (g) => {
+    fillEllipse(g, 8.2, 8.4, 6.4, 5.6, DI);
+    fillEllipse(g, 7.8, 7.6, 5.8, 5, SD);
+    fillEllipse(g, 7, 6.6, 3.6, 2.8, YE);
+    fillRect(g, 4, 11, 8, 3, BR);
+    fillRect(g, 4, 11, 8, 1, BL);
+    fillRect(g, 7, 12, 2, 2, DI);
+    plot(g, 5, 8, BL);
+    plot(g, 10, 9, DI);
+    plot(g, 6, 10, BR);
+  });
+}
+
 function cropGreenTile(): SpriteData {
   const g = createGrid(TILE_SIZE, TILE_SIZE, MD);
   for (let y = 0; y < TILE_SIZE; y++) {
@@ -745,18 +848,21 @@ function paintLandTiles(tiles: SpriteData[], tall: Array<boolean[][] | null>): v
     [TileId.shed, shedTile()],
     [TileId.wreck, wreckTile()],
     [TileId.snag, snagTile()],
+    [TileId.wheel, wheelTile()],
+    [TileId.hut, hutTile()],
   ];
   for (const [id, art] of sprites) {
     tiles[id] = art.pixels;
     tall[id] = art.tall;
   }
 
-  const houses: Array<[readonly [TileId, TileId, TileId, TileId], ReturnType<typeof houseSprite>]> =
+  const quads: Array<[readonly [TileId, TileId, TileId, TileId], ReturnType<typeof houseSprite>]> =
     [
       [HOUSE_RED, houseSprite(RB, RM, RC, RD)],
       [HOUSE_BROWN, houseSprite(BL, BR, DI, COLOR.GROUND_DARK_OLIVE)],
+      [PLANE, planeSprite()],
     ];
-  for (const [ids, art] of houses) {
+  for (const [ids, art] of quads) {
     // ids: screen top-left, top-right, bottom-left, bottom-right
     ids.forEach((id, q) => {
       const ox = (q % 2) * TILE_SIZE;

@@ -1,6 +1,6 @@
 /**
- * Debug 「地图预览」 list (P12): one row per map asset, then 「第N关全程」 per
- * stage, then 返回. Same overlay as 挑战 Boss, with compact rows.
+ * Debug 「地图预览」 list: one row per registered map, then 返回.
+ * Same overlay as 挑战 Boss, with compact rows.
  */
 
 import { listMapPreviews, type MapPreviewTarget } from '@/game/maps/preview';

@@ -1,10 +1,10 @@
 /**
- * 地图预览 targets (hidden debug layer). One row per registered map, then one
- * 「第N关全程」 row per stage that plays the stage's pre-boss map sequence.
- * Targets are `map:<id>` or `stage:<id>`.
+ * 地图预览 targets (hidden debug layer). The list is one row per registered
+ * map. `buildPreviewTrack` still accepts `stage:<id>` (a stage's pre-boss run)
+ * when a caller passes that target; the debug list does not offer it.
  */
 
-import { getStage, listStages } from '@/game/levels/registry';
+import { getStage } from '@/game/levels/registry';
 import type { StageData } from '@/game/levels/types';
 import { listMaps } from './registry';
 import { buildMapTrack, buildStageRunTrack, type BackgroundTrack } from './track';
@@ -18,13 +18,7 @@ export function stageRunLabel(stage: StageData): string {
 }
 
 export function listMapPreviews(): ReadonlyArray<{ target: MapPreviewTarget; label: string }> {
-  return [
-    ...listMaps().map((map) => ({ target: `map:${map.id}` as const, label: map.label })),
-    ...listStages().map((stage) => ({
-      target: `stage:${stage.id}` as const,
-      label: stageRunLabel(stage),
-    })),
-  ];
+  return listMaps().map((map) => ({ target: `map:${map.id}` as const, label: map.label }));
 }
 
 /** Track for a preview target. Unknown or missing targets play the first stage's run. */

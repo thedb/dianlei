@@ -91,7 +91,7 @@ describe('stage 1 building placements', () => {
   });
 
   it('rejects a map the track does not use', () => {
-    expect(() => placeBuildings([{ ...stage1.buildings[0]!, map: 'seaA' }], track)).toThrow();
+    expect(() => placeBuildings([{ ...stage1.buildings[0]!, map: 'riverA' }], track)).toThrow();
   });
 
   it('footprints in a section never overlap', () => {

@@ -1,15 +1,19 @@
 /**
- * 陆地B: a military airfield. Nine screens (5760 px, 128 s of map preview),
- * bottom to top: perimeter approach, the runway core, then a battlefield
- * the airfield breaks into. Stage 1 does not use this map.
+ * 陆地B: a military airfield that breaks into forest. Nine screens (5760 px,
+ * 128 s of map preview), bottom to top: perimeter, runway core, a drainage
+ * cut at the end of the runway, then woods. Stage 1 does not use this map.
  *
- * Every chunk keeps a five-column spine on row 0 and row 39 (`AIRFIELD_SPINE`)
- * and no water, so the road or runway joins across chunks. The spine tile
- * changes with the phase: dirt road, runway, then dirt road again.
+ * Parked aircraft are 2×2 map tiles (see `PLANE`). They are background, with
+ * no HP, collision, or drops. The last three chunks are forest: huts and
+ * footpaths, then deeper woods, then a ruined clearing. No hangars, barracks,
+ * or grid roads in that third.
+ *
+ * Every chunk keeps a five-column spine on row 0 and row 39 (`AIRFIELD_SPINE`).
+ * Water stays off those rows. The drainage channel sits inside `runwayBatteries`.
  */
 
 import { LAND_B_SEED, MAP_CHUNK_ROWS } from '@/game/config';
-import { TileId } from '@/game/art/tiles';
+import { PLANE, TileId } from '@/game/art/tiles';
 import { ROAD_COL, sealEdges, type ChunkDef, type ChunkMapSpec, type ChunkPainter } from './chunks';
 
 const LAST = MAP_CHUNK_ROWS - 1;
@@ -25,7 +29,24 @@ export const AIRFIELD_SPINE = [
 
 const SPINE = new Set<number>(AIRFIELD_SPINE);
 
-function landChunk(id: string, spineId: TileId, body: (p: ChunkPainter) => void): ChunkDef {
+const HOUSES = new Set<number>([
+  TileId.houseRedTL,
+  TileId.houseRedTR,
+  TileId.houseRedBL,
+  TileId.houseRedBR,
+  TileId.houseBrownTL,
+  TileId.houseBrownTR,
+  TileId.houseBrownBL,
+  TileId.houseBrownBR,
+]);
+
+function landChunk(
+  id: string,
+  spineId: TileId | { bottom: TileId; top: TileId },
+  body: (p: ChunkPainter) => void
+): ChunkDef {
+  const bottomId = typeof spineId === 'number' ? spineId : spineId.bottom;
+  const topId = typeof spineId === 'number' ? spineId : spineId.top;
   return {
     id,
     bottom: 'none',
@@ -33,13 +54,16 @@ function landChunk(id: string, spineId: TileId, body: (p: ChunkPainter) => void)
     variants: 1,
     paint(p) {
       body(p);
-      sealEdges(p, 'none', 'none', AIRFIELD_SPINE, spineId);
+      sealEdges(p, 'none', 'none', AIRFIELD_SPINE, bottomId);
+      if (topId !== bottomId) {
+        for (const c of AIRFIELD_SPINE) p.set(c, LAST, topId);
+      }
     },
   };
 }
 
-function stampSpine(p: ChunkPainter, id: TileId): void {
-  for (let r = 0; r < p.rows; r++) for (const c of AIRFIELD_SPINE) p.set(c, r, id);
+function stampSpine(p: ChunkPainter, id: TileId, r0 = 0, r1 = LAST): void {
+  for (let r = r0; r <= r1; r++) for (const c of AIRFIELD_SPINE) p.set(c, r, id);
 }
 
 /** Non-spine cells of an edge row, columns 2–20, so chunk joins share a ground. */
@@ -47,6 +71,12 @@ function paveEdge(p: ChunkPainter, which: 'top' | 'bottom' | 'both', id: TileId)
   const rows = which === 'both' ? [0, LAST] : which === 'top' ? [LAST] : [0];
   for (const r of rows) {
     for (let c = 2; c <= 20; c++) if (!SPINE.has(c)) p.set(c, r, id);
+  }
+}
+
+function meadowEdges(p: ChunkPainter): void {
+  for (const r of [0, LAST]) {
+    for (let c = 0; c < p.cols; c++) if (!SPINE.has(c)) p.set(c, r, TileId.meadow);
   }
 }
 
@@ -82,8 +112,17 @@ function concreteBand(p: ChunkPainter, r0: number, r1: number): void {
   }
 }
 
-function marks(p: ChunkPainter): void {
-  for (let r = 2; r < LAST; r += 2) p.set(ROAD_COL, r, TileId.runwayMark);
+function marksBetween(p: ChunkPainter, r0: number, r1: number): void {
+  for (let r = r0; r <= r1; r += 2) p.set(ROAD_COL, r, TileId.runwayMark);
+}
+
+/** 2×2 fighter on the apron. `r` is the lower row, nose toward the top of the map. */
+function parkedPlane(p: ChunkPainter, c: number, r: number): void {
+  const [tl, tr, bl, br] = PLANE;
+  p.set(c, r, bl);
+  p.set(c + 1, r, br);
+  p.set(c, r + 1, tl);
+  p.set(c + 1, r + 1, tr);
 }
 
 function bushes(p: ChunkPainter): void {
@@ -99,40 +138,73 @@ function bushes(p: ChunkPainter): void {
   p.scatter(8, [TileId.bush, TileId.fir], (c) => c < 7 || c > 15);
 }
 
-function scorchGround(p: ChunkPainter): void {
-  p.meadow();
-  for (let r = 1; r < LAST; r++) {
-    for (let c = 0; c < p.cols; c++) {
-      if ((c + r) % 3 !== 0) p.set(c, r, TileId.scorch);
-      else if ((c * 2 + r) % 5 === 0) p.set(c, r, TileId.dirt);
+/** Straight drainage: two shoulder ditches into one transverse cut. Interior only. */
+function drainage(p: ChunkPainter, ditchFrom: number, channelAt: number): void {
+  const lip = channelAt - 1;
+  const far = channelAt + 4;
+  for (let c = 1; c <= 21; c++) {
+    p.set(c, lip, TileId.concrete);
+    p.set(c, far, TileId.concrete);
+  }
+  for (let r = ditchFrom; r <= lip; r++) {
+    p.set(7, r, TileId.lake);
+    p.set(15, r, TileId.lake);
+  }
+  for (let r = channelAt; r < channelAt + 4; r++) {
+    for (let c = 1; c <= 21; c++) p.set(c, r, TileId.lake);
+  }
+}
+
+function canPave(id: TileId): boolean {
+  return (
+    id === TileId.meadow ||
+    id === TileId.meadowB ||
+    id === TileId.meadowDark ||
+    id === TileId.flowers ||
+    id === TileId.forest ||
+    id === TileId.scorch ||
+    id === TileId.dirt ||
+    id === TileId.oak ||
+    id === TileId.fir ||
+    id === TileId.bush
+  );
+}
+
+/** A one-tile dirt footpath. Skips huts, cabins, and the sealed edge rows. */
+function footpath(p: ChunkPainter, points: ReadonlyArray<readonly [number, number]>): void {
+  for (let i = 1; i < points.length; i++) {
+    const [c0, r0] = points[i - 1]!;
+    const [c1, r1] = points[i]!;
+    const steps = Math.max(Math.abs(c1 - c0), Math.abs(r1 - r0));
+    for (let s = 0; s <= steps; s++) {
+      const t = steps === 0 ? 0 : s / steps;
+      const c = Math.round(c0 + (c1 - c0) * t);
+      const r = Math.round(r0 + (r1 - r0) * t);
+      if (r <= 0 || r >= LAST) continue;
+      const id = p.get(c, r);
+      if (id === null || id === TileId.hut || HOUSES.has(id) || id === TileId.lake) continue;
+      if (!canPave(id) && id !== TileId.road) continue;
+      p.set(c, r, TileId.road);
     }
   }
 }
 
-function craters(p: ChunkPainter, spots: ReadonlyArray<readonly [number, number]>): void {
-  for (const [c, r] of spots) {
-    p.set(c, r, TileId.crater);
-    if (!SPINE.has(c + 1)) p.set(c + 1, r, TileId.scorch);
-    p.set(c, r + 1, TileId.scorch);
-  }
+function hut(p: ChunkPainter, c: number, r: number): void {
+  if (r <= 0 || r >= LAST) return;
+  p.set(c, r, TileId.hut);
 }
 
-function wreck(p: ChunkPainter, c: number, r: number): void {
-  p.rect(c, r, 2, 2, TileId.wreck);
-}
-
-function snagFringe(p: ChunkPainter): void {
-  for (let r = 4; r <= 34; r += 6) {
-    p.set(1, r, TileId.snag);
-    p.set(p.cols - 2, r + 3, TileId.snag);
-    if (r % 12 === 4) p.set(2, r + 2, TileId.fir);
+function woods(p: ChunkPainter, dense: boolean): void {
+  p.meadow();
+  p.blob(3, 10, 6.5, 10, TileId.forest, 0.35);
+  p.blob(19, 9, 6, 9, TileId.forest, 0.4);
+  p.blob(4, 30, 6, 8, TileId.forest, 0.35);
+  p.blob(19, 31, 6.5, 8, TileId.forest, 0.3);
+  if (dense) {
+    p.blob(11, 20, 5, 8, TileId.forest, 0.3);
+    p.blob(8, 14, 4, 5, TileId.forest, 0.35);
   }
-}
-
-function trenches(p: ChunkPainter): void {
-  for (const r of [10, 20, 30]) {
-    for (let c = 2; c <= 20; c++) p.set(c, r, TileId.trench);
-  }
+  p.scatter(10, [TileId.oak, TileId.fir, TileId.bush]);
 }
 
 /** Perimeter fence, a gate across the road, sparse brush, one sentry block. */
@@ -164,7 +236,7 @@ const guardPosts = landChunk('guardPosts', TileId.road, (p) => {
   p.scatter(4, [TileId.fir, TileId.oak], (c) => c < 6 || c > 16);
 });
 
-/** The fence opens onto concrete. The top edge is already the apron. */
+/** The fence opens onto concrete. A few fighters already sit on the apron. */
 const taxiIn = landChunk('taxiIn', TileId.road, (p) => {
   p.meadow();
   shoulders(p, 0, 17);
@@ -176,16 +248,19 @@ const taxiIn = landChunk('taxiIn', TileId.road, (p) => {
   hangar(p, 3, 28);
   pad(p, 16, 30);
   p.set(19, 24, TileId.bunker);
+  parkedPlane(p, 7, 22);
+  parkedPlane(p, 16, 24);
+  parkedPlane(p, 7, 34);
   bushes(p);
 });
 
-/** Runway, hangar row, pads. Bottom edge matches the taxiway's concrete. */
+/** Runway, hangar row, pads, and fighters parked beside the hangars. */
 const runwayHangars = landChunk('runwayHangars', TileId.runway, (p) => {
   p.meadow();
   concreteBand(p, 1, 38);
   paveEdge(p, 'both', TileId.concrete);
   stampSpine(p, TileId.runway);
-  marks(p);
+  marksBetween(p, 2, 36);
   hangar(p, 3, 6);
   hangar(p, 3, 22);
   hangar(p, 16, 12);
@@ -197,15 +272,19 @@ const runwayHangars = landChunk('runwayHangars', TileId.runway, (p) => {
   p.set(20, 26, TileId.bunker);
   p.hRoad(18, 3, 8, TileId.street);
   p.hRoad(32, 14, 19, TileId.street);
+  parkedPlane(p, 7, 8);
+  parkedPlane(p, 14, 16);
+  parkedPlane(p, 7, 26);
+  parkedPlane(p, 18, 6);
 });
 
-/** Densest screen: tower, fuel and ammo, hangars both sides, AA pits, pads. */
+/** Densest screen: tower, fuel and ammo, hangars both sides, AA pits, planes. */
 const towerApron = landChunk('towerApron', TileId.runway, (p) => {
   p.meadow();
   concreteBand(p, 1, 38);
   paveEdge(p, 'both', TileId.concrete);
   stampSpine(p, TileId.runway);
-  marks(p);
+  marksBetween(p, 2, 36);
   p.hRoad(8, 3, 19, TileId.street);
   p.hRoad(20, 3, 19, TileId.street);
   p.rect(3, 2, 3, 2, TileId.barracks);
@@ -225,128 +304,163 @@ const towerApron = landChunk('towerApron', TileId.runway, (p) => {
   p.set(20, 18, TileId.bunker);
   p.set(2, 30, TileId.bunker);
   p.set(20, 8, TileId.bunker);
+  parkedPlane(p, 7, 4);
+  parkedPlane(p, 14, 4);
+  parkedPlane(p, 7, 12);
+  parkedPlane(p, 14, 28);
 });
 
-/** Runway continues, with a second battery line and fewer empty pads. */
-const runwayBatteries = landChunk('runwayBatteries', TileId.runway, (p) => {
-  p.meadow();
-  concreteBand(p, 1, 38);
-  paveEdge(p, 'both', TileId.concrete);
-  stampSpine(p, TileId.runway);
-  marks(p);
-  hangar(p, 3, 8);
-  hangar(p, 16, 18);
-  hangar(p, 3, 28);
-  pad(p, 7, 4);
-  pad(p, 14, 6);
-  pad(p, 7, 20);
-  pad(p, 14, 30);
-  p.rect(17, 4, 2, 2, TileId.radar);
-  p.rect(16, 32, 3, 2, TileId.barracks);
-  for (const [c, r] of [
-    [2, 6],
-    [20, 12],
-    [2, 22],
-    [20, 28],
-  ] as const) {
-    p.set(c, r, TileId.bunker);
-  }
-  p.hRoad(16, 3, 8, TileId.street);
-  p.hRoad(26, 14, 19, TileId.street);
-});
-
-/** The runway is still the edge spine, but the apron is holed by craters. */
-const craterApron = landChunk('craterApron', TileId.runway, (p) => {
-  scorchGround(p);
-  concreteBand(p, 2, 16);
-  paveEdge(p, 'bottom', TileId.concrete);
-  paveEdge(p, 'top', TileId.scorch);
-  stampSpine(p, TileId.runway);
-  hangar(p, 3, 6);
-  wreck(p, 16, 8);
-  wreck(p, 16, 24);
-  wreck(p, 4, 28);
-  pad(p, 7, 18);
-  p.set(7, 19, TileId.crater);
-  craters(p, [
-    [10, 8],
-    [12, 14],
-    [9, 22],
-    [13, 28],
-    [11, 34],
-    [6, 12],
-    [15, 16],
-    [8, 32],
-  ]);
-  snagFringe(p);
-  p.set(2, 20, TileId.bunker);
-});
-
-/** Trenches cut the field. The spine on the edges is a dirt road again. */
-const trenchLine = landChunk('trenchLine', TileId.road, (p) => {
-  scorchGround(p);
-  paveEdge(p, 'both', TileId.scorch);
-  stampSpine(p, TileId.road);
-  trenches(p);
-  p.set(ROAD_COL, 14, TileId.runway);
-  p.set(ROAD_COL, 24, TileId.runwayMark);
-  p.set(ROAD_COL - 1, 16, TileId.runway);
-  wreck(p, 4, 6);
-  wreck(p, 16, 12);
-  wreck(p, 6, 26);
-  wreck(p, 15, 32);
-  hangar(p, 3, 34);
-  p.set(3, 36, TileId.crater);
-  craters(p, [
-    [9, 6],
-    [12, 12],
-    [8, 16],
-    [14, 22],
-    [10, 26],
-    [13, 34],
-    [5, 18],
-    [17, 8],
-  ]);
-  snagFringe(p);
-  for (let r = 4; r <= 34; r += 8) p.set(1, r, TileId.wall);
-});
-
-/** Craters, wrecks, a broken wall, and a scorched tree fringe. No intact runway. */
-const battlefield = landChunk('battlefield', TileId.road, (p) => {
-  scorchGround(p);
-  paveEdge(p, 'both', TileId.scorch);
-  stampSpine(p, TileId.road);
-  trenches(p);
-  for (let r = 4; r <= 34; r += 4) {
-    for (const c of AIRFIELD_SPINE) {
-      if ((c + r) % 2 === 0) p.set(c, r, r % 8 === 0 ? TileId.crater : TileId.scorch);
+/**
+ * Runway ends here. Shoulder ditches feed a transverse channel; above it the
+ * ground is already grass. The top edge is a dirt road so the woods can join.
+ */
+const runwayBatteries = landChunk(
+  'runwayBatteries',
+  { bottom: TileId.runway, top: TileId.road },
+  (p) => {
+    p.meadow();
+    concreteBand(p, 1, 28);
+    paveEdge(p, 'bottom', TileId.concrete);
+    paveEdge(p, 'top', TileId.meadow);
+    stampSpine(p, TileId.runway, 0, 28);
+    marksBetween(p, 2, 26);
+    hangar(p, 3, 8);
+    hangar(p, 16, 12);
+    hangar(p, 3, 20);
+    p.rect(17, 4, 2, 2, TileId.radar);
+    for (const [c, r] of [
+      [2, 6],
+      [20, 10],
+      [2, 18],
+      [20, 24],
+    ] as const) {
+      p.set(c, r, TileId.bunker);
     }
+    parkedPlane(p, 4, 2);
+    parkedPlane(p, 18, 6);
+    parkedPlane(p, 4, 16);
+    parkedPlane(p, 18, 22);
+    drainage(p, 2, 30);
+    for (let r = 35; r < LAST; r++) p.set(ROAD_COL, r, TileId.road);
+    p.set(2, 36, TileId.fir);
+    p.set(20, 36, TileId.oak);
+    p.set(5, 37, TileId.bush);
   }
-  craters(p, [
-    [4, 6],
-    [7, 10],
-    [15, 8],
-    [18, 14],
-    [6, 18],
-    [16, 20],
-    [9, 24],
-    [13, 28],
-    [5, 32],
-    [17, 34],
+);
+
+/** Forest edge of the airfield: scattered huts, two cabins, dirt tracks. */
+const hutWoods = landChunk('hutWoods', TileId.road, (p) => {
+  woods(p, false);
+  footpath(p, [
+    [ROAD_COL, 1],
+    [7, 8],
+    [4, 16],
+    [8, 22],
+    [16, 24],
+    [18, 31],
+    [ROAD_COL, 38],
   ]);
-  wreck(p, 3, 8);
-  wreck(p, 16, 10);
-  wreck(p, 5, 22);
-  wreck(p, 15, 26);
-  wreck(p, 8, 34);
-  p.rect(16, 32, 4, 1, TileId.hangarRoof);
-  p.set(17, 33, TileId.wreck);
-  snagFringe(p);
-  for (let r = 5; r <= 33; r += 7) {
-    p.set(1, r, TileId.wall);
-    if (r % 2 === 1) p.set(p.cols - 2, r + 1, TileId.wall);
+  footpath(p, [
+    [7, 8],
+    [2, 7],
+  ]);
+  footpath(p, [
+    [8, 22],
+    [6, 28],
+  ]);
+  footpath(p, [
+    [ROAD_COL, 34],
+    [3, 34],
+  ]);
+  hut(p, 2, 7);
+  hut(p, 18, 6);
+  hut(p, 16, 20);
+  hut(p, 6, 28);
+  hut(p, 3, 34);
+  p.house(4, 15, 'brown');
+  p.house(17, 30, 'brown');
+  meadowEdges(p);
+});
+
+/** Deeper canopy. Two huts on a track, no military buildings. */
+const deepWoods = landChunk('deepWoods', TileId.road, (p) => {
+  woods(p, true);
+  footpath(p, [
+    [ROAD_COL, 1],
+    [8, 10],
+    [14, 18],
+    [6, 28],
+    [ROAD_COL, 38],
+  ]);
+  footpath(p, [
+    [14, 18],
+    [19, 16],
+  ]);
+  hut(p, 8, 11);
+  hut(p, 19, 16);
+  meadowEdges(p);
+});
+
+/** The front line in the trees: craters, wrecks, snags. One hut off a track. */
+const ruinWoods = landChunk('ruinWoods', TileId.road, (p) => {
+  woods(p, false);
+  p.blob(11, 18, 5.5, 12, TileId.scorch, 0.28, true);
+  const craters: Array<[number, number]> = [
+    [2, 8],
+    [4, 14],
+    [6, 20],
+    [8, 26],
+    [7, 32],
+    [15, 6],
+    [17, 12],
+    [19, 18],
+    [16, 24],
+    [18, 30],
+    [5, 10],
+    [14, 16],
+    [6, 28],
+    [15, 34],
+    [3, 22],
+    [20, 26],
+  ];
+  for (const [c, r] of craters) {
+    p.set(c, r, TileId.crater);
+    if (!SPINE.has(c + 1)) p.set(c + 1, r, TileId.scorch);
+    p.set(c, r + 1, TileId.scorch);
   }
-  p.set(2, 16, TileId.bunker);
+  p.rect(3, 12, 2, 2, TileId.wreck);
+  p.rect(16, 18, 2, 2, TileId.wreck);
+  p.rect(6, 30, 2, 2, TileId.wreck);
+  for (const [c, r] of [
+    [1, 6],
+    [2, 16],
+    [1, 26],
+    [2, 34],
+    [21, 8],
+    [20, 18],
+    [21, 28],
+    [20, 36],
+    [8, 4],
+    [14, 36],
+  ] as const) {
+    p.set(c, r, TileId.snag);
+  }
+  for (const [c, r, len] of [
+    [3, 18, 3],
+    [15, 22, 4],
+    [5, 33, 4],
+  ] as const) {
+    for (let i = 0; i < len; i++) p.set(c + i, r, TileId.trench);
+  }
+  footpath(p, [
+    [ROAD_COL, 1],
+    [15, 8],
+    [12, 20],
+    [5, 30],
+    [ROAD_COL, 38],
+  ]);
+  hut(p, 15, 8);
+  meadowEdges(p);
 });
 
 export const LAND_B_LIBRARY: readonly ChunkDef[] = [
@@ -356,9 +470,9 @@ export const LAND_B_LIBRARY: readonly ChunkDef[] = [
   runwayHangars,
   towerApron,
   runwayBatteries,
-  craterApron,
-  trenchLine,
-  battlefield,
+  hutWoods,
+  deepWoods,
+  ruinWoods,
 ];
 
 export const LAND_B_SPEC: ChunkMapSpec = {
@@ -372,8 +486,8 @@ export const LAND_B_SPEC: ChunkMapSpec = {
     { fixed: 'runwayHangars' },
     { fixed: 'towerApron' },
     { fixed: 'runwayBatteries' },
-    { fixed: 'craterApron' },
-    { fixed: 'trenchLine', flip: true },
-    { fixed: 'battlefield' },
+    { fixed: 'hutWoods', flip: true },
+    { fixed: 'deepWoods' },
+    { fixed: 'ruinWoods' },
   ],
 };
