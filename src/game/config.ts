@@ -475,9 +475,33 @@ export const RIVER_A_SEED = 21;
 /** 宇宙A is a starfield with no tiles. 地图预览 plays it this long. */
 export const SPACE_A_PREVIEW_SECONDS = 24;
 
-/** Cloud-shadow layer over maps that ask for it: alpha and drift relative to the ground. */
-export const CLOUD_SHADOW_ALPHA = 0.12;
+/**
+ * Cloud shadows over maps that set `cloudShadows` (陆地A / 陆地B / 河流A).
+ * Alpha stays low so the silhouettes read without muddying the ground.
+ * Scroll is relative to the tiles (faster than 1 drifts the shadows ahead).
+ * Clusters repeat every `CLOUD_SHADOW_SPAN` pixels and are drawn this far
+ * above their stored y so they enter from the top.
+ */
+export const CLOUD_SHADOW_ALPHA = 0.18;
 export const CLOUD_SHADOW_SCROLL = 1.25;
+export const CLOUD_SHADOW_SPAN = 1600;
+export const CLOUD_SHADOW_MARGIN = 180;
+
+/** Warning cloud band: pixels per second, and opacity at full fade. */
+export const WARNING_CLOUD_DRIFT = 70;
+export const WARNING_CLOUD_ALPHA = 0.9;
+
+/**
+ * 宇宙A planet parallax as a fraction of the far star layer
+ * (`STAR_SCROLL_SPEEDS[0]`). Both stay below 1, so planets lag every star
+ * layer. The large limb is the slower of the two.
+ */
+export const PLANET_PARALLAX_LARGE = 0.16;
+export const PLANET_PARALLAX_SMALL = 0.5;
+
+/** Large planet radius, and how many radii its center sits past the screen edge. */
+export const PLANET_LARGE_RADIUS = 176;
+export const PLANET_LARGE_CLIP = 0.27;
 
 /** Warning scroll ramps from BG_SCROLL_SPEED to this, then the tiles fade */
 export const BG_WARNING_SCROLL = 200;

@@ -4,7 +4,9 @@
  * cut at the end of the runway, then woods. Stage 1 does not use this map.
  *
  * Parked aircraft are 2×2 map tiles (see `PLANE`). They are background, with
- * no HP, collision, or drops. The last three chunks are forest: huts and
+ * no HP, collision, or drops. On the apron they sit in rows of three, shoulder
+ * to shoulder, and the next row is at least ten tiles further along. They are
+ * not scattered down the runway. The last three chunks are forest: huts and
  * footpaths, then deeper woods, then a ruined clearing. No hangars, barracks,
  * or grid roads in that third.
  *
@@ -125,6 +127,11 @@ function parkedPlane(p: ChunkPainter, c: number, r: number): void {
   p.set(c + 1, r + 1, tr);
 }
 
+/** `count` fighters abreast. The next one starts two columns over, so the 2×2 tiles touch. */
+function parkedGroup(p: ChunkPainter, c: number, r: number, count: number): void {
+  for (let i = 0; i < count; i++) parkedPlane(p, c + i * 2, r);
+}
+
 function bushes(p: ChunkPainter): void {
   const spots: Array<[number, number]> = [
     [3, 8],
@@ -236,7 +243,7 @@ const guardPosts = landChunk('guardPosts', TileId.road, (p) => {
   p.scatter(4, [TileId.fir, TileId.oak], (c) => c < 6 || c > 16);
 });
 
-/** The fence opens onto concrete. A few fighters already sit on the apron. */
+/** The fence opens onto concrete. Two rows of three fighters sit on the apron. */
 const taxiIn = landChunk('taxiIn', TileId.road, (p) => {
   p.meadow();
   shoulders(p, 0, 17);
@@ -248,13 +255,12 @@ const taxiIn = landChunk('taxiIn', TileId.road, (p) => {
   hangar(p, 3, 28);
   pad(p, 16, 30);
   p.set(19, 24, TileId.bunker);
-  parkedPlane(p, 7, 22);
-  parkedPlane(p, 16, 24);
-  parkedPlane(p, 7, 34);
   bushes(p);
+  parkedGroup(p, 15, 22, 3);
+  parkedGroup(p, 2, 34, 3);
 });
 
-/** Runway, hangar row, pads, and fighters parked beside the hangars. */
+/** Runway, hangar row, pads, and two rows of fighters beside the runway. */
 const runwayHangars = landChunk('runwayHangars', TileId.runway, (p) => {
   p.meadow();
   concreteBand(p, 1, 38);
@@ -272,13 +278,11 @@ const runwayHangars = landChunk('runwayHangars', TileId.runway, (p) => {
   p.set(20, 26, TileId.bunker);
   p.hRoad(18, 3, 8, TileId.street);
   p.hRoad(32, 14, 19, TileId.street);
-  parkedPlane(p, 7, 8);
-  parkedPlane(p, 14, 16);
-  parkedPlane(p, 7, 26);
-  parkedPlane(p, 18, 6);
+  parkedGroup(p, 2, 10, 3);
+  parkedGroup(p, 15, 34, 3);
 });
 
-/** Densest screen: tower, fuel and ammo, hangars both sides, AA pits, planes. */
+/** Densest screen: tower, fuel and ammo, hangars both sides, AA pits, two plane rows. */
 const towerApron = landChunk('towerApron', TileId.runway, (p) => {
   p.meadow();
   concreteBand(p, 1, 38);
@@ -304,10 +308,8 @@ const towerApron = landChunk('towerApron', TileId.runway, (p) => {
   p.set(20, 18, TileId.bunker);
   p.set(2, 30, TileId.bunker);
   p.set(20, 8, TileId.bunker);
-  parkedPlane(p, 7, 4);
-  parkedPlane(p, 14, 4);
-  parkedPlane(p, 7, 12);
-  parkedPlane(p, 14, 28);
+  parkedGroup(p, 2, 10, 3);
+  parkedGroup(p, 15, 28, 3);
 });
 
 /**
@@ -336,11 +338,9 @@ const runwayBatteries = landChunk(
     ] as const) {
       p.set(c, r, TileId.bunker);
     }
-    parkedPlane(p, 4, 2);
-    parkedPlane(p, 18, 6);
-    parkedPlane(p, 4, 16);
-    parkedPlane(p, 18, 22);
     drainage(p, 2, 30);
+    parkedGroup(p, 1, 2, 3);
+    parkedGroup(p, 16, 16, 3);
     for (let r = 35; r < LAST; r++) p.set(ROAD_COL, r, TileId.road);
     p.set(2, 36, TileId.fir);
     p.set(20, 36, TileId.oak);

@@ -255,19 +255,55 @@ function countHouseTiles(grid: TileGrid, r0 = 0, r1 = grid.length): number {
   return ids.reduce((n, id) => n + countTile(grid, id, r0, r1), 0);
 }
 
+interface PlaneAt {
+  c: number;
+  r: number;
+}
+
 /** Complete 2×2 parked fighters whose lower row is inside `[r0, r1)`. */
-function countPlanes(grid: TileGrid, r0: number, r1: number): number {
-  let n = 0;
+function planeAnchors(grid: TileGrid, r0: number, r1: number): PlaneAt[] {
+  const found: PlaneAt[] = [];
   for (let r = r0; r < r1 - 1; r++) {
     for (let c = 0; c < MAP_TILES_X - 1; c++) {
       if (grid[r]![c] !== TileId.planeBL) continue;
       if (grid[r]![c + 1] !== TileId.planeBR) continue;
       if (grid[r + 1]![c] !== TileId.planeTL) continue;
       if (grid[r + 1]![c + 1] !== TileId.planeTR) continue;
-      n++;
+      found.push({ c, r });
     }
   }
-  return n;
+  return found;
+}
+
+function countPlanes(grid: TileGrid, r0: number, r1: number): number {
+  return planeAnchors(grid, r0, r1).length;
+}
+
+/** Fighters on the same row whose columns touch (each sprite is two tiles wide). */
+function groupPlanes(planes: readonly PlaneAt[]): PlaneAt[][] {
+  const parent = planes.map((_, i) => i);
+  const find = (i: number): number => {
+    const p = parent[i]!;
+    if (p === i) return i;
+    const root = find(p);
+    parent[i] = root;
+    return root;
+  };
+  for (let i = 0; i < planes.length; i++) {
+    for (let j = i + 1; j < planes.length; j++) {
+      const a = planes[i]!;
+      const b = planes[j]!;
+      if (a.r === b.r && Math.abs(a.c - b.c) === 2) parent[find(i)] = find(j);
+    }
+  }
+  const groups = new Map<number, PlaneAt[]>();
+  planes.forEach((plane, i) => {
+    const id = find(i);
+    const list = groups.get(id);
+    if (list) list.push(plane);
+    else groups.set(id, [plane]);
+  });
+  return [...groups.values()];
 }
 
 function countTile(grid: TileGrid, id: TileId, r0 = 0, r1 = grid.length): number {
@@ -429,6 +465,41 @@ describe('陆地B airfield', () => {
     expect(countPlanes(grid, 80, 240)).toBeGreaterThanOrEqual(12);
     expect(countPlanes(grid, 240, 360)).toBe(0);
     expect(tileTerrain(TileId.planeBL)).toBe('feature');
+  });
+
+  it('parks fighters in side-by-side rows with a gap before the next row', () => {
+    const planes = planeAnchors(grid, 0, grid.length);
+    expect(planes).toHaveLength(24);
+    const tiles = [TileId.planeTL, TileId.planeTR, TileId.planeBL, TileId.planeBR].reduce(
+      (n, id) => n + countTile(grid, id),
+      0
+    );
+    expect(tiles).toBe(planes.length * 4);
+    const spine = new Set<number>(AIRFIELD_SPINE);
+    for (const plane of planes) {
+      expect(spine.has(plane.c) || spine.has(plane.c + 1)).toBe(false);
+    }
+    const groups = groupPlanes(planes);
+    expect(groups).toHaveLength(8);
+    for (const group of groups) {
+      expect(group).toHaveLength(3);
+      const row = group[0]!.r;
+      const cols = group.map((plane) => plane.c).sort((a, b) => a - b);
+      for (const plane of group) expect(plane.r).toBe(row);
+      expect(cols[1]! - cols[0]!).toBe(2);
+      expect(cols[2]! - cols[1]!).toBe(2);
+    }
+    for (let chunk = 0; chunk < LAND_B_CHUNKS; chunk++) {
+      const inChunk = groups.filter((group) => Math.floor(group[0]!.r / MAP_CHUNK_ROWS) === chunk);
+      if (chunk >= 2 && chunk <= 5) {
+        expect(inChunk, `chunk ${chunk}`).toHaveLength(2);
+        const sorted = [...inChunk].sort((a, b) => a[0]!.r - b[0]!.r);
+        const gap = sorted[1]![0]!.r - (sorted[0]![0]!.r + 2);
+        expect(gap, `chunk ${chunk} gap`).toBeGreaterThanOrEqual(10);
+      } else {
+        expect(inChunk, `chunk ${chunk}`).toHaveLength(0);
+      }
+    }
   });
 
   it('keeps the airfield props, and the forest third free of orderly buildings', () => {
