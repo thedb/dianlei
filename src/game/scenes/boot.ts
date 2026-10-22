@@ -50,6 +50,7 @@ export function createBootScene(ctx: SceneContext): Scene {
           ctx.difficulty = choice;
           ctx.playMode = 'play';
           ctx.battleEntry = 'stage';
+          delete ctx.challengeStage;
           return 'battle';
         }
         return null;

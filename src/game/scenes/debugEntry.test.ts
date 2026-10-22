@@ -12,6 +12,14 @@ import {
 } from '@/game/ui/debugPanel';
 import { START_BUTTON } from '@/game/ui/startButton';
 import { DIFFICULTY_EASY_BUTTON } from '@/game/ui/difficultySelect';
+import {
+  BOSS_DIFF_BACK_BUTTON,
+  BOSS_DIFF_HARD_BUTTON,
+  BOSS_DIFF_NORMAL_BUTTON,
+  BOSS_STAGE_1_BUTTON,
+  BOSS_STAGE_BACK_BUTTON,
+} from '@/game/ui/bossChallenge';
+import { SETTINGS_STORAGE_KEY } from '@/game/settings';
 import { createTitleScene } from './title';
 import type { TitleAttract } from './titleAttract';
 import type { SceneContext } from './types';
@@ -111,10 +119,23 @@ describe('title debug entry', () => {
     expect(title.update(DT, makeInput())).toBeNull();
     expect(attract.updates()).toBe(calls + 1);
 
-    expect(title.update(DT, makeInput({ taps: [point(DEBUG_BOSS_BUTTON)] }))).toBe('battle');
+    expect(title.update(DT, makeInput({ taps: [point(DEBUG_BOSS_BUTTON)] }))).toBeNull();
+    const frozen = attract.updates();
+    expect(title.update(DT, makeInput())).toBeNull();
+    expect(attract.updates()).toBe(frozen);
+    expect(ctx.battleEntry).toBe('stage');
+    expect(ctx.difficulty).toBeUndefined();
+
+    expect(title.update(DT, makeInput({ taps: [point(BOSS_STAGE_1_BUTTON)] }))).toBeNull();
+    expect(title.update(DT, makeInput())).toBeNull();
+    expect(attract.updates()).toBe(frozen);
+
+    expect(title.update(DT, makeInput({ taps: [point(BOSS_DIFF_NORMAL_BUTTON)] }))).toBe('battle');
     expect(ctx.battleEntry).toBe('boss');
     expect(ctx.playMode).toBe('play');
     expect(ctx.difficulty).toBe('easy');
+    expect(ctx.challengeStage).toBe('1');
+    expect(ctx.storage.getStorage(SETTINGS_STORAGE_KEY)).toBeNull();
   });
 
   it('toggles debug mode without leaving the title', () => {
@@ -176,9 +197,16 @@ describe('title debug entry', () => {
     }
     expect(title.update(DT, makeInput({ taps: [outside] }))).toBeNull();
     expect(title.update(DT, makeInput({ taps: [point(DEBUG_BOSS_BUTTON)] }))).toBeNull();
+    expect(title.update(DT, makeInput({ taps: [point(BOSS_STAGE_1_BUTTON)] }))).toBeNull();
+    expect(ctx.playMode).toBeUndefined();
 
     expect(title.update(DT, makeInput({ taps: [hot] }))).toBeNull();
-    expect(title.update(DT, makeInput({ taps: [point(DEBUG_BOSS_BUTTON)] }))).toBe('battle');
+    expect(title.update(DT, makeInput({ taps: [point(DEBUG_BOSS_BUTTON)] }))).toBeNull();
+    expect(title.update(DT, makeInput({ taps: [point(BOSS_STAGE_1_BUTTON)] }))).toBeNull();
+    expect(title.update(DT, makeInput({ taps: [point(BOSS_DIFF_HARD_BUTTON)] }))).toBe('battle');
+    expect(ctx.battleEntry).toBe('boss');
+    expect(ctx.difficulty).toBe('hard');
+    expect(ctx.challengeStage).toBe('1');
 
     title.enter();
     for (let i = 0; i < DEBUG_HOT_TAPS - 1; i++) {
@@ -187,10 +215,54 @@ describe('title debug entry', () => {
     title.update(2.1, makeInput());
     expect(title.update(DT, makeInput({ taps: [hot] }))).toBeNull();
     expect(title.update(DT, makeInput({ taps: [point(DEBUG_BOSS_BUTTON)] }))).toBeNull();
+    expect(title.update(DT, makeInput({ taps: [point(BOSS_DIFF_NORMAL_BUTTON)] }))).toBeNull();
+    expect(ctx.difficulty).toBe('hard');
     for (let i = 0; i < DEBUG_HOT_TAPS - 2; i++) {
       expect(title.update(DT, makeInput({ taps: [hot] }))).toBeNull();
     }
     expect(title.update(DT, makeInput({ taps: [hot] }))).toBeNull();
-    expect(title.update(DT, makeInput({ taps: [point(DEBUG_BOSS_BUTTON)] }))).toBe('battle');
+    expect(title.update(DT, makeInput({ taps: [point(DEBUG_BOSS_BUTTON)] }))).toBeNull();
+    expect(title.update(DT, makeInput({ menuConfirm: true }))).toBeNull();
+    expect(title.update(DT, makeInput({ menuConfirm: true }))).toBe('battle');
+    expect(ctx.battleEntry).toBe('boss');
+    expect(ctx.difficulty).toBe('easy');
+  });
+
+  it('steps back from 困难 to the stage list, then to the debug panel', () => {
+    const ctx = context();
+    const attract = stubAttract();
+    const title = createTitleScene(ctx, attract);
+    title.enter();
+    openPanel(title);
+    expect(title.update(DT, makeInput({ taps: [point(DEBUG_BOSS_BUTTON)] }))).toBeNull();
+    expect(title.update(DT, makeInput({ taps: [point(BOSS_STAGE_1_BUTTON)] }))).toBeNull();
+    const frozen = attract.updates();
+
+    expect(title.update(DT, makeInput({ taps: [point(BOSS_DIFF_BACK_BUTTON)] }))).toBeNull();
+    expect(title.update(DT, makeInput())).toBeNull();
+    expect(attract.updates()).toBe(frozen);
+    expect(ctx.playMode).toBeUndefined();
+
+    expect(title.update(DT, makeInput({ menuBack: true }))).toBeNull();
+    expect(title.update(DT, makeInput())).toBeNull();
+    expect(attract.updates()).toBe(frozen + 1);
+
+    expect(title.update(DT, makeInput({ taps: [point(DEBUG_WEAPON_BUTTON)] }))).toBe('battle');
+    expect(ctx.playMode).toBe('weaponTest');
+    expect(ctx.battleEntry).toBe('stage');
+    expect(ctx.challengeStage).toBeUndefined();
+    expect(ctx.storage.getStorage(SETTINGS_STORAGE_KEY)).toBeNull();
+  });
+
+  it('returns from the stage list to the debug panel without starting', () => {
+    const ctx = context();
+    const title = createTitleScene(ctx, stubAttract());
+    title.enter();
+    openPanel(title);
+    title.update(DT, makeInput({ taps: [point(DEBUG_BOSS_BUTTON)] }));
+    expect(title.update(DT, makeInput({ taps: [point(BOSS_STAGE_BACK_BUTTON)] }))).toBeNull();
+    expect(title.update(DT, makeInput({ taps: [point(DEBUG_CLOSE_BUTTON)] }))).toBeNull();
+    expect(ctx.battleEntry).toBe('stage');
+    expect(ctx.difficulty).toBeUndefined();
   });
 });

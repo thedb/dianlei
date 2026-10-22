@@ -3,6 +3,7 @@
  * The live stage demo starts here, in enter, once this scene is current.
  * Boot and any earlier loading frame do not create it.
  * A hidden top-right hot zone opens the debug panel; the demo keeps running.
+ * 「挑战 Boss」 then pauses it for a stage list and a 普通 / 困难 step.
  */
 
 import type { Scene, SceneContext } from './types';
@@ -23,6 +24,11 @@ import {
 } from '@/game/ui/widgets';
 import { START_BUTTON, drawStartButton, isStartTapped } from '@/game/ui/startButton';
 import { createDifficultySelect } from '@/game/ui/difficultySelect';
+import {
+  challengeRunDifficulty,
+  createBossDifficultySelect,
+  createBossStageSelect,
+} from '@/game/ui/bossChallenge';
 import { sharedTitleAttract, type TitleAttract } from './titleAttract';
 
 const ITEM_COUNT = 2;
@@ -43,12 +49,17 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
   let inSettings = false;
   let inDebug = false;
   let inDifficulty = false;
+  /** Challenge Boss: stage list, then 普通 / 困难. Null while the debug panel is up. */
+  let bossPick: 'stage' | 'difficulty' | null = null;
+  let bossStageId = '1';
   let blinkTimer = 0;
   // Shared demo is created in enter. An injected demo stays stopped until then.
   let attract: TitleAttract | null = injected ?? null;
   const settingsPanel = createSettingsPanel(ctx.settings);
   const debugPanel = createDebugPanel();
   const difficultySelect = createDifficultySelect();
+  const bossStageSelect = createBossStageSelect();
+  const bossDifficultySelect = createBossDifficultySelect();
   const hotZone = createDebugHotZone();
 
   function demo(): TitleAttract {
@@ -76,6 +87,7 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
       inSettings = false;
       inDebug = false;
       inDifficulty = false;
+      bossPick = null;
       blinkTimer = 0;
       hotZone.reset();
       ctx.input.setControlsEnabled(false);
@@ -90,7 +102,9 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
     update(dt: number, input: InputState) {
       blinkTimer = (blinkTimer + dt) % 1;
       const live = demo();
-      if (!inDifficulty) {
+      // Formal difficulty and both challenge-Boss steps pause the demo.
+      // The debug panel itself keeps it running.
+      if (!inDifficulty && bossPick === null) {
         if (!live.isRunning()) live.start();
         live.update(dt);
       }
@@ -101,18 +115,47 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
       }
 
       if (inDebug) {
+        if (bossPick === 'difficulty') {
+          const choice = bossDifficultySelect.update(input);
+          if (choice === 'back') {
+            bossPick = 'stage';
+            bossStageSelect.open();
+            return null;
+          }
+          if (choice) {
+            ctx.playMode = 'play';
+            ctx.battleEntry = 'boss';
+            ctx.difficulty = challengeRunDifficulty(choice);
+            ctx.challengeStage = bossStageId;
+            return 'battle';
+          }
+          return null;
+        }
+        if (bossPick === 'stage') {
+          const choice = bossStageSelect.update(input);
+          if (choice === 'back') {
+            bossPick = null;
+            return null;
+          }
+          if (choice) {
+            bossStageId = choice;
+            bossPick = 'difficulty';
+            bossDifficultySelect.open();
+          }
+          return null;
+        }
+
         const action = debugPanel.update(input);
         if (action === 'close') inDebug = false;
         else if (action === 'toggleDebug') {
           ctx.settings.update({ debugMode: !ctx.settings.get().debugMode });
         } else if (action === 'boss') {
-          ctx.playMode = 'play';
-          ctx.battleEntry = 'boss';
-          ctx.difficulty = 'easy';
-          return 'battle';
+          bossPick = 'stage';
+          bossStageSelect.open();
         } else if (action === 'weaponTest') {
           ctx.playMode = 'weaponTest';
           ctx.battleEntry = 'stage';
+          delete ctx.challengeStage;
           return 'battle';
         }
         return null;
@@ -128,6 +171,7 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
           ctx.difficulty = choice;
           ctx.playMode = 'play';
           ctx.battleEntry = 'stage';
+          delete ctx.challengeStage;
           return 'battle';
         }
         return null;
@@ -186,6 +230,10 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
 
       if (inSettings) {
         settingsPanel.render(c, ctx.input.getControlsView(), '设置');
+      } else if (bossPick === 'stage') {
+        bossStageSelect.render(c);
+      } else if (bossPick === 'difficulty') {
+        bossDifficultySelect.render(c);
       } else if (inDebug) {
         debugPanel.render(c, ctx.settings.get().debugMode);
       } else if (inDifficulty) {
