@@ -114,6 +114,32 @@ This document defines the coding conventions and constraints for all AI agents w
 - Wave data in `src/game/levels/` using TypeScript types
 - Patterns driven by data, not hard-coded `if` statements
 - MVP waves marked in wave table should be playable first
+- **Stage registry**: `src/game/levels/registry.ts` (`getStage`, `listStages`) is the only module that imports a concrete stage table. Battle, the wave scheduler, the 挑战 Boss list, and tests go through it. A `StageData` carries its own `id`, `label`, `sections`, `warningAt`, waves, buildings, `boss: BossDef`, and optional `buildingDrops`
+
+### Battle Scene Layout (P11)
+- `src/game/scenes/battle.ts` only orders the frame (keep it ≲600 lines). The rules live in `src/game/battle/`:
+  - `context.ts` — the shared `Battle` state (pools, player, run state, stage, boss, clocks), `runDifficulty` / `runProfile`, `publishRun`, `leaveToTitle`, audio unlock
+  - `playMode.ts` — `PLAY_MODE_RULES`: one row per `playMode` (`silent`, `pausable`, `pauseExit`, `publishesRun`, `onDeath`, `world`, `range`, `hud`, `difficulty`, `victoryExit`, `bossEntry`). Modules read these flags; never branch on `playMode` strings. A new mode is a new row
+  - `player.ts` (steer, bank, guns, pickups, death, respawn, extend) · `combat.ts` (kills, drops, bomb, homing targets, collision pass) · `world.ts` (scroll, waves, buildings, enemies, bullets, items, boss-practice `jumpTo`) · `bossFight.ts` (boss events, victory fly-off) · `fx.ts` (explosion / spark pools, shake) · `range.ts` (weapon-test panel and stats) · `pause.ts` · `render.ts` (field) · `hud.ts` (HUD and overlays)
+- Frame order is fixed and covered by replay tests: pause → range death → pause request → range taps → clock / shake / timers / buttons → ship (death, victory hold, fly-in, control + bomb) → player bullets → (world) scroll, waves, boss arrival, buildings → enemies → bomb ring hits → homing → boss + victory → enemy bullets / items → FX → collisions → extend
+- Player shots find enemies through `SpatialGrid` (`systems/collision.ts`), padded by `ENEMY_MAX_HIT_RADIUS`; candidates come back in pool order, so hit order matches a full scan
+- Gameplay randomness comes from `SceneContext.rng` (`engine/rng.ts`, seeded `createRng`). Never call `Math.random` in gameplay code; the replay tests make it throw
+
+### Data-Driven Content (P11)
+- **Enemies**: one row per type in `ENEMY_DEFS` (`entities/enemyDefs.ts`): HP, score, footprint, hit radius, size class, category, `deathBursts`, `barrel`, `spin`, `snapAim`, `avoidsWater`. No per-type branches in battle code
+- **Bullet patterns**: `systems/danmaku.ts`. Named kinds are rows in `FIRE_PRESETS`; one-off shapes use `{ kind: 'pattern', pattern: PatternSpec }`. Gun clocks (`pullShots`) and the sweeping laser (`stepLaserSweep`) are shared by enemies and bosses
+- **Bosses**: a `BossDef` (`levels/bosses/*.ts`) lists parts and a phase table (targets, optional `segmentHp`, `transition`, `gate`, attacks, enrage, look, HP-bar slot). `systems/boss.ts` is the generic runner; the segmented HP bar comes from the table (`bar: 'extra'` phases are the yellow slot). Hull art is keyed by `BossDef.art` in `BOSS_ART` (`art/bossSprite.ts`)
+- **Difficulty**: `DIFFICULTY_PROFILES` (`difficulty.ts`): `hpScale`, `bulletSpeedScale`, `fireRateScale`, `bossGates`, optional `buildingDrops`. Boss phases with a `gate` run only when the profile opens it (Hard opens `hard` = phase 3)
+- **Drops**: `BUILDING_DROP_RULES` in `systems/dropRules.ts` (first matching rule wins). A stage or a difficulty profile may supply its own list
+- **Building guns**: `BuildingSpec.fire` (`entities/building.ts`); barrel look and pivot in `BUILDING_BARRELS` (`art/buildingSprite.ts`)
+
+### Recipes
+- **New enemy**: add the id to `EnemyType` and a row to `ENEMY_DEFS`, then a sprite builder in `art/enemySprite.ts` `BUILDERS`. Use it from wave data with any `Fire`
+- **New bullet pattern**: add a `Fire` kind plus a `FIRE_PRESETS` row, or use `{ kind: 'pattern', pattern }` inline in the wave
+- **New boss**: write a `BossDef` in `levels/bosses/`, add its art builder to `BOSS_ART`, and point the stage's `boss` at it
+- **New stage**: write `levels/stageN.ts` exporting a `StageData` with a new `id` and add it to `STAGES` in the registry. The 挑战 Boss picker lists it automatically. Tile art (`art/tiles.ts`) is still Stage 1 only
+- **New weapon**: a registry row in `systems/playerWeapons.ts` (see Weapons)
+- **New play mode**: a `PlayMode` id and a `PLAY_MODE_RULES` row
 
 ## Testing
 
@@ -127,6 +153,7 @@ This document defines the coding conventions and constraints for all AI agents w
 - Power-up / extend / death rules
 - Config sanity checks
 - Object pool behavior
+- Deterministic replays: `scenes/battle.replay.test.ts` (gameplay digest) and `scenes/battle.render.test.ts` (draw-call digest) run seeded Stage 1 / boss practice / attract / weapon-test sessions. Their expected values are behavior: a refactor must leave them unchanged. Only a deliberate gameplay or visual change may recapture them (`REPLAY_CAPTURE=1`), and the PR must say so
 
 ## Build & Deploy
 
