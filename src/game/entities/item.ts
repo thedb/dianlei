@@ -4,6 +4,7 @@
  */
 
 import type { Poolable } from '@/engine/pool';
+import type { Rng } from '@/engine/rng';
 import {
   LOGICAL_W,
   LOGICAL_H,
@@ -73,8 +74,8 @@ export function createItem(): Item {
   };
 }
 
-/** Spawn item at position */
-export function spawnItem(item: Item, type: ItemType, x: number, y: number): void {
+/** Spawn item at position. `rng` picks the bounce heading. */
+export function spawnItem(item: Item, type: ItemType, x: number, y: number, rng: Rng): void {
   item.type = type;
   item.x = x;
   item.y = y;
@@ -85,7 +86,7 @@ export function spawnItem(item: Item, type: ItemType, x: number, y: number): voi
 
   if (ITEM_DEFS[type].motion === 'bounce') {
     // Weapon items bounce around - start with random diagonal velocity
-    const angle = Math.random() * Math.PI * 2;
+    const angle = rng() * Math.PI * 2;
     item.vx = Math.cos(angle) * ITEM_P_SPEED;
     item.vy = Math.sin(angle) * ITEM_P_SPEED;
   } else {
