@@ -51,11 +51,12 @@ import {
   SHAKE_BIG_DURATION,
   BUILDING_HP,
 } from '@/game/config';
-import { bossUsesPhase3, prepareBossConfig, scaleHp, type Difficulty } from '@/game/difficulty';
+import { difficultyProfile, prepareBossConfig, scaleHp, type Difficulty } from '@/game/difficulty';
+import { clockSeed, createRng } from '@/engine/rng';
 import { getStageGrids } from '@/game/art/tiles';
 import { PALETTE, COLOR } from '@/game/palette';
-import { stage1 } from '@/game/levels/stage1';
-import type { BossConfig } from '@/game/levels/types';
+import { getStage } from '@/game/levels/registry';
+import type { BossDef } from '@/game/levels/types';
 
 // Art assets
 import {
@@ -176,6 +177,7 @@ import { buildingClass, enemyClass } from '@/game/entities/objectClass';
 import {
   applyBossBomb,
   bossHitsPlayer,
+  bossExtraSpan,
   bossHpBarLayout,
   bossIntroBarFill,
   bossIntroBarLayout,
@@ -383,7 +385,10 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
   const enemyBulletPool = new ObjectPool(createEnemyBullet, 200);
   const itemPool = new ObjectPool(createItem, 10);
   const buildingPool = new ObjectPool(createBuilding, 16);
-  const buildingScheduler = new BuildingScheduler(stage1.buildings, stage1.warningAt);
+  let stage = getStage();
+  let buildingScheduler = new BuildingScheduler(stage.buildings, stage.warningAt);
+  const fallbackRng = createRng(clockSeed());
+  const rng = (): number => (sceneCtx.rng ?? fallbackRng)();
   const explosionPool: Explosion[] = [];
   for (let i = 0; i < EXPLOSION_POOL_SIZE; i++) {
     explosionPool.push(createExplosion());
@@ -394,7 +399,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
   }
 
   let boss: BossRuntime | null = null;
-  let bossCfg: BossConfig = stage1.boss;
+  let bossCfg: BossDef = stage.boss;
   const victory: VictoryExit = createVictoryExit();
   let warningPlayed = false;
   let finishedAt: number | null = null;
@@ -418,11 +423,11 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
   let mainClock = volleyInterval(state.main);
   let subClock = 0;
   let gameTime = 0;
-  const scroller = new Scroller();
+  let scroller = new Scroller(stage.sections);
   let scrollFrame: ScrollFrame = {
     scroll: 0,
     tileDelta: 0,
-    fade: backgroundFade(0, stage1.warningAt),
+    fade: backgroundFade(0, stage.warningAt, stage.sections),
     starScroll: [0, 0, 0],
   };
 
@@ -554,7 +559,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
     if (ev.convertBullets) {
       let cleared = 0;
       enemyBulletPool.forEach(() => cleared++);
-      state.score += cleared * stage1.boss.transition.bulletsToScore;
+      state.score += cleared * stage.boss.bulletsToScore;
       enemyBulletPool.releaseAll();
     }
     for (const shot of ev.shots) {
@@ -590,11 +595,11 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
   }
 
   function armBossConfig(): void {
-    bossCfg = prepareBossConfig(stage1.boss, runDifficulty());
+    bossCfg = prepareBossConfig(stage.boss, runDifficulty());
   }
 
   function spawnBoss(): BossRuntime {
-    return createBoss(bossCfg, { phase3: bossUsesPhase3(runDifficulty()) });
+    return createBoss(bossCfg, { gates: difficultyProfile(runDifficulty()).bossGates });
   }
 
   function jumpTo(time: number): void {
@@ -611,13 +616,13 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
     buildingPool.releaseAll();
     buildingScheduler.reset();
     clearFx();
-    boss = time >= stage1.boss.enterAt ? spawnBoss() : null;
+    boss = time >= stage.boss.enterAt ? spawnBoss() : null;
     resetVictoryExit(victory);
-    warningPlayed = time >= stage1.warningAt + WARNING_BANNER_DELAY;
+    warningPlayed = time >= stage.warningAt + WARNING_BANNER_DELAY;
     scrollFrame = {
       ...scrollFrame,
       tileDelta: 0,
-      fade: backgroundFade(gameTime, stage1.warningAt),
+      fade: backgroundFade(gameTime, stage.warningAt, stage.sections),
     };
     finishedAt = null;
     shakeLeft = 0;
@@ -678,7 +683,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
     spawnKillExplosion(enemy);
     waveScheduler?.recordKill();
     sfx('enemyExplode');
-    if (enemy.drop) spawnItem(itemPool.acquire(), enemy.drop, enemy.x, enemy.y);
+    if (enemy.drop) spawnItem(itemPool.acquire(), enemy.drop, enemy.x, enemy.y, rng);
     enemyPool.release(enemy);
   }
 
@@ -703,7 +708,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
     sfx('enemyExplode');
     // Live slot. Read state.sub here, not a copy taken when the scene started.
     const drop = chooseBuildingDrop(state.sub);
-    spawnItem(itemPool.acquire(), drop, b.x, b.y);
+    spawnItem(itemPool.acquire(), drop, b.x, b.y, rng);
   }
 
   function anyBuildingBlocksTank(x: number, y: number): boolean {
@@ -823,7 +828,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       if (!b.wrecked) markBombTarget(b, player.x, player.y);
     });
 
-    if (boss) applyBossEvents(applyBossBomb(boss, bossCfg));
+    if (boss) applyBossEvents(applyBossBomb(boss));
     sfx('bomb');
   }
 
@@ -1052,6 +1057,10 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       // Sprites are immutable. Reuse the bake when the title demo restarts.
       if (!assets) assets = createGameAssets();
 
+      stage = getStage(sceneCtx.battleEntry === 'boss' ? sceneCtx.challengeStage : undefined);
+      buildingScheduler = new BuildingScheduler(stage.buildings, stage.warningAt);
+      scroller = new Scroller(stage.sections);
+
       // Reset player
       player.x = LOGICAL_W / 2;
       player.y = PLAYER_SPAWN_Y;
@@ -1092,7 +1101,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       bombWave.active = false;
 
       // Full wave table, including ground units and the conditional relief ship
-      waveScheduler = new WaveScheduler({ mvpOnly: false });
+      waveScheduler = new WaveScheduler({ mvpOnly: false, stage });
 
       // Reset timers. Weapon-test tune returns to the permanent constants.
       resetWeaponTestTune(weaponTune);
@@ -1103,7 +1112,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       scrollFrame = {
         scroll: 0,
         tileDelta: 0,
-        fade: backgroundFade(0, stage1.warningAt),
+        fade: backgroundFade(0, stage.warningAt, stage.sections),
         starScroll: [0, 0, 0],
       };
       fireHeld = false;
@@ -1128,7 +1137,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       // Weapon test keeps the fresh loadout and does not jump.
       if (!weaponTest() && sceneCtx.battleEntry === 'boss') {
         maxOut(state.main);
-        jumpTo(stage1.boss.enterAt);
+        jumpTo(stage.boss.enterAt);
       }
 
       if (!demo()) audio.init();
@@ -1248,15 +1257,15 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
         updatePlayerControl(dt, input);
       }
 
-      if (!weaponTest()) scrollFrame = scroller.update(dt, gameTime, stage1.warningAt);
+      if (!weaponTest()) scrollFrame = scroller.update(dt, gameTime, stage.warningAt);
 
-      const pastWarning = !weaponTest() && gameTime >= stage1.warningAt;
-      const warningWindow = pastWarning && gameTime < stage1.boss.enterAt;
+      const pastWarning = !weaponTest() && gameTime >= stage.warningAt;
+      const warningWindow = pastWarning && gameTime < stage.boss.enterAt;
       if (
         !weaponTest() &&
         !warningPlayed &&
-        gameTime >= stage1.warningAt + WARNING_BANNER_DELAY &&
-        gameTime < stage1.boss.enterAt
+        gameTime >= stage.warningAt + WARNING_BANNER_DELAY &&
+        gameTime < stage.boss.enterAt
       ) {
         warningPlayed = true;
         sfx('warning');
@@ -1306,7 +1315,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
         }
       }
 
-      if (!weaponTest() && !boss && gameTime >= stage1.boss.enterAt) {
+      if (!weaponTest() && !boss && gameTime >= stage.boss.enterAt) {
         boss = spawnBoss();
       }
 
@@ -1374,7 +1383,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       missilesToRelease.forEach((m) => missilePool.release(m));
 
       if (boss && boss.phase !== 'done') {
-        const ev = updateBoss(boss, dt, bossCfg);
+        const ev = updateBoss(boss, dt);
         applyBossEvents(ev);
         if (boss.phase === 'clear' && finishedAt === null) finishedAt = gameTime;
         if (!demo()) {
@@ -1403,7 +1412,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       }
 
       // Warning fades enemy bullets with no score. Boss shots after enterAt stay.
-      const bulletAlpha = warningWindow ? warningBulletAlpha(gameTime, stage1.warningAt) : 1;
+      const bulletAlpha = warningWindow ? warningBulletAlpha(gameTime, stage.warningAt) : 1;
       if (warningWindow && bulletAlpha <= 0) {
         enemyBulletPool.releaseAll();
       }
@@ -1472,8 +1481,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
           const hit = resolveBossBullet(
             boss,
             { x: bullet.x, y: bullet.y, w: bullet.width, h: bullet.height },
-            bullet.damage,
-            bossCfg
+            bullet.damage
           );
           if (hit.consumedBullet) {
             spawnHitSpark(bullet.x, bullet.y);
@@ -1527,12 +1535,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
           return;
         }
         if (boss) {
-          const hit = resolveBossBullet(
-            boss,
-            { x: m.x, y: m.y, w: size, h: size },
-            m.damage,
-            bossCfg
-          );
+          const hit = resolveBossBullet(boss, { x: m.x, y: m.y, w: size, h: size }, m.damage);
           if (hit.consumedBullet) {
             spawnHitSpark(m.x, m.y);
             missilePool.release(m);
@@ -1587,7 +1590,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       if (isPlayerVulnerable() && boss && bossHitsPlayer(boss, player.x, player.y)) {
         killPlayer();
       }
-      if (isPlayerVulnerable() && boss && bossLaserHits(boss, bossCfg, player.x, player.y)) {
+      if (isPlayerVulnerable() && boss && bossLaserHits(boss, player.x, player.y)) {
         killPlayer();
       }
       if (isPlayerVulnerable()) {
@@ -1709,12 +1712,12 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
         if (!isGroundEnemy(enemy.type)) drawEnemy(enemy);
       });
 
-      if (boss && assets.boss) {
-        drawBossWorld(ctx, renderer, boss, assets.boss, gameTime);
+      if (boss && assets.bosses) {
+        drawBossWorld(ctx, renderer, boss, assets.bosses, gameTime);
       }
 
-      const warningWindow = gameTime >= stage1.warningAt && gameTime < stage1.boss.enterAt;
-      const bulletFade = warningWindow ? warningBulletAlpha(gameTime, stage1.warningAt) : 1;
+      const warningWindow = gameTime >= stage.warningAt && gameTime < stage.boss.enterAt;
+      const bulletFade = warningWindow ? warningBulletAlpha(gameTime, stage.warningAt) : 1;
       ctx.globalAlpha = bulletFade;
       enemyBulletPool.forEach((bullet) => {
         const bx = bullet.prevX + (bullet.x - bullet.prevX) * alpha;
@@ -1740,7 +1743,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       });
       ctx.globalAlpha = 1;
 
-      if (boss) drawBossLaser(ctx, boss, bossCfg, gameTime);
+      if (boss) drawBossLaser(ctx, boss, gameTime);
 
       // Draw player bullets with glow
       bulletPool.forEach((bullet) => {
@@ -1895,7 +1898,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
           renderer.fillText('SUB -', subX, iconY + 4, '#666', 10);
         }
 
-        const intro = boss ? null : introBanner(gameTime);
+        const intro = boss ? null : introBanner(gameTime, stage.label);
         if (intro && !state.gameOver) {
           const blink = intro !== 'GO' || Math.floor(gameTime * 8) % 2 === 0;
           renderer.fillText(
@@ -1907,12 +1910,11 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
           );
         }
 
-        const barIntro = bossIntroBarFill(gameTime, stage1.warningAt, stage1.boss.enterAt);
-        const phase3Hp = bossUsesPhase3(runDifficulty()) ? (stage1.boss.phase3?.hp ?? 0) : 0;
-        const partsHp = stage1.boss.parts.reduce((sum, part) => sum + part.hp, 0);
+        const barIntro = bossIntroBarFill(gameTime, stage.warningAt, stage.boss.enterAt);
         let barLayout: BossHpBarLayout | null = null;
         if (barIntro !== null) {
-          barLayout = bossIntroBarLayout(barIntro, phase3Hp / Math.max(1, partsHp + phase3Hp));
+          const span = bossExtraSpan(stage.boss, difficultyProfile(runDifficulty()).bossGates);
+          barLayout = bossIntroBarLayout(barIntro, span);
         } else if (boss && boss.phase !== 'clear' && boss.phase !== 'done') {
           barLayout = bossHpBarLayout(boss);
         }
@@ -1920,8 +1922,8 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
 
         if (
           !state.gameOver &&
-          gameTime >= stage1.warningAt + WARNING_BANNER_DELAY &&
-          gameTime < stage1.boss.enterAt
+          gameTime >= stage.warningAt + WARNING_BANNER_DELAY &&
+          gameTime < stage.boss.enterAt
         ) {
           const blink = Math.floor(gameTime * 6) % 2 === 0;
           renderer.fillRect(0, LOGICAL_H / 2 - 28, LOGICAL_W, 40, 'rgba(0, 0, 0, 0.45)');
@@ -1945,7 +1947,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       drawPauseButton(ctx, controlsView.layout.pauseButton, controlsView.settings.controlOpacity);
 
       // Pause menu overlay
-      pauseMenu.render(ctx, controlsView, { stage: 1, score: state.score });
+      pauseMenu.render(ctx, controlsView, { stage: stage.stage, score: state.score });
 
       if (boss?.phase === 'clear' && victory.phase === 'wait') {
         renderer.fillText('STAGE CLEAR', LOGICAL_W / 2 - 66, 72, '#7dff9a', 18);
@@ -2004,7 +2006,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       };
       if (boss) {
         info.bossPhase = boss.phase;
-        info.bossPhase3 = boss.phase3Armed;
+        info.bossPhase3 = boss.extraArmed;
         info.bossMaxHp = boss.fightMax;
       }
       return info;

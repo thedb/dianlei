@@ -7,6 +7,7 @@
  */
 
 import type { Difficulty } from '@/game/difficulty';
+import { listStages } from '@/game/levels/registry';
 import {
   choiceButton,
   createChoiceOverlay,
@@ -14,10 +15,12 @@ import {
   type ChoiceRow,
 } from './choiceOverlay';
 
-/** Offered stage bosses. Add a row here when another stage exists. */
-export const BOSS_CHALLENGE_STAGES = [{ id: '1', label: '1' }] as const;
+/** Offered stage bosses: one row per registered stage (`levels/registry.ts`). */
+export const BOSS_CHALLENGE_STAGES: ReadonlyArray<{ id: string; label: string }> = listStages().map(
+  (stage) => ({ id: stage.id, label: stage.label })
+);
 
-export type BossChallengeStageId = (typeof BOSS_CHALLENGE_STAGES)[number]['id'];
+export type BossChallengeStageId = string;
 
 export type BossChallengeRank = 'normal' | 'hard';
 

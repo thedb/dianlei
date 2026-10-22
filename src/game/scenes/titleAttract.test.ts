@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ControlsView } from '@/engine/input';
 import { ATTRACT_LOOP_SECONDS, BOMBS_START, LIVES_START } from '@/game/config';
 import { computeControlLayout } from '@/game/controls';
-import { stage1 } from '@/game/levels/stage1';
+import { getStage } from '@/game/levels/registry';
 import { createMemoryStorage, createSettingsStore } from '@/game/settings';
 import { WaveScheduler } from '@/game/systems/waveScheduler';
 import { makeInput } from '@/test/fakes';
@@ -12,6 +12,8 @@ import { createBattleScene } from './battle';
 import { createTitleScene } from './title';
 import type { SceneContext } from './types';
 import { attractInput, createTitleAttract } from './titleAttract';
+
+const stage1 = getStage('1');
 
 vi.mock('@/game/art', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/game/art')>();

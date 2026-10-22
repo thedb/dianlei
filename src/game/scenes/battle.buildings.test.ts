@@ -3,11 +3,13 @@ import { makeInput } from '@/test/fakes';
 import { createMemoryStorage, createSettingsStore } from '@/game/settings';
 import { computeControlLayout } from '@/game/controls';
 import { BG_SCROLL_SPEED } from '@/game/config';
-import { stage1 } from '@/game/levels/stage1';
+import { getStage } from '@/game/levels/registry';
 import { buildingSpawnScroll } from '@/game/entities/building';
 import type { ControlsView } from '@/engine/input';
 import type { BattleEntry, SceneContext } from './types';
 import { createBattleScene } from './battle';
+
+const stage1 = getStage('1');
 
 vi.mock('@/game/art', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/game/art')>();

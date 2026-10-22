@@ -2,8 +2,9 @@
  * Deterministic replays. A fixed seed plus a scripted pilot drives the real
  * battle scene through Stage 1 and boss practice; each run must land on the
  * same outcome, score, kills, boss phase timeline, and per-frame digest.
- * The expected values were captured on the pre-P11 code path, so any change
- * here is a gameplay change.
+ * The expected values were captured on the pre-P11 code path (with the same
+ * seeded generator standing in for `Math.random`), so any change here is a
+ * gameplay change.
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -58,6 +59,13 @@ function fnv(hash: number, text: string): number {
   return h;
 }
 
+/** Gameplay randomness must come from the injected `rng`, never `Math.random`. */
+function forbidMathRandom(): void {
+  vi.spyOn(Math, 'random').mockImplementation(() => {
+    throw new Error('gameplay called Math.random');
+  });
+}
+
 function context(entry: BattleEntry, difficulty: Difficulty, rng: () => number): SceneContext {
   const settings = createSettingsStore(createMemoryStorage());
   const layout = computeControlLayout(settings.get(), { top: 0, bottom: 0 });
@@ -68,8 +76,9 @@ function context(entry: BattleEntry, difficulty: Difficulty, rng: () => number):
     buttonAPressed: false,
     buttonBPressed: false,
   };
-  vi.spyOn(Math, 'random').mockImplementation(rng);
+  forbidMathRandom();
   return {
+    rng,
     showDebug: false,
     safeArea: { top: 0, bottom: 0, left: 0, right: 0 },
     settings,
@@ -576,8 +585,8 @@ function capture(name: string, got: unknown): boolean {
 
 describe('deterministic replay, other play modes', () => {
   it('title attract demo', () => {
-    vi.spyOn(Math, 'random').mockImplementation(seeded(71));
-    const demo = createTitleAttract('auto', { rng: seeded(7) });
+    forbidMathRandom();
+    const demo = createTitleAttract('auto', { rng: seeded(7), worldRng: seeded(71) });
     demo.start();
     let digest = 2166136261;
     const plans: string[] = [];

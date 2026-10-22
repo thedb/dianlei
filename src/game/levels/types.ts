@@ -3,9 +3,10 @@
  */
 
 import type { PatternSpec } from '@/game/systems/danmaku';
+import type { DropRule } from '@/game/systems/dropRules';
 
-export type EnemyType =
-  'small' | 'medium' | 'interceptor' | 'bomber' | 'drone' | 'tank' | 'turret2' | 'missile_car';
+export type { EnemyType } from '@/game/entities/enemyDefs';
+import type { EnemyType } from '@/game/entities/enemyDefs';
 
 export type MoveKind =
   | 'straight'
@@ -84,6 +85,9 @@ export interface SpawnGroup {
 
 export type StageSection = 'ground' | 'coast' | 'base';
 
+/** Game time (seconds) at which each section hands over to the next. `base` ends at the warning. */
+export type SectionEnds = Readonly<Record<StageSection, number>>;
+
 export interface Wave {
   id: string;
   t: number;
@@ -93,15 +97,17 @@ export interface Wave {
   groups: SpawnGroup[];
 }
 
-export type BossPartId = 'turretL' | 'turretR' | 'core';
-
-export interface BossPart {
-  id: BossPartId;
+export interface BossPartDef {
+  id: string;
   offset: { x: number; y: number };
   radius: number;
   hp: number;
+  /** Paid when the part dies for good (not when a later phase revives it). */
   score: number;
-  phase: 1 | 2;
+  /** Baked sprite drawn over the hull. Omit for parts that are only a glow. */
+  sprite?: string;
+  /** `fall`: drops off with a medium blast and a small shake when destroyed. */
+  onDestroy?: 'fall';
 }
 
 export interface LaserConfig {
@@ -114,53 +120,92 @@ export interface LaserConfig {
   hitWidth: number;
 }
 
-/**
- * Hard-only extra HP segment, plus the spiral ↔ aimed pattern.
- * Every difficulty plays that pattern in phase 2. Hard phase 3 plays
- * `BossConfig.phase2`'s ring and laser on this segment's HP.
- */
-export interface BossPhase3Config {
-  hp: number;
-  /** Invulnerable beat after the phase-2 core breaks, before the ring and laser. */
-  transition: number;
-  /** Seconds on spiral, then the same on aimed, then repeat. Phase 2. */
-  patternHold: number;
-  spiral: { kind: 'spiral'; interval: number; arms: number; rotStep: number; speed: number };
-  aimed: { kind: 'aimed_fast3'; interval: number; speed: number };
+/** A gun fixed to a part (or the hull) that fires one `Fire` on its own clock. */
+export interface BossGunAttack {
+  kind: 'gun';
+  id: string;
+  /** Part id, or `hull` for the boss center. A dead part's gun stops. */
+  from: string;
+  fire: Fire;
+  /** Interval while the phase is enraged. */
+  enrageInterval?: number;
+  /** Hold fire while this phase's laser is sweeping. */
+  pauseWhileLaserSweeps?: boolean;
+  /** Fire only while this phase's laser is idle. */
+  onlyWhileLaserIdle?: boolean;
+  /** A tick in which this gun fires skips the attacks listed after it. */
+  yieldOnFire?: boolean;
 }
 
-export interface BossConfig {
+/** Steps fire in turn, each for `hold` seconds, sharing one rotation. */
+export interface BossCycleAttack {
+  kind: 'cycle';
+  id: string;
+  from: string;
+  hold: number;
+  steps: { label: string; fire: Fire }[];
+}
+
+export interface BossLaserAttack {
+  kind: 'laser';
+  id: string;
+  from: string;
+  laser: LaserConfig;
+  /** Cooldown and sweep time while the phase is enraged. */
+  enraged: { every: number; sweep: number };
+}
+
+export type BossAttack = BossGunAttack | BossCycleAttack | BossLaserAttack;
+
+/**
+ * One fight phase. Phases run in order; a gated phase runs only when the run's
+ * difficulty profile lists its gate (`DifficultyProfile.bossGates`).
+ */
+export interface BossPhaseDef {
+  /** Runtime phase name while fighting (`boss.phase`). */
+  id: string;
+  /** Parts that must die to leave the phase. Bullets and bombs hit only these. */
+  targets: string[];
+  /** HP (before the difficulty scale) for targets revived from an earlier phase. */
+  segmentHp?: number;
+  /** Invulnerable beat before the phase, named for `boss.phase`. The first phase uses the entry. */
+  transition?: { id: string; duration: number };
+  gate?: string;
+  attacks: BossAttack[];
+  /** Enrage once the first target drops to this fraction of its max HP. */
+  enrageAtHpRatio?: number;
+  /** When one target dies, the others fire this much faster (1.25 → 0.8× interval). */
+  survivorRateMul?: number;
+  look: {
+    hull: 'closed' | 'open';
+    /** Code-drawn pulse on a part while the phase (or its transition) runs. */
+    glow?: { part: string; color: 'magenta' | 'yellow' };
+  };
+  /** `extra` phases get their own slot on the HP bar (Hard phase 3). */
+  bar: 'main' | 'extra';
+}
+
+export interface BossDef {
+  id: string;
+  /** Key into the boss art registry (`art/bossSprite.ts`). */
+  art: string;
   enterAt: number;
   enterDuration: number;
+  /** Entry starts at (anchorX, enterY) and lands on parkY. */
+  anchorX: number;
+  enterY: number;
   parkY: number;
   drift: { amp: number; period: number };
-  parts: BossPart[];
-  phase1: {
-    turretL: Fire;
-    turretR: Fire;
-    hull: Fire;
-    survivorRateMul: number;
-  };
-  transition: {
-    duration: number;
-    bulletsToScore: number;
-  };
-  phase2: {
-    ring: Fire;
-    aimed: Fire;
-    laser: LaserConfig;
-    enrageAtHpRatio: number;
-    enrage: {
-      ringInterval: number;
-      laserEvery: number;
-      sweep: number;
-    };
-  };
-  /** Present in the stage data. Only a hard run arms it. */
-  phase3?: BossPhase3Config;
+  hull: { w: number; h: number };
+  parts: BossPartDef[];
+  phases: BossPhaseDef[];
+  /** Score per enemy bullet converted when a phase breaks. */
+  bulletsToScore: number;
   death: {
     duration: number;
     explosions: number;
+    /** Blast offsets from the hull center, cycled. */
+    offsets: readonly (readonly [number, number])[];
   };
 }
 
@@ -180,10 +225,17 @@ export interface BuildingPlacement {
 }
 
 export interface StageData {
+  /** Registry key (`levels/registry.ts`). */
+  id: string;
+  /** Shown in the STAGE intro banner and the pause menu. */
+  label: string;
   stage: number;
   scrollSpeed: number;
   warningAt: number;
+  sections: SectionEnds;
   waves: Wave[];
   buildings: BuildingPlacement[];
-  boss: BossConfig;
+  boss: BossDef;
+  /** Building drop rules. Omit for `BUILDING_DROP_RULES`. */
+  buildingDrops?: readonly DropRule[];
 }

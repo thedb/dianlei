@@ -4,7 +4,11 @@
 
 import { describe, expect, it, beforeEach } from 'vitest';
 import { WaveScheduler } from './waveScheduler';
-import { getStageEnemyCount, stage1 } from '@/game/levels/stage1';
+import { getStage, stageEnemyCount } from '@/game/levels/registry';
+
+const stage1 = getStage('1');
+const getStageEnemyCount = (includeConditional = true): number =>
+  stageEnemyCount(stage1, includeConditional);
 
 describe('WaveScheduler', () => {
   let scheduler: WaveScheduler;

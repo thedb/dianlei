@@ -9,7 +9,7 @@ import {
   SEA_GUN_FIRE_INTERVAL,
   TILE_SIZE,
 } from '@/game/config';
-import { stage1 } from '@/game/levels/stage1';
+import { getStage } from '@/game/levels/registry';
 import type { BuildingPlacement } from '@/game/levels/types';
 import { getStageGrids, mapLayerSpecs, mapPixelScreenY, TileId } from '@/game/art/tiles';
 import { backgroundFade } from '@/game/systems/background';
@@ -32,6 +32,8 @@ import {
   validateBuildingFootprint,
   type Building,
 } from './building';
+
+const stage1 = getStage('1');
 
 const DT = 1 / 60;
 const grids = getStageGrids();

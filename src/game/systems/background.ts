@@ -1,5 +1,5 @@
 /**
- * Stage 1 scroll and section crossfade.
+ * Stage scroll and section crossfade (section times come from the stage data).
  * Tile speed is BG_SCROLL_SPEED until warningAt, then ramps up while the
  * ground fades into clouds and a parallax starfield (wave table §1.1 / §4.5).
  */
@@ -10,6 +10,7 @@ import {
   STAR_SCROLL_SPEEDS,
   SECTION_BLEND_LEAD,
   SECTION_BLEND_TAIL,
+  SECTION_BASE_END,
   SECTION_COAST_END,
   SECTION_GROUND_END,
   WARNING_BULLET_FADE,
@@ -21,6 +22,14 @@ import {
   WARNING_STAR_FADE,
   WARNING_TILE_FADE,
 } from '@/game/config';
+import type { SectionEnds } from '@/game/levels/types';
+
+/** Stage 1 section timing. Stages pass their own `StageData.sections`. */
+export const DEFAULT_SECTION_ENDS: SectionEnds = {
+  ground: SECTION_GROUND_END,
+  coast: SECTION_COAST_END,
+  base: SECTION_BASE_END,
+};
 
 export interface SectionFade {
   ground: number;
@@ -65,9 +74,13 @@ function cloudAlpha(u: number): number {
 }
 
 /** Per-layer opacity at game time `t`. */
-export function backgroundFade(t: number, warningAt: number): SectionFade {
-  const intoCoast = blendAmount(t, SECTION_GROUND_END);
-  const intoBase = blendAmount(t, SECTION_COAST_END);
+export function backgroundFade(
+  t: number,
+  warningAt: number,
+  sections: SectionEnds = DEFAULT_SECTION_ENDS
+): SectionFade {
+  const intoCoast = blendAmount(t, sections.ground);
+  const intoBase = blendAmount(t, sections.coast);
 
   let ground = 1 - intoCoast;
   let coast = intoCoast * (1 - intoBase);
@@ -112,6 +125,8 @@ export class Scroller {
   scroll = 0;
   private starScroll: [number, number, number] = [0, 0, 0];
 
+  constructor(private readonly sections: SectionEnds = DEFAULT_SECTION_ENDS) {}
+
   reset(): void {
     this.scroll = 0;
     this.starScroll = [0, 0, 0];
@@ -128,7 +143,7 @@ export class Scroller {
     return {
       scroll: this.scroll,
       tileDelta,
-      fade: backgroundFade(t, warningAt),
+      fade: backgroundFade(t, warningAt, this.sections),
       starScroll: [this.starScroll[0] ?? 0, this.starScroll[1] ?? 0, this.starScroll[2] ?? 0],
     };
   }

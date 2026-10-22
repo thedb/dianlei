@@ -4,10 +4,13 @@ import { createMemoryStorage, createSettingsStore } from '@/game/settings';
 import { computeControlLayout } from '@/game/controls';
 import { BOMBS_START, LIVES_START, POWER_MAX } from '@/game/config';
 import { prepareBossConfig, type Difficulty } from '@/game/difficulty';
-import { stage1 } from '@/game/levels/stage1';
+import { getStage } from '@/game/levels/registry';
+import { bossPhaseDef } from '@/game/systems/boss';
 import type { BattleEntry } from './types';
 import type { ControlsView } from '@/engine/input';
 import { createBattleScene } from './battle';
+
+const stage1 = getStage('1');
 
 vi.mock('@/game/art', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/game/art')>();
@@ -88,7 +91,7 @@ describe('battle boss practice', () => {
     const prepared = prepareBossConfig(stage1.boss, 'hard');
     const parts = prepared.parts.reduce((sum, part) => sum + part.hp, 0);
     expect(info.bossPhase3).toBe(true);
-    expect(info.bossMaxHp).toBeCloseTo(parts + (prepared.phase3?.hp ?? 0));
+    expect(info.bossMaxHp).toBeCloseTo(parts + (bossPhaseDef(prepared, 'phase3').segmentHp ?? 0));
   });
 
   it('holds fire during the fly-in, then shoots', () => {

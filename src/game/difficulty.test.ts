@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { BUILDING_HP } from '@/game/config';
 import { ENEMY_STATS } from '@/game/entities/enemy';
-import { stage1 } from '@/game/levels/stage1';
+import { getStage } from '@/game/levels/registry';
+import { bossPhaseDef } from '@/game/systems/boss';
 import {
   DIFFICULTY_HP_SCALE,
   bossUsesPhase3,
@@ -9,6 +10,8 @@ import {
   scaleHp,
   type Difficulty,
 } from './difficulty';
+
+const stage1 = getStage('1');
 
 const DIFFICULTIES: Difficulty[] = ['easy', 'medium', 'hard'];
 
@@ -35,16 +38,16 @@ describe('difficulty HP scale', () => {
   it('scales boss parts and the phase-3 segment without editing the stage table', () => {
     const turret = stage1.boss.parts[0]!.hp;
     const core = stage1.boss.parts[2]!.hp;
-    const phase3 = stage1.boss.phase3!.hp;
+    const phase3 = bossPhaseDef(stage1.boss, 'phase3').segmentHp!;
     const hard = prepareBossConfig(stage1.boss, 'hard');
     const easy = prepareBossConfig(stage1.boss, 'easy');
 
     expect(stage1.boss.parts[0]!.hp).toBe(turret);
-    expect(stage1.boss.phase3!.hp).toBe(phase3);
+    expect(bossPhaseDef(stage1.boss, 'phase3').segmentHp).toBe(phase3);
     expect(easy.parts.map((part) => part.hp)).toEqual(stage1.boss.parts.map((part) => part.hp));
     expect(hard.parts[0]!.hp).toBeCloseTo(turret * 1.3);
     expect(hard.parts[2]!.hp).toBeCloseTo(core * 1.3);
-    expect(hard.phase3!.hp).toBeCloseTo(phase3 * 1.3);
+    expect(bossPhaseDef(hard, 'phase3').segmentHp!).toBeCloseTo(phase3 * 1.3);
     expect(bossUsesPhase3('easy')).toBe(false);
     expect(bossUsesPhase3('hard')).toBe(true);
   });
