@@ -56,10 +56,12 @@ export type Fire =
       firstDelay?: number;
       maxShots?: number;
       atY?: number;
+      /** Flight speed in pixels/second. Omit to use the kind's default. */
+      speed?: number;
     }
   | { kind: 'fan3' | 'fan5' | 'fan7wide'; spread: number; interval: number; firstDelay?: number }
   | { kind: 'ring8' | 'ring16'; interval: number; rotStep: number }
-  | { kind: 'spiral'; interval: number; arms: number; rotStep: number };
+  | { kind: 'spiral'; interval: number; arms: number; rotStep: number; speed?: number };
 
 export interface SpawnDrop {
   index: number;
@@ -116,15 +118,19 @@ export interface LaserConfig {
   hitWidth: number;
 }
 
-/** Hard-only final segment. Easy and Medium leave this unused. */
+/**
+ * Hard-only extra HP segment, plus the spiral ↔ aimed pattern.
+ * Every difficulty plays that pattern in phase 2. Hard phase 3 plays
+ * `BossConfig.phase2`'s ring and laser on this segment's HP.
+ */
 export interface BossPhase3Config {
   hp: number;
-  /** Invulnerable beat after the phase-2 core breaks, before the new pattern. */
+  /** Invulnerable beat after the phase-2 core breaks, before the ring and laser. */
   transition: number;
-  /** Seconds on spiral, then the same on aimed, then repeat. */
+  /** Seconds on spiral, then the same on aimed, then repeat. Phase 2. */
   patternHold: number;
-  spiral: { kind: 'spiral'; interval: number; arms: number; rotStep: number };
-  aimed: { kind: 'aimed_fast3'; interval: number };
+  spiral: { kind: 'spiral'; interval: number; arms: number; rotStep: number; speed: number };
+  aimed: { kind: 'aimed_fast3'; interval: number; speed: number };
 }
 
 export interface BossConfig {

@@ -175,9 +175,10 @@ import {
 import { buildingClass, enemyClass } from '@/game/entities/objectClass';
 import {
   applyBossBomb,
-  bossBarRatio,
   bossHitsPlayer,
+  bossHpBarLayout,
   bossIntroBarFill,
+  bossIntroBarLayout,
   bossLaserHits,
   bossMissileTargets,
   createBoss,
@@ -185,6 +186,7 @@ import {
   resolveBossBullet,
   updateBoss,
   type BossEvents,
+  type BossHpBarLayout,
   type BossRuntime,
 } from '@/game/systems/boss';
 import {
@@ -1906,11 +1908,15 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
         }
 
         const barIntro = bossIntroBarFill(gameTime, stage1.warningAt, stage1.boss.enterAt);
-        let barFill: number | null = barIntro;
-        if (barFill === null && boss && boss.phase !== 'clear' && boss.phase !== 'done') {
-          barFill = bossBarRatio(boss);
+        const phase3Hp = bossUsesPhase3(runDifficulty()) ? (stage1.boss.phase3?.hp ?? 0) : 0;
+        const partsHp = stage1.boss.parts.reduce((sum, part) => sum + part.hp, 0);
+        let barLayout: BossHpBarLayout | null = null;
+        if (barIntro !== null) {
+          barLayout = bossIntroBarLayout(barIntro, phase3Hp / Math.max(1, partsHp + phase3Hp));
+        } else if (boss && boss.phase !== 'clear' && boss.phase !== 'done') {
+          barLayout = bossHpBarLayout(boss);
         }
-        if (barFill !== null) drawBossHpBar(ctx, barFill, 48, 32, 264, 8);
+        if (barLayout) drawBossHpBar(ctx, barLayout, 48, 32, 264, 8);
 
         if (
           !state.gameOver &&

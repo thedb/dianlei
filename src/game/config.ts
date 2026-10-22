@@ -534,17 +534,25 @@ export const DIFFICULTY_HP_MEDIUM = 1.15;
 export const DIFFICULTY_HP_HARD = 1.3;
 
 /**
- * Hard-only third boss segment (wave table §5.5). Authored before the HP scale,
- * so a hard run multiplies it by `DIFFICULTY_HP_HARD` with everything else.
- * Spiral shots are small and slow; aimed volleys are the existing fast triple.
+ * Spiral ↔ aimed pattern (scheme E). It now plays on phase 2 for every
+ * difficulty. Hard phase 3 plays the old phase-2 ring and laser instead.
+ * HP is still the hard-only extra segment, authored before the HP scale.
+ *
+ * Speeds are flight speeds in pixels/second (not multiplied by
+ * `ENEMY_BULLET_SPEED_SCALE` again). The previous spiral used the small
+ * bullet's 120 and two arms every 0.18s; aimed used the fast bullet's 152
+ * every 1.15s. Steady-state spiral count stays under `ENEMY_BULLET_CAP`:
+ * 4 / 0.12 shots per second, about 3 seconds on screen at 180 px/s.
  */
 export const BOSS_PHASE3_HP = 240;
 export const BOSS_PHASE3_TRANSITION = 1.2;
 export const BOSS_PHASE3_PATTERN_HOLD = 3;
-export const BOSS_PHASE3_SPIRAL_INTERVAL = 0.18;
-export const BOSS_PHASE3_SPIRAL_ARMS = 2;
+export const BOSS_PHASE3_SPIRAL_INTERVAL = 0.12;
+export const BOSS_PHASE3_SPIRAL_ARMS = 4;
 export const BOSS_PHASE3_SPIRAL_ROT = 22;
-export const BOSS_PHASE3_AIMED_INTERVAL = 1.15;
+export const BOSS_PHASE3_SPIRAL_SPEED = 180;
+export const BOSS_PHASE3_AIMED_INTERVAL = 0.75;
+export const BOSS_PHASE3_AIMED_SPEED = 228;
 
 /** Boss HP bar starts filling this long after warningAt (2:33). */
 export const BOSS_HP_BAR_FILL_START = 3;

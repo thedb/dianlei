@@ -3,7 +3,7 @@
  * Step A lists stage bosses. Step B is 普通 / 困难, the same overlay as the
  * formal difficulty screen, without 中等.
  * 普通 is formal Easy (HP ×1, two boss phases). 困难 is formal Hard
- * (HP ×1.3, phase-3 spiral ↔ aimed). The choice stays on the run.
+ * (HP ×1.3, three boss phases). The choice stays on the run.
  */
 
 import type { Difficulty } from '@/game/difficulty';

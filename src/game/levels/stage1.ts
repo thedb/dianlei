@@ -10,11 +10,13 @@
 
 import {
   BOSS_PHASE3_AIMED_INTERVAL,
+  BOSS_PHASE3_AIMED_SPEED,
   BOSS_PHASE3_HP,
   BOSS_PHASE3_PATTERN_HOLD,
   BOSS_PHASE3_SPIRAL_ARMS,
   BOSS_PHASE3_SPIRAL_INTERVAL,
   BOSS_PHASE3_SPIRAL_ROT,
+  BOSS_PHASE3_SPIRAL_SPEED,
   BOSS_PHASE3_TRANSITION,
 } from '@/game/config';
 import type { SpawnGroup, StageData } from './types';
@@ -737,8 +739,13 @@ export const stage1: StageData = {
         interval: BOSS_PHASE3_SPIRAL_INTERVAL,
         arms: BOSS_PHASE3_SPIRAL_ARMS,
         rotStep: BOSS_PHASE3_SPIRAL_ROT,
+        speed: BOSS_PHASE3_SPIRAL_SPEED,
       },
-      aimed: { kind: 'aimed_fast3', interval: BOSS_PHASE3_AIMED_INTERVAL },
+      aimed: {
+        kind: 'aimed_fast3',
+        interval: BOSS_PHASE3_AIMED_INTERVAL,
+        speed: BOSS_PHASE3_AIMED_SPEED,
+      },
     },
     death: { duration: 2.5, explosions: 6 },
   },
