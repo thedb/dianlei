@@ -27,7 +27,7 @@ import {
   WEAPON_TEST_SUB_MAX,
 } from '@/game/config';
 import { HIGH_SCORE_KEY } from '@/game/highScore';
-import { stage1 } from '@/game/levels/stage1';
+import { getStage } from '@/game/levels/registry';
 import { weaponLevel } from '@/game/systems/playerWeapons';
 import type { ControlsView } from '@/engine/input';
 import type { Rect } from '@/game/ui/widgets';
@@ -61,6 +61,8 @@ import {
   WEAPON_TEST_TUNE_FIELDS,
   WEAPON_TEST_TUNE_LABEL,
 } from './weaponTest';
+
+const stage1 = getStage('1');
 
 vi.mock('@/game/art', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/game/art')>();

@@ -1,2 +1,2 @@
 export * from './types';
-export { stage1 } from './stage1';
+export { getStage, listStages, DEFAULT_STAGE_ID } from './registry';

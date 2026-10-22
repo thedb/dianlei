@@ -62,7 +62,7 @@ export interface GameDebugInfo {
   /** Buildings on the map, intact or wrecked. */
   buildingCount?: number;
   /** Item the next destroyed building would drop, from the live sub slot. */
-  buildingDrop?: 'B' | 'T';
+  buildingDrop?: string;
 }
 
 /**

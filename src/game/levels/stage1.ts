@@ -8,17 +8,9 @@
  * geometry was wrong (V stagger, hover stopY, escort angles).
  */
 
-import {
-  BOSS_PHASE3_AIMED_INTERVAL,
-  BOSS_PHASE3_AIMED_SPEED,
-  BOSS_PHASE3_HP,
-  BOSS_PHASE3_PATTERN_HOLD,
-  BOSS_PHASE3_SPIRAL_ARMS,
-  BOSS_PHASE3_SPIRAL_INTERVAL,
-  BOSS_PHASE3_SPIRAL_ROT,
-  BOSS_PHASE3_SPIRAL_SPEED,
-  BOSS_PHASE3_TRANSITION,
-} from '@/game/config';
+import { SECTION_BASE_END, SECTION_COAST_END, SECTION_GROUND_END } from '@/game/config';
+import { ORBITAL_BATTLESHIP } from './bosses/orbitalBattleship';
+import { stageEnemyCount, stageMvpEnemyCount, stageMvpWaves } from './stageStats';
 import type { SpawnGroup, StageData } from './types';
 
 function sideArc(side: 'left' | 'right', y0: number, delay: number, speed: number): SpawnGroup {
@@ -65,9 +57,12 @@ const w20Anchors: ReadonlyArray<readonly [number, number]> = [
 ];
 
 export const stage1: StageData = {
+  id: '1',
+  label: '1',
   stage: 1,
   scrollSpeed: 40,
   warningAt: 150,
+  sections: { ground: SECTION_GROUND_END, coast: SECTION_COAST_END, base: SECTION_BASE_END },
 
   waves: [
     // ========================================================================
@@ -698,81 +693,17 @@ export const stage1: StageData = {
     { id: 'B11', type: 'radar_station', section: 'base', row: 104, col: 17 },
   ],
 
-  boss: {
-    enterAt: 155,
-    enterDuration: 3,
-    parkY: 110,
-    drift: { amp: 40, period: 6 },
-    parts: [
-      { id: 'turretL', offset: { x: -78, y: 20 }, radius: 16, hp: 140, score: 5000, phase: 1 },
-      { id: 'turretR', offset: { x: 78, y: 20 }, radius: 16, hp: 140, score: 5000, phase: 1 },
-      { id: 'core', offset: { x: 0, y: 10 }, radius: 22, hp: 560, score: 30000, phase: 2 },
-    ],
-    phase1: {
-      turretL: { kind: 'fan5', spread: 60, interval: 1.6 },
-      turretR: { kind: 'aimed3burst', interval: 1.6, firstDelay: 0.8 },
-      hull: { kind: 'fan7wide', spread: 90, interval: 5 },
-      survivorRateMul: 1.25,
-    },
-    transition: { duration: 1.5, bulletsToScore: 10 },
-    phase2: {
-      ring: { kind: 'ring16', interval: 2.0, rotStep: 11.25 },
-      aimed: { kind: 'aimed_fast3', interval: 1.2 },
-      laser: {
-        every: 7,
-        telegraph: 0.8,
-        sweep: 1.5,
-        fromDeg: -25,
-        toDeg: 25,
-        width: 10,
-        hitWidth: 8,
-      },
-      enrageAtHpRatio: 0.5,
-      enrage: { ringInterval: 1.6, laserEvery: 5.5, sweep: 1.2 },
-    },
-    phase3: {
-      hp: BOSS_PHASE3_HP,
-      transition: BOSS_PHASE3_TRANSITION,
-      patternHold: BOSS_PHASE3_PATTERN_HOLD,
-      spiral: {
-        kind: 'spiral',
-        interval: BOSS_PHASE3_SPIRAL_INTERVAL,
-        arms: BOSS_PHASE3_SPIRAL_ARMS,
-        rotStep: BOSS_PHASE3_SPIRAL_ROT,
-        speed: BOSS_PHASE3_SPIRAL_SPEED,
-      },
-      aimed: {
-        kind: 'aimed_fast3',
-        interval: BOSS_PHASE3_AIMED_INTERVAL,
-        speed: BOSS_PHASE3_AIMED_SPEED,
-      },
-    },
-    death: { duration: 2.5, explosions: 6 },
-  },
+  boss: ORBITAL_BATTLESHIP,
 };
 
 /** Waves marked playable in the MVP (★ and ☆). */
 export function getMvpWaves() {
-  return stage1.waves.filter((w) => w.mvp === true || w.mvp === 'partial');
-}
-
-function countGroups(wave: (typeof stage1.waves)[number], mvpPartial: boolean): number {
-  return wave.groups.reduce((sum, group) => {
-    if (
-      mvpPartial &&
-      wave.mvp === 'partial' &&
-      group.enemy !== 'small' &&
-      group.enemy !== 'medium'
-    ) {
-      return sum;
-    }
-    return sum + group.count;
-  }, 0);
+  return stageMvpWaves(stage1);
 }
 
 /** Small and medium ships the MVP scheduler actually spawns, including W27. */
 export function getMvpEnemyCount(): number {
-  return getMvpWaves().reduce((total, wave) => total + countGroups(wave, true), 0);
+  return stageMvpEnemyCount(stage1);
 }
 
 /**
@@ -780,8 +711,5 @@ export function getMvpEnemyCount(): number {
  * The conditional relief ship (W27) is included only when asked.
  */
 export function getStageEnemyCount(includeConditional = true): number {
-  return stage1.waves.reduce((total, wave) => {
-    if (!includeConditional && wave.condition) return total;
-    return total + countGroups(wave, false);
-  }, 0);
+  return stageEnemyCount(stage1, includeConditional);
 }

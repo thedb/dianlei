@@ -13,6 +13,7 @@ export * from './itemSprite';
 export * from './explosionSprite';
 export * from './buildingSprite';
 export * from './weaponFx';
+export * from './gunBarrel';
 
 import type { PlayerSpriteSheet } from './playerSprite';
 import type { EnemyAssets } from './enemySprite';
@@ -44,7 +45,7 @@ export interface GameAssets {
   items: ItemAssets;
   explosions: ExplosionAssets;
   background: BackgroundMaps;
-  boss: BossAssets;
+  bosses: Record<string, BossAssets>;
 }
 
 /** Initialize all game assets (call once at boot) */
@@ -57,6 +58,6 @@ export function createGameAssets(): GameAssets {
     items: createItemAssets(),
     explosions: createExplosionAssets(),
     background: createBackgroundMaps(),
-    boss: createBossAssets(),
+    bosses: createBossAssets(),
   };
 }

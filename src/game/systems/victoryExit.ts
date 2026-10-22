@@ -13,7 +13,6 @@ import {
   VICTORY_RETURN_ARRIVE,
   VICTORY_RETURN_SPEED,
 } from '@/game/config';
-import type { BossPhase } from '@/game/systems/boss';
 
 export type VictoryExitPhase = 'idle' | 'wait' | 'return' | 'flyoff' | 'done';
 
@@ -53,7 +52,7 @@ export function victoryExitBlocksInput(phase: VictoryExitPhase): boolean {
  */
 export function stepVictoryExit(
   exit: VictoryExit,
-  bossPhase: BossPhase,
+  bossPhase: string,
   dt: number,
   playerX: number,
   playerY: number,

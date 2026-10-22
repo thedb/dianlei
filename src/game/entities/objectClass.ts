@@ -1,10 +1,12 @@
 /**
  * Size class and category for everything the player can shoot (design §5.4.1).
- * The bomb and the homing missile read these tables; a new enemy, building or
- * mini-boss only has to add its row here.
+ * The bomb and the homing missile read these tables. Enemy rows come from
+ * `ENEMY_DEFS` (`size` / `category`); buildings and the boss are listed here.
+ * Nothing else may hard-code per-type size checks.
  */
 
-import type { BuildingType, EnemyType } from '@/game/levels/types';
+import type { BuildingType } from '@/game/levels/types';
+import { ENEMY_DEFS, ENEMY_TYPES, type EnemyType } from './enemyDefs';
 
 export type SizeClass = 'small' | 'medium' | 'large';
 export type TargetCategory = 'air' | 'ground' | 'building' | 'boss';
@@ -14,16 +16,12 @@ export interface ObjectClass {
   category: TargetCategory;
 }
 
-export const ENEMY_CLASS: Record<EnemyType, ObjectClass> = {
-  small: { size: 'small', category: 'air' },
-  drone: { size: 'small', category: 'air' },
-  interceptor: { size: 'small', category: 'air' },
-  medium: { size: 'medium', category: 'air' },
-  bomber: { size: 'medium', category: 'air' },
-  tank: { size: 'small', category: 'ground' },
-  missile_car: { size: 'small', category: 'ground' },
-  turret2: { size: 'medium', category: 'ground' },
-};
+export const ENEMY_CLASS: Readonly<Record<EnemyType, ObjectClass>> = Object.fromEntries(
+  ENEMY_TYPES.map((type) => [
+    type,
+    { size: ENEMY_DEFS[type].size, category: ENEMY_DEFS[type].category },
+  ])
+) as Record<EnemyType, ObjectClass>;
 
 export const BUILDING_CLASS: Record<BuildingType, ObjectClass> = {
   pillbox: { size: 'small', category: 'building' },

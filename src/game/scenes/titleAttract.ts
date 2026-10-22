@@ -20,6 +20,7 @@ import { computeControlLayout } from '@/game/controls';
 import { createMemoryStorage, createSettingsStore } from '@/game/settings';
 import { attractStick, pickAttractPlan, type AttractPlan, type PilotWorld } from './attractPilot';
 import { createBattleScene } from './battle';
+import { clockSeed, createRng, type Rng } from '@/engine/rng';
 import type { SceneContext } from './types';
 
 /** `idle` stands still so tests can force the real death rules. The title uses `auto`. */
@@ -120,6 +121,8 @@ function attractContext(): SceneContext {
 export interface TitleAttractOptions {
   /** Route picks. Defaults to Math.random. Each start and restart draws twice. */
   rng?: () => number;
+  /** Gameplay randomness inside the demo battle (item headings). Defaults to a clock seed. */
+  worldRng?: Rng;
   /** Seconds before a living demo restarts. Defaults to ATTRACT_LOOP_SECONDS. */
   loopSeconds?: number;
 }
@@ -142,7 +145,10 @@ export function createTitleAttract(
 ): TitleAttract {
   const rng = options.rng ?? Math.random;
   const loopSeconds = options.loopSeconds ?? ATTRACT_LOOP_SECONDS;
-  const battle = createBattleScene(attractContext());
+  const battle = createBattleScene({
+    ...attractContext(),
+    rng: options.worldRng ?? createRng(clockSeed()),
+  });
   let running = false;
   let fading = false;
   let fade = 0;

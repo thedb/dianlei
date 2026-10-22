@@ -6,10 +6,12 @@
  */
 
 import type { Poolable } from '@/engine/pool';
-import { WEAPONS, type EquippedWeapon } from '@/game/systems/playerWeapons';
-import type { BuildingPlacement, BuildingType, StageSection } from '@/game/levels/types';
+import type { EquippedWeapon } from '@/game/systems/playerWeapons';
+import type { ItemType } from '@/game/entities/item';
+import type { BuildingPlacement, BuildingType, Fire, StageSection } from '@/game/levels/types';
 import type { BulletSpawner } from '@/game/entities/enemyBullet';
-import { executeFirePattern } from '@/game/entities/enemyBullet';
+import { executeFirePattern, fireInterval } from '@/game/systems/danmaku';
+import { BUILDING_DROP_RULES, pickDrop, type DropRule } from '@/game/systems/dropRules';
 import { TileId, mapLayerSpecs, type TerrainGrids } from '@/game/art/tiles';
 import {
   LOGICAL_H,
@@ -19,7 +21,6 @@ import {
   TURRET_TURN_RATE,
   SCORE_BUILDING,
   BUILDING_HP,
-  HOMING_MAX_LEVEL,
   SEA_GUN_FIRE_INTERVAL,
   BUILDING_FIRE_MIN_Y,
   BUILDING_HIT_INSET,
@@ -33,14 +34,20 @@ export interface BuildingSpec {
   cols: number;
   rows: number;
   terrain: BuildingTerrain;
-  fires: boolean;
+  /** Gun on the roof. Barrel patterns track the player at TURRET_TURN_RATE. */
+  fire?: Fire;
 }
 
 export const BUILDING_SPECS: Record<BuildingType, BuildingSpec> = {
-  pillbox: { cols: 2, rows: 2, terrain: 'land', fires: false },
-  fuel_depot: { cols: 3, rows: 2, terrain: 'land', fires: false },
-  radar_station: { cols: 2, rows: 2, terrain: 'land', fires: false },
-  sea_gun: { cols: 2, rows: 2, terrain: 'water', fires: true },
+  pillbox: { cols: 2, rows: 2, terrain: 'land' },
+  fuel_depot: { cols: 3, rows: 2, terrain: 'land' },
+  radar_station: { cols: 2, rows: 2, terrain: 'land' },
+  sea_gun: {
+    cols: 2,
+    rows: 2,
+    terrain: 'water',
+    fire: { kind: 'fixed2', interval: SEA_GUN_FIRE_INTERVAL },
+  },
 };
 
 export function buildingSize(type: BuildingType): { width: number; height: number } {
@@ -265,7 +272,8 @@ export function updateBuilding(
   b.y = pos.y;
   if (b.hitFlashTimer > 0) b.hitFlashTimer = Math.max(0, b.hitFlashTimer - dt);
 
-  if (!b.wrecked && BUILDING_SPECS[b.type].fires) {
+  const fire = BUILDING_SPECS[b.type].fire;
+  if (!b.wrecked && fire) {
     const desired = Math.atan2(playerY - b.y, playerX - b.x);
     const maxStep = ((TURRET_TURN_RATE * Math.PI) / 180) * dt;
     const diff = wrapPi(desired - b.aimAngle);
@@ -273,19 +281,12 @@ export function updateBuilding(
 
     const top = b.y - b.height / 2;
     if (fireEnabled && top >= BUILDING_FIRE_MIN_Y && b.y <= LOGICAL_H) {
+      const interval = fireInterval(fire);
       b.fireTimer += dt;
-      if (b.fireTimer >= SEA_GUN_FIRE_INTERVAL) {
-        b.fireTimer -= SEA_GUN_FIRE_INTERVAL;
+      if (b.fireTimer >= interval) {
+        b.fireTimer -= interval;
         b.shotsFired++;
-        executeFirePattern(
-          { kind: 'fixed2', interval: SEA_GUN_FIRE_INTERVAL },
-          b.x,
-          b.y,
-          playerX,
-          playerY,
-          spawner,
-          { aimAngle: b.aimAngle }
-        );
+        executeFirePattern(fire, b.x, b.y, playerX, playerY, spawner, { aimAngle: b.aimAngle });
       }
     }
   }
@@ -332,16 +333,18 @@ export function buildingBlocksTank(b: Building, x: number, y: number): boolean {
   );
 }
 
-export type BuildingDrop = 'B' | 'T';
+export type BuildingDrop = ItemType;
 
 /**
- * The one item a destroyed building drops.
+ * The one item a destroyed building drops (`BUILDING_DROP_RULES`).
  * Pass the live sub slot (`state.sub` at the moment of the kill). A copy taken
  * earlier in the run is stale: equipping or leveling T must change the next drop.
  * No sub, level 0, or T below HOMING_MAX_LEVEL → T. Homing already at max → B.
  * Buildings never drop P. Wave-table carriers still drop only P and B.
  */
-export function chooseBuildingDrop(sub: EquippedWeapon | null): BuildingDrop {
-  if (sub !== null && sub.id === WEAPONS.homing.id && sub.level >= HOMING_MAX_LEVEL) return 'B';
-  return 'T';
+export function chooseBuildingDrop(
+  sub: EquippedWeapon | null,
+  rules: readonly DropRule[] = BUILDING_DROP_RULES
+): BuildingDrop {
+  return pickDrop(rules, { sub });
 }

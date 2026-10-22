@@ -5,18 +5,11 @@
 
 import type { Poolable } from '@/engine/pool';
 import type { EnemyType, Move, Fire } from '@/game/levels/types';
-import { ENEMY_CLASS } from '@/game/entities/objectClass';
+import { ENEMY_DEFS } from '@/game/entities/enemyDefs';
+import { fireUsesBarrel } from '@/game/systems/danmaku';
 import {
   LOGICAL_W,
   LOGICAL_H,
-  SCORE_SMALL_FIGHTER,
-  SCORE_MEDIUM_FIGHTER,
-  SCORE_INTERCEPTOR,
-  SCORE_TANK,
-  SCORE_DRONE,
-  SCORE_MISSILE_CAR,
-  SCORE_DUAL_TURRET,
-  SCORE_BOMBER,
   HIT_FLASH_TIME,
   BG_SCROLL_SPEED,
   HOVER_ENTER_SPEED,
@@ -36,23 +29,11 @@ import {
 } from '@/game/config';
 
 /** Enemy stats by type. Sizes and HP match the wave table §2. */
-export const ENEMY_STATS: Record<
-  EnemyType,
-  { hp: number; score: number; width: number; height: number; hitRadius: number }
-> = {
-  small: { hp: 3, score: SCORE_SMALL_FIGHTER, width: 24, height: 24, hitRadius: 10 },
-  medium: { hp: 24, score: SCORE_MEDIUM_FIGHTER, width: 36, height: 36, hitRadius: 15 },
-  interceptor: { hp: 6, score: SCORE_INTERCEPTOR, width: 28, height: 28, hitRadius: 12 },
-  bomber: { hp: 60, score: SCORE_BOMBER, width: 56, height: 48, hitRadius: 24 },
-  drone: { hp: 4, score: SCORE_DRONE, width: 20, height: 20, hitRadius: 8 },
-  tank: { hp: 8, score: SCORE_TANK, width: 24, height: 24, hitRadius: 10 },
-  turret2: { hp: 30, score: SCORE_DUAL_TURRET, width: 32, height: 32, hitRadius: 14 },
-  missile_car: { hp: 12, score: SCORE_MISSILE_CAR, width: 24, height: 32, hitRadius: 12 },
-};
+export const ENEMY_STATS = ENEMY_DEFS;
 
 /** Ground units scroll with the map and do not kill the player on contact. */
 export function isGroundEnemy(type: EnemyType): boolean {
-  return ENEMY_CLASS[type].category === 'ground';
+  return ENEMY_DEFS[type].category === 'ground';
 }
 
 /** Tile query used to keep tanks off river / shallow water. Off-map is not blocked. */
@@ -252,9 +233,9 @@ export function updateEnemy(
 
   updateEnemyMovement(enemy, dt, scrollDelta, terrain);
 
-  if (enemy.fire.kind === 'fixed2') {
+  if (fireUsesBarrel(enemy.fire)) {
     steerAim(enemy, playerX, playerY, dt, TURRET_TURN_RATE);
-  } else if (enemy.type === 'tank') {
+  } else if (ENEMY_DEFS[enemy.type].snapAim) {
     enemy.aimAngle = Math.atan2(playerY - enemy.y, playerX - enemy.x);
   }
 
@@ -443,14 +424,15 @@ function updateEnemyMovement(
     case 'ground': {
       const { vx, climb } = groundDrive(move);
       const scrolledY = enemy.y + scrollDelta;
-      if (enemy.type === 'tank' && terrain?.blocksTank(enemy.x, scrolledY)) {
+      const avoidsWater = ENEMY_DEFS[enemy.type].avoidsWater === true;
+      if (avoidsWater && terrain?.blocksTank(enemy.x, scrolledY)) {
         enemy.x += waterEscapeDir(enemy.x, scrolledY, terrain) * TANK_ENTRY_SPEED * dt;
         enemy.y = scrolledY;
         break;
       }
       const nextX = enemy.x + vx * dt;
       const nextY = scrolledY - climb * dt;
-      if (enemy.type === 'tank' && terrain) {
+      if (avoidsWater && terrain) {
         enemy.x = terrain.blocksTank(nextX, scrolledY) ? enemy.x : nextX;
         enemy.y = terrain.blocksTank(enemy.x, nextY) ? scrolledY : nextY;
       } else {

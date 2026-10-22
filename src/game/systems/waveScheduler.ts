@@ -1,15 +1,19 @@
 /**
  * Wave scheduler system
- * Spawns enemies according to wave data from stage1.ts
+ * Spawns enemies according to a stage's wave table (default: the registry's default stage).
  */
 
-import type { Wave, EnemyType, Move, Fire, SpawnGroup } from '@/game/levels/types';
-import { stage1 } from '@/game/levels/stage1';
+import type { Wave, EnemyType, Move, Fire, SpawnGroup, StageData } from '@/game/levels/types';
+import { getStage } from '@/game/levels/registry';
+import { mvpSkipsGroup } from '@/game/levels/stageStats';
 import { LOGICAL_H, LOGICAL_W } from '@/game/config';
-import { ENEMY_STATS } from '@/game/entities/enemy';
+import { ENEMY_DEFS } from '@/game/entities/enemyDefs';
+import { withFireStagger } from '@/game/systems/danmaku';
 
 export interface WaveSchedulerConfig {
   mvpOnly: boolean;
+  /** Omit for the default stage. */
+  stage?: StageData;
 }
 
 export interface SpawnRequest {
@@ -45,10 +49,11 @@ export class WaveScheduler {
 
   constructor(config: WaveSchedulerConfig) {
     this.mvpOnly = config.mvpOnly;
+    const stage = config.stage ?? getStage();
     if (config.mvpOnly) {
-      this.waves = stage1.waves.filter((w) => w.mvp === true || w.mvp === 'partial');
+      this.waves = stage.waves.filter((w) => w.mvp === true || w.mvp === 'partial');
     } else {
-      this.waves = stage1.waves;
+      this.waves = stage.waves;
     }
   }
 
@@ -167,14 +172,7 @@ export class WaveScheduler {
       const group = wave.groups[gi]!;
 
       // P1 partial waves drop non-fighter groups. The full stage keeps them.
-      if (
-        this.mvpOnly &&
-        wave.mvp === 'partial' &&
-        group.enemy !== 'small' &&
-        group.enemy !== 'medium'
-      ) {
-        continue;
-      }
+      if (this.mvpOnly && mvpSkipsGroup(wave, group.enemy)) continue;
 
       for (let i = 0; i < group.count; i++) {
         const spawnTime = wave.t + (group.delay ?? 0) + (group.interval ?? 0) * i;
@@ -247,7 +245,7 @@ function resolveGroundSpawn(
 ): { x: number; y: number } {
   const move = group.move;
   if (move.kind !== 'ground') return { x: laneX, y: group.y ?? -20 };
-  const stats = ENEMY_STATS[group.enemy];
+  const stats = ENEMY_DEFS[group.enemy];
   const halfW = Math.ceil(stats.width / 2);
   const halfH = Math.ceil(stats.height / 2);
   switch (move.entry ?? 'top') {
@@ -260,29 +258,5 @@ function resolveGroundSpawn(
       return { x: laneX, y: group.y ?? LOGICAL_H + halfH + 2 };
     default:
       return { x: laneX, y: group.y ?? -halfH - 1 };
-  }
-}
-
-/** Offset each ship in a group so their first shots don't land on the same frame. */
-function withFireStagger(fire: Fire, extra: number): Fire {
-  if (extra === 0 || fire.kind === 'none') return fire;
-  switch (fire.kind) {
-    case 'ring8':
-    case 'ring16':
-      return fire;
-    case 'fan3':
-    case 'fan5':
-    case 'fan7wide':
-    case 'aimed1':
-    case 'aimed3burst':
-    case 'missile':
-    case 'aimed_fast3':
-    case 'fixed2': {
-      const interval = fire.interval;
-      const base = fire.firstDelay ?? interval ?? 0;
-      return { ...fire, firstDelay: base + extra };
-    }
-    default:
-      return fire;
   }
 }

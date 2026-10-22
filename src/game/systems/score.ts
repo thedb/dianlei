@@ -62,9 +62,9 @@ export function formatStageTime(seconds: number): string {
   return `${m}:${r.toString().padStart(2, '0')}`;
 }
 
-/** STAGE 1 → READY → GO during the first five seconds. */
-export function introBanner(t: number): 'STAGE 1' | 'READY' | 'GO' | null {
-  if (t < INTRO_STAGE_UNTIL) return 'STAGE 1';
+/** STAGE n → READY → GO during the first five seconds. `label` is `StageData.label`. */
+export function introBanner(t: number, label = '1'): string | null {
+  if (t < INTRO_STAGE_UNTIL) return `STAGE ${label}`;
   if (t < INTRO_READY_UNTIL) return 'READY';
   if (t < INTRO_GO_UNTIL) return 'GO';
   return null;

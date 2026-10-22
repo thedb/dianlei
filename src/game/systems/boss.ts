@@ -1,17 +1,17 @@
 /**
- * Orbital battleship (wave table §5).
- * Pure state: rendering and bullet pools live in the battle scene.
+ * Generic boss runner. Everything boss-specific (parts, phase order, guns,
+ * transitions, HP segments, difficulty gates, look) is data in a `BossDef`
+ * (`levels/bosses/`). Pure state: rendering and bullet pools live in the
+ * battle scene.
+ *
+ * Lifecycle: enter → (transition →) fight, per enabled phase → death → clear
+ * → done. `boss.phase` names the current step: `enter`, a phase id, a
+ * transition id, `death`, `clear`, or `done`.
  */
 
 import {
-  AIMED_BURST_COUNT,
-  AIMED_BURST_GAP,
   BOMB_BOSS_RATIO,
-  BOSS_ANCHOR_X,
-  BOSS_ENTER_Y,
   BOSS_HP_BAR_FILL_START,
-  BOSS_HULL_H,
-  BOSS_HULL_W,
   BOSS_TURRET_FALL_GRAVITY,
   BOSS_TURRET_FALL_SPEED,
   HIT_FLASH_TIME,
@@ -21,55 +21,71 @@ import {
   SHAKE_SMALL_DURATION,
   SHAKE_SMALL_INTENSITY,
 } from '@/game/config';
-import type { BossConfig, BossPartId, Fire, FireKind } from '@/game/levels/types';
-import { checkBulletEnemyCollision, segmentCircleCollision } from '@/game/systems/collision';
+import type {
+  BossAttack,
+  BossCycleAttack,
+  BossDef,
+  BossGunAttack,
+  BossLaserAttack,
+  BossPhaseDef,
+  Fire,
+  LaserConfig,
+} from '@/game/levels/types';
+import { checkBulletEnemyCollision } from '@/game/systems/collision';
+import {
+  createGunClock,
+  createLaserSweep,
+  fireBurst,
+  fireFirstDelay,
+  fireInterval,
+  fireRotStep,
+  interruptLaserSweep,
+  laserSweepHits,
+  pullShots,
+  resetGunClock,
+  resetLaserSweep,
+  stepLaserSweep,
+  type GunClock,
+  type LaserSweepState,
+} from '@/game/systems/danmaku';
 
-export type BossPhase =
-  | 'enter'
-  | 'phase1'
-  | 'transition'
-  | 'phase2'
-  | 'transition3'
-  | 'phase3'
-  | 'death'
-  | 'clear'
-  | 'done';
+export type BossStage = 'enter' | 'transition' | 'fight' | 'death' | 'clear' | 'done';
 
 export interface BossPartRuntime {
-  id: BossPartId;
+  id: string;
   hp: number;
   maxHp: number;
   score: number;
   offsetX: number;
   offsetY: number;
   radius: number;
-  /** 1 = turret, 2 = core */
-  phase: 1 | 2;
+  sprite: string | null;
+  onDestroy: 'fall' | null;
   alive: boolean;
   falling: boolean;
   fallVy: number;
   worldX: number;
   worldY: number;
+  /** Multiplier on this part's gun intervals (0.8 after the other turret dies). */
+  intervalMul: number;
 }
 
-export interface BossGun {
-  timer: number;
-  shots: number;
-  burstLeft: number;
-  burstTimer: number;
-}
-
-export interface BossLaser {
-  mode: 'idle' | 'telegraph' | 'sweep';
-  elapsed: number;
-  dir: 1 | -1;
-  /** Degrees off straight down. */
-  angleDeg: number;
-  sweepDuration: number;
+export interface BossCycleState {
+  step: number;
+  time: number;
+  gun: GunClock;
+  /** Rotation shared by every step, kept across step changes. */
+  rot: number;
 }
 
 export interface BossRuntime {
-  phase: BossPhase;
+  def: BossDef;
+  /** Phases this run fights, in order (gated phases already filtered). */
+  phases: readonly BossPhaseDef[];
+  phaseIndex: number;
+  stage: BossStage;
+  /** `enter`, a phase id, a transition id, `death`, `clear`, or `done`. */
+  phase: string;
   x: number;
   y: number;
   prevX: number;
@@ -79,38 +95,28 @@ export interface BossRuntime {
   parts: BossPartRuntime[];
   invulnerable: boolean;
   enraged: boolean;
-  guns: {
-    turretL: BossGun;
-    turretR: BossGun;
-    hull: BossGun;
-    ring: BossGun;
-    aimed: BossGun;
-  };
-  laser: BossLaser;
-  laserCooldown: number;
-  ringRot: number;
+  /** Gun clocks keyed by attack id. */
+  guns: Record<string, GunClock>;
+  cycle: BossCycleState;
+  /** Current cycle step label, or null when the phase has no cycle. */
+  pattern: string | null;
+  laser: LaserSweepState;
   deathSpawned: number;
   hitFlash: number;
-  /** Multiplier on the configured fire interval (0.8 after the other turret dies). */
-  intervalMulL: number;
-  intervalMulR: number;
   resultSent: boolean;
-  /** Hard run only. The phase-3 HP segment is banked until the phase-2 core breaks. */
-  phase3Armed: boolean;
-  phase3Max: number;
-  /** Parts plus the armed phase-3 segment. Bomb damage is 8% of this. */
+  /** True when this run fights at least one `bar: 'extra'` phase. */
+  extraArmed: boolean;
+  /** HP banked in extra phases. */
+  extraMax: number;
+  /** Parts plus every armed segment. Bomb damage is 8% of this. */
   fightMax: number;
-  /** Spiral ↔ aimed clock. Phase 2 plays it when the stage defines that pattern. */
-  pattern: 'spiral' | 'aimed';
-  patternTime: number;
-  spiralRot: number;
 }
 
 export interface BossExplosion {
   x: number;
   y: number;
   delay: number;
-  /** Turret pop is medium. The death sequence is the large multi-blast. */
+  /** Part pop is medium. The death sequence is the large multi-blast. */
   size: 'medium' | 'large';
 }
 
@@ -147,17 +153,9 @@ export interface BulletBox {
   h: number;
 }
 
-const DEATH_OFFSETS: ReadonlyArray<readonly [number, number]> = [
-  [0, -10],
-  [-68, -20],
-  [72, 8],
-  [-40, 28],
-  [36, -32],
-  [8, 18],
-];
-
-function freshGun(): BossGun {
-  return { timer: 0, shots: 0, burstLeft: 0, burstTimer: 0 };
+export interface BossSpawnOptions {
+  /** Gates this run opens (`DifficultyProfile.bossGates`). Ungated phases always run. */
+  gates?: readonly string[];
 }
 
 export function emptyBossEvents(): BossEvents {
@@ -173,8 +171,44 @@ export function emptyBossEvents(): BossEvents {
   };
 }
 
-export function bossTotalHp(config: BossConfig): number {
-  return config.parts.reduce((sum, part) => sum + part.hp, 0);
+/** Phases a run with these gates fights. */
+export function enabledBossPhases(
+  def: BossDef,
+  gates: readonly string[] = []
+): readonly BossPhaseDef[] {
+  return def.phases.filter((phase) => phase.gate === undefined || gates.includes(phase.gate));
+}
+
+/** Phase definition by id. Throws on a typo so data errors surface in tests. */
+export function bossPhaseDef(def: BossDef, id: string): BossPhaseDef {
+  const phase = def.phases.find((item) => item.id === id);
+  if (!phase) throw new Error(`boss ${def.id} has no phase ${id}`);
+  return phase;
+}
+
+/** Attack definition by phase and attack id. */
+export function bossAttackDef(def: BossDef, phaseId: string, attackId: string): BossAttack {
+  const attack = bossPhaseDef(def, phaseId).attacks.find((item) => item.id === attackId);
+  if (!attack) throw new Error(`boss ${def.id} phase ${phaseId} has no attack ${attackId}`);
+  return attack;
+}
+
+export function bossTotalHp(def: BossDef): number {
+  return def.parts.reduce((sum, part) => sum + part.hp, 0);
+}
+
+/** HP banked in extra-bar phases this run fights. */
+export function bossExtraHp(def: BossDef, gates: readonly string[] = []): number {
+  return enabledBossPhases(def, gates).reduce(
+    (sum, phase) => sum + (phase.bar === 'extra' ? (phase.segmentHp ?? 0) : 0),
+    0
+  );
+}
+
+/** Width of the extra slot on the HP bar, for the warning fill. 0 without one. */
+export function bossExtraSpan(def: BossDef, gates: readonly string[] = []): number {
+  const extra = bossExtraHp(def, gates);
+  return extra / Math.max(1, bossTotalHp(def) + extra);
 }
 
 /** 8% of total boss HP, rounded to the wave table's 67. */
@@ -204,87 +238,125 @@ export function bossHpRemaining(boss: BossRuntime): number {
 }
 
 export interface BossHpBarLayout {
-  /** 0–1 fill of the phases 1–2 slot. */
+  /** 0–1 fill of the main slot (every `bar: 'main'` phase). */
   mainFill: number;
-  /** Width of the phase-3 slot as a fraction of the bar. 0 when that segment is unarmed. */
-  phase3Span: number;
-  /** 0–1 fill inside the phase-3 slot. Stays full until that segment is live. */
-  phase3Fill: number;
+  /** Width of the extra slot as a fraction of the bar. 0 when no extra phase is armed. */
+  extraSpan: number;
+  /** 0–1 fill inside the extra slot. Stays full until that segment is live. */
+  extraFill: number;
 }
 
-const PHASE3_BAR_LIVE = new Set<BossPhase>(['transition3', 'phase3', 'death', 'clear', 'done']);
+function extraLive(boss: BossRuntime): boolean {
+  if (boss.stage === 'death' || boss.stage === 'clear' || boss.stage === 'done') return true;
+  if (boss.stage !== 'transition' && boss.stage !== 'fight') return false;
+  return boss.phases[boss.phaseIndex]?.bar === 'extra';
+}
 
 /**
- * Two slots when phase 3 is armed. Phases 1–2 share the left slot. The right
- * slot is the phase-3 HP and does not shrink while those phases take damage.
- * Easy and Medium are one slot (`phase3Span` 0).
+ * Two slots when an extra phase is armed. Main phases share the left slot. The
+ * right slot is the extra HP and does not shrink while main phases take
+ * damage. Without an extra phase the bar is one slot (`extraSpan` 0).
  */
 export function bossHpBarLayout(boss: BossRuntime): BossHpBarLayout {
-  const phase3Max = boss.phase3Armed ? boss.phase3Max : 0;
+  const extraMax = boss.extraArmed ? boss.extraMax : 0;
   const total = Math.max(1, boss.fightMax);
-  const phase3Span = phase3Max > 0 ? phase3Max / total : 0;
-  const mainMax = Math.max(1, total - phase3Max);
+  const extraSpan = extraMax > 0 ? extraMax / total : 0;
+  const mainMax = Math.max(1, total - extraMax);
   let mainHp = 0;
-  let phase3Hp = 0;
-  if (phase3Max <= 0) {
+  let extraHp = 0;
+  if (extraMax <= 0) {
     mainHp = bossHpRemaining(boss);
-  } else if (PHASE3_BAR_LIVE.has(boss.phase)) {
-    if (boss.phase === 'transition3' || boss.phase === 'phase3') {
-      phase3Hp = Math.max(0, bossPart(boss, 'core')?.hp ?? 0);
+  } else if (extraLive(boss)) {
+    if (boss.stage === 'transition' || boss.stage === 'fight') {
+      extraHp = targetHp(boss);
     }
   } else {
     mainHp = bossHpRemaining(boss);
-    phase3Hp = phase3Max;
+    extraHp = extraMax;
   }
   return {
     mainFill: clamp01(mainHp / mainMax),
-    phase3Span,
-    phase3Fill: phase3Max > 0 ? clamp01(phase3Hp / phase3Max) : 0,
+    extraSpan,
+    extraFill: extraMax > 0 ? clamp01(extraHp / extraMax) : 0,
   };
 }
 
 /**
  * Warning-bar fill, left to right across the same slots as `bossHpBarLayout`.
- * `phase3Span` is 0 on Easy and Medium, so the whole bar stays one segment.
+ * `extraSpan` 0 keeps the whole bar one segment.
  */
-export function bossIntroBarLayout(fill: number, phase3Span: number): BossHpBarLayout {
-  const span = clamp01(phase3Span);
+export function bossIntroBarLayout(fill: number, extraSpan: number): BossHpBarLayout {
+  const span = clamp01(extraSpan);
   const u = clamp01(fill);
-  if (span <= 0) return { mainFill: u, phase3Span: 0, phase3Fill: 0 };
+  if (span <= 0) return { mainFill: u, extraSpan: 0, extraFill: 0 };
   const mainSpan = 1 - span;
   if (u <= mainSpan) {
-    return { mainFill: mainSpan > 0 ? u / mainSpan : 0, phase3Span: span, phase3Fill: 0 };
+    return { mainFill: mainSpan > 0 ? u / mainSpan : 0, extraSpan: span, extraFill: 0 };
   }
-  return { mainFill: 1, phase3Span: span, phase3Fill: (u - mainSpan) / span };
+  return { mainFill: 1, extraSpan: span, extraFill: (u - mainSpan) / span };
 }
 
-/** Overall remaining fraction. The drawn bar splits this into two slots on Hard. */
+/** Overall remaining fraction. The drawn bar splits this into two slots when armed. */
 export function bossBarRatio(boss: BossRuntime): number {
   const layout = bossHpBarLayout(boss);
-  return (1 - layout.phase3Span) * layout.mainFill + layout.phase3Span * layout.phase3Fill;
+  return (1 - layout.extraSpan) * layout.mainFill + layout.extraSpan * layout.extraFill;
 }
 
-/**
- * Ring, sweep laser, and enrage. With a phase-3 pattern on the stage, phase 2
- * plays the spiral and this pattern waits for phase 3. Without one, phase 2
- * still sweeps.
- */
-export function bossRingLaserPhase(boss: BossRuntime, config: BossConfig): boolean {
-  if (config.phase3) return boss.phase === 'phase3';
-  return boss.phase === 'phase2';
-}
-
-export function bossPart(boss: BossRuntime, id: BossPartId): BossPartRuntime | undefined {
+export function bossPart(boss: BossRuntime, id: string): BossPartRuntime | undefined {
   return boss.parts.find((part) => part.id === id);
 }
 
 export function bossHullRect(boss: BossRuntime): { x: number; y: number; w: number; h: number } {
-  return {
-    x: boss.x - BOSS_HULL_W / 2,
-    y: boss.y - BOSS_HULL_H / 2,
-    w: BOSS_HULL_W,
-    h: BOSS_HULL_H,
-  };
+  const { w, h } = boss.def.hull;
+  return { x: boss.x - w / 2, y: boss.y - h / 2, w, h };
+}
+
+/** Current phase while entering, fighting, or in its transition. Null afterwards. */
+export function bossCurrentPhase(boss: BossRuntime): BossPhaseDef | null {
+  if (boss.stage === 'death' || boss.stage === 'clear' || boss.stage === 'done') return null;
+  return boss.phases[boss.phaseIndex] ?? null;
+}
+
+export interface BossLook {
+  hull: 'closed' | 'open';
+  glow: { part: BossPartRuntime; color: 'magenta' | 'yellow'; opening: number } | null;
+}
+
+/**
+ * What to draw: hull state and the core glow. Null once the wreck is gone.
+ * Death keeps the last phase's hull. The glow fades in over 0.5s of a transition.
+ */
+export function bossLook(boss: BossRuntime): BossLook | null {
+  if (boss.stage === 'clear' || boss.stage === 'done') return null;
+  const phase = boss.phases[boss.phaseIndex];
+  if (!phase) return null;
+  let glow: BossLook['glow'] = null;
+  const glowing = boss.stage === 'transition' || boss.stage === 'fight';
+  if (glowing && phase.look.glow) {
+    const part = bossPart(boss, phase.look.glow.part);
+    if (part?.alive) {
+      const opening = boss.stage === 'transition' ? Math.min(1, boss.phaseTime / 0.5) : 1;
+      glow = { part, color: phase.look.glow.color, opening };
+    }
+  }
+  return { hull: phase.look.hull, glow };
+}
+
+export interface BossActiveLaser {
+  state: LaserSweepState;
+  spec: LaserConfig;
+  originX: number;
+  originY: number;
+}
+
+/** The current phase's laser while it telegraphs or sweeps. */
+export function bossActiveLaser(boss: BossRuntime): BossActiveLaser | null {
+  if (boss.stage !== 'fight' || boss.laser.mode === 'idle') return null;
+  const attack = phaseLaser(boss);
+  if (!attack) return null;
+  const origin = attackOrigin(boss, attack.from);
+  if (!origin) return null;
+  return { state: boss.laser, spec: attack.laser, originX: origin.x, originY: origin.y };
 }
 
 /**
@@ -303,22 +375,32 @@ export function bossIntroBarFill(
   return clamp01((gameTime - start) / span);
 }
 
-export interface BossSpawnOptions {
-  /** Arm the hard-only third HP segment. Easy and Medium leave this false. */
-  phase3?: boolean;
-}
-
-export function createBoss(config: BossConfig, options: BossSpawnOptions = {}): BossRuntime {
-  const phase3Max = options.phase3 && config.phase3 ? config.phase3.hp : 0;
+export function createBoss(def: BossDef, options: BossSpawnOptions = {}): BossRuntime {
+  const phases = enabledBossPhases(def, options.gates);
+  const extraMax = phases.reduce(
+    (sum, phase) => sum + (phase.bar === 'extra' ? (phase.segmentHp ?? 0) : 0),
+    0
+  );
+  const guns: Record<string, GunClock> = {};
+  for (const phase of def.phases) {
+    for (const attack of phase.attacks) {
+      if (attack.kind === 'gun') guns[attack.id] = createGunClock();
+    }
+  }
+  const firstLaser = phases.flatMap((phase) => phase.attacks).find(isLaser);
   const boss: BossRuntime = {
+    def,
+    phases,
+    phaseIndex: 0,
+    stage: 'enter',
     phase: 'enter',
-    x: BOSS_ANCHOR_X,
-    y: BOSS_ENTER_Y,
-    prevX: BOSS_ANCHOR_X,
-    prevY: BOSS_ENTER_Y,
+    x: def.anchorX,
+    y: def.enterY,
+    prevX: def.anchorX,
+    prevY: def.enterY,
     phaseTime: 0,
     driftTime: 0,
-    parts: config.parts.map((part) => ({
+    parts: def.parts.map((part) => ({
       id: part.id,
       hp: part.hp,
       maxHp: part.hp,
@@ -326,132 +408,80 @@ export function createBoss(config: BossConfig, options: BossSpawnOptions = {}): 
       offsetX: part.offset.x,
       offsetY: part.offset.y,
       radius: part.radius,
-      phase: part.phase,
+      sprite: part.sprite ?? null,
+      onDestroy: part.onDestroy ?? null,
       alive: true,
       falling: false,
       fallVy: 0,
-      worldX: BOSS_ANCHOR_X + part.offset.x,
-      worldY: BOSS_ENTER_Y + part.offset.y,
+      worldX: def.anchorX + part.offset.x,
+      worldY: def.enterY + part.offset.y,
+      intervalMul: 1,
     })),
     invulnerable: true,
     enraged: false,
-    guns: {
-      turretL: freshGun(),
-      turretR: freshGun(),
-      hull: freshGun(),
-      ring: freshGun(),
-      aimed: freshGun(),
-    },
-    laser: {
-      mode: 'idle',
-      elapsed: 0,
-      dir: 1,
-      angleDeg: 0,
-      sweepDuration: config.phase2.laser.sweep,
-    },
-    laserCooldown: 0,
-    ringRot: 0,
+    guns,
+    cycle: { step: 0, time: 0, gun: createGunClock(), rot: 0 },
+    pattern: null,
+    laser: createLaserSweep(firstLaser?.laser.sweep ?? 0),
     deathSpawned: 0,
     hitFlash: 0,
-    intervalMulL: 1,
-    intervalMulR: 1,
     resultSent: false,
-    phase3Armed: phase3Max > 0,
-    phase3Max,
+    extraArmed: extraMax > 0,
+    extraMax,
     fightMax: 0,
-    pattern: 'spiral',
-    patternTime: 0,
-    spiralRot: 0,
   };
-  boss.fightMax = boss.parts.reduce((sum, part) => sum + part.maxHp, 0) + phase3Max;
+  boss.fightMax = boss.parts.reduce((sum, part) => sum + part.maxHp, 0) + extraMax;
   syncParts(boss);
   return boss;
 }
 
-export function updateBoss(boss: BossRuntime, dt: number, config: BossConfig): BossEvents {
+export function updateBoss(boss: BossRuntime, dt: number): BossEvents {
   const ev = emptyBossEvents();
-  if (boss.phase === 'done') return ev;
+  if (boss.stage === 'done') return ev;
+  const def = boss.def;
 
   boss.prevX = boss.x;
   boss.prevY = boss.y;
   let attackDt = 0;
 
-  if (boss.phase === 'enter') {
+  if (boss.stage === 'enter') {
     boss.phaseTime += dt;
-    const duration = Math.max(0.0001, config.enterDuration);
+    const duration = Math.max(0.0001, def.enterDuration);
     const u = Math.min(1, boss.phaseTime / duration);
-    boss.x = BOSS_ANCHOR_X;
-    boss.y = BOSS_ENTER_Y + (config.parkY - BOSS_ENTER_Y) * u;
+    boss.x = def.anchorX;
+    boss.y = def.enterY + (def.parkY - def.enterY) * u;
     if (boss.phaseTime >= duration) {
       const leftover = boss.phaseTime - duration;
-      boss.phase = 'phase1';
+      startFight(boss);
       boss.phaseTime = leftover;
       boss.driftTime = leftover;
-      boss.y = config.parkY;
-      boss.invulnerable = false;
+      boss.y = def.parkY;
       attackDt = leftover;
     }
-  } else if (boss.phase === 'phase1') {
+  } else if (boss.stage === 'fight') {
     boss.phaseTime += dt;
     boss.driftTime += dt;
-    drift(boss, config);
+    drift(boss);
     attackDt = dt;
-  } else if (boss.phase === 'transition') {
+  } else if (boss.stage === 'transition') {
     boss.phaseTime += dt;
     boss.driftTime += dt;
-    drift(boss, config);
-    if (boss.phaseTime >= config.transition.duration) {
-      const leftover = boss.phaseTime - config.transition.duration;
-      boss.phase = 'phase2';
-      boss.phaseTime = leftover;
-      boss.invulnerable = false;
-      boss.pattern = 'spiral';
-      boss.patternTime = 0;
-      boss.spiralRot = 0;
-      boss.laser.mode = 'idle';
-      boss.laser.elapsed = 0;
-      boss.laserCooldown = 0;
-      boss.guns.ring = freshGun();
-      boss.guns.aimed = freshGun();
-      attackDt = leftover;
-    }
-  } else if (boss.phase === 'phase2') {
-    boss.phaseTime += dt;
-    boss.driftTime += dt;
-    drift(boss, config);
-    attackDt = dt;
-  } else if (boss.phase === 'transition3') {
-    boss.phaseTime += dt;
-    boss.driftTime += dt;
-    drift(boss, config);
-    const duration = Math.max(0.0001, config.phase3?.transition ?? 1);
+    drift(boss);
+    const duration = Math.max(0.0001, boss.phases[boss.phaseIndex]?.transition?.duration ?? 0);
     if (boss.phaseTime >= duration) {
       const leftover = boss.phaseTime - duration;
-      boss.phase = 'phase3';
+      startFight(boss);
       boss.phaseTime = leftover;
-      boss.invulnerable = false;
-      boss.laser.mode = 'idle';
-      boss.laser.elapsed = 0;
-      boss.laser.angleDeg = 0;
-      boss.laserCooldown = 0;
-      boss.enraged = false;
-      boss.guns.ring = freshGun();
-      boss.guns.aimed = freshGun();
       attackDt = leftover;
     }
-  } else if (boss.phase === 'phase3') {
+  } else if (boss.stage === 'death') {
     boss.phaseTime += dt;
-    boss.driftTime += dt;
-    drift(boss, config);
-    attackDt = dt;
-  } else if (boss.phase === 'death') {
-    boss.phaseTime += dt;
-    spawnDueDeathExplosions(boss, config, ev);
-    if (boss.phaseTime >= config.death.duration) {
-      boss.phase = 'clear';
+    spawnDueDeathExplosions(boss, ev);
+    if (boss.phaseTime >= def.death.duration) {
+      setStage(boss, 'clear');
       boss.phaseTime = 0;
     }
-  } else if (boss.phase === 'clear') {
+  } else if (boss.stage === 'clear') {
     // The victory fly-off owns the wait. `releaseBossResult` opens the result.
     boss.phaseTime += dt;
   }
@@ -460,42 +490,32 @@ export function updateBoss(boss: BossRuntime, dt: number, config: BossConfig): B
   syncParts(boss);
   if (boss.hitFlash > 0) boss.hitFlash = Math.max(0, boss.hitFlash - dt);
 
-  if (attackDt > 0 && boss.phase === 'phase1') tickPhase1(boss, attackDt, config, ev);
-  if (attackDt > 0 && boss.phase === 'phase2') {
-    if (config.phase3) tickSpiralAimed(boss, attackDt, config, ev);
-    else tickRingLaser(boss, attackDt, config, ev);
-  }
-  if (attackDt > 0 && boss.phase === 'phase3') tickRingLaser(boss, attackDt, config, ev);
+  if (attackDt > 0 && boss.stage === 'fight') tickAttacks(boss, attackDt, ev);
   return ev;
 }
 
 /** Death animation is over and the fly-off has left the screen. Opens the result once. */
 export function releaseBossResult(boss: BossRuntime): BossEvents {
   const ev = emptyBossEvents();
-  if (boss.phase !== 'clear' || boss.resultSent) return ev;
+  if (boss.stage !== 'clear' || boss.resultSent) return ev;
   boss.resultSent = true;
-  boss.phase = 'done';
+  setStage(boss, 'done');
   ev.enterResult = true;
   return ev;
 }
 
-export function applyBossBomb(boss: BossRuntime, config: BossConfig): BossEvents {
+export function applyBossBomb(boss: BossRuntime): BossEvents {
   const ev = emptyBossEvents();
-  if (bossRingLaserPhase(boss, config)) interruptLaser(boss);
+  if (boss.stage === 'fight' && phaseLaser(boss)) interruptLaserSweep(boss.laser);
 
   if (!canTakeDamage(boss)) return ev;
 
   const amount = bossBombDamage(boss.fightMax);
-  if (boss.phase === 'phase1') {
-    const living = boss.parts.filter((part) => part.phase === 1 && part.alive);
-    const shares = splitBombDamage(amount, living.length);
-    living.forEach((part, index) => {
-      hurtPart(boss, part, shares[index] ?? 0, ev, config);
-    });
-  } else if (boss.phase === 'phase2' || boss.phase === 'phase3') {
-    const core = bossPart(boss, 'core');
-    if (core) hurtPart(boss, core, amount, ev, config);
-  }
+  const living = damageableParts(boss);
+  const shares = splitBombDamage(amount, living.length);
+  living.forEach((part, index) => {
+    hurtPart(boss, part, shares[index] ?? 0, ev);
+  });
   return ev;
 }
 
@@ -505,12 +525,11 @@ export function bossMissileTargets(boss: BossRuntime): BossPartRuntime[] {
   return damageableParts(boss);
 }
 
-/** Player bullet against turrets, the core, or the invulnerable hull. */
+/** Player bullet against the live targets or the invulnerable hull. */
 export function resolveBossBullet(
   boss: BossRuntime,
   bullet: BulletBox,
-  damage: number,
-  config: BossConfig
+  damage: number
 ): BossEvents {
   const ev = emptyBossEvents();
   if (!bossBlocksShots(boss)) return ev;
@@ -519,7 +538,7 @@ export function resolveBossBullet(
 
   const connect = (part: BossPartRuntime): BossEvents => {
     ev.consumedBullet = true;
-    if (!boss.invulnerable) hurtPart(boss, part, damage, ev, config);
+    if (!boss.invulnerable) hurtPart(boss, part, damage, ev);
     return ev;
   };
 
@@ -558,7 +577,7 @@ export function resolveBossBullet(
 }
 
 export function bossHitsPlayer(boss: BossRuntime, px: number, py: number): boolean {
-  if (!bossThreatens(boss)) return false;
+  if (!bossBlocksShots(boss)) return false;
   const hull = bossHullRect(boss);
   if (circleRect(px, py, HITBOX_RADIUS, hull.x, hull.y, hull.w, hull.h)) return true;
   for (const part of boss.parts) {
@@ -572,366 +591,240 @@ export function bossHitsPlayer(boss: BossRuntime, px: number, py: number): boole
 }
 
 /** Sweeping beam only. The telegraph line does not hurt. */
-export function bossLaserHits(
-  boss: BossRuntime,
-  config: BossConfig,
-  px: number,
-  py: number
-): boolean {
-  if (!bossRingLaserPhase(boss, config) || boss.laser.mode !== 'sweep') return false;
-  const core = bossPart(boss, 'core');
-  if (!core) return false;
-  const ang = Math.PI / 2 + (boss.laser.angleDeg * Math.PI) / 180;
-  const len = LOGICAL_H + BOSS_HULL_H;
-  const x2 = core.worldX + Math.cos(ang) * len;
-  const y2 = core.worldY + Math.sin(ang) * len;
-  const reach = config.phase2.laser.hitWidth / 2 + HITBOX_RADIUS;
-  return segmentCircleCollision(core.worldX, core.worldY, x2, y2, px, py, reach);
+export function bossLaserHits(boss: BossRuntime, px: number, py: number): boolean {
+  const active = bossActiveLaser(boss);
+  if (!active) return false;
+  const length = LOGICAL_H + boss.def.hull.h;
+  return laserSweepHits(
+    active.state,
+    active.spec,
+    active.originX,
+    active.originY,
+    length,
+    px,
+    py,
+    HITBOX_RADIUS
+  );
 }
 
-function drift(boss: BossRuntime, config: BossConfig): void {
-  const { amp, period } = config.drift;
+function isLaser(attack: BossAttack): attack is BossLaserAttack {
+  return attack.kind === 'laser';
+}
+
+function phaseLaser(boss: BossRuntime): BossLaserAttack | undefined {
+  return boss.phases[boss.phaseIndex]?.attacks.find(isLaser);
+}
+
+function setStage(boss: BossRuntime, stage: BossStage): void {
+  boss.stage = stage;
+  const phase = boss.phases[boss.phaseIndex];
+  if (stage === 'fight') boss.phase = phase?.id ?? 'fight';
+  else if (stage === 'transition') boss.phase = phase?.transition?.id ?? phase?.id ?? 'transition';
+  else boss.phase = stage;
+}
+
+/** Fresh guns, cycle, and laser cooldown for the phase that starts fighting now. */
+function startFight(boss: BossRuntime): void {
+  setStage(boss, 'fight');
+  boss.invulnerable = false;
+  boss.enraged = false;
+  const phase = boss.phases[boss.phaseIndex];
+  if (!phase) return;
+  for (const attack of phase.attacks) {
+    if (attack.kind === 'gun') {
+      const gun = boss.guns[attack.id];
+      if (gun) resetGunClock(gun);
+    } else if (attack.kind === 'cycle') {
+      boss.cycle.step = 0;
+      boss.cycle.time = 0;
+      boss.cycle.rot = 0;
+      resetGunClock(boss.cycle.gun);
+      boss.pattern = attack.steps[0]?.label ?? null;
+    }
+  }
+  resetLaserSweep(boss.laser);
+}
+
+function drift(boss: BossRuntime): void {
+  const { amp, period } = boss.def.drift;
   const omega = (Math.PI * 2 * boss.driftTime) / Math.max(0.0001, period);
-  boss.x = BOSS_ANCHOR_X + amp * Math.sin(omega);
-  boss.y = config.parkY;
+  boss.x = boss.def.anchorX + amp * Math.sin(omega);
+  boss.y = boss.def.parkY;
 }
 
-function tickPhase1(boss: BossRuntime, dt: number, config: BossConfig, ev: BossEvents): void {
-  const phase = config.phase1;
-  fireGun(boss, 'turretL', boss.guns.turretL, phase.turretL, dt, boss.intervalMulL, ev);
-  fireGun(boss, 'turretR', boss.guns.turretR, phase.turretR, dt, boss.intervalMulR, ev);
+function attackOrigin(boss: BossRuntime, from: string): { x: number; y: number } | null {
+  if (from === 'hull') return { x: boss.x, y: boss.y };
+  const part = bossPart(boss, from);
+  if (!part?.alive) return null;
+  return { x: part.worldX, y: part.worldY };
+}
 
-  const interval = fireInterval(phase.hull);
-  const first = fireFirstDelay(phase.hull, interval);
-  const count = pullShots(boss.guns.hull, dt, interval, first, phase.hull.kind);
-  for (let i = 0; i < count; i++) {
-    ev.shots.push({ fire: phase.hull, x: boss.x, y: boss.y, rotation: 0 });
+function tickAttacks(boss: BossRuntime, dt: number, ev: BossEvents): void {
+  const phase = boss.phases[boss.phaseIndex];
+  if (!phase) return;
+  for (const attack of phase.attacks) {
+    if (attack.kind === 'laser') {
+      const every = boss.enraged ? attack.enraged.every : attack.laser.every;
+      const sweep = boss.enraged ? attack.enraged.sweep : attack.laser.sweep;
+      stepLaserSweep(boss.laser, dt, attack.laser, every, sweep);
+    } else if (attack.kind === 'cycle') {
+      tickCycle(boss, attack, dt, ev);
+    } else if (tickGun(boss, attack, dt, ev) > 0 && attack.yieldOnFire) {
+      return;
+    }
   }
 }
 
-function tickSpiralAimed(boss: BossRuntime, dt: number, config: BossConfig, ev: BossEvents): void {
-  const phase = config.phase3;
-  if (!phase) return;
-  const core = bossPart(boss, 'core');
-  const originX = core?.worldX ?? boss.x;
-  const originY = core?.worldY ?? boss.y;
+/** Returns how many volleys fired. */
+function tickGun(boss: BossRuntime, attack: BossGunAttack, dt: number, ev: BossEvents): number {
+  if (attack.pauseWhileLaserSweeps && boss.laser.mode === 'sweep') return 0;
+  if (attack.onlyWhileLaserIdle && boss.laser.mode !== 'idle') return 0;
+  const origin = attackOrigin(boss, attack.from);
+  const gun = boss.guns[attack.id];
+  if (!origin || !gun) return 0;
+  const mul = attack.from === 'hull' ? 1 : (bossPart(boss, attack.from)?.intervalMul ?? 1);
+  const fire = attack.fire;
+  const base =
+    boss.enraged && attack.enrageInterval !== undefined
+      ? attack.enrageInterval
+      : fireInterval(fire);
+  const interval = base * mul;
+  const first = fireFirstDelay(fire, base) * mul;
+  const count = pullShots(gun, dt, interval, first, fireBurst(fire));
+  const step = fireRotStep(fire);
+  for (let i = 0; i < count; i++) {
+    ev.shots.push({ fire, x: origin.x, y: origin.y, rotation: gun.rot + i * step });
+  }
+  gun.rot += count * step;
+  return count;
+}
+
+function tickCycle(boss: BossRuntime, attack: BossCycleAttack, dt: number, ev: BossEvents): void {
+  const origin = attackOrigin(boss, attack.from);
+  const cycle = boss.cycle;
+  const hold = Math.max(0.05, attack.hold);
   let left = dt;
-  const hold = Math.max(0.05, phase.patternHold);
 
   for (let guard = 0; guard < 4 && left > 1e-8; guard++) {
-    const untilSwitch = hold - boss.patternTime;
+    const untilSwitch = hold - cycle.time;
     const slice = Math.min(left, Math.max(0, untilSwitch));
     if (slice > 0) {
-      firePhase3Slice(boss, phase, slice, originX, originY, ev);
-      boss.patternTime += slice;
+      const fire = attack.steps[cycle.step]?.fire;
+      if (fire && origin) fireCycleSlice(cycle, fire, slice, origin, ev);
+      cycle.time += slice;
       left -= slice;
     }
-    if (boss.patternTime + 1e-9 < hold) return;
-    boss.patternTime = 0;
-    boss.pattern = boss.pattern === 'spiral' ? 'aimed' : 'spiral';
-    boss.guns.ring = freshGun();
-    boss.guns.aimed = freshGun();
+    if (cycle.time + 1e-9 < hold) return;
+    cycle.time = 0;
+    cycle.step = (cycle.step + 1) % Math.max(1, attack.steps.length);
+    boss.pattern = attack.steps[cycle.step]?.label ?? null;
+    resetGunClock(cycle.gun);
     if (left <= 1e-8) return;
   }
 }
 
-function firePhase3Slice(
-  boss: BossRuntime,
-  phase: NonNullable<BossConfig['phase3']>,
-  dt: number,
-  originX: number,
-  originY: number,
-  ev: BossEvents
-): void {
-  if (boss.pattern === 'spiral') {
-    const fire = phase.spiral;
-    const count = pullShots(boss.guns.ring, dt, fire.interval, fire.interval, fire.kind);
-    for (let i = 0; i < count; i++) {
-      ev.shots.push({ fire, x: originX, y: originY, rotation: boss.spiralRot });
-      boss.spiralRot += fire.rotStep;
-    }
-    return;
-  }
-  const fire = phase.aimed;
-  const interval = fireInterval(fire);
-  const count = pullShots(boss.guns.aimed, dt, interval, interval, fire.kind);
-  for (let i = 0; i < count; i++) {
-    ev.shots.push({ fire, x: originX, y: originY, rotation: 0 });
-  }
-}
-
-function tickRingLaser(boss: BossRuntime, dt: number, config: BossConfig, ev: BossEvents): void {
-  tickLaser(boss, dt, config);
-  const phase = config.phase2;
-  const core = bossPart(boss, 'core');
-  const originX = core?.worldX ?? boss.x;
-  const originY = core?.worldY ?? boss.y;
-
-  if (boss.laser.mode !== 'sweep' && phase.ring.kind === 'ring16') {
-    const interval = boss.enraged ? phase.enrage.ringInterval : phase.ring.interval;
-    const count = pullShots(boss.guns.ring, dt, interval, interval, phase.ring.kind);
-    for (let i = 0; i < count; i++) {
-      ev.shots.push({
-        fire: phase.ring,
-        x: originX,
-        y: originY,
-        rotation: boss.ringRot + i * phase.ring.rotStep,
-      });
-    }
-    boss.ringRot += count * phase.ring.rotStep;
-    if (count > 0) return;
-  }
-
-  if (boss.laser.mode === 'idle') {
-    const interval = fireInterval(phase.aimed);
-    const first = fireFirstDelay(phase.aimed, interval);
-    const count = pullShots(boss.guns.aimed, dt, interval, first, phase.aimed.kind);
-    for (let i = 0; i < count; i++) {
-      ev.shots.push({ fire: phase.aimed, x: originX, y: originY, rotation: 0 });
-    }
-  }
-}
-
-function fireGun(
-  boss: BossRuntime,
-  id: 'turretL' | 'turretR',
-  gun: BossGun,
+function fireCycleSlice(
+  cycle: BossCycleState,
   fire: Fire,
   dt: number,
-  intervalMul: number,
+  origin: { x: number; y: number },
   ev: BossEvents
 ): void {
-  const part = bossPart(boss, id);
-  if (!part?.alive) return;
-  const base = fireInterval(fire);
-  const interval = base * intervalMul;
-  const first = fireFirstDelay(fire, base) * intervalMul;
-  const count = pullShots(gun, dt, interval, first, fire.kind);
+  const interval = fireInterval(fire);
+  const count = pullShots(cycle.gun, dt, interval, fireFirstDelay(fire, interval), fireBurst(fire));
+  const step = fireRotStep(fire);
   for (let i = 0; i < count; i++) {
-    ev.shots.push({ fire, x: part.worldX, y: part.worldY, rotation: 0 });
+    ev.shots.push({ fire, x: origin.x, y: origin.y, rotation: cycle.rot });
+    cycle.rot += step;
   }
 }
 
-function tickLaser(boss: BossRuntime, dt: number, config: BossConfig): void {
-  const laser = config.phase2.laser;
-  const enrage = config.phase2.enrage;
-  let left = dt;
-
-  for (let guard = 0; guard < 6 && left > 1e-8; guard++) {
-    const every = boss.enraged ? enrage.laserEvery : laser.every;
-    if (boss.laser.mode === 'idle') {
-      const need = every - boss.laserCooldown;
-      if (need > left) {
-        boss.laserCooldown += left;
-        return;
-      }
-      left -= Math.max(0, need);
-      boss.laserCooldown = every;
-      boss.laser.mode = 'telegraph';
-      boss.laser.elapsed = 0;
-      boss.laser.angleDeg = 0;
-    } else if (boss.laser.mode === 'telegraph') {
-      const need = laser.telegraph - boss.laser.elapsed;
-      if (need > left) {
-        boss.laser.elapsed += left;
-        boss.laser.angleDeg = 0;
-        return;
-      }
-      left -= Math.max(0, need);
-      boss.laser.mode = 'sweep';
-      boss.laser.elapsed = 0;
-      boss.laser.sweepDuration = boss.enraged ? enrage.sweep : laser.sweep;
-      boss.laser.angleDeg = sweepFrom(boss, laser.fromDeg, laser.toDeg);
-    } else {
-      const need = boss.laser.sweepDuration - boss.laser.elapsed;
-      if (need > left) {
-        boss.laser.elapsed += left;
-        boss.laser.angleDeg = sweepAngle(boss, laser.fromDeg, laser.toDeg);
-        return;
-      }
-      left -= Math.max(0, need);
-      boss.laser.elapsed = boss.laser.sweepDuration;
-      boss.laser.angleDeg = sweepAngle(boss, laser.fromDeg, laser.toDeg);
-      boss.laser.mode = 'idle';
-      boss.laser.elapsed = 0;
-      boss.laserCooldown = 0;
-      boss.laser.dir = boss.laser.dir === 1 ? -1 : 1;
-    }
-  }
-}
-
-function sweepFrom(boss: BossRuntime, fromDeg: number, toDeg: number): number {
-  return boss.laser.dir > 0 ? fromDeg : toDeg;
-}
-
-function sweepAngle(boss: BossRuntime, fromDeg: number, toDeg: number): number {
-  const from = sweepFrom(boss, fromDeg, toDeg);
-  const to = boss.laser.dir > 0 ? toDeg : fromDeg;
-  const dur = Math.max(0.0001, boss.laser.sweepDuration);
-  const u = clamp01(boss.laser.elapsed / dur);
-  return from + (to - from) * u;
-}
-
-/** Cancel an active laser and start its cooldown over. Idle lasers keep their timer. */
-function interruptLaser(boss: BossRuntime): void {
-  if (boss.laser.mode === 'idle') return;
-  boss.laser.mode = 'idle';
-  boss.laser.elapsed = 0;
-  boss.laser.angleDeg = 0;
-  boss.laserCooldown = 0;
-}
-
-function pullShots(
-  gun: BossGun,
-  dt: number,
-  interval: number,
-  firstDelay: number,
-  kind: FireKind
-): number {
-  const step = Math.max(0.01, interval);
-  const first = Math.max(0, firstDelay);
-  let left = dt;
-  let fired = 0;
-
-  for (let guard = 0; guard < 8 && left > 1e-8; guard++) {
-    if (gun.burstLeft > 0) {
-      const need = AIMED_BURST_GAP - gun.burstTimer;
-      if (left + 1e-9 < need) {
-        gun.burstTimer += left;
-        return fired;
-      }
-      left -= need;
-      gun.burstTimer = 0;
-      gun.burstLeft--;
-      fired++;
-      continue;
-    }
-
-    const threshold = gun.shots === 0 ? first : step;
-    const need = threshold - gun.timer;
-    if (left + 1e-9 < need) {
-      gun.timer += left;
-      return fired;
-    }
-    left -= Math.max(0, need);
-    gun.timer = 0;
-    gun.shots++;
-    fired++;
-    if (kind === 'aimed3burst') {
-      gun.burstLeft = AIMED_BURST_COUNT - 1;
-      gun.burstTimer = 0;
-    }
-  }
-  return fired;
-}
-
-function hurtPart(
-  boss: BossRuntime,
-  part: BossPartRuntime,
-  amount: number,
-  ev: BossEvents,
-  config: BossConfig
-): void {
+function hurtPart(boss: BossRuntime, part: BossPartRuntime, amount: number, ev: BossEvents): void {
   if (!part.alive || amount <= 0 || boss.invulnerable) return;
   part.hp -= amount;
   boss.hitFlash = HIT_FLASH_TIME;
   if (part.hp > 0) {
-    refreshEnrage(boss, config);
+    refreshEnrage(boss);
     return;
   }
   part.hp = 0;
-  killPart(boss, part, ev, config);
+  killPart(boss, part, ev);
 }
 
-function killPart(
-  boss: BossRuntime,
-  part: BossPartRuntime,
-  ev: BossEvents,
-  config: BossConfig
-): void {
+/** A later phase this run fights brings the part back, so its score waits. */
+function revivedLater(boss: BossRuntime, part: BossPartRuntime): boolean {
+  for (let i = boss.phaseIndex + 1; i < boss.phases.length; i++) {
+    if (boss.phases[i]!.targets.includes(part.id)) return true;
+  }
+  return false;
+}
+
+function killPart(boss: BossRuntime, part: BossPartRuntime, ev: BossEvents): void {
   if (!part.alive) return;
   part.alive = false;
   part.hp = 0;
+  const phase = boss.phases[boss.phaseIndex];
+  if (!phase) return;
 
-  if (part.id === 'turretL' || part.id === 'turretR') {
-    ev.score += part.score;
+  if (!revivedLater(boss, part)) ev.score += part.score;
+  if (part.onDestroy === 'fall') {
     part.falling = true;
     part.fallVy = BOSS_TURRET_FALL_SPEED;
     ev.explosions.push({ x: part.worldX, y: part.worldY, delay: 0, size: 'medium' });
     ev.shake = { intensity: SHAKE_SMALL_INTENSITY, duration: SHAKE_SMALL_DURATION };
-    if (part.id === 'turretL') boss.intervalMulR = survivorScale(config);
-    else boss.intervalMulL = survivorScale(config);
-    const turrets = boss.parts.filter((item) => item.phase === 1);
-    if (boss.phase === 'phase1' && turrets.every((item) => !item.alive)) {
-      beginTransition(boss, ev);
+  }
+  if (phase.survivorRateMul !== undefined) {
+    const scale = phase.survivorRateMul <= 0 ? 1 : 1 / phase.survivorRateMul;
+    for (const id of phase.targets) {
+      const other = bossPart(boss, id);
+      if (other && other !== part) other.intervalMul = scale;
     }
-    return;
   }
 
-  if (part.id === 'core') {
-    if (boss.phase === 'phase2' && boss.phase3Armed && config.phase3) {
-      beginPhase3(boss, part, ev, config);
-      return;
-    }
-    ev.score += part.score;
-    beginDeath(boss, ev, config);
-  }
+  const cleared = phase.targets.every((id) => !bossPart(boss, id)?.alive);
+  if (!cleared) return;
+  if (boss.phaseIndex + 1 < boss.phases.length) beginTransition(boss, ev);
+  else beginDeath(boss, ev);
 }
 
-function survivorScale(config: BossConfig): number {
-  const rate = config.phase1.survivorRateMul;
-  if (rate <= 0) return 1;
-  return 1 / rate;
-}
-
+/** Next phase: revive its targets on their segment HP, convert bullets, go invulnerable. */
 function beginTransition(boss: BossRuntime, ev: BossEvents): void {
-  if (boss.phase !== 'phase1') return;
-  boss.phase = 'transition';
+  boss.phaseIndex++;
+  const next = boss.phases[boss.phaseIndex]!;
+  for (const id of next.targets) {
+    const part = bossPart(boss, id);
+    if (!part || part.alive) continue;
+    const hp = next.segmentHp ?? part.maxHp;
+    part.alive = true;
+    part.falling = false;
+    part.hp = hp;
+    part.maxHp = hp;
+  }
   boss.phaseTime = 0;
   boss.invulnerable = true;
-  boss.laser.mode = 'idle';
-  ev.convertBullets = true;
-}
-
-function beginPhase3(
-  boss: BossRuntime,
-  core: BossPartRuntime,
-  ev: BossEvents,
-  config: BossConfig
-): void {
-  const phase = config.phase3;
-  if (!phase || boss.phase !== 'phase2') return;
-  core.alive = true;
-  core.falling = false;
-  core.hp = phase.hp;
-  core.maxHp = phase.hp;
-  boss.phase = 'transition3';
-  boss.phaseTime = 0;
-  boss.invulnerable = true;
-  boss.laser.mode = 'idle';
-  boss.laser.elapsed = 0;
-  boss.laser.angleDeg = 0;
-  boss.laserCooldown = 0;
   boss.enraged = false;
+  resetLaserSweep(boss.laser);
   ev.convertBullets = true;
+  if (next.transition) setStage(boss, 'transition');
+  else startFight(boss);
 }
 
-function beginDeath(boss: BossRuntime, ev: BossEvents, config: BossConfig): void {
-  if (boss.phase === 'death' || boss.phase === 'clear' || boss.phase === 'done') return;
-  boss.phase = 'death';
+function beginDeath(boss: BossRuntime, ev: BossEvents): void {
+  if (boss.stage === 'death' || boss.stage === 'clear' || boss.stage === 'done') return;
+  setStage(boss, 'death');
   boss.phaseTime = 0;
   boss.invulnerable = true;
   boss.laser.mode = 'idle';
   boss.deathSpawned = 0;
   ev.clearBullets = true;
-  ev.shake = { intensity: SHAKE_BIG_INTENSITY, duration: config.death.duration };
+  ev.shake = { intensity: SHAKE_BIG_INTENSITY, duration: boss.def.death.duration };
   emitDeathExplosion(boss, 0, ev);
   boss.deathSpawned = 1;
 }
 
-function spawnDueDeathExplosions(boss: BossRuntime, config: BossConfig, ev: BossEvents): void {
-  const count = Math.max(1, config.death.explosions);
-  const interval = config.death.duration / count;
+function spawnDueDeathExplosions(boss: BossRuntime, ev: BossEvents): void {
+  const count = Math.max(1, boss.def.death.explosions);
+  const interval = boss.def.death.duration / count;
   while (boss.deathSpawned < count && boss.phaseTime + 1e-9 >= boss.deathSpawned * interval) {
     emitDeathExplosion(boss, boss.deathSpawned, ev);
     boss.deathSpawned++;
@@ -939,52 +832,46 @@ function spawnDueDeathExplosions(boss: BossRuntime, config: BossConfig, ev: Boss
 }
 
 function emitDeathExplosion(boss: BossRuntime, index: number, ev: BossEvents): void {
-  const spot = DEATH_OFFSETS[index % DEATH_OFFSETS.length] ?? [0, 0];
-  ev.explosions.push({
-    x: boss.x + spot[0],
-    y: boss.y + spot[1],
-    delay: 0,
-    size: 'large',
-  });
+  const offsets = boss.def.death.offsets;
+  const spot = offsets[index % Math.max(1, offsets.length)] ?? [0, 0];
+  ev.explosions.push({ x: boss.x + spot[0], y: boss.y + spot[1], delay: 0, size: 'large' });
 }
 
-function refreshEnrage(boss: BossRuntime, config: BossConfig): void {
-  if (!bossRingLaserPhase(boss, config)) return;
-  const core = bossPart(boss, 'core');
-  if (!core) return;
-  if (core.hp <= core.maxHp * config.phase2.enrageAtHpRatio) boss.enraged = true;
+function targetHp(boss: BossRuntime): number {
+  const phase = boss.phases[boss.phaseIndex];
+  if (!phase) return 0;
+  return phase.targets.reduce((sum, id) => sum + Math.max(0, bossPart(boss, id)?.hp ?? 0), 0);
+}
+
+function refreshEnrage(boss: BossRuntime): void {
+  if (boss.stage !== 'fight') return;
+  const phase = boss.phases[boss.phaseIndex];
+  if (phase?.enrageAtHpRatio === undefined) return;
+  const lead = bossPart(boss, phase.targets[0] ?? '');
+  if (!lead) return;
+  if (lead.hp <= lead.maxHp * phase.enrageAtHpRatio) boss.enraged = true;
 }
 
 function canTakeDamage(boss: BossRuntime): boolean {
-  return (
-    (boss.phase === 'phase1' || boss.phase === 'phase2' || boss.phase === 'phase3') &&
-    !boss.invulnerable
-  );
+  return boss.stage === 'fight' && !boss.invulnerable;
 }
 
 function bossBlocksShots(boss: BossRuntime): boolean {
-  return (
-    boss.phase === 'enter' ||
-    boss.phase === 'phase1' ||
-    boss.phase === 'transition' ||
-    boss.phase === 'phase2' ||
-    boss.phase === 'transition3' ||
-    boss.phase === 'phase3'
-  );
+  return boss.stage === 'enter' || boss.stage === 'transition' || boss.stage === 'fight';
 }
 
-function bossThreatens(boss: BossRuntime): boolean {
-  return bossBlocksShots(boss);
-}
-
+/**
+ * Entering and fighting: this phase's living targets. During a transition the
+ * previous phase's targets stay the hittable set (the boss is invulnerable).
+ */
 function damageableParts(boss: BossRuntime): BossPartRuntime[] {
-  if (boss.phase === 'phase2' || boss.phase === 'phase3' || boss.phase === 'transition3') {
-    return boss.parts.filter((part) => part.phase === 2 && part.alive && !part.falling);
-  }
-  if (boss.phase === 'enter' || boss.phase === 'phase1' || boss.phase === 'transition') {
-    return boss.parts.filter((part) => part.phase === 1 && part.alive && !part.falling);
-  }
-  return [];
+  if (!bossBlocksShots(boss)) return [];
+  const index = boss.stage === 'transition' ? boss.phaseIndex - 1 : boss.phaseIndex;
+  const phase = boss.phases[index];
+  if (!phase) return [];
+  return boss.parts.filter(
+    (part) => phase.targets.includes(part.id) && part.alive && !part.falling
+  );
 }
 
 function fallDebris(boss: BossRuntime, dt: number): void {
@@ -1001,29 +888,6 @@ function syncParts(boss: BossRuntime): void {
     if (part.falling) continue;
     part.worldX = boss.x + part.offsetX;
     part.worldY = boss.y + part.offsetY;
-  }
-}
-
-function fireInterval(fire: Fire): number {
-  if (fire.kind === 'none') return 2;
-  if (fire.kind === 'ring8' || fire.kind === 'ring16' || fire.kind === 'spiral')
-    return fire.interval;
-  return fire.interval ?? 2;
-}
-
-function fireFirstDelay(fire: Fire, interval: number): number {
-  switch (fire.kind) {
-    case 'fan3':
-    case 'fan5':
-    case 'fan7wide':
-    case 'aimed1':
-    case 'aimed3burst':
-    case 'missile':
-    case 'aimed_fast3':
-    case 'fixed2':
-      return fire.firstDelay ?? interval;
-    default:
-      return interval;
   }
 }
 

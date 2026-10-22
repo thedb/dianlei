@@ -1,13 +1,15 @@
 /**
- * Turns an enemy's Fire config into bullets.
- * aimed3burst is three aimed shots  AIMED_BURST_GAP apart.
+ * Turns an enemy's Fire config into bullets through the shared pattern library.
+ * Burst patterns (aimed3burst) repeat AIMED_BURST_GAP apart; rings turn by `rotStep`;
+ * barrel patterns (fixed2) follow the shooter's aim angle.
  * side_arc ships with a single aimed1 and no interval fire once, at the arc apex.
  */
 
 import type { Enemy } from '@/game/entities/enemy';
 import { shouldEnemyFire } from '@/game/entities/enemy';
 import { executeFirePattern, type BulletSpawner } from '@/game/entities/enemyBullet';
-import { AIMED_BURST_COUNT, AIMED_BURST_GAP, AIMED_MIN_DIST } from '@/game/config';
+import { fireBurst, fireRotStep, fireUsesBarrel } from '@/game/systems/danmaku';
+import { AIMED_BURST_GAP, AIMED_MIN_DIST } from '@/game/config';
 
 function farEnough(enemy: Enemy, playerX: number, playerY: number): boolean {
   const dx = playerX - enemy.x;
@@ -64,25 +66,16 @@ export function updateEnemyWeapons(
   if (!result.shouldFire) return;
 
   const fire = result.fireData;
-  if (fire.kind === 'ring8' || fire.kind === 'ring16') {
-    executeFirePattern(fire, enemy.x, enemy.y, playerX, playerY, spawner, {
-      rotation: enemy.patternRot,
-    });
-    enemy.patternRot += fire.rotStep;
-    return;
-  }
+  const aimAngle = fireUsesBarrel(fire) ? enemy.aimAngle : undefined;
+  executeFirePattern(fire, enemy.x, enemy.y, playerX, playerY, spawner, {
+    rotation: enemy.patternRot,
+    ...(aimAngle === undefined ? {} : { aimAngle }),
+  });
+  enemy.patternRot += fireRotStep(fire);
 
-  if (fire.kind === 'fixed2') {
-    executeFirePattern(fire, enemy.x, enemy.y, playerX, playerY, spawner, {
-      aimAngle: enemy.aimAngle,
-    });
-    return;
-  }
-
-  executeFirePattern(fire, enemy.x, enemy.y, playerX, playerY, spawner);
-
-  if (fire.kind === 'aimed3burst') {
-    enemy.burstLeft = AIMED_BURST_COUNT - 1;
+  const burst = fireBurst(fire);
+  if (burst > 1) {
+    enemy.burstLeft = burst - 1;
     enemy.burstTimer = 0;
   }
 }
