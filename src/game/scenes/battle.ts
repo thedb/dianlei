@@ -1120,6 +1120,9 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       // Boss practice: Lv3, the normal bomb and life loadout, clock at 2:35.
       // seek() drops every wave that already passed, so those ships never
       // enter and do not count toward the kill-rate denominator.
+      // Difficulty is the challenge pick (普通 → easy, 困难 → hard), so phase 3
+      // arms only on hard. The picker records `challengeStage`; only stage 1
+      // exists, and this jump stays on that table.
       // Weapon test keeps the fresh loadout and does not jump.
       if (!weaponTest() && sceneCtx.battleEntry === 'boss') {
         maxOut(state.main);
@@ -1993,7 +1996,11 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
         buildingCount: buildingPool.getActiveCount(),
         buildingDrop: chooseBuildingDrop(state.sub),
       };
-      if (boss) info.bossPhase = boss.phase;
+      if (boss) {
+        info.bossPhase = boss.phase;
+        info.bossPhase3 = boss.phase3Armed;
+        info.bossMaxHp = boss.fightMax;
+      }
       return info;
     },
   };

@@ -49,6 +49,10 @@ export interface GameDebugInfo {
   gameTime?: number;
   /** Orbital boss phase, when the fight has started */
   bossPhase?: string;
+  /** Hard challenge / formal Hard armed the phase-3 segment. */
+  bossPhase3?: boolean;
+  /** Scaled boss HP pool for this run, including phase 3 when it is armed. */
+  bossMaxHp?: number;
   /** Ship is in the death explosion and has not respawned. */
   playerDead?: boolean;
   /** Explosions still playing, including ones waiting on a delay. */

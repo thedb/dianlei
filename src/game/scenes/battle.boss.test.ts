@@ -3,6 +3,7 @@ import { makeInput } from '@/test/fakes';
 import { createMemoryStorage, createSettingsStore } from '@/game/settings';
 import { computeControlLayout } from '@/game/controls';
 import { BOMBS_START, LIVES_START, POWER_MAX } from '@/game/config';
+import { prepareBossConfig, type Difficulty } from '@/game/difficulty';
 import { stage1 } from '@/game/levels/stage1';
 import type { BattleEntry } from './types';
 import type { ControlsView } from '@/engine/input';
@@ -26,7 +27,7 @@ vi.mock('@/game/systems/audio', () => {
 
 const DT = 1 / 60;
 
-function setup(battleEntry: BattleEntry = 'stage') {
+function setup(battleEntry: BattleEntry = 'stage', difficulty?: Difficulty) {
   const settings = createSettingsStore(createMemoryStorage());
   const layout = computeControlLayout(settings.get(), { top: 0, bottom: 0 });
   const view: ControlsView = {
@@ -43,6 +44,8 @@ function setup(battleEntry: BattleEntry = 'stage') {
     storage: createMemoryStorage(),
     run: { report: null },
     battleEntry,
+    ...(difficulty !== undefined ? { difficulty } : {}),
+    ...(battleEntry === 'boss' ? { challengeStage: '1' } : {}),
     input: { setControlsEnabled: vi.fn(), getControlsView: () => view },
   });
   scene.enter();
@@ -66,6 +69,26 @@ describe('battle boss practice', () => {
     expect(later.enemyCount).toBe(0);
     expect(later.bossPhase).toBe('phase1');
     expect(later.gameTime).toBeGreaterThan(stage1.boss.enterAt + stage1.boss.enterDuration);
+  });
+
+  it('普通 boss practice keeps Easy HP and two phases', () => {
+    const scene = setup('boss', 'easy');
+    const info = scene.getDebugInfo!();
+    const parts = prepareBossConfig(stage1.boss, 'easy').parts.reduce(
+      (sum, part) => sum + part.hp,
+      0
+    );
+    expect(info.bossPhase3).toBe(false);
+    expect(info.bossMaxHp).toBeCloseTo(parts);
+  });
+
+  it('困难 boss practice scales HP and arms phase 3', () => {
+    const scene = setup('boss', 'hard');
+    const info = scene.getDebugInfo!();
+    const prepared = prepareBossConfig(stage1.boss, 'hard');
+    const parts = prepared.parts.reduce((sum, part) => sum + part.hp, 0);
+    expect(info.bossPhase3).toBe(true);
+    expect(info.bossMaxHp).toBeCloseTo(parts + (prepared.phase3?.hp ?? 0));
   });
 
   it('holds fire during the fly-in, then shoots', () => {

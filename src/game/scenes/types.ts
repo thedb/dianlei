@@ -39,11 +39,18 @@ export interface SceneContext {
    */
   battleEntry: BattleEntry;
   /**
-   * Chosen on the difficulty overlay for this run, including retry.
-   * Omitted means Easy. Not persisted. Boss practice forces Easy.
+   * Chosen for this run, including retry. Omitted means Easy.
+   * Formal start writes 简单 / 中等 / 困难. Challenge Boss writes 普通 (easy)
+   * or 困难 (hard) and never medium. Not persisted.
    * The attract demo does not read it.
    */
   difficulty?: Difficulty;
+  /**
+   * Stage boss id from the challenge picker (`'1'` today). Formal starts and
+   * weapon test leave it unset. Battle still jumps to stage 1, the only table.
+   * Not persisted.
+   */
+  challengeStage?: string;
   /**
    * `attract` is the silent title demo. It runs the same battle scene, but
    * does not play SFX, publish a run, draw the HUD, or respawn after death.
