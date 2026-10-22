@@ -13,6 +13,7 @@ export * from './itemSprite';
 export * from './explosionSprite';
 export * from './buildingSprite';
 export * from './weaponFx';
+export * from './gunBarrel';
 
 import type { PlayerSpriteSheet } from './playerSprite';
 import type { EnemyAssets } from './enemySprite';

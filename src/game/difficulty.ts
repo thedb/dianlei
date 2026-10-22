@@ -25,7 +25,10 @@ export interface DifficultyProfile {
   hpScale: number;
   /** Multiplier on enemy bullet flight speed. */
   bulletSpeedScale: number;
-  /** Multiplier on enemy fire rate (fire clocks run this much faster). */
+  /**
+   * Multiplier on the enemy weapon clock (aircraft and ground units run their
+   * gun timers this much faster). Buildings and the boss keep authored timing.
+   */
   fireRateScale: number;
   /** Boss phases with these gates run (`BossPhaseDef.gate`). */
   bossGates: readonly string[];

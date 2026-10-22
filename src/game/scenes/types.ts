@@ -8,6 +8,7 @@ import type { SettingsStore, SettingsStorage } from '@/game/settings';
 import type { Difficulty } from '@/game/difficulty';
 import type { RunReport } from '@/game/systems/score';
 import type { Rng } from '@/engine/rng';
+import type { PlayMode } from '@/game/battle/playMode';
 
 export type SceneId = 'boot' | 'title' | 'battle' | 'result' | 'gameover';
 
@@ -48,7 +49,7 @@ export interface SceneContext {
   difficulty?: Difficulty;
   /**
    * Stage boss id from the challenge picker (`'1'` today). Formal starts and
-   * weapon test leave it unset. Battle still jumps to stage 1, the only table.
+   * weapon test leave it unset. Battle loads that stage from the registry.
    * Not persisted.
    */
   challengeStage?: string;
@@ -57,8 +58,9 @@ export interface SceneContext {
    * does not play SFX, publish a run, draw the HUD, or respawn after death.
    * `weaponTest` is the damage range: same player, loadout, and fire path,
    * no scroll and no spawns. Omitted on a real run (treated as `play`).
+   * What each mode turns on or off is the `PLAY_MODE_RULES` table.
    */
-  playMode?: 'play' | 'attract' | 'weaponTest';
+  playMode?: PlayMode;
   /**
    * Gameplay random source (spawn jitter, item drift, explosion offsets).
    * Omitted falls back to a clock-seeded generator per battle scene. Replay

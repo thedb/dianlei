@@ -383,6 +383,17 @@ function fuelDepot(dead: boolean): SpriteData {
 /** Turret pivot relative to the sprite center. The battle scene draws the barrels here. */
 export const SEA_GUN_PIVOT = { x: 0, y: -2 } as const;
 
+export interface BuildingBarrel {
+  style: 'single' | 'twin';
+  /** Pivot relative to the sprite center. */
+  pivot: { readonly x: number; readonly y: number };
+}
+
+/** Code-drawn gun barrels on intact buildings, rotated to `aimAngle`. */
+export const BUILDING_BARRELS: Partial<Record<BuildingType, BuildingBarrel>> = {
+  sea_gun: { style: 'twin', pivot: SEA_GUN_PIVOT },
+};
+
 const TURRET_PARTS: ReadonlySet<number> = new Set([OI, OM, OL, OD, DG, G, K]);
 
 function seaGun(dead: boolean): SpriteData {

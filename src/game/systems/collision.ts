@@ -162,13 +162,22 @@ export function checkItemPickup(
   return circleCollision(playerX, playerY, ITEM_PICKUP_RADIUS, itemX, itemY, 8);
 }
 
+const GRID_HALF = 2048;
+const GRID_SPAN = GRID_HALF * 2;
+const ascending = (a: number, b: number): number => a - b;
+
 /**
- * Spatial hash grid for broad-phase collision detection
- * Divides space into cells for faster collision queries
+ * Spatial hash grid for broad-phase collision detection.
+ * Each object goes into the one cell holding its point. Rect queries visit
+ * objects in insertion order, so a caller that inserts in pool order sees the
+ * same order as a full pool scan. Cell arrays are reused across frames.
  */
 export class SpatialGrid<T> {
   private readonly cellSize: number;
-  private readonly cells: Map<string, T[]> = new Map();
+  private readonly cells = new Map<number, number[]>();
+  private readonly used: number[][] = [];
+  private readonly items: T[] = [];
+  private readonly scratch: number[] = [];
 
   constructor(cellSize: number = 64) {
     this.cellSize = cellSize;
@@ -176,50 +185,65 @@ export class SpatialGrid<T> {
 
   /** Clear all cells */
   clear(): void {
-    this.cells.clear();
+    for (const cell of this.used) cell.length = 0;
+    this.used.length = 0;
+    this.items.length = 0;
   }
 
-  /** Get cell key for position */
-  private getCellKey(x: number, y: number): string {
-    const cx = Math.floor(x / this.cellSize);
-    const cy = Math.floor(y / this.cellSize);
-    return `${cx},${cy}`;
+  private cell(cx: number, cy: number): number[] | undefined {
+    return this.cells.get((cx + GRID_HALF) * GRID_SPAN + (cy + GRID_HALF));
   }
 
   /** Insert object at position */
   insert(obj: T, x: number, y: number): void {
-    const key = this.getCellKey(x, y);
-    const cell = this.cells.get(key);
-    if (cell) {
-      cell.push(obj);
-    } else {
-      this.cells.set(key, [obj]);
+    const slot = this.items.length;
+    this.items.push(obj);
+    const key =
+      (Math.floor(x / this.cellSize) + GRID_HALF) * GRID_SPAN +
+      (Math.floor(y / this.cellSize) + GRID_HALF);
+    let cell = this.cells.get(key);
+    if (!cell) {
+      cell = [];
+      this.cells.set(key, cell);
     }
+    if (cell.length === 0) this.used.push(cell);
+    cell.push(slot);
+  }
+
+  /**
+   * Visit every object whose cell overlaps the rectangle, in insertion order.
+   * The callback must not query or insert into this grid.
+   */
+  forEachInRect(x: number, y: number, w: number, h: number, visit: (obj: T) => void): void {
+    const slots = this.scratch;
+    slots.length = 0;
+    const minCX = Math.floor(x / this.cellSize);
+    const maxCX = Math.floor((x + w) / this.cellSize);
+    const minCY = Math.floor(y / this.cellSize);
+    const maxCY = Math.floor((y + h) / this.cellSize);
+    let cellsHit = 0;
+    for (let cx = minCX; cx <= maxCX; cx++) {
+      for (let cy = minCY; cy <= maxCY; cy++) {
+        const cell = this.cell(cx, cy);
+        if (!cell || cell.length === 0) continue;
+        cellsHit++;
+        for (let i = 0; i < cell.length; i++) slots.push(cell[i]!);
+      }
+    }
+    if (cellsHit > 1) slots.sort(ascending);
+    for (let i = 0; i < slots.length; i++) visit(this.items[slots[i]!]!);
   }
 
   /** Get all objects in cell containing position */
   getAtPosition(x: number, y: number): T[] {
-    const key = this.getCellKey(x, y);
-    return this.cells.get(key) ?? [];
+    const cell = this.cell(Math.floor(x / this.cellSize), Math.floor(y / this.cellSize));
+    return cell ? cell.map((slot) => this.items[slot]!) : [];
   }
 
   /** Get all objects in cells overlapping a rectangle */
   getInRect(x: number, y: number, w: number, h: number): T[] {
     const result: T[] = [];
-    const minCX = Math.floor(x / this.cellSize);
-    const maxCX = Math.floor((x + w) / this.cellSize);
-    const minCY = Math.floor(y / this.cellSize);
-    const maxCY = Math.floor((y + h) / this.cellSize);
-
-    for (let cx = minCX; cx <= maxCX; cx++) {
-      for (let cy = minCY; cy <= maxCY; cy++) {
-        const cell = this.cells.get(`${cx},${cy}`);
-        if (cell) {
-          result.push(...cell);
-        }
-      }
-    }
-
+    this.forEachInRect(x, y, w, h, (obj) => result.push(obj));
     return result;
   }
 
