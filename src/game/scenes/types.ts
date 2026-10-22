@@ -7,6 +7,7 @@ import type { InputState, InputHandler } from '@/engine/input';
 import type { SettingsStore, SettingsStorage } from '@/game/settings';
 import type { Difficulty } from '@/game/difficulty';
 import type { RunReport } from '@/game/systems/score';
+import type { Rng } from '@/engine/rng';
 
 export type SceneId = 'boot' | 'title' | 'battle' | 'result' | 'gameover';
 
@@ -58,4 +59,10 @@ export interface SceneContext {
    * no scroll and no spawns. Omitted on a real run (treated as `play`).
    */
   playMode?: 'play' | 'attract' | 'weaponTest';
+  /**
+   * Gameplay random source (spawn jitter, item drift, explosion offsets).
+   * Omitted falls back to a clock-seeded generator per battle scene. Replay
+   * tests inject a seeded one.
+   */
+  rng?: Rng;
 }

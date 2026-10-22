@@ -6,7 +6,7 @@ import type { H5Platform } from '@/platform/h5';
 import { createGameLoop, type GameLoop } from '@/engine/loop';
 import { createInputHandler, type InputHandler } from '@/engine/input';
 import { createRenderer, type Renderer } from '@/engine/renderer';
-import { createAudioSystem, type AudioSystem } from '@/engine/audio';
+import { clockSeed, createRng } from '@/engine/rng';
 import { createSceneManager, type SceneContext } from './scenes';
 import { createSettingsStore, type Settings } from './settings';
 import { getAudioSystem } from './systems/audio';
@@ -57,9 +57,6 @@ export function createGame(platform: H5Platform): Game {
   const inputHandler: InputHandler = createInputHandler(platform, settings, safeArea);
   inputHandler.setScaleFactor(1, 0, 0);
 
-  // Create audio system
-  const audioSystem: AudioSystem = createAudioSystem(platform);
-
   // Scene context. The FPS / debug overlay follows the persisted debug switch.
   const sceneContext: SceneContext = {
     showDebug: settings.get().debugMode,
@@ -68,6 +65,7 @@ export function createGame(platform: H5Platform): Game {
     settings,
     storage: platform,
     run: { report: null },
+    rng: createRng(clockSeed()),
     battleEntry: 'stage',
   };
   settings.subscribe((s) => {
@@ -123,9 +121,6 @@ export function createGame(platform: H5Platform): Game {
       sceneManager.getCurrentScene()?.onHide?.();
     }
   });
-
-  // Export audio system for future use
-  void audioSystem;
 
   return {
     start(): void {

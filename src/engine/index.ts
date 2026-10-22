@@ -13,4 +13,4 @@ export {
   type RendererOptions,
   type GameDebugInfo,
 } from './renderer';
-export { createAudioSystem, type AudioSystem } from './audio';
+export { createRng, clockSeed, type Rng } from './rng';
