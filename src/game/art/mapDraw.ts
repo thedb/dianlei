@@ -1,17 +1,16 @@
 /**
  * Background drawing for a track: baked map chunks, cloud shadows, the
- * warning cloud band, and the starfield.
+ * warning cloud band, and the starfield with its planet layer.
  *
  * Memory stays bounded on mobile: a map is never baked whole. Each chunk
  * (`MAP_CHUNK_ROWS` tile rows, one screen) is baked once into a 368×640
  * canvas and kept in a small LRU (`MAP_CHUNK_CACHE`). A frame blits the two
  * chunks on screen and bakes a few rows of the next one ahead of time
  * (`MAP_PREFETCH_ROWS_PER_FRAME`), so no single frame pays for a whole chunk.
+ * Cloud stamps and planets are baked once too (`clouds.ts`, `planets.ts`).
  */
 
 import {
-  CLOUD_SHADOW_ALPHA,
-  CLOUD_SHADOW_SCROLL,
   LOGICAL_H,
   MAP_CHUNK_CACHE,
   MAP_CHUNK_ROWS,
@@ -22,6 +21,7 @@ import {
 import { PALETTE } from '@/game/palette';
 import type { BackgroundTrack, TrackLayer } from '@/game/maps/track';
 import type { ScrollFrame } from '@/game/systems/background';
+import { createCloudSheet, drawCloudShadows, drawSkyClouds, type CloudSheet } from './clouds';
 import {
   createStripJob,
   finishStripJob,
@@ -29,6 +29,7 @@ import {
   type StripJob,
   type StripPixels,
 } from './mapRaster';
+import { createPlanetLayer, drawPlanets, type BakedPlanet } from './planets';
 import { buildStars, type Star } from './tiles';
 
 export type MapCanvas = OffscreenCanvas | HTMLCanvasElement;
@@ -144,10 +145,17 @@ export class ChunkCache {
 export interface BackgroundArt {
   chunks: ChunkCache;
   stars: Star[];
+  clouds: CloudSheet;
+  planets: BakedPlanet[];
 }
 
 export function createBackgroundArt(): BackgroundArt {
-  return { chunks: new ChunkCache(), stars: buildStars() };
+  return {
+    chunks: new ChunkCache(),
+    stars: buildStars(),
+    clouds: createCloudSheet(),
+    planets: createPlanetLayer(),
+  };
 }
 
 /** Chunks on screen for a layer-local scroll: `[first, last]`, clipped to the map. */
@@ -156,31 +164,6 @@ export function visibleChunks(layer: TrackLayer, localScroll: number): [number, 
   const last = Math.floor((localScroll + LOGICAL_H - 1) / CHUNK_PX);
   return [Math.max(0, first), Math.min(chunkCount(layer) - 1, last)];
 }
-
-interface Cloud {
-  x: number;
-  y: number;
-  rx: number;
-  ry: number;
-}
-
-const CLOUDS: readonly Cloud[] = [
-  { x: 50, y: 40, rx: 78, ry: 16 },
-  { x: 180, y: 120, rx: 96, ry: 18 },
-  { x: 300, y: 70, rx: 70, ry: 14 },
-  { x: 120, y: 220, rx: 110, ry: 20 },
-  { x: 250, y: 300, rx: 80, ry: 15 },
-  { x: 40, y: 380, rx: 90, ry: 16 },
-  { x: 200, y: 460, rx: 120, ry: 18 },
-  { x: 320, y: 520, rx: 64, ry: 14 },
-];
-
-const CLOUD_SHADOWS: readonly Cloud[] = [
-  { x: 70, y: 0, rx: 92, ry: 54 },
-  { x: 290, y: 380, rx: 110, ry: 62 },
-  { x: 170, y: 720, rx: 80, ry: 46 },
-];
-const CLOUD_SHADOW_SPAN = LOGICAL_H + 480;
 
 function drawLayer(
   ctx: CanvasRenderingContext2D,
@@ -200,17 +183,7 @@ function drawLayer(
   }
   if (prefetch) art.chunks.prefetch(layer, last + 1);
 
-  if (layer.map.cloudShadows) {
-    ctx.globalAlpha = alpha * CLOUD_SHADOW_ALPHA;
-    ctx.fillStyle = PALETTE[1];
-    const drift = scroll * CLOUD_SHADOW_SCROLL;
-    for (const c of CLOUD_SHADOWS) {
-      const y = ((c.y + drift) % CLOUD_SHADOW_SPAN) - 240;
-      ctx.beginPath();
-      ctx.ellipse(c.x, y, c.rx, c.ry, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
+  if (layer.map.cloudShadows) drawCloudShadows(ctx, art.clouds, scroll, alpha);
 }
 
 /**
@@ -231,20 +204,11 @@ export function drawBackground(
     drawLayer(ctx, art, layer, frame.scroll, alpha, alpha >= 0.99);
   });
 
-  if (fade.clouds > 0.01) {
-    const drift = time * 70;
-    ctx.globalAlpha = fade.clouds * 0.85;
-    ctx.fillStyle = 'rgba(210, 220, 230, 0.9)';
-    for (const cloud of CLOUDS) {
-      const y = ((cloud.y + drift) % (LOGICAL_H + 80)) - 40;
-      ctx.beginPath();
-      ctx.ellipse(cloud.x, y, cloud.rx, cloud.ry, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
+  if (fade.clouds > 0.01) drawSkyClouds(ctx, art.clouds, time, fade.clouds);
 
   if (fade.stars > 0.01) {
     ctx.globalAlpha = fade.stars;
+    drawPlanets(ctx, art.planets, frame.starScroll[0]);
     for (const star of art.stars) {
       const speedScroll = frame.starScroll[star.layer];
       const y = (star.y + speedScroll) % (LOGICAL_H + 40);

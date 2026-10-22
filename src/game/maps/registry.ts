@@ -50,7 +50,7 @@ export const RIVER_A: TileMapDef = {
   cloudShadows: true,
 };
 
-/** The post-WARNING starfield behind the boss. */
+/** The post-WARNING starfield behind the boss. Planets are drawn with the stars, not as tiles. */
 export const SPACE_A: StarfieldMapDef = {
   id: 'spaceA',
   label: '宇宙A',
