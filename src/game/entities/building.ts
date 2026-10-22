@@ -8,11 +8,13 @@
 import type { Poolable } from '@/engine/pool';
 import type { EquippedWeapon } from '@/game/systems/playerWeapons';
 import type { ItemType } from '@/game/entities/item';
-import type { BuildingPlacement, BuildingType, Fire, StageSection } from '@/game/levels/types';
+import type { BuildingPlacement, BuildingType, Fire } from '@/game/levels/types';
 import type { BulletSpawner } from '@/game/entities/enemyBullet';
 import { executeFirePattern, fireInterval } from '@/game/systems/danmaku';
 import { BUILDING_DROP_RULES, pickDrop, type DropRule } from '@/game/systems/dropRules';
-import { TileId, mapLayerSpecs, type TerrainGrids } from '@/game/art/tiles';
+import { footprintOn } from '@/game/maps/terrain';
+import { layerIndexOf, type BackgroundTrack } from '@/game/maps/track';
+import type { TileGrid } from '@/game/maps/types';
 import {
   LOGICAL_H,
   MAP_CROP_X,
@@ -27,6 +29,7 @@ import {
   BUILDING_TANK_CLEARANCE,
 } from '@/game/config';
 
+/** Terrain the whole footprint must stand on (`maps/terrain.ts`). */
 export type BuildingTerrain = 'land' | 'water';
 
 export interface BuildingSpec {
@@ -56,65 +59,49 @@ export function buildingSize(type: BuildingType): { width: number; height: numbe
 }
 
 /**
- * Tiles a land building may cover: open grass, scrub, trees, bare dirt and
- * concrete apron. Roads, water, edge rocks and every decor tile (barracks,
- * bunker, hangar, pads, radar) are excluded so decor stays untouched.
+ * A placement tied to the track it scrolls on: `layer` indexes
+ * `track.layers`, `origin` is that layer's world-scroll origin.
  */
-const LAND_TILES: ReadonlySet<TileId> = new Set<TileId>([
-  TileId.grass,
-  TileId.grassDark,
-  TileId.grassB,
-  TileId.bush,
-  TileId.tree,
-  TileId.treePine,
-  TileId.dirt,
-  TileId.concrete,
-  TileId.concreteDark,
-]);
-
-const WATER_TILES: ReadonlySet<TileId> = new Set<TileId>([
-  TileId.water,
-  TileId.waterB,
-  TileId.shallow,
-]);
-
-export function footprintTileOk(terrain: BuildingTerrain, id: TileId): boolean {
-  return terrain === 'land' ? LAND_TILES.has(id) : WATER_TILES.has(id);
+export interface PlacedBuilding extends BuildingPlacement {
+  layer: number;
+  origin: number;
 }
 
-/** True when every tile under the footprint suits the building's terrain. */
-export function validateBuildingFootprint(grids: TerrainGrids, p: BuildingPlacement): boolean {
+/** Resolve a stage's placements against its track. Throws on a map the track does not use. */
+export function placeBuildings(
+  placements: readonly BuildingPlacement[],
+  track: BackgroundTrack
+): PlacedBuilding[] {
+  return placements.map((p) => {
+    const layer = layerIndexOf(track, p.map);
+    if (layer < 0) throw new Error(`building ${p.id}: map ${p.map} is not on the track`);
+    return { ...p, layer, origin: track.layers[layer]!.origin };
+  });
+}
+
+/**
+ * True when every cell under the footprint has the building's terrain: land
+ * buildings on open land (no road, decor, or rock), sea buildings on water.
+ */
+export function validateBuildingFootprint(grid: TileGrid, p: BuildingPlacement): boolean {
   const spec = BUILDING_SPECS[p.type];
-  const grid = grids[p.section];
-  for (let r = p.row; r < p.row + spec.rows; r++) {
-    const line = grid[r];
-    if (!line) return false;
-    for (let c = p.col; c < p.col + spec.cols; c++) {
-      const id = line[c];
-      if (id === undefined || !footprintTileOk(spec.terrain, id)) return false;
-    }
-  }
-  return true;
-}
-
-function sectionOrigin(section: StageSection): number {
-  return mapLayerSpecs()[section].origin;
+  return footprintOn(grid, spec.terrain, p.row, p.col, spec.rows, spec.cols);
 }
 
 /** World scroll at which the footprint's bottom edge reaches the top of the screen. */
-export function buildingSpawnScroll(p: BuildingPlacement): number {
-  return sectionOrigin(p.section) + p.row * TILE_SIZE - LOGICAL_H;
+export function buildingSpawnScroll(p: PlacedBuilding): number {
+  return p.origin + p.row * TILE_SIZE - LOGICAL_H;
 }
 
 /** World scroll at which the footprint's top edge leaves the bottom of the screen. */
-export function buildingExitScroll(p: BuildingPlacement): number {
-  return sectionOrigin(p.section) + (p.row + BUILDING_SPECS[p.type].rows) * TILE_SIZE;
+export function buildingExitScroll(p: PlacedBuilding): number {
+  return p.origin + (p.row + BUILDING_SPECS[p.type].rows) * TILE_SIZE;
 }
 
 /** Footprint center on screen. Whole pixels, locked to the tile blit. */
-export function buildingCenter(p: BuildingPlacement, scroll: number): { x: number; y: number } {
+export function buildingCenter(p: PlacedBuilding, scroll: number): { x: number; y: number } {
   const { width, height } = buildingSize(p.type);
-  const local = Math.floor(scroll) - sectionOrigin(p.section);
+  const local = Math.floor(scroll) - p.origin;
   return {
     x: p.col * TILE_SIZE - MAP_CROP_X + width / 2,
     y: local + LOGICAL_H - p.row * TILE_SIZE - height / 2,
@@ -126,11 +113,11 @@ export function buildingCenter(p: BuildingPlacement, scroll: number): { x: numbe
  * screen. Nothing spawns from the boss warning on.
  */
 export class BuildingScheduler {
-  private readonly queue: BuildingPlacement[];
+  private readonly queue: PlacedBuilding[];
   private next = 0;
 
   constructor(
-    placements: readonly BuildingPlacement[],
+    placements: readonly PlacedBuilding[],
     private readonly warningAt: number
   ) {
     this.queue = [...placements].sort((a, b) => buildingSpawnScroll(a) - buildingSpawnScroll(b));
@@ -140,12 +127,12 @@ export class BuildingScheduler {
     this.next = 0;
   }
 
-  update(scroll: number, gameTime: number): BuildingPlacement[] {
+  update(scroll: number, gameTime: number): PlacedBuilding[] {
     if (gameTime >= this.warningAt) {
       this.next = this.queue.length;
       return [];
     }
-    const out: BuildingPlacement[] = [];
+    const out: PlacedBuilding[] = [];
     while (this.next < this.queue.length && buildingSpawnScroll(this.queue[this.next]!) <= scroll) {
       out.push(this.queue[this.next]!);
       this.next++;
@@ -155,9 +142,10 @@ export class BuildingScheduler {
 }
 
 export interface Building extends Poolable {
-  placement: BuildingPlacement;
+  placement: PlacedBuilding;
   type: BuildingType;
-  section: StageSection;
+  /** Track layer it rides; its alpha is the building's. */
+  layer: number;
   x: number;
   y: number;
   width: number;
@@ -174,12 +162,14 @@ export interface Building extends Poolable {
   bombHitIn: number;
 }
 
-const PLACEHOLDER: BuildingPlacement = {
+const PLACEHOLDER: PlacedBuilding = {
   id: '',
   type: 'pillbox',
-  section: 'ground',
+  map: '',
   row: 0,
   col: 0,
+  layer: 0,
+  origin: 0,
 };
 
 export function createBuilding(): Building {
@@ -187,7 +177,7 @@ export function createBuilding(): Building {
     active: false,
     placement: PLACEHOLDER,
     type: 'pillbox',
-    section: 'ground',
+    layer: 0,
     x: 0,
     y: 0,
     width: 32,
@@ -204,7 +194,7 @@ export function createBuilding(): Building {
     reset() {
       this.placement = PLACEHOLDER;
       this.type = 'pillbox';
-      this.section = 'ground';
+      this.layer = 0;
       this.x = 0;
       this.y = 0;
       this.width = 32;
@@ -223,7 +213,7 @@ export function createBuilding(): Building {
 
 export function spawnBuilding(
   b: Building,
-  p: BuildingPlacement,
+  p: PlacedBuilding,
   scroll: number,
   hp: number = BUILDING_HP
 ): void {
@@ -231,7 +221,7 @@ export function spawnBuilding(
   const { x, y } = buildingCenter(p, scroll);
   b.placement = p;
   b.type = p.type;
-  b.section = p.section;
+  b.layer = p.layer;
   b.x = x;
   b.y = y;
   b.width = width;

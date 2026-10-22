@@ -33,7 +33,7 @@ import {
   spawnHomingMissile,
   type HomingTarget,
 } from '@/game/entities/homingMissile';
-import { BuildingScheduler, createBuilding } from '@/game/entities/building';
+import { BuildingScheduler, createBuilding, placeBuildings } from '@/game/entities/building';
 import { SpatialGrid } from '@/game/systems/collision';
 import { WaveScheduler } from '@/game/systems/waveScheduler';
 import { getAudioSystem, type SfxType } from '@/game/systems/audio';
@@ -42,6 +42,7 @@ import type { BossRuntime } from '@/game/systems/boss';
 import type { RunReport } from '@/game/systems/score';
 import { createVictoryExit, type VictoryExit } from '@/game/systems/victoryExit';
 import { Scroller, backgroundFade, type ScrollFrame } from '@/game/systems/background';
+import { buildStageTrack, type BackgroundTrack } from '@/game/maps/track';
 import { createPauseMenu, type PauseMenu } from '@/game/ui/pauseMenu';
 import {
   createDamageMeter,
@@ -119,6 +120,8 @@ export interface Battle {
   bossCfg: BossDef;
   boss: BossRuntime | null;
   waves: WaveScheduler | null;
+  /** Maps under the battle: the stage's, or the 地图预览 target. */
+  track: BackgroundTrack;
   buildingScheduler: BuildingScheduler;
   scroller: Scroller;
   scrollFrame: ScrollFrame;
@@ -130,6 +133,7 @@ export interface Battle {
 
 export function createBattle(scene: SceneContext): Battle {
   const stage = getStage();
+  const track = buildStageTrack(stage);
   const fallbackRng = createRng(clockSeed());
   const audio = getAudioSystem();
   const rules = (): PlayModeRules => playModeRules(scene.playMode);
@@ -217,12 +221,16 @@ export function createBattle(scene: SceneContext): Battle {
     bossCfg: stage.boss,
     boss: null,
     waves: null,
-    buildingScheduler: new BuildingScheduler(stage.buildings, stage.warningAt),
-    scroller: new Scroller(stage.sections),
+    track,
+    buildingScheduler: new BuildingScheduler(
+      placeBuildings(stage.buildings, track),
+      stage.warningAt
+    ),
+    scroller: new Scroller(track),
     scrollFrame: {
       scroll: 0,
       tileDelta: 0,
-      fade: backgroundFade(0, stage.warningAt, stage.sections),
+      fade: backgroundFade(0, track),
       starScroll: [0, 0, 0],
     },
     gameTime: 0,

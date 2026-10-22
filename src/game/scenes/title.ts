@@ -4,6 +4,7 @@
  * Boot and any earlier loading frame do not create it.
  * A hidden top-right hot zone opens the debug panel; the demo keeps running.
  * 「挑战 Boss」 then pauses it for a stage list and a 普通 / 困难 step.
+ * 「地图预览」 pauses it for the map list.
  */
 
 import type { Scene, SceneContext } from './types';
@@ -29,6 +30,7 @@ import {
   createBossDifficultySelect,
   createBossStageSelect,
 } from '@/game/ui/bossChallenge';
+import { createMapPreviewSelect } from '@/game/ui/mapPreviewSelect';
 import { sharedTitleAttract, type TitleAttract } from './titleAttract';
 
 const ITEM_COUNT = 2;
@@ -52,6 +54,8 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
   /** Challenge Boss: stage list, then 普通 / 困难. Null while the debug panel is up. */
   let bossPick: 'stage' | 'difficulty' | null = null;
   let bossStageId = '1';
+  /** 地图预览 list is up (over the debug panel). */
+  let inMapPreview = false;
   let blinkTimer = 0;
   // Shared demo is created in enter. An injected demo stays stopped until then.
   let attract: TitleAttract | null = injected ?? null;
@@ -60,6 +64,7 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
   const difficultySelect = createDifficultySelect();
   const bossStageSelect = createBossStageSelect();
   const bossDifficultySelect = createBossDifficultySelect();
+  const mapPreviewSelect = createMapPreviewSelect();
   const hotZone = createDebugHotZone();
 
   function demo(): TitleAttract {
@@ -88,6 +93,7 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
       inDebug = false;
       inDifficulty = false;
       bossPick = null;
+      inMapPreview = false;
       blinkTimer = 0;
       hotZone.reset();
       ctx.input.setControlsEnabled(false);
@@ -102,9 +108,9 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
     update(dt: number, input: InputState) {
       blinkTimer = (blinkTimer + dt) % 1;
       const live = demo();
-      // Formal difficulty and both challenge-Boss steps pause the demo.
-      // The debug panel itself keeps it running.
-      if (!inDifficulty && bossPick === null) {
+      // Formal difficulty, both challenge-Boss steps, and the map list pause
+      // the demo. The debug panel itself keeps it running.
+      if (!inDifficulty && bossPick === null && !inMapPreview) {
         if (!live.isRunning()) live.start();
         live.update(dt);
       }
@@ -115,6 +121,18 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
       }
 
       if (inDebug) {
+        if (inMapPreview) {
+          const choice = mapPreviewSelect.update(input);
+          if (choice === 'back') inMapPreview = false;
+          else if (choice) {
+            ctx.playMode = 'mapPreview';
+            ctx.battleEntry = 'stage';
+            ctx.previewMap = choice;
+            delete ctx.challengeStage;
+            return 'battle';
+          }
+          return null;
+        }
         if (bossPick === 'difficulty') {
           const choice = bossDifficultySelect.update(input);
           if (choice === 'back') {
@@ -152,6 +170,9 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
         } else if (action === 'boss') {
           bossPick = 'stage';
           bossStageSelect.open();
+        } else if (action === 'mapPreview') {
+          inMapPreview = true;
+          mapPreviewSelect.open();
         } else if (action === 'weaponTest') {
           ctx.playMode = 'weaponTest';
           ctx.battleEntry = 'stage';
@@ -234,6 +255,8 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
         bossStageSelect.render(c);
       } else if (bossPick === 'difficulty') {
         bossDifficultySelect.render(c);
+      } else if (inMapPreview) {
+        mapPreviewSelect.render(c);
       } else if (inDebug) {
         debugPanel.render(c, ctx.settings.get().debugMode);
       } else if (inDifficulty) {

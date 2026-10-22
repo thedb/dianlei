@@ -8,7 +8,6 @@
  * geometry was wrong (V stagger, hover stopY, escort angles).
  */
 
-import { SECTION_BASE_END, SECTION_COAST_END, SECTION_GROUND_END } from '@/game/config';
 import { ORBITAL_BATTLESHIP } from './bosses/orbitalBattleship';
 import { stageEnemyCount, stageMvpEnemyCount, stageMvpWaves } from './stageStats';
 import type { SpawnGroup, StageData } from './types';
@@ -62,7 +61,8 @@ export const stage1: StageData = {
   stage: 1,
   scrollSpeed: 40,
   warningAt: 150,
-  sections: { ground: SECTION_GROUND_END, coast: SECTION_COAST_END, base: SECTION_BASE_END },
+  // 陆地A covers the whole run to the warning; the boss fight is over 宇宙A.
+  maps: { run: [{ map: 'landA', at: 0 }], boss: 'spaceA' },
 
   waves: [
     // ========================================================================
@@ -676,21 +676,22 @@ export const stage1: StageData = {
     },
   ],
 
-  // Wave table §4.7. Row = lowest footprint row, col = leftmost column, both in
-  // the section's own tile grid. Each one is fully in its section from the
-  // moment it enters the top until it leaves the bottom.
+  // Wave table §4.7. Row = lowest footprint row, col = leftmost column, in
+  // 陆地A's grid. Rows keep each building's old spawn scroll: ground rows are
+  // unchanged, coast rows were 122.5 rows in (rounded down, 8 px earlier),
+  // base rows 235 rows in. Sea guns sit on 陆地A's pond, stream, and lake.
   buildings: [
-    { id: 'B01', type: 'pillbox', section: 'ground', row: 60, col: 14 },
-    { id: 'B02', type: 'fuel_depot', section: 'ground', row: 69, col: 15 },
-    { id: 'B03', type: 'pillbox', section: 'ground', row: 88, col: 3 },
-    { id: 'B04', type: 'fuel_depot', section: 'ground', row: 101, col: 12 },
-    { id: 'B05', type: 'pillbox', section: 'ground', row: 112, col: 15 },
-    { id: 'B06', type: 'sea_gun', section: 'coast', row: 62, col: 5 },
-    { id: 'B07', type: 'sea_gun', section: 'coast', row: 89, col: 2 },
-    { id: 'B08', type: 'sea_gun', section: 'coast', row: 94, col: 18 },
-    { id: 'B09', type: 'radar_station', section: 'base', row: 56, col: 15 },
-    { id: 'B10', type: 'radar_station', section: 'base', row: 78, col: 3 },
-    { id: 'B11', type: 'radar_station', section: 'base', row: 104, col: 17 },
+    { id: 'B01', type: 'pillbox', map: 'landA', row: 60, col: 14 },
+    { id: 'B02', type: 'fuel_depot', map: 'landA', row: 69, col: 15 },
+    { id: 'B03', type: 'pillbox', map: 'landA', row: 88, col: 3 },
+    { id: 'B04', type: 'fuel_depot', map: 'landA', row: 101, col: 12 },
+    { id: 'B05', type: 'pillbox', map: 'landA', row: 112, col: 15 },
+    { id: 'B06', type: 'sea_gun', map: 'landA', row: 184, col: 5 },
+    { id: 'B07', type: 'sea_gun', map: 'landA', row: 211, col: 2 },
+    { id: 'B08', type: 'sea_gun', map: 'landA', row: 216, col: 18 },
+    { id: 'B09', type: 'radar_station', map: 'landA', row: 291, col: 15 },
+    { id: 'B10', type: 'radar_station', map: 'landA', row: 313, col: 3 },
+    { id: 'B11', type: 'radar_station', map: 'landA', row: 339, col: 17 },
   ],
 
   boss: ORBITAL_BATTLESHIP,

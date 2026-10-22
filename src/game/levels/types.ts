@@ -83,10 +83,25 @@ export interface SpawnGroup {
   fireStagger?: number;
 }
 
+/** Wave-table section a wave belongs to (wave table §1.1). A label only; scenery comes from `StageData.maps`. */
 export type StageSection = 'ground' | 'coast' | 'base';
 
-/** Game time (seconds) at which each section hands over to the next. `base` ends at the warning. */
-export type SectionEnds = Readonly<Record<StageSection, number>>;
+/** One map in a stage's pre-boss run. */
+export interface StageMapEntry {
+  /** Map registry id (`maps/registry.ts`). */
+  map: string;
+  /** Handover time (s): this map blends in around here. The first entry is at 0. */
+  at: number;
+}
+
+/**
+ * Which map assets a stage scrolls through and when. `run` plays from the
+ * start to the warning; `boss` is the starfield the warning fades into.
+ */
+export interface StageMaps {
+  run: readonly StageMapEntry[];
+  boss: string;
+}
 
 export interface Wave {
   id: string;
@@ -214,12 +229,13 @@ export type BuildingType = 'pillbox' | 'fuel_depot' | 'radar_station' | 'sea_gun
 /**
  * A destructible building fixed to the tile map (wave table §4.7).
  * `row` is the lowest map row of the footprint (rows grow toward the top of the
- * screen), `col` the leftmost column. Both index the section's own tile grid.
+ * screen), `col` the leftmost column. Both index the grid of `map`, which must
+ * be in the stage's `maps.run`.
  */
 export interface BuildingPlacement {
   id: string;
   type: BuildingType;
-  section: StageSection;
+  map: string;
   row: number;
   col: number;
 }
@@ -232,7 +248,7 @@ export interface StageData {
   stage: number;
   scrollSpeed: number;
   warningAt: number;
-  sections: SectionEnds;
+  maps: StageMaps;
   waves: Wave[];
   buildings: BuildingPlacement[];
   boss: BossDef;

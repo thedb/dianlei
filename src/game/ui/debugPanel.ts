@@ -16,7 +16,8 @@ import {
   type Rect,
 } from './widgets';
 
-export type DebugPanelAction = 'close' | 'boss' | 'weaponTest' | 'toggleDebug' | null;
+export type DebugPanelAction =
+  'close' | 'boss' | 'weaponTest' | 'mapPreview' | 'toggleDebug' | null;
 
 const BUTTON_W = 220;
 const BUTTON_H = 44;
@@ -35,13 +36,15 @@ export function debugPanelButton(index: number): Rect {
 export const DEBUG_BOSS_BUTTON = debugPanelButton(0);
 export const DEBUG_MODE_BUTTON = debugPanelButton(1);
 export const DEBUG_WEAPON_BUTTON = debugPanelButton(2);
-export const DEBUG_CLOSE_BUTTON = debugPanelButton(3);
+export const DEBUG_MAP_BUTTON = debugPanelButton(3);
+export const DEBUG_CLOSE_BUTTON = debugPanelButton(4);
 
-const PANEL: Rect = { x: 40, y: 168, w: LOGICAL_W - 80, h: 280 };
+const PANEL: Rect = { x: 40, y: 168, w: LOGICAL_W - 80, h: 336 };
 const BUTTONS = [
   DEBUG_BOSS_BUTTON,
   DEBUG_MODE_BUTTON,
   DEBUG_WEAPON_BUTTON,
+  DEBUG_MAP_BUTTON,
   DEBUG_CLOSE_BUTTON,
 ] as const;
 
@@ -49,6 +52,7 @@ function actionFor(index: number): DebugPanelAction {
   if (index === 0) return 'boss';
   if (index === 1) return 'toggleDebug';
   if (index === 2) return 'weaponTest';
+  if (index === 3) return 'mapPreview';
   return 'close';
 }
 
@@ -86,7 +90,13 @@ export function createDebugPanel(): DebugPanel {
       drawScrim(ctx, LOGICAL_W, LOGICAL_H);
       drawPanel(ctx, PANEL);
       drawText(ctx, '调试', LOGICAL_W / 2, PANEL.y + 28, 20, UI_COLORS.accent, 'center');
-      const labels = ['挑战 Boss', `调试模式 ${debugOn ? '开' : '关'}`, '武器测试', '关闭'];
+      const labels = [
+        '挑战 Boss',
+        `调试模式 ${debugOn ? '开' : '关'}`,
+        '武器测试',
+        '地图预览',
+        '关闭',
+      ];
       BUTTONS.forEach((rect, i) => {
         drawButton(ctx, rect, labels[i]!, i === selected);
       });

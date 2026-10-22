@@ -1,24 +1,14 @@
 /**
- * Stage 1 scrolling tiles. 16×16 palette art, three sections.
- * Map is 23 tiles (368px) wide and drawn at x = -4 so the 360-wide screen
+ * Map tileset: 16×16 palette art shared by every map asset (`src/game/maps/`).
+ * Maps are 23 tiles (368px) wide and drawn at x = -4 so the 360-wide screen
  * crops 4px from each side (design doc §3.7).
+ *
+ * Ids 0–32 are the original stage-1 tiles, still used by 海面A and 陆地B.
+ * Ids from 33 on are the 陆地A set.
  */
 
-import { COLOR, PALETTE } from '@/game/palette';
-import {
-  BG_SCROLL_SPEED,
-  LOGICAL_H,
-  MAP_CROP_X,
-  MAP_TILES_X,
-  SECTION_BASE_END,
-  SECTION_BLEND_LEAD,
-  SECTION_BLEND_TAIL,
-  SECTION_COAST_END,
-  SECTION_GROUND_END,
-  TILE_SIZE,
-  warningTileScrollPx,
-} from '@/game/config';
-import type { ScrollFrame } from '@/game/systems/background';
+import { COLOR } from '@/game/palette';
+import { LOGICAL_H, MAP_TILES_X, TILE_SIZE } from '@/game/config';
 import { createGrid, fillEllipse, fillPoly, fillRect, plot } from './pixelDraw';
 import type { SpriteData } from './types';
 
@@ -78,11 +68,37 @@ export const TileId = {
   hangarRoof: 30,
   radar: 31,
   waterB: 32,
+  meadow: 33,
+  meadowB: 34,
+  meadowDark: 35,
+  flowers: 36,
+  road: 37,
+  street: 38,
+  lake: 39,
+  bridge: 40,
+  cropGreen: 41,
+  cropWheat: 42,
+  cropPlowed: 43,
+  forest: 44,
+  oak: 45,
+  fir: 46,
+  boulder: 47,
+  shed: 48,
+  houseRedTL: 49,
+  houseRedTR: 50,
+  houseRedBL: 51,
+  houseRedBR: 52,
+  houseBrownTL: 53,
+  houseBrownTR: 54,
+  houseBrownBL: 55,
+  houseBrownBR: 56,
+  plaza: 57,
+  reeds: 58,
 } as const;
 
 export type TileId = (typeof TileId)[keyof typeof TileId];
 
-const TILE_COUNT = 33;
+export const TILE_COUNT = 59;
 
 function grassTile(base: number, light: number, dark: number, phase: number): SpriteData {
   const g = createGrid(TILE_SIZE, TILE_SIZE, base);
@@ -143,7 +159,7 @@ function dirtPath(vertical: boolean): SpriteData {
   return g;
 }
 
-function paintTiles(): SpriteData[] {
+function paintTiles(tall: Array<boolean[][] | null>): SpriteData[] {
   const tiles: SpriteData[] = Array.from({ length: TILE_COUNT }, () =>
     createGrid(TILE_SIZE, TILE_SIZE, GD)
   );
@@ -380,40 +396,328 @@ function paintTiles(): SpriteData[] {
   plot(radar, 7, 6, K);
   tiles[TileId.radar] = radar;
 
+  paintLandTiles(tiles, tall);
   return tiles;
 }
+
+// ============================================================================
+// 陆地A tiles (P12). Light from the top-left: highlights up-left, rims and
+// cast shadows down-right. Roads, water, the forest edge and field borders are
+// finished per neighbour by `art/mapRaster.ts`; the pixels here are the base.
+// ============================================================================
+
+const M = COLOR.TERRAIN_GRASS;
+const ML = COLOR.TERRAIN_LIGHT_GRASS;
+const MD = COLOR.TERRAIN_GREEN;
+const MF = COLOR.TERRAIN_FOREST;
+const MX = COLOR.TERRAIN_DARK_GREEN;
+const YE = COLOR.EXPLOSION_YELLOW;
+const WH = COLOR.WHITE;
+const RD = COLOR.ENEMY_DARK_RED;
+const RC = COLOR.ENEMY_CRIMSON;
+const RM = COLOR.ENEMY_RED;
+const RB = COLOR.ENEMY_BRIGHT_RED;
+const WALL = COLOR.PALE_GRAY;
+const WALL_D = COLOR.LIGHT_GRAY;
+const GR = COLOR.GRAY;
+const NV = COLOR.SHADOW;
+
+function meadowTile(base: number, light: number, dark: number, phase: number): SpriteData {
+  const g = createGrid(TILE_SIZE, TILE_SIZE, base);
+  const tufts: Array<[number, number]> = [
+    [2, 1],
+    [9, 2],
+    [13, 5],
+    [5, 6],
+    [11, 9],
+    [1, 10],
+    [7, 12],
+    [14, 13],
+  ];
+  for (const [x, y] of tufts) {
+    const xx = (x + phase * 7) % TILE_SIZE;
+    const yy = (y + phase * 5) % (TILE_SIZE - 1);
+    plot(g, xx, yy, light);
+    plot(g, xx + 1, yy, light);
+    plot(g, xx + 1, yy + 1, dark);
+  }
+  return g;
+}
+
+/** Tall pixels cast the top-left-light shadow onto their lower-right neighbours. */
+function tallMask(width: number, height: number): boolean[][] {
+  return Array.from({ length: height }, () => Array.from({ length: width }, () => false));
+}
+
+function overlay(
+  base: SpriteData,
+  mask: boolean[][],
+  paint: (g: SpriteData) => void
+): { pixels: SpriteData; tall: boolean[][] } {
+  const layer = createGrid(base[0]!.length, base.length, -1);
+  paint(layer);
+  const pixels = base.map((row) => [...row]);
+  for (let y = 0; y < layer.length; y++) {
+    for (let x = 0; x < layer[y]!.length; x++) {
+      const c = layer[y]![x]!;
+      if (c < 0) continue;
+      pixels[y]![x] = c;
+      mask[y]![x] = true;
+    }
+  }
+  return { pixels, tall: mask };
+}
+
+function oakTile(): { pixels: SpriteData; tall: boolean[][] } {
+  return overlay(meadowTile(M, ML, MD, 3), tallMask(TILE_SIZE, TILE_SIZE), (g) => {
+    fillEllipse(g, 8, 8, 6.6, 6.4, MX);
+    fillEllipse(g, 7.6, 7.6, 6, 5.8, MF);
+    fillEllipse(g, 6.4, 6.2, 3.8, 3.4, MD);
+    fillEllipse(g, 5.4, 5, 1.8, 1.4, M);
+    plot(g, 9, 4, MD);
+    plot(g, 11, 7, MD);
+    plot(g, 4, 9, MD);
+  });
+}
+
+function firTile(): { pixels: SpriteData; tall: boolean[][] } {
+  return overlay(meadowTile(M, ML, MD, 5), tallMask(TILE_SIZE, TILE_SIZE), (g) => {
+    fillEllipse(g, 8, 8, 5.6, 5.6, MX);
+    const spikes: Array<[number, number]> = [
+      [8, 1],
+      [14, 8],
+      [8, 14],
+      [1, 8],
+      [3, 3],
+      [13, 3],
+      [13, 13],
+      [3, 13],
+    ];
+    for (const [x, y] of spikes) plot(g, x, y, MX);
+    fillEllipse(g, 7.5, 7.5, 4.2, 4.2, MF);
+    fillEllipse(g, 7, 7, 2.6, 2.6, MD);
+    plot(g, 6, 6, M);
+    plot(g, 7, 6, M);
+  });
+}
+
+function boulderTile(): { pixels: SpriteData; tall: boolean[][] } {
+  return overlay(meadowTile(M, ML, MD, 6), tallMask(TILE_SIZE, TILE_SIZE), (g) => {
+    fillEllipse(g, 8.5, 9, 6, 5, AD);
+    fillEllipse(g, 8, 8.4, 5.6, 4.6, CD);
+    fillEllipse(g, 7, 7.4, 4, 3.2, GR);
+    fillEllipse(g, 6, 6.4, 2, 1.4, CL);
+    plot(g, 10, 9, COLOR.DARK_GRAY);
+    plot(g, 11, 10, COLOR.DARK_GRAY);
+    fillEllipse(g, 12.5, 12.5, 1.6, 1.2, CD);
+  });
+}
+
+function shedTile(): { pixels: SpriteData; tall: boolean[][] } {
+  return overlay(meadowTile(M, ML, MD, 7), tallMask(TILE_SIZE, TILE_SIZE), (g) => {
+    fillRect(g, 2, 3, 12, 10, DI);
+    fillRect(g, 3, 4, 10, 4, BL);
+    fillRect(g, 3, 8, 10, 4, BR);
+    fillRect(g, 3, 7, 10, 1, DI);
+    for (let x = 4; x < 13; x += 3) plot(g, x, 10, DI);
+  });
+}
+
+/** One 32×32 house: pitched roof (ridge left-right), wall strip, door, chimney. */
+function houseSprite(
+  light: number,
+  mid: number,
+  dark: number,
+  edge: number
+): {
+  pixels: SpriteData;
+  tall: boolean[][];
+} {
+  const S = TILE_SIZE * 2;
+  const base = createGrid(S, S, M);
+  for (let y = 0; y < S; y += TILE_SIZE) {
+    for (let x = 0; x < S; x += TILE_SIZE) {
+      const t = meadowTile(M, ML, MD, (x + y) / TILE_SIZE + 1);
+      for (let yy = 0; yy < TILE_SIZE; yy++) {
+        for (let xx = 0; xx < TILE_SIZE; xx++) base[y + yy]![x + xx] = t[yy]![xx]!;
+      }
+    }
+  }
+  return overlay(base, tallMask(S, S), (g) => {
+    fillRect(g, 3, 4, 26, 23, edge);
+    fillRect(g, 4, 5, 24, 8, light);
+    fillRect(g, 4, 13, 24, 8, mid);
+    fillRect(g, 4, 12, 24, 1, dark);
+    for (let y = 7; y < 12; y += 3) {
+      for (let x = 5 + (y % 2); x < 28; x += 4) plot(g, x, y, mid);
+    }
+    for (let y = 15; y < 21; y += 3) {
+      for (let x = 5 + (y % 2); x < 28; x += 4) plot(g, x, y, dark);
+    }
+    fillRect(g, 4, 21, 24, 5, WALL);
+    fillRect(g, 4, 25, 24, 1, WALL_D);
+    fillRect(g, 14, 22, 4, 4, DI);
+    fillRect(g, 7, 22, 3, 2, NV);
+    fillRect(g, 22, 22, 3, 2, NV);
+    fillRect(g, 21, 6, 3, 5, CD);
+    fillRect(g, 21, 6, 3, 1, CL);
+    plot(g, 4, 5, edge);
+    plot(g, 27, 5, edge);
+  });
+}
+
+function cropGreenTile(): SpriteData {
+  const g = createGrid(TILE_SIZE, TILE_SIZE, MD);
+  for (let y = 0; y < TILE_SIZE; y++) {
+    for (let x = 0; x < TILE_SIZE; x++) {
+      const lane = x % 4;
+      if (lane === 0) g[y]![x] = MF;
+      else if (lane === 1 && (y + x) % 3 !== 0) g[y]![x] = M;
+      else if (lane === 2 && y % 4 === 1) g[y]![x] = ML;
+    }
+  }
+  return g;
+}
+
+function cropWheatTile(): SpriteData {
+  const g = createGrid(TILE_SIZE, TILE_SIZE, SD);
+  for (let y = 0; y < TILE_SIZE; y++) {
+    for (let x = 0; x < TILE_SIZE; x++) {
+      if (x % 3 === 0) g[y]![x] = COLOR.GROUND_LIGHT_OLIVE;
+      else if ((x * 7 + y * 3) % 13 === 0) g[y]![x] = YE;
+    }
+  }
+  return g;
+}
+
+function cropPlowedTile(): SpriteData {
+  const g = createGrid(TILE_SIZE, TILE_SIZE, BR);
+  for (let y = 0; y < TILE_SIZE; y++) {
+    for (let x = 0; x < TILE_SIZE; x++) {
+      const band = y % 4;
+      if (band === 0) g[y]![x] = BL;
+      else if (band === 2) g[y]![x] = DI;
+      if ((x * 5 + y) % 17 === 0) g[y]![x] = MD;
+    }
+  }
+  return g;
+}
+
+function plazaTile(): SpriteData {
+  const g = createGrid(TILE_SIZE, TILE_SIZE, CC);
+  for (let y = 0; y < TILE_SIZE; y++) {
+    const shift = Math.floor(y / 4) % 2 === 0 ? 0 : 4;
+    for (let x = 0; x < TILE_SIZE; x++) {
+      if (y % 4 === 3 || (x + shift) % 8 === 7) g[y]![x] = CD;
+      else if (y % 4 === 0 && (x + shift) % 8 === 0) g[y]![x] = CL;
+    }
+  }
+  return g;
+}
+
+function reedsTile(): SpriteData {
+  const g = meadowTile(M, ML, MD, 4);
+  const stems: Array<[number, number]> = [
+    [2, 4],
+    [5, 9],
+    [8, 3],
+    [11, 10],
+    [13, 5],
+    [4, 13],
+    [10, 14],
+  ];
+  for (const [x, y] of stems) {
+    plot(g, x, y, SD);
+    plot(g, x, y + 1, COLOR.GROUND_MED_OLIVE);
+    plot(g, x + 1, y + 1, COLOR.GROUND_LIGHT_OLIVE);
+    plot(g, x, y + 2, MF);
+  }
+  return g;
+}
+
+function flowersTile(): SpriteData {
+  const g = meadowTile(M, ML, MD, 2);
+  const dots: Array<[number, number, number]> = [
+    [3, 2, YE],
+    [10, 4, WH],
+    [6, 8, YE],
+    [13, 9, WH],
+    [2, 12, WH],
+    [9, 13, YE],
+    [14, 1, YE],
+  ];
+  for (const [x, y, c] of dots) {
+    plot(g, x, y, c);
+    plot(g, x, y + 1, MD);
+  }
+  return g;
+}
+
+function paintLandTiles(tiles: SpriteData[], tall: Array<boolean[][] | null>): void {
+  tiles[TileId.meadow] = meadowTile(M, ML, MD, 0);
+  tiles[TileId.meadowB] = meadowTile(M, ML, MD, 1);
+  tiles[TileId.meadowDark] = meadowTile(MD, M, MF, 2);
+  tiles[TileId.flowers] = flowersTile();
+  tiles[TileId.reeds] = reedsTile();
+  tiles[TileId.plaza] = plazaTile();
+  tiles[TileId.cropGreen] = cropGreenTile();
+  tiles[TileId.cropWheat] = cropWheatTile();
+  tiles[TileId.cropPlowed] = cropPlowedTile();
+  // Finished per neighbour in the raster; these are their stand-alone looks.
+  tiles[TileId.road] = dirtPath(true);
+  tiles[TileId.street] = createGrid(TILE_SIZE, TILE_SIZE, AS);
+  tiles[TileId.lake] = createGrid(TILE_SIZE, TILE_SIZE, WO);
+  tiles[TileId.bridge] = dirtPath(true);
+  tiles[TileId.forest] = createGrid(TILE_SIZE, TILE_SIZE, MF);
+
+  const sprites: Array<[TileId, { pixels: SpriteData; tall: boolean[][] }]> = [
+    [TileId.oak, oakTile()],
+    [TileId.fir, firTile()],
+    [TileId.boulder, boulderTile()],
+    [TileId.shed, shedTile()],
+  ];
+  for (const [id, art] of sprites) {
+    tiles[id] = art.pixels;
+    tall[id] = art.tall;
+  }
+
+  const houses: Array<[readonly [TileId, TileId, TileId, TileId], ReturnType<typeof houseSprite>]> =
+    [
+      [HOUSE_RED, houseSprite(RB, RM, RC, RD)],
+      [HOUSE_BROWN, houseSprite(BL, BR, DI, COLOR.GROUND_DARK_OLIVE)],
+    ];
+  for (const [ids, art] of houses) {
+    // ids: screen top-left, top-right, bottom-left, bottom-right
+    ids.forEach((id, q) => {
+      const ox = (q % 2) * TILE_SIZE;
+      const oy = Math.floor(q / 2) * TILE_SIZE;
+      tiles[id] = art.pixels.slice(oy, oy + TILE_SIZE).map((row) => row.slice(ox, ox + TILE_SIZE));
+      tall[id] = art.tall.slice(oy, oy + TILE_SIZE).map((row) => row.slice(ox, ox + TILE_SIZE));
+    });
+  }
+}
+
+/** Screen quadrants of a 2×2 house: top-left, top-right, bottom-left, bottom-right. */
+export const HOUSE_RED = [
+  TileId.houseRedTL,
+  TileId.houseRedTR,
+  TileId.houseRedBL,
+  TileId.houseRedBR,
+] as const;
+export const HOUSE_BROWN = [
+  TileId.houseBrownTL,
+  TileId.houseBrownTR,
+  TileId.houseBrownBL,
+  TileId.houseBrownBR,
+] as const;
 
 function clampCol(n: number): number {
   return Math.max(1, Math.min(MAP_TILES_X - 2, n));
 }
 
-function roadCol(y: number): number {
-  const sway = Math.sin(y * 0.11) * 4.2 + Math.sin(y * 0.037 + 1.3) * 2.1;
-  return clampCol(Math.round(11 + sway));
-}
-
 function riverCenter(y: number): number {
   const sway = Math.sin(y * 0.07) * 5 + Math.sin(y * 0.021 + 2) * 2;
   return clampCol(Math.round(11 + sway));
-}
-
-function paintPath(grid: TileId[][]): void {
-  const rows = grid.length;
-  let prev = roadCol(0);
-  for (let y = 0; y < rows; y++) {
-    const col = roadCol(y);
-    const row = grid[y]!;
-    if (col === prev) {
-      row[col] = TileId.roadV;
-    } else {
-      const a = Math.min(prev, col);
-      const b = Math.max(prev, col);
-      for (let x = a; x <= b; x++) row[x] = TileId.roadH;
-      row[prev] = TileId.dirt;
-      row[col] = TileId.roadV;
-    }
-    prev = col;
-  }
 }
 
 function paintRiver(grid: TileId[][], y: number, x0: number, x1: number): void {
@@ -454,50 +758,11 @@ function stampFort(grid: TileId[][], cx: number, cy: number): void {
   }
 }
 
-/** Ground: forest, a winding dirt track, hut camps, edge peaks. */
-export function buildGroundMap(rows: number): TileId[][] {
-  const grid = emptyGrid(rows);
-  for (let y = 0; y < rows; y++) {
-    for (let x = 0; x < MAP_TILES_X; x++) {
-      const h = hash(x, y);
-      const clump = hash(x >> 1, y >> 1);
-      const edge = x <= 1 || x >= MAP_TILES_X - 2;
-      let id: TileId = h % 6 === 0 ? TileId.grassB : h % 8 === 0 ? TileId.grassDark : TileId.grass;
-      if (edge && h % 4 !== 0) id = h % 3 === 0 ? TileId.rock : TileId.mountain;
-      else if (clump % 4 === 0) id = h % 5 === 0 ? TileId.treePine : TileId.tree;
-      else if (h % 17 === 0) id = TileId.bush;
-      else if (h % 23 === 0) id = TileId.rock;
-      grid[y]![x] = id;
-    }
-  }
-  paintPath(grid);
-  for (let i = 0; i < rows; i += 28) {
-    const y = i + 14;
-    if (y + 3 >= rows) break;
-    const road = roadCol(y);
-    const x = road < 11 ? Math.min(MAP_TILES_X - 6, road + 5) : Math.max(1, road - 8);
-    stamp(grid, x, y, 5, 4, TileId.grass);
-    stamp(grid, x, y, 4, 3, TileId.barracks);
-    stamp(grid, x + (road < 11 ? -2 : 4), y + 1, 2, 2, TileId.bunker);
-  }
-  const blendRows = 8;
-  for (let y = Math.max(0, rows - blendRows); y < rows; y++) {
-    for (let x = 0; x < MAP_TILES_X; x++) {
-      const id = grid[y]![x];
-      if (id === TileId.roadV || id === TileId.roadH || id === TileId.roadX || id === TileId.dirt) {
-        continue;
-      }
-      if ((x + y) % 2 === 0) grid[y]![x] = TileId.sand;
-    }
-  }
-  return grid;
-}
-
 function fortBand(y: number): boolean {
   return [36, 96, 150].some((c) => Math.abs(y - c) <= 7);
 }
 
-/** Coast: a winding river, bridges, and stone forts on the islands it splits around. */
+/** 海面A (old stage-1 coast): a winding river, bridges, and stone forts on the islands it splits around. */
 export function buildCoastMap(rows: number): TileId[][] {
   const grid = emptyGrid(rows);
   for (let y = 0; y < rows; y++) {
@@ -565,7 +830,7 @@ export function buildCoastMap(rows: number): TileId[][] {
   return grid;
 }
 
-/** Base: perimeter wall, runway, hangar rows, pads, then mountains outside the fence. */
+/** 陆地B (old stage-1 base): perimeter wall, runway, hangar rows, pads, then mountains outside the fence. */
 export function buildBaseMap(rows: number): TileId[][] {
   const grid = emptyGrid(rows);
   for (let y = 0; y < rows; y++) {
@@ -613,54 +878,29 @@ export function buildBaseMap(rows: number): TileId[][] {
 }
 
 let tilePixels: SpriteData[] | null = null;
+let tileTall: Array<boolean[][] | null> | null = null;
 
 export function getTilePixels(): SpriteData[] {
-  if (!tilePixels) tilePixels = paintTiles();
+  if (!tilePixels) {
+    tileTall = Array.from({ length: TILE_COUNT }, () => null);
+    tilePixels = paintTiles(tileTall);
+  }
   return tilePixels;
 }
 
-function hash(x: number, y: number): number {
+/**
+ * Per-tile mask of pixels that stand up off the ground (canopies, roofs,
+ * boulders). The raster casts their shadow down-right. Null = flat tile.
+ */
+export function getTileTallMasks(): ReadonlyArray<boolean[][] | null> {
+  getTilePixels();
+  return tileTall!;
+}
+
+export function hash(x: number, y: number): number {
   let n = x * 374761393 + y * 668265263;
   n = Math.imul(n ^ (n >>> 13), 1274126177);
   return (n ^ (n >>> 16)) >>> 0;
-}
-
-export interface MapLayerSpec {
-  id: 'ground' | 'coast' | 'base';
-  /**
-   * World scroll (px) at which this map's logical y=0 sits on the bottom of the screen.
-   * Later rows are ahead of the ship and enter from the top.
-   */
-  origin: number;
-  rows: number;
-}
-
-/** How tall each section bitmap is, including the warning overrun on the base. */
-export function mapLayerSpecs(): Record<'ground' | 'coast' | 'base', MapLayerSpec> {
-  const groundEnd = SECTION_GROUND_END + SECTION_BLEND_TAIL;
-  const coastStart = SECTION_GROUND_END - SECTION_BLEND_LEAD;
-  const coastEnd = SECTION_COAST_END + SECTION_BLEND_TAIL;
-  const baseStart = SECTION_COAST_END - SECTION_BLEND_LEAD;
-  const rowsFor = (startSec: number, endSec: number, extraPx: number) =>
-    Math.ceil(((endSec - startSec) * BG_SCROLL_SPEED + LOGICAL_H + extraPx) / TILE_SIZE);
-
-  return {
-    ground: {
-      id: 'ground',
-      origin: 0,
-      rows: rowsFor(0, groundEnd, 0),
-    },
-    coast: {
-      id: 'coast',
-      origin: coastStart * BG_SCROLL_SPEED,
-      rows: rowsFor(coastStart, coastEnd, 0),
-    },
-    base: {
-      id: 'base',
-      origin: baseStart * BG_SCROLL_SPEED,
-      rows: rowsFor(baseStart, SECTION_BASE_END, warningTileScrollPx()),
-    },
-  };
 }
 
 function stamp(grid: TileId[][], x: number, y: number, w: number, h: number, id: TileId): void {
@@ -676,11 +916,11 @@ function stamp(grid: TileId[][], x: number, y: number, w: number, h: number, id:
   }
 }
 
-function emptyGrid(rows: number): TileId[][] {
+export function emptyGrid(rows: number, fill: TileId = TileId.grass): TileId[][] {
   const grid: TileId[][] = [];
   for (let y = 0; y < rows; y++) {
     const row: TileId[] = [];
-    for (let x = 0; x < MAP_TILES_X; x++) row.push(TileId.grass);
+    for (let x = 0; x < MAP_TILES_X; x++) row.push(fill);
     grid.push(row);
   }
   return grid;
@@ -709,264 +949,4 @@ export function buildStars(count = 56): Star[] {
     });
   }
   return stars;
-}
-
-export interface BackgroundMaps {
-  ground: OffscreenCanvas | HTMLCanvasElement;
-  coast: OffscreenCanvas | HTMLCanvasElement;
-  base: OffscreenCanvas | HTMLCanvasElement;
-  grids: {
-    ground: TileId[][];
-    coast: TileId[][];
-    base: TileId[][];
-  };
-  stars: Star[];
-}
-
-function createCanvas(width: number, height: number): OffscreenCanvas | HTMLCanvasElement {
-  if (typeof OffscreenCanvas !== 'undefined') {
-    return new OffscreenCanvas(width, height);
-  }
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  return canvas;
-}
-
-const RGB = PALETTE.map((hex) => {
-  const n = parseInt(hex.slice(1), 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255] as const;
-});
-
-export function renderTileGrid(grid: TileId[][]): OffscreenCanvas | HTMLCanvasElement {
-  const tiles = getTilePixels();
-  const rows = grid.length;
-  const cols = MAP_TILES_X;
-  const w = cols * TILE_SIZE;
-  const h = rows * TILE_SIZE;
-  const canvas = createCanvas(w, h);
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Failed to get 2D context for tile map');
-  const image = ctx.createImageData(w, h);
-  const px = image.data;
-  for (let ty = 0; ty < rows; ty++) {
-    const row = grid[ty]!;
-    for (let tx = 0; tx < cols; tx++) {
-      const tile = tiles[row[tx]!]!;
-      const originX = tx * TILE_SIZE;
-      // Logical row 0 is the start of the section and is stored at the bottom of the
-      // bitmap, each tile still upright. Blitting toward y=0 then brings new terrain
-      // in from the top of the screen and slides the field downward.
-      const originY = (rows - 1 - ty) * TILE_SIZE;
-      for (let y = 0; y < TILE_SIZE; y++) {
-        const src = tile[y]!;
-        const diBase = ((originY + y) * w + originX) * 4;
-        for (let x = 0; x < TILE_SIZE; x++) {
-          const rgb = RGB[src[x]!]!;
-          const di = diBase + x * 4;
-          px[di] = rgb[0];
-          px[di + 1] = rgb[1];
-          px[di + 2] = rgb[2];
-          px[di + 3] = 255;
-        }
-      }
-    }
-  }
-  ctx.putImageData(image, 0, 0);
-  return canvas;
-}
-
-let cachedMaps: BackgroundMaps | null = null;
-let cachedGrids: TerrainGrids | null = null;
-
-/** Stage 1 tile grids without rendering. Same objects the background bitmaps are drawn from. */
-export function getStageGrids(): TerrainGrids {
-  if (cachedGrids) return cachedGrids;
-  const specs = mapLayerSpecs();
-  cachedGrids = {
-    ground: buildGroundMap(specs.ground.rows),
-    coast: buildCoastMap(specs.coast.rows),
-    base: buildBaseMap(specs.base.rows),
-  };
-  return cachedGrids;
-}
-
-export function createBackgroundMaps(): BackgroundMaps {
-  if (cachedMaps) return cachedMaps;
-  const grids = getStageGrids();
-  cachedMaps = {
-    ground: renderTileGrid(grids.ground),
-    coast: renderTileGrid(grids.coast),
-    base: renderTileGrid(grids.base),
-    grids,
-    stars: buildStars(),
-  };
-  return cachedMaps;
-}
-
-interface Cloud {
-  x: number;
-  y: number;
-  rx: number;
-  ry: number;
-}
-
-const CLOUDS: readonly Cloud[] = [
-  { x: 50, y: 40, rx: 78, ry: 16 },
-  { x: 180, y: 120, rx: 96, ry: 18 },
-  { x: 300, y: 70, rx: 70, ry: 14 },
-  { x: 120, y: 220, rx: 110, ry: 20 },
-  { x: 250, y: 300, rx: 80, ry: 15 },
-  { x: 40, y: 380, rx: 90, ry: 16 },
-  { x: 200, y: 460, rx: 120, ry: 18 },
-  { x: 320, y: 520, rx: 64, ry: 14 },
-];
-
-/**
- * Screen Y of an upright logical map pixel.
- * `scroll` 0 puts logical y=0 at the bottom of the view. Increasing `scroll`
- * moves that pixel downward; pixels ahead of it enter from the top.
- */
-export function mapPixelScreenY(logicalY: number, scroll: number, viewH = LOGICAL_H): number {
-  const row = Math.floor(logicalY / TILE_SIZE);
-  const inTile = logicalY - row * TILE_SIZE;
-  return scroll + viewH - (row + 1) * TILE_SIZE + inTile;
-}
-
-/** Inverse of `mapPixelScreenY` for a layer-local scroll (world scroll minus the layer origin). */
-export function logicalMapY(screenY: number, localScroll: number, viewH = LOGICAL_H): number {
-  const rel = localScroll + viewH - screenY;
-  if (rel <= 0) return -1;
-  const row = Math.ceil(rel / TILE_SIZE) - 1;
-  const inTile = (row + 1) * TILE_SIZE - rel;
-  return row * TILE_SIZE + inTile;
-}
-
-export function logicalMapX(screenX: number): number {
-  return screenX + MAP_CROP_X;
-}
-
-/**
- * Source Y into a row-reversed section bitmap.
- * Logical scroll 0 shows the start of the section (bottom of the bitmap).
- * Larger scroll moves the window up the bitmap, which slides the field down the screen.
- */
-export function scrollSourceY(mapHeight: number, logicalScroll: number, viewH = LOGICAL_H): number {
-  const maxY = Math.max(0, mapHeight - viewH);
-  const sy = maxY - Math.floor(logicalScroll);
-  if (sy < 0) return 0;
-  if (sy > maxY) return maxY;
-  return sy;
-}
-
-const WATER_TILES: ReadonlySet<TileId> = new Set([TileId.water, TileId.waterB, TileId.shallow]);
-
-export function isWaterTile(id: TileId): boolean {
-  return WATER_TILES.has(id);
-}
-
-export interface TerrainGrids {
-  ground: TileId[][];
-  coast: TileId[][];
-  base: TileId[][];
-}
-
-/** Later section wins a crossfade tie so coast water applies as soon as the river is visible. */
-export function dominantTerrain(fade: {
-  ground: number;
-  coast: number;
-  base: number;
-}): 'ground' | 'coast' | 'base' | null {
-  let best: 'ground' | 'coast' | 'base' | null = null;
-  let bestA = 0.05;
-  const layers = [
-    ['ground', fade.ground],
-    ['coast', fade.coast],
-    ['base', fade.base],
-  ] as const;
-  for (const [id, alpha] of layers) {
-    if (alpha >= bestA) {
-      best = id;
-      bestA = alpha;
-    }
-  }
-  return best;
-}
-
-/** True when a tank center sits on river / shallow water. Off-map is land (not blocked). */
-export function terrainBlocksTank(
-  grids: TerrainGrids,
-  scroll: number,
-  fade: { ground: number; coast: number; base: number },
-  x: number,
-  y: number
-): boolean {
-  const layer = dominantTerrain(fade);
-  if (!layer) return false;
-  const spec = mapLayerSpecs()[layer];
-  const mapY = logicalMapY(y, scroll - spec.origin);
-  const mapX = logicalMapX(x);
-  if (mapY < 0) return false;
-  const col = Math.floor(mapX / TILE_SIZE);
-  const row = Math.floor(mapY / TILE_SIZE);
-  const grid = grids[layer];
-  const line = grid[row];
-  if (!line || col < 0 || col >= line.length) return false;
-  return isWaterTile(line[col]!);
-}
-
-function blitMap(
-  ctx: CanvasRenderingContext2D,
-  map: OffscreenCanvas | HTMLCanvasElement,
-  logicalScroll: number,
-  alpha: number
-): void {
-  if (alpha <= 0.01) return;
-  const sy = scrollSourceY(map.height, logicalScroll);
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  ctx.drawImage(map, 0, sy, map.width, LOGICAL_H, -MAP_CROP_X, 0, map.width, LOGICAL_H);
-  ctx.restore();
-}
-
-/**
- * Draw the scrolling field, then clouds and stars when the warning fade asks for them.
- * `frame.scroll` is the world scroll in pixels.
- */
-export function drawBackground(
-  ctx: CanvasRenderingContext2D,
-  maps: BackgroundMaps,
-  frame: ScrollFrame,
-  time: number
-): void {
-  const specs = mapLayerSpecs();
-  const { fade } = frame;
-  blitMap(ctx, maps.ground, frame.scroll - specs.ground.origin, fade.ground);
-  blitMap(ctx, maps.coast, frame.scroll - specs.coast.origin, fade.coast);
-  blitMap(ctx, maps.base, frame.scroll - specs.base.origin, fade.base);
-
-  if (fade.clouds > 0.01) {
-    const drift = time * 70;
-    ctx.globalAlpha = fade.clouds * 0.85;
-    ctx.fillStyle = 'rgba(210, 220, 230, 0.9)';
-    for (const cloud of CLOUDS) {
-      const y = ((cloud.y + drift) % (LOGICAL_H + 80)) - 40;
-      ctx.beginPath();
-      ctx.ellipse(cloud.x, y, cloud.rx, cloud.ry, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  if (fade.stars > 0.01) {
-    ctx.globalAlpha = fade.stars;
-    for (const star of maps.stars) {
-      const speedScroll = frame.starScroll[star.layer];
-      const y = (star.y + speedScroll) % (LOGICAL_H + 40);
-      const size = star.layer === 2 ? 2 : 1;
-      ctx.fillStyle = star.layer === 0 ? 'rgba(180, 190, 210, 0.7)' : 'rgba(245, 248, 255, 0.95)';
-      ctx.fillRect(Math.floor(star.x), Math.floor(y), size, size);
-    }
-  }
-
-  ctx.globalAlpha = 1;
 }

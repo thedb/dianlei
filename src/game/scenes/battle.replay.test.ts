@@ -21,8 +21,7 @@ import { createBattleScene, type BattleScene } from './battle';
 
 vi.mock('@/game/art', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/game/art')>();
-  const tiles = await import('@/game/art/tiles');
-  return { ...actual, createGameAssets: () => ({ background: { grids: tiles.getStageGrids() } }) };
+  return { ...actual, createGameAssets: () => ({ background: {} }) };
 });
 
 vi.mock('@/game/systems/audio', () => {
@@ -353,31 +352,31 @@ const EXPECTED: Record<string, ReplayResult> = {
       'clear@12787',
       'done@12957',
     ],
-    digest: 2624522900,
+    digest: 2911893839,
   },
   'stage 1 medium, full clear': {
     outcome: 'result',
-    frames: 12069,
-    score: 89260,
+    frames: 12060,
+    score: 88560,
     lives: 3,
     report: {
       outcome: 'clear',
-      baseScore: 89260,
+      baseScore: 88560,
       kills: 130,
       spawned: 148,
       deaths: 0,
-      time: 198.36666666671667,
+      time: 198.20000000004987,
     },
     bossPhases: [
       'enter@9299',
       'phase1@9479',
-      'transition@10191',
-      'phase2@10282',
-      'death@11750',
-      'clear@11901',
-      'done@12069',
+      'transition@10187',
+      'phase2@10278',
+      'death@11740',
+      'clear@11891',
+      'done@12060',
     ],
-    digest: 3384538761,
+    digest: 3486602057,
   },
   'stage 1 hard, full clear with phase 3': {
     outcome: 'result',
@@ -403,39 +402,39 @@ const EXPECTED: Record<string, ReplayResult> = {
       'clear@13722',
       'done@13885',
     ],
-    digest: 1523737388,
+    digest: 4037038383,
   },
   'stage 1 easy, demo pilot game over': {
     outcome: 'gameover',
-    frames: 4679,
-    score: 9600,
+    frames: 4956,
+    score: 11600,
     lives: 0,
     report: {
       outcome: 'gameover',
-      baseScore: 9600,
-      kills: 34,
-      spawned: 67,
+      baseScore: 11600,
+      kills: 35,
+      spawned: 73,
       deaths: 3,
-      time: 77.99999999999686,
+      time: 82.61666666666326,
     },
     bossPhases: [],
-    digest: 3797780913,
+    digest: 1908201645,
   },
   'stage 1 hard, demo pilot game over': {
     outcome: 'gameover',
-    frames: 5016,
-    score: 4700,
+    frames: 5029,
+    score: 6600,
     lives: 0,
     report: {
       outcome: 'gameover',
-      baseScore: 4700,
+      baseScore: 6600,
       kills: 12,
       spawned: 73,
       deaths: 3,
-      time: 83.6166666666632,
+      time: 83.83333333332986,
     },
     bossPhases: [],
-    digest: 970315678,
+    digest: 2281493793,
   },
   'boss practice 普通': {
     outcome: 'result',

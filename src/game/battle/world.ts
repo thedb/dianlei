@@ -12,8 +12,7 @@ import {
   WARNING_BANNER_DELAY,
 } from '@/game/config';
 import { scaleHp } from '@/game/difficulty';
-import { getStageGrids } from '@/game/art/tiles';
-import { terrainBlocksTank } from '@/game/art';
+import { terrainBlocksTank } from '@/game/maps/track';
 import { ENEMY_STATS, spawnEnemy, updateEnemy } from '@/game/entities/enemy';
 import { updateEnemyBullet } from '@/game/entities/enemyBullet';
 import { updateItem } from '@/game/entities/item';
@@ -32,7 +31,7 @@ import { clearFx, resetShake } from './fx';
 import { collectHomingTargets } from './combat';
 import { spawnBoss } from './bossFight';
 
-/** Stage clock landmarks for this frame. All false in a mode with no world. */
+/** Stage clock landmarks for this frame. All false in a mode with no spawns. */
 export interface StageWindow {
   /** Waves stop spawning and ground guns stop firing. */
   pastWarning: boolean;
@@ -41,15 +40,16 @@ export interface StageWindow {
 }
 
 export function stageWindow(b: Battle): StageWindow {
-  const pastWarning = b.rules().world && b.gameTime >= b.stage.warningAt;
+  const pastWarning = b.rules().spawns && b.gameTime >= b.stage.warningAt;
   return { pastWarning, warningWindow: pastWarning && b.gameTime < b.stage.boss.enterAt };
 }
 
-/** Map scroll and the warning cue. Skipped with no world. */
+/** Map scroll, and the warning cue when the mode spawns the stage. */
 export function stepScroll(b: Battle, dt: number): void {
   const { stage } = b;
-  b.scrollFrame = b.scroller.update(dt, b.gameTime, stage.warningAt);
+  b.scrollFrame = b.scroller.update(dt, b.gameTime);
   if (
+    b.rules().spawns &&
     !b.warningPlayed &&
     b.gameTime >= stage.warningAt + WARNING_BANNER_DELAY &&
     b.gameTime < stage.boss.enterAt
@@ -101,7 +101,8 @@ export function stepSpawns(b: Battle, dt: number, pastWarning: boolean): void {
 
   // Buildings ride the tile map. Footprints are checked against the real grid on spawn.
   for (const placement of b.buildingScheduler.update(b.scrollFrame.scroll, b.gameTime)) {
-    if (!validateBuildingFootprint(getStageGrids(), placement)) continue;
+    const layer = b.track.layers[placement.layer];
+    if (!layer || !validateBuildingFootprint(layer.grid, placement)) continue;
     spawnBuilding(
       b.buildings.acquire(),
       placement,
@@ -120,14 +121,15 @@ export function stepSpawns(b: Battle, dt: number, pastWarning: boolean): void {
       b.spawner,
       !pastWarning
     );
-    if (gone || b.scrollFrame.fade[building.section] <= 0.01) b.buildings.release(building);
+    if (gone || (b.scrollFrame.fade.layers[building.layer] ?? 0) <= 0.01) {
+      b.buildings.release(building);
+    }
   });
 }
 
 function blocksTank(b: Battle, x: number, y: number): boolean {
-  const grids = b.assets?.background?.grids;
   const frame = b.scrollFrame;
-  if (grids && terrainBlocksTank(grids, frame.scroll, frame.fade, x, y)) return true;
+  if (terrainBlocksTank(b.track, frame.scroll, frame.fade.layers, x, y)) return true;
   let blocked = false;
   b.buildings.forEach((building) => {
     if (!blocked && buildingBlocksTank(building, x, y)) blocked = true;
@@ -192,7 +194,7 @@ export function jumpTo(b: Battle, time: number): void {
   b.scrollFrame = {
     ...b.scrollFrame,
     tileDelta: 0,
-    fade: backgroundFade(b.gameTime, stage.warningAt, stage.sections),
+    fade: backgroundFade(b.gameTime, b.track),
   };
   b.finishedAt = null;
   resetShake(b.fx);

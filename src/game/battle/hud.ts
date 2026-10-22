@@ -99,6 +99,22 @@ function drawStageHud(renderer: Renderer, b: Battle, assets: GameAssets): void {
   }
 }
 
+function clock(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
+}
+
+/** 地图预览: which track is playing and how far along it is. */
+function drawPreviewHud(renderer: Renderer, b: Battle): void {
+  const { track, gameTime } = b;
+  renderer.fillText(`地图预览  ${track.label}`, 8, 4, '#fff', 10);
+  const end = track.endAt ?? 0;
+  renderer.fillText(`${clock(gameTime)} / ${clock(end)}`, LOGICAL_W - 72, 4, '#9cf', 10);
+  const fill = end > 0 ? Math.min(1, gameTime / end) : 0;
+  renderer.fillRect(8, 18, LOGICAL_W - 16, 3, 'rgba(255, 255, 255, 0.2)');
+  renderer.fillRect(8, 18, (LOGICAL_W - 16) * fill, 3, PALETTE[COLOR.PLAYER_CYAN]);
+}
+
 /** Everything above the field. The silent title demo draws none of it. */
 export function drawOverlay(renderer: Renderer, b: Battle, assets: GameAssets): void {
   const hud = b.rules().hud;
@@ -112,6 +128,7 @@ export function drawOverlay(renderer: Renderer, b: Battle, assets: GameAssets): 
   }
 
   if (hud === 'range') drawRangeHud(ctx, b);
+  else if (hud === 'preview') drawPreviewHud(renderer, b);
   else drawStageHud(renderer, b, assets);
 
   const controlsView = b.scene.input.getControlsView();
