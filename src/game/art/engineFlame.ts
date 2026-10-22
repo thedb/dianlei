@@ -93,7 +93,8 @@ export function drawEngineFlame(
 }
 
 /**
- * Draw engine flames for player at all nozzle positions
+ * Draw engine flames for the player at nozzle offsets.
+ * Offsets are already in logical pixels relative to the ship center.
  */
 export function drawPlayerFlames(
   ctx: CanvasRenderingContext2D,
@@ -101,27 +102,86 @@ export function drawPlayerFlames(
   centerY: number,
   nozzleOffsets: Array<{ x: number; y: number }>,
   velocityY: number,
-  time: number,
-  scale = 1
+  time: number
 ): void {
-  const config =
-    scale === 1
-      ? PLAYER_FLAME_CONFIG
-      : {
-          ...PLAYER_FLAME_CONFIG,
-          baseLength: PLAYER_FLAME_CONFIG.baseLength * scale,
-          baseWidth: PLAYER_FLAME_CONFIG.baseWidth * scale,
-          flickerAmount: PLAYER_FLAME_CONFIG.flickerAmount * scale,
-        };
   for (const nozzle of nozzleOffsets) {
     drawEngineFlame(
       ctx,
-      centerX + nozzle.x * scale,
-      centerY + nozzle.y * scale,
-      config,
+      centerX + nozzle.x,
+      centerY + nozzle.y,
+      PLAYER_FLAME_CONFIG,
       velocityY,
       time
     );
+  }
+}
+
+/** Sprite metrics used to map a source nozzle onto a scaled draw. */
+export interface FlameSpriteBox {
+  width: number;
+  height: number;
+  anchorX: number;
+  anchorY: number;
+}
+
+/**
+ * Where a source nozzle lands once the sprite is drawn at `drawn` size.
+ * Source nozzles are relative to the source anchor. The result is relative
+ * to the same center the sprite is placed on, using that draw's anchor and
+ * pixel size — not a uniform scale of the full-ship offset.
+ * Native size (drawn === source) returns the nozzle unchanged.
+ */
+export function fittedNozzle(
+  source: FlameSpriteBox,
+  nozzle: { x: number; y: number },
+  drawn: FlameSpriteBox
+): { x: number; y: number } {
+  if (
+    drawn.width === source.width &&
+    drawn.height === source.height &&
+    drawn.anchorX === source.anchorX &&
+    drawn.anchorY === source.anchorY
+  ) {
+    return { x: nozzle.x, y: nozzle.y };
+  }
+  const scaleX = drawn.width / source.width;
+  const scaleY = drawn.height / source.height;
+  return {
+    x: -drawn.anchorX + (source.anchorX + nozzle.x) * scaleX,
+    y: -drawn.anchorY + (source.anchorY + nozzle.y) * scaleY,
+  };
+}
+
+function fittedFlameConfig(scaleX: number, scaleY: number): FlameConfig {
+  if (scaleX === 1 && scaleY === 1) return PLAYER_FLAME_CONFIG;
+  return {
+    ...PLAYER_FLAME_CONFIG,
+    baseLength: PLAYER_FLAME_CONFIG.baseLength * scaleY,
+    baseWidth: PLAYER_FLAME_CONFIG.baseWidth * scaleX,
+    flickerAmount: PLAYER_FLAME_CONFIG.flickerAmount * scaleY,
+  };
+}
+
+/**
+ * Flames for a player sprite drawn smaller than its source pixels.
+ * Each nozzle is mapped through `fittedNozzle`, so a banked frame keeps the
+ * exhaust on that frame's engines, at the tail of the drawn ship.
+ */
+export function drawFittedPlayerFlames(
+  ctx: CanvasRenderingContext2D,
+  centerX: number,
+  centerY: number,
+  source: FlameSpriteBox & { nozzles: ReadonlyArray<{ x: number; y: number }> },
+  drawn: FlameSpriteBox,
+  velocityY: number,
+  time: number
+): void {
+  const scaleX = drawn.width / source.width;
+  const scaleY = drawn.height / source.height;
+  const config = fittedFlameConfig(scaleX, scaleY);
+  for (const nozzle of source.nozzles) {
+    const at = fittedNozzle(source, nozzle, drawn);
+    drawEngineFlame(ctx, centerX + at.x, centerY + at.y, config, velocityY, time);
   }
 }
 

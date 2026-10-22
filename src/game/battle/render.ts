@@ -13,7 +13,6 @@ import {
   INVINCIBLE_ALPHA_MIN,
   INVINCIBLE_BLINK_FAST,
   INVINCIBLE_BLINK_INTERVAL,
-  MATE_SCALE,
   SHOW_HITBOX,
 } from '@/game/config';
 import {
@@ -25,6 +24,7 @@ import {
   drawBossWorld,
   drawBulletGlow,
   drawEnemyFlame,
+  drawFittedPlayerFlames,
   drawGunBarrel,
   drawHomingExhaust,
   drawPlayerFlames,
@@ -96,7 +96,15 @@ function drawMates(
   for (const mate of places) {
     const x = renderX + mate.dx;
     const y = renderY + mate.dy;
-    drawPlayerFlames(ctx, x, y, frame.nozzles, b.player.velocityY, b.gameTime, MATE_SCALE);
+    drawFittedPlayerFlames(
+      ctx,
+      x,
+      y,
+      frame,
+      { width: w, height: h, anchorX: ax, anchorY: ay },
+      b.player.velocityY,
+      b.gameTime
+    );
     renderer.drawImage(frame.canvas, x - ax, y - ay, w, h);
   }
 }

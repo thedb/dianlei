@@ -13,7 +13,6 @@ import {
   VULCAN_MUZZLE_Y,
 } from '@/game/config';
 import { PLAYER_SPRITE_H, PLAYER_SPRITE_W } from '@/game/art/playerSprite';
-import { ENEMY_MAX_HIT_RADIUS } from '@/game/entities/enemyDefs';
 import { checkPlayerBulletCollision, checkPlayerEnemyCollision } from '@/game/systems/collision';
 import {
   applyDeathPenalty,
@@ -69,11 +68,12 @@ describe('wingman slot M', () => {
   it('places one ship on the left at M=1 and one on each side at M=2', () => {
     expect(matePlacements(0)).toEqual([]);
     expect(matePlacements(1)).toEqual([{ side: 'left', dx: -MATE_OFFSET_X, dy: MATE_OFFSET_Y }]);
-    expect(MATE_OFFSET_X).toBe(32);
+    expect(MATE_OFFSET_X).toBe(25.6);
+    expect(MATE_OFFSET_X).toBeCloseTo(32 * 0.8);
     expect(MATE_OFFSET_Y).toBe(0);
     const both = matePlacements(2);
     expect(both.map((p) => p.side)).toEqual(['left', 'right']);
-    expect(both.map((p) => p.dx)).toEqual([-32, 32]);
+    expect(both.map((p) => p.dx)).toEqual([-MATE_OFFSET_X, MATE_OFFSET_X]);
     expect(both.every((p) => p.dy === 0)).toBe(true);
   });
 
@@ -107,7 +107,7 @@ describe('wingman slot M', () => {
     const both = record();
     fireMates(2, 100, 400, both);
     expect(both.shots).toHaveLength(2);
-    expect(both.shots.map((s) => s.x)).toEqual([100 - 32, 100 + 32]);
+    expect(both.shots.map((s) => s.x)).toEqual([100 - MATE_OFFSET_X, 100 + MATE_OFFSET_X]);
     for (const shot of both.shots) {
       expect(shot.vx).toBe(0);
       expect(shot.vy).toBe(-PLAYER_BULLET_SPEED);
@@ -170,7 +170,8 @@ describe('wingman slot M', () => {
 
     for (const place of matePlacements(2)) {
       expect(checkPlayerBulletCollision(0, 0, place.dx, place.dy, EB_HIT_RADIUS_LARGE)).toBe(false);
-      expect(checkPlayerEnemyCollision(0, 0, place.dx, place.dy, ENEMY_MAX_HIT_RADIUS)).toBe(false);
+      // A body the size of the drawn wingman still misses the player. Wingmen are not colliders.
+      expect(checkPlayerEnemyCollision(0, 0, place.dx, place.dy, halfSprite)).toBe(false);
       const innerX = place.dx - Math.sign(place.dx) * halfSprite;
       expect(checkPlayerBulletCollision(0, 0, innerX, place.dy, EB_HIT_RADIUS_LARGE)).toBe(false);
     }
