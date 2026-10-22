@@ -54,10 +54,17 @@ export interface SceneContext {
    */
   challengeStage?: string;
   /**
+   * 地图预览 target from the debug panel (`maps/preview.ts`): `map:<id>` for
+   * one map asset, `stage:<id>` for a stage's whole pre-boss map run. Only
+   * `playMode: 'mapPreview'` reads it. Not persisted.
+   */
+  previewMap?: string;
+  /**
    * `attract` is the silent title demo. It runs the same battle scene, but
    * does not play SFX, publish a run, draw the HUD, or respawn after death.
    * `weaponTest` is the damage range: same player, loadout, and fire path,
-   * no scroll and no spawns. Omitted on a real run (treated as `play`).
+   * no scroll and no spawns. `mapPreview` scrolls a map with only the ship.
+   * Omitted on a real run (treated as `play`).
    * What each mode turns on or off is the `PLAY_MODE_RULES` table.
    */
   playMode?: PlayMode;

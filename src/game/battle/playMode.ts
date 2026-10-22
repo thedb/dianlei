@@ -7,11 +7,14 @@
  *   report, and the ship stays dead so the title can fade and restart.
  * - `weaponTest`: the damage range. Same player, loadout, and fire path, no
  *   world (scroll, waves, buildings, boss), one immortal target.
+ * - `mapPreview`: 地图预览. The ship flies over one map (or a stage's whole
+ *   pre-boss map run) with no waves, buildings, or boss, and the scene leaves
+ *   for the title when the track ends.
  */
 
 import type { Difficulty } from '@/game/difficulty';
 
-export type PlayMode = 'play' | 'attract' | 'weaponTest';
+export type PlayMode = 'play' | 'attract' | 'weaponTest' | 'mapPreview';
 
 export interface PlayModeRules {
   /** No SFX and no audio init or unlock. */
@@ -24,12 +27,18 @@ export interface PlayModeRules {
   publishesRun: boolean;
   /** After the death explosion: respawn (or game over), hold the wreck, or leave to the title. */
   onDeath: 'respawn' | 'hold' | 'title';
-  /** Map scroll, waves, buildings, and the boss. */
-  world: boolean;
+  /** The map scrolls and the background track is drawn. */
+  scroll: boolean;
+  /** Waves, buildings, the warning, and the boss. */
+  spawns: boolean;
+  /** Background track: the stage's maps, or the 地图预览 target (`SceneContext.previewMap`). */
+  track: 'stage' | 'preview';
+  /** Leave for the title once the track's `endAt` passes. */
+  leaveAtTrackEnd: boolean;
   /** The weapon-test range: fixed target, panel taps, tune overrides, damage meter. */
   range: boolean;
   /** HUD layer drawn over the field. */
-  hud: 'stage' | 'range' | 'none';
+  hud: 'stage' | 'range' | 'preview' | 'none';
   /** Forced run difficulty. Null reads `SceneContext.difficulty`. */
   difficulty: Difficulty | null;
   /** Scripted fly-off and the result screen after the boss dies. */
@@ -45,7 +54,10 @@ export const PLAY_MODE_RULES: Readonly<Record<PlayMode, PlayModeRules>> = {
     pauseExit: 'confirm',
     publishesRun: true,
     onDeath: 'respawn',
-    world: true,
+    scroll: true,
+    spawns: true,
+    track: 'stage',
+    leaveAtTrackEnd: false,
     range: false,
     hud: 'stage',
     difficulty: null,
@@ -58,7 +70,10 @@ export const PLAY_MODE_RULES: Readonly<Record<PlayMode, PlayModeRules>> = {
     pauseExit: 'confirm',
     publishesRun: false,
     onDeath: 'hold',
-    world: true,
+    scroll: true,
+    spawns: true,
+    track: 'stage',
+    leaveAtTrackEnd: false,
     range: false,
     hud: 'none',
     difficulty: 'easy',
@@ -71,11 +86,30 @@ export const PLAY_MODE_RULES: Readonly<Record<PlayMode, PlayModeRules>> = {
     pauseExit: 'immediate',
     publishesRun: false,
     onDeath: 'title',
-    world: false,
+    scroll: false,
+    spawns: false,
+    track: 'stage',
+    leaveAtTrackEnd: false,
     range: true,
     hud: 'range',
     difficulty: 'easy',
     victoryExit: true,
+    bossEntry: false,
+  },
+  mapPreview: {
+    silent: false,
+    pausable: true,
+    pauseExit: 'immediate',
+    publishesRun: false,
+    onDeath: 'title',
+    scroll: true,
+    spawns: false,
+    track: 'preview',
+    leaveAtTrackEnd: true,
+    range: false,
+    hud: 'preview',
+    difficulty: 'easy',
+    victoryExit: false,
     bossEntry: false,
   },
 };

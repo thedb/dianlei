@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { SECTION_BASE_END } from '@/game/config';
+import { BG_SCROLL_SPEED, LOGICAL_H, TILE_SIZE, warningTileScrollPx } from '@/game/config';
+import { getTileMap } from '@/game/maps';
 import type { GroundEntry } from './types';
 import { getMvpEnemyCount, getMvpWaves, getStageEnemyCount, stage1 } from './stage1';
 
@@ -27,11 +28,23 @@ describe('stage1 waves', () => {
   });
 
   it('stops spawning before the warning', () => {
-    expect(stage1.warningAt).toBe(SECTION_BASE_END);
     expect(stage1.warningAt).toBe(150);
     const last = stage1.waves[stage1.waves.length - 1]!;
     expect(last.id).toBe('W27');
     expect(last.t).toBeLessThan(stage1.warningAt);
+  });
+
+  it('runs on 陆地A alone until the warning, then 宇宙A for the boss', () => {
+    expect(stage1.maps.run).toEqual([{ map: 'landA', at: 0 }]);
+    expect(stage1.maps.boss).toBe('spaceA');
+  });
+
+  it('has 陆地A rows for the whole pre-boss run and the warning speed-up, without looping', () => {
+    const rows = getTileMap('landA').rows;
+    const warningScroll = stage1.warningAt * BG_SCROLL_SPEED;
+    expect(rows * TILE_SIZE).toBeGreaterThanOrEqual(
+      warningScroll + warningTileScrollPx() + LOGICAL_H
+    );
   });
 
   it('only uses small and medium fighters in fully-MVP waves', () => {

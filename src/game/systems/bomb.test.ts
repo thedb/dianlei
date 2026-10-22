@@ -12,7 +12,13 @@ import { ENEMY_STATS } from '@/game/entities/enemy';
 import { BOSS_CLASS, enemyClass } from '@/game/entities/objectClass';
 import type { EnemyType } from '@/game/levels/types';
 import { createEnemy, spawnEnemy, type Enemy } from '@/game/entities/enemy';
-import { createBuilding, spawnBuilding, buildingSpawnScroll } from '@/game/entities/building';
+import {
+  createBuilding,
+  spawnBuilding,
+  buildingSpawnScroll,
+  placeBuildings,
+} from '@/game/entities/building';
+import { buildStageTrack } from '@/game/maps';
 import {
   bombArrives,
   bombArrivalDelay,
@@ -197,7 +203,7 @@ describe('bomb against real enemies and buildings', () => {
   });
 
   it('wrecks on-screen buildings and leaves off-screen ones intact', () => {
-    const p = stage1.buildings[0]!;
+    const p = placeBuildings(stage1.buildings, buildStageTrack(stage1))[0]!;
     const on = createBuilding();
     spawnBuilding(on, p, buildingSpawnScroll(p) + 200);
     const off = createBuilding();

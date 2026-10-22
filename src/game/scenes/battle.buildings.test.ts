@@ -4,7 +4,8 @@ import { createMemoryStorage, createSettingsStore } from '@/game/settings';
 import { computeControlLayout } from '@/game/controls';
 import { BG_SCROLL_SPEED } from '@/game/config';
 import { getStage } from '@/game/levels/registry';
-import { buildingSpawnScroll } from '@/game/entities/building';
+import { buildingSpawnScroll, placeBuildings } from '@/game/entities/building';
+import { buildStageTrack } from '@/game/maps';
 import type { ControlsView } from '@/engine/input';
 import type { BattleEntry, SceneContext } from './types';
 import { createBattleScene } from './battle';
@@ -57,7 +58,9 @@ function runUntil(scene: ReturnType<typeof setup>, seconds: number): void {
   while ((scene.getDebugInfo!().gameTime ?? 0) < seconds) scene.update(DT, makeInput());
 }
 
-const firstSpawn = Math.min(...stage1.buildings.map(buildingSpawnScroll)) / BG_SCROLL_SPEED;
+const firstSpawn =
+  Math.min(...placeBuildings(stage1.buildings, buildStageTrack(stage1)).map(buildingSpawnScroll)) /
+  BG_SCROLL_SPEED;
 
 describe('battle buildings', () => {
   it('spawns the first building when the map scrolls it in', () => {

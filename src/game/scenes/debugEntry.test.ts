@@ -6,6 +6,7 @@ import { makeInput } from '@/test/fakes';
 import {
   DEBUG_BOSS_BUTTON,
   DEBUG_CLOSE_BUTTON,
+  DEBUG_MAP_BUTTON,
   DEBUG_MODE_BUTTON,
   DEBUG_WEAPON_BUTTON,
   createDebugPanel,
@@ -96,12 +97,13 @@ function openPanel(title: ReturnType<typeof createTitleScene>): void {
 }
 
 describe('debug panel actions', () => {
-  it('maps the four entries', () => {
+  it('maps the five entries', () => {
     const panel = createDebugPanel();
     panel.open();
     expect(panel.update(makeInput({ taps: [point(DEBUG_BOSS_BUTTON)] }))).toBe('boss');
     expect(panel.update(makeInput({ taps: [point(DEBUG_MODE_BUTTON)] }))).toBe('toggleDebug');
     expect(panel.update(makeInput({ taps: [point(DEBUG_WEAPON_BUTTON)] }))).toBe('weaponTest');
+    expect(panel.update(makeInput({ taps: [point(DEBUG_MAP_BUTTON)] }))).toBe('mapPreview');
     expect(panel.update(makeInput({ taps: [point(DEBUG_CLOSE_BUTTON)] }))).toBe('close');
     panel.open();
     expect(panel.update(makeInput({ menuBack: true }))).toBe('close');

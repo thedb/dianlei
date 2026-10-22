@@ -21,7 +21,7 @@ import type { BuildingAssets } from './buildingSprite';
 import type { BulletAssets } from './bulletSprite';
 import type { ItemAssets } from './itemSprite';
 import type { ExplosionAssets } from './explosionSprite';
-import type { BackgroundMaps } from './tiles';
+import type { BackgroundArt } from './mapDraw';
 import type { BossAssets } from './bossSprite';
 
 import { createPlayerSpriteSheet } from './playerSprite';
@@ -30,10 +30,10 @@ import { createBuildingAssets } from './buildingSprite';
 import { createBulletAssets } from './bulletSprite';
 import { createItemAssets } from './itemSprite';
 import { createExplosionAssets } from './explosionSprite';
-import { createBackgroundMaps } from './tiles';
+import { createBackgroundArt } from './mapDraw';
 import { createBossAssets } from './bossSprite';
 
-export { drawBackground, terrainBlocksTank } from './tiles';
+export { drawBackground } from './mapDraw';
 export { drawBossWorld, drawBossHpBar, drawBossLaser } from './bossSprite';
 
 /** All game sprite assets */
@@ -44,7 +44,7 @@ export interface GameAssets {
   bullets: BulletAssets;
   items: ItemAssets;
   explosions: ExplosionAssets;
-  background: BackgroundMaps;
+  background: BackgroundArt;
   bosses: Record<string, BossAssets>;
 }
 
@@ -57,7 +57,7 @@ export function createGameAssets(): GameAssets {
     bullets: createBulletAssets(),
     items: createItemAssets(),
     explosions: createExplosionAssets(),
-    background: createBackgroundMaps(),
+    background: createBackgroundArt(),
     bosses: createBossAssets(),
   };
 }

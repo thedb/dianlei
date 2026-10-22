@@ -120,7 +120,7 @@ export function drawField(renderer: Renderer, b: Battle, assets: GameAssets, alp
   ctx.save();
   if (shake.x !== 0 || shake.y !== 0) ctx.translate(shake.x, shake.y);
   if (b.rules().range) drawRangeField(ctx);
-  else drawBackground(ctx, assets.background, scrollFrame, gameTime);
+  else drawBackground(ctx, assets.background, b.track, scrollFrame, gameTime);
 
   // Buildings sit on the tiles: no interpolation, so they never slip off the grid
   b.buildings.forEach((building) => {
@@ -130,7 +130,7 @@ export function drawField(renderer: Renderer, b: Battle, assets: GameAssets, alp
       : building.hitFlashTimer > 0
         ? sheet.hitFlash
         : sheet.idle;
-    ctx.globalAlpha = scrollFrame.fade[building.section];
+    ctx.globalAlpha = scrollFrame.fade.layers[building.layer] ?? 0;
     renderer.drawImage(frame.canvas, building.x - frame.anchorX, building.y - frame.anchorY);
     const barrel = BUILDING_BARRELS[building.type];
     if (barrel && !building.wrecked) {

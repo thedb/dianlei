@@ -1,0 +1,84 @@
+/**
+ * Map registry (P12). The only module that knows every map asset. Stages,
+ * 地图预览, the background renderer, and tests ask here.
+ *
+ * Adding a map: write its `MapDef` (a chunk library plus `composeChunks` for a
+ * new tile map, like `landA.ts`), add it to `MAPS`, and reference its id from a
+ * stage's `maps.run` (or `maps.boss` for a starfield). 地图预览 lists it
+ * automatically.
+ */
+
+import { LAND_B_ROWS, MAP_CHUNK_ROWS, SEA_A_ROWS, SPACE_A_PREVIEW_SECONDS } from '@/game/config';
+import { buildBaseMap, buildCoastMap } from '@/game/art/tiles';
+import { composeChunks } from './chunks';
+import { LAND_A_SPEC } from './landA';
+import type { MapDef, StarfieldMapDef, TileGrid, TileMapDef } from './types';
+
+export const LAND_A: TileMapDef = {
+  id: 'landA',
+  label: '陆地A',
+  kind: 'tiles',
+  rows: LAND_A_SPEC.slots.length * MAP_CHUNK_ROWS,
+  build: () => composeChunks(LAND_A_SPEC),
+  cloudShadows: true,
+};
+
+/** Old stage-1 base section (runway, hangars, wall), kept as is. */
+export const LAND_B: TileMapDef = {
+  id: 'landB',
+  label: '陆地B',
+  kind: 'tiles',
+  rows: LAND_B_ROWS,
+  build: () => buildBaseMap(LAND_B_ROWS),
+};
+
+/** Old stage-1 coast section (winding river, island forts, docks), kept as is. */
+export const SEA_A: TileMapDef = {
+  id: 'seaA',
+  label: '海面A',
+  kind: 'tiles',
+  rows: SEA_A_ROWS,
+  build: () => buildCoastMap(SEA_A_ROWS),
+};
+
+/** The post-WARNING starfield behind the boss. */
+export const SPACE_A: StarfieldMapDef = {
+  id: 'spaceA',
+  label: '宇宙A',
+  kind: 'starfield',
+  previewSeconds: SPACE_A_PREVIEW_SECONDS,
+};
+
+const MAPS: readonly MapDef[] = [LAND_A, LAND_B, SEA_A, SPACE_A];
+
+export function listMaps(): readonly MapDef[] {
+  return MAPS;
+}
+
+export function getMap(id: string): MapDef {
+  const map = MAPS.find((m) => m.id === id);
+  if (!map) throw new Error(`unknown map ${id}`);
+  return map;
+}
+
+export function getTileMap(id: string): TileMapDef {
+  const map = getMap(id);
+  if (map.kind !== 'tiles') throw new Error(`map ${id} has no tiles`);
+  return map;
+}
+
+const grids = new Map<string, TileGrid>();
+
+/** The map's grid, built once. Grids are shared; never mutate them. */
+export function getMapGrid(id: string): TileGrid {
+  let grid = grids.get(id);
+  if (!grid) {
+    const map = getTileMap(id);
+    grid = map.build();
+    if (grid.length !== map.rows) {
+      throw new Error(`map ${id} built ${grid.length} rows, declared ${map.rows}`);
+    }
+    grids.set(id, grid);
+  }
+  return grid;
+}

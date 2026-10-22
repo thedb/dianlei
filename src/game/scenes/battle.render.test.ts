@@ -115,7 +115,6 @@ const rec = vi.hoisted(() => {
 
 vi.mock('@/game/art', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/game/art')>();
-  const tiles = await import('@/game/art/tiles');
   const logged =
     (name: string) =>
     (...args: unknown[]): void =>
@@ -123,7 +122,7 @@ vi.mock('@/game/art', async (importOriginal) => {
   return {
     ...actual,
     createGameAssets: () => ({
-      background: { grids: tiles.getStageGrids() },
+      background: {},
       player: rec.stub('player'),
       enemies: rec.stub('enemies'),
       buildings: rec.stub('buildings'),
@@ -221,13 +220,13 @@ function stageRun(
 }
 
 const EXPECTED: Record<string, RenderResult> = {
-  'stage easy': { outcome: 'result', frames: 12957, renders: 565, calls: 84937, hash: 2009977106 },
-  'stage hard': { outcome: 'result', frames: 13885, renders: 605, calls: 90970, hash: 2653435174 },
-  'stage demo': { outcome: 'gameover', frames: 4679, renders: 205, calls: 27764, hash: 225066328 },
-  'boss hard': { outcome: 'result', frames: 5205, renders: 228, calls: 34209, hash: 3719287889 },
-  attract: { outcome: 'timeout', frames: 5400, renders: 318, calls: 24398, hash: 4143471026 },
+  'stage easy': { outcome: 'result', frames: 12957, renders: 565, calls: 84948, hash: 1970209475 },
+  'stage hard': { outcome: 'result', frames: 13885, renders: 605, calls: 90982, hash: 1537338769 },
+  'stage demo': { outcome: 'gameover', frames: 4956, renders: 217, calls: 30352, hash: 3569853036 },
+  'boss hard': { outcome: 'result', frames: 5205, renders: 228, calls: 34209, hash: 2214869741 },
+  attract: { outcome: 'timeout', frames: 5400, renders: 318, calls: 24665, hash: 2185208717 },
   weaponTest: { outcome: 'timeout', frames: 600, renders: 55, calls: 23578, hash: 1094835362 },
-  pause: { outcome: 'timeout', frames: 720, renders: 56, calls: 5607, hash: 1738775126 },
+  pause: { outcome: 'timeout', frames: 720, renders: 56, calls: 5607, hash: 1977861426 },
 };
 
 function check(name: string, got: RenderResult): void {

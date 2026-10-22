@@ -1,6 +1,6 @@
 /**
- * Battle scene — a stage through its boss, plus the title demo and the weapon
- * range (`playMode`). This file only orders the frame; the rules live in
+ * Battle scene — a stage through its boss, plus the title demo, the weapon
+ * range, and 地图预览 (`playMode`). This file only orders the frame; the rules live in
  * `src/game/battle/` and per-mode differences in `battle/playMode.ts`.
  */
 
@@ -13,8 +13,10 @@ import type { ItemType } from '@/game/entities/item';
 import { WaveScheduler } from '@/game/systems/waveScheduler';
 import { maxOut } from '@/game/systems/playerWeapons';
 import { resetVictoryExit, victoryExitBlocksInput } from '@/game/systems/victoryExit';
-import { BuildingScheduler } from '@/game/entities/building';
+import { BuildingScheduler, placeBuildings } from '@/game/entities/building';
 import { Scroller, backgroundFade } from '@/game/systems/background';
+import { buildStageTrack, trackFinished } from '@/game/maps/track';
+import { buildPreviewTrack } from '@/game/maps/preview';
 import { resetWeaponTestTune, type WeaponTestStats } from './weaponTest';
 import {
   createBattle,
@@ -94,8 +96,13 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
 
       const stage = getStage(sceneCtx.battleEntry === 'boss' ? sceneCtx.challengeStage : undefined);
       b.stage = stage;
-      b.buildingScheduler = new BuildingScheduler(stage.buildings, stage.warningAt);
-      b.scroller = new Scroller(stage.sections);
+      const stageTrack = buildStageTrack(stage);
+      b.track = b.rules().track === 'preview' ? buildPreviewTrack(sceneCtx.previewMap) : stageTrack;
+      b.buildingScheduler = new BuildingScheduler(
+        placeBuildings(stage.buildings, stageTrack),
+        stage.warningAt
+      );
+      b.scroller = new Scroller(b.track);
 
       resetPlayer(b);
       releaseAllPools(b);
@@ -115,7 +122,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       b.scrollFrame = {
         scroll: 0,
         tileDelta: 0,
-        fade: backgroundFade(0, stage.warningAt, stage.sections),
+        fade: backgroundFade(0, b.track),
         starScroll: [0, 0, 0],
       };
       b.controls.fireHeld = false;
@@ -163,6 +170,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
 
       // The range has no run to lose: a death leaves without a report.
       if (rules.onDeath === 'title' && state.isDead) return leaveToTitle(b);
+      if (rules.leaveAtTrackEnd && trackFinished(b.track, b.gameTime)) return leaveToTitle(b);
       if (requestPause(b, input)) return null;
       if (rules.range) rangeTaps(b, input);
 
@@ -201,10 +209,8 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
 
       const { pastWarning, warningWindow } = stageWindow(b);
       stepPlayerBullets(b, dt);
-      if (rules.world) {
-        stepScroll(b, dt);
-        stepSpawns(b, dt, pastWarning);
-      }
+      if (rules.scroll) stepScroll(b, dt);
+      if (rules.spawns) stepSpawns(b, dt, pastWarning);
       stepEnemies(b, dt, pastWarning);
       updateBombHits(b, dt);
       stepMissiles(b, dt);
