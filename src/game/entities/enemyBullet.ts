@@ -232,8 +232,8 @@ export function executeFirePattern(
     }
 
     case 'aimed_fast3': {
-      // 3-way fast spread aimed at player
-      const speed = getScaledSpeed('fast');
+      // 3-way fast spread aimed at player. Boss phase 2 passes its own speed.
+      const speed = fire.speed ?? getScaledSpeed('fast');
       const baseAngle = Math.atan2(playerY - enemyY, playerX - enemyX);
       const spreadRad = (15 * Math.PI) / 180;
 
@@ -293,7 +293,7 @@ export function executeFirePattern(
 
     case 'spiral': {
       const arms = Math.max(1, fire.arms);
-      const speed = getScaledSpeed('small');
+      const speed = fire.speed ?? getScaledSpeed('small');
       const rotRad = (rotation * Math.PI) / 180;
       for (let i = 0; i < arms; i++) {
         const angle = rotRad + (i * Math.PI * 2) / arms;

@@ -13,10 +13,13 @@ import { bossUsesPhase3, prepareBossConfig } from '@/game/difficulty';
 import { stage1 } from '@/game/levels/stage1';
 import {
   applyBossBomb,
+  bossBarRatio,
   bossBombDamage,
   bossHitsPlayer,
+  bossHpBarLayout,
   bossHpRemaining,
   bossIntroBarFill,
+  bossIntroBarLayout,
   bossLaserHits,
   bossPart,
   bossTotalHp,
@@ -61,6 +64,20 @@ function approach(
     ev = resolveBossBullet(boss, { x, y, w: 4, h: 12 }, damage, cfg);
   }
   return { x, y, ev };
+}
+
+function toPhase3(): BossRuntime {
+  const boss = createBoss(cfg, { phase3: true });
+  updateBoss(boss, cfg.enterDuration, cfg);
+  const left = bossPart(boss, 'turretL')!;
+  const right = bossPart(boss, 'turretR')!;
+  resolveBossBullet(boss, { x: left.worldX, y: left.worldY, w: 4, h: 12 }, left.hp, cfg);
+  resolveBossBullet(boss, { x: right.worldX, y: right.worldY, w: 4, h: 12 }, right.hp, cfg);
+  updateBoss(boss, cfg.transition.duration, cfg);
+  const core = bossPart(boss, 'core')!;
+  resolveBossBullet(boss, { x: core.worldX, y: core.worldY, w: 4, h: 12 }, core.hp, cfg);
+  updateBoss(boss, cfg.phase3!.transition, cfg);
+  return boss;
 }
 
 function toPhase2(): BossRuntime {
@@ -290,7 +307,7 @@ describe('boss phases', () => {
     expect(hull.shots.some((shot) => shot.fire.kind === 'fan7wide')).toBe(true);
   });
 
-  it('puts the whole bomb into the core and enrages at half HP', () => {
+  it('puts the whole bomb into the phase-2 core and does not enrage the spiral', () => {
     const boss = toPhase2();
     applyBossBomb(boss, cfg);
     expect(bossPart(boss, 'core')!.hp).toBe(560 - 67);
@@ -299,14 +316,27 @@ describe('boss phases', () => {
     const core = bossPart(fresh, 'core')!;
     resolveBossBullet(fresh, { x: core.worldX, y: core.worldY, w: 4, h: 12 }, 280, cfg);
     expect(core.hp).toBe(280);
-    expect(fresh.enraged).toBe(true);
+    expect(fresh.enraged).toBe(false);
+    const spiral = updateBoss(fresh, cfg.phase3!.spiral.interval, cfg);
+    expect(spiral.shots.some((shot) => shot.fire.kind === 'spiral')).toBe(true);
+    expect(spiral.shots.some((shot) => shot.fire.kind === 'ring16')).toBe(false);
+    expect(fresh.laser.mode).toBe('idle');
+  });
 
-    const ring = updateBoss(fresh, 1.6, cfg);
+  it('enrages the phase-3 ring when that segment drops to half', () => {
+    const boss = toPhase3();
+    const core = bossPart(boss, 'core')!;
+    const half = core.maxHp * cfg.phase2.enrageAtHpRatio;
+    resolveBossBullet(boss, { x: core.worldX, y: core.worldY, w: 4, h: 12 }, core.hp - half, cfg);
+    expect(core.hp).toBeCloseTo(half);
+    expect(boss.enraged).toBe(true);
+    const ring = updateBoss(boss, cfg.phase2.enrage.ringInterval, cfg);
     expect(ring.shots.some((shot) => shot.fire.kind === 'ring16')).toBe(true);
+    expect(ring.shots.some((shot) => shot.fire.kind === 'spiral')).toBe(false);
   });
 
   it('interrupts the laser and restarts its cooldown', () => {
-    const boss = toPhase2();
+    const boss = toPhase3();
     let steps = 0;
     while (boss.laser.mode === 'idle' && steps < 600) {
       updateBoss(boss, DT, cfg);
@@ -327,7 +357,7 @@ describe('boss phases', () => {
   });
 
   it('holds the ring still while the laser is sweeping', () => {
-    const boss = toPhase2();
+    const boss = toPhase3();
     let steps = 0;
     while (boss.laser.mode !== 'sweep' && steps < 800) {
       updateBoss(boss, DT, cfg);
@@ -347,19 +377,19 @@ describe('boss phases', () => {
     expect(bossHitsPlayer(boss, boss.x, boss.y + 40)).toBe(true);
     expect(bossHitsPlayer(boss, 20, 600)).toBe(false);
 
-    const phase2 = toPhase2();
+    const phase3 = toPhase3();
     let guard = 0;
-    while (phase2.laser.mode !== 'sweep' && guard < 800) {
-      updateBoss(phase2, DT, cfg);
+    while (phase3.laser.mode !== 'sweep' && guard < 800) {
+      updateBoss(phase3, DT, cfg);
       guard++;
     }
-    expect(phase2.laser.mode).toBe('sweep');
-    const core = bossPart(phase2, 'core')!;
-    const ang = Math.PI / 2 + (phase2.laser.angleDeg * Math.PI) / 180;
+    expect(phase3.laser.mode).toBe('sweep');
+    const core = bossPart(phase3, 'core')!;
+    const ang = Math.PI / 2 + (phase3.laser.angleDeg * Math.PI) / 180;
     expect(
-      bossLaserHits(phase2, cfg, core.worldX + Math.cos(ang) * 90, core.worldY + Math.sin(ang) * 90)
+      bossLaserHits(phase3, cfg, core.worldX + Math.cos(ang) * 90, core.worldY + Math.sin(ang) * 90)
     ).toBe(true);
-    expect(bossLaserHits(phase2, cfg, 8, 600)).toBe(false);
+    expect(bossLaserHits(phase3, cfg, 8, 600)).toBe(false);
   });
 
   it('scores the core, clears bullets, then STAGE CLEAR and the result', () => {
@@ -430,17 +460,69 @@ describe('boss difficulty phases', () => {
     for (let i = 0; i < 8; i++) {
       const ev = updateBoss(medium, 0.5, mediumCfg);
       expect(ev.shots.some((shot) => shot.fire.kind === 'spiral')).toBe(false);
+      expect(ev.shots.some((shot) => shot.fire.kind === 'ring16')).toBe(false);
       expect(medium.phase === 'phase3' || medium.phase === 'transition3').toBe(false);
     }
+
+    const living = reachPhase2(mediumCfg, false);
+    let sawSpiral = false;
+    for (let i = 0; i < 8; i++) {
+      const ev = updateBoss(living, 0.5, mediumCfg);
+      if (ev.shots.some((shot) => shot.fire.kind === 'spiral')) sawSpiral = true;
+      expect(ev.shots.some((shot) => shot.fire.kind === 'ring16')).toBe(false);
+    }
+    expect(sawSpiral).toBe(true);
+    expect(living.phase).toBe('phase2');
+    expect(living.laser.mode).toBe('idle');
   });
 
-  it('opens a hard phase-3 segment that switches spiral then aimed', () => {
+  it('plays the tuned spiral in phase 2 and the ring laser in phase 3', () => {
     const hardCfg = prepareBossConfig(stage1.boss, 'hard');
-    const phase3 = hardCfg.phase3!;
+    const pattern = hardCfg.phase3!;
     const boss = reachPhase2(hardCfg, true);
     expect(boss.phase).toBe('phase2');
+    expect(boss.pattern).toBe('spiral');
     expect(boss.fightMax).toBeCloseTo((140 + 140 + 560 + 240) * 1.3);
     expect(bossPart(boss, 'core')!.hp).toBeCloseTo(560 * 1.3);
+    expect(pattern.spiral.arms).toBe(4);
+    expect(pattern.spiral.speed).toBe(180);
+    expect(pattern.spiral.interval).toBeLessThan(0.18);
+    expect(pattern.aimed.speed).toBe(228);
+    expect(pattern.aimed.interval).toBeLessThan(1.15);
+
+    const full = bossHpBarLayout(boss);
+    expect(full.phase3Span).toBeCloseTo(240 / 1080);
+    expect(full.phase3Fill).toBeCloseTo(1);
+    expect(full.mainFill).toBeCloseTo(560 / 840);
+    expect(bossBarRatio(boss)).toBeCloseTo((560 + 240) / 1080);
+
+    const spiral = updateBoss(boss, pattern.spiral.interval, hardCfg);
+    expect(spiral.shots.map((shot) => shot.fire.kind)).toContain('spiral');
+    expect(spiral.shots.some((shot) => shot.fire.kind === 'aimed_fast3')).toBe(false);
+    expect(spiral.shots.some((shot) => shot.fire.kind === 'ring16')).toBe(false);
+    const rot0 = spiral.shots[0]?.rotation ?? 0;
+    const spiralFire = spiral.shots.find((shot) => shot.fire.kind === 'spiral')?.fire;
+    expect(spiralFire).toMatchObject({ arms: 4, speed: 180 });
+
+    const again = updateBoss(boss, pattern.spiral.interval, hardCfg);
+    const rot1 = again.shots.find((shot) => shot.fire.kind === 'spiral')?.rotation ?? rot0;
+    expect(rot1).not.toBe(rot0);
+
+    const remain = pattern.patternHold - pattern.spiral.interval * 2;
+    updateBoss(boss, remain, hardCfg);
+    expect(boss.pattern).toBe('aimed');
+
+    const aimed = updateBoss(boss, pattern.aimed.interval, hardCfg);
+    expect(aimed.shots.some((shot) => shot.fire.kind === 'aimed_fast3')).toBe(true);
+    expect(aimed.shots.some((shot) => shot.fire.kind === 'spiral')).toBe(false);
+    const aimedFire = aimed.shots.find((shot) => shot.fire.kind === 'aimed_fast3')?.fire;
+    expect(aimedFire).toMatchObject({ speed: 228 });
+
+    const core = bossPart(boss, 'core')!;
+    resolveBossBullet(boss, { x: core.worldX, y: core.worldY, w: 4, h: 12 }, 50, hardCfg);
+    const nicked = bossHpBarLayout(boss);
+    expect(nicked.phase3Fill).toBeCloseTo(1);
+    expect(nicked.mainFill).toBeLessThan(1);
 
     const broke = killCore(boss, hardCfg);
     expect(broke.score).toBe(0);
@@ -449,37 +531,65 @@ describe('boss difficulty phases', () => {
     expect(boss.invulnerable).toBe(true);
     expect(bossPart(boss, 'core')!.hp).toBeCloseTo(240 * 1.3);
     expect(applyBossBomb(boss, hardCfg).score).toBe(0);
+    const handed = bossHpBarLayout(boss);
+    expect(handed.mainFill).toBe(0);
+    expect(handed.phase3Fill).toBeCloseTo(1);
+    expect(handed.phase3Span).toBeCloseTo(240 / 1080);
 
-    updateBoss(boss, phase3.transition, hardCfg);
+    updateBoss(boss, pattern.transition, hardCfg);
     expect(boss.phase).toBe('phase3');
-    expect(boss.pattern).toBe('spiral');
     expect(boss.invulnerable).toBe(false);
+    expect(boss.laser.mode).toBe('idle');
 
-    const spiral = updateBoss(boss, phase3.spiral.interval, hardCfg);
-    expect(spiral.shots.map((shot) => shot.fire.kind)).toContain('spiral');
-    expect(spiral.shots.some((shot) => shot.fire.kind === 'aimed_fast3')).toBe(false);
-    const rot0 = spiral.shots[0]?.rotation ?? 0;
+    const ringFire = hardCfg.phase2.ring;
+    const ringInterval = ringFire.kind === 'ring16' ? ringFire.interval : 2;
+    const ring = updateBoss(boss, ringInterval, hardCfg);
+    expect(ring.shots.some((shot) => shot.fire.kind === 'ring16')).toBe(true);
+    expect(ring.shots.some((shot) => shot.fire.kind === 'spiral')).toBe(false);
 
-    const again = updateBoss(boss, phase3.spiral.interval, hardCfg);
-    const rot1 = again.shots.find((shot) => shot.fire.kind === 'spiral')?.rotation ?? rot0;
-    expect(rot1).not.toBe(rot0);
+    const wounded = bossPart(boss, 'core')!;
+    const before = bossHpBarLayout(boss).phase3Fill;
+    resolveBossBullet(boss, { x: wounded.worldX, y: wounded.worldY, w: 4, h: 12 }, 40, hardCfg);
+    expect(bossHpBarLayout(boss).phase3Fill).toBeLessThan(before);
+    expect(bossHpBarLayout(boss).mainFill).toBe(0);
 
-    const remain = phase3.patternHold - phase3.spiral.interval * 2;
-    updateBoss(boss, remain, hardCfg);
-    expect(boss.pattern).toBe('aimed');
-
-    const aimed = updateBoss(boss, phase3.aimed.interval, hardCfg);
-    expect(aimed.shots.some((shot) => shot.fire.kind === 'aimed_fast3')).toBe(true);
-    expect(aimed.shots.some((shot) => shot.fire.kind === 'spiral')).toBe(false);
-
-    const core = bossPart(boss, 'core')!;
-    const death = resolveBossBullet(
-      boss,
-      { x: core.worldX, y: core.worldY, w: 4, h: 12 },
-      core.hp,
-      hardCfg
-    );
+    const death = killCore(boss, hardCfg);
     expect(death.score).toBe(30000);
     expect(boss.phase).toBe('death');
+    expect(bossHpBarLayout(boss).phase3Fill).toBe(0);
+    expect(bossBarRatio(boss)).toBe(0);
+  });
+});
+
+describe('boss HP bar segments', () => {
+  it('draws easy as one segment and keeps hard phase-3 HP in its own slot', () => {
+    const easy = createBoss(cfg);
+    expect(bossHpBarLayout(easy)).toMatchObject({ phase3Span: 0, phase3Fill: 0 });
+    expect(bossHpBarLayout(easy).mainFill).toBeCloseTo(1);
+
+    const hardCfg = prepareBossConfig(stage1.boss, 'hard');
+    const hard = createBoss(hardCfg, { phase3: true });
+    const layout = bossHpBarLayout(hard);
+    expect(layout.phase3Span).toBeCloseTo(240 / 1080);
+    expect(layout.phase3Fill).toBeCloseTo(1);
+    expect(layout.mainFill).toBeCloseTo(1);
+
+    updateBoss(hard, hardCfg.enterDuration, hardCfg);
+    const left = bossPart(hard, 'turretL')!;
+    resolveBossBullet(hard, { x: left.worldX, y: left.worldY, w: 4, h: 12 }, left.hp, hardCfg);
+    const after = bossHpBarLayout(hard);
+    expect(after.phase3Fill).toBeCloseTo(1);
+    expect(after.mainFill).toBeCloseTo(700 / 840);
+    expect(bossBarRatio(hard)).toBeCloseTo((700 + 240) / 1080);
+
+    const span = 240 / 1080;
+    expect(bossIntroBarLayout(0, span)).toMatchObject({ mainFill: 0, phase3Fill: 0 });
+    const mid = bossIntroBarLayout(0.5, span);
+    expect(mid.phase3Fill).toBe(0);
+    expect(mid.mainFill).toBeCloseTo(0.5 / (1 - span));
+    const late = bossIntroBarLayout(1 - span / 2, span);
+    expect(late.mainFill).toBeCloseTo(1);
+    expect(late.phase3Fill).toBeCloseTo(0.5);
+    expect(bossIntroBarLayout(1, 0)).toEqual({ mainFill: 1, phase3Span: 0, phase3Fill: 0 });
   });
 });

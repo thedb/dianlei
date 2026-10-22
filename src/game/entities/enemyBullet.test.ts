@@ -51,6 +51,32 @@ describe('enemy fire patterns', () => {
     expect(aimedSpeed).toBeGreaterThan(spiralSpeed);
   });
 
+  it('uses an explicit flight speed on spiral and aimed triples', () => {
+    const spiral = recorder();
+    executeFirePattern(
+      { kind: 'spiral', interval: 0.12, arms: 4, rotStep: 22, speed: 180 },
+      180,
+      120,
+      40,
+      500,
+      spiral.spawner
+    );
+    expect(spiral.shots).toHaveLength(4);
+    expect(Math.hypot(spiral.shots[0]!.vx, spiral.shots[0]!.vy)).toBeCloseTo(180);
+
+    const aimed = recorder();
+    executeFirePattern(
+      { kind: 'aimed_fast3', interval: 0.75, speed: 228 },
+      180,
+      120,
+      40,
+      500,
+      aimed.spawner
+    );
+    expect(aimed.shots).toHaveLength(3);
+    expect(Math.hypot(aimed.shots[0]!.vx, aimed.shots[0]!.vy)).toBeCloseTo(228);
+  });
+
   it('fans five small bullets across the spread', () => {
     const { shots, spawner } = recorder();
     executeFirePattern({ kind: 'fan5', spread: 50, interval: 1.8 }, 180, 100, 180, 400, spawner);

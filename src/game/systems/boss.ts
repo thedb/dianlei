@@ -100,7 +100,7 @@ export interface BossRuntime {
   phase3Max: number;
   /** Parts plus the armed phase-3 segment. Bomb damage is 8% of this. */
   fightMax: number;
-  /** Which phase-3 volley is live. Ignored before phase 3. */
+  /** Spiral ↔ aimed clock. Phase 2 plays it when the stage defines that pattern. */
   pattern: 'spiral' | 'aimed';
   patternTime: number;
   spiralRot: number;
@@ -203,22 +203,75 @@ export function bossHpRemaining(boss: BossRuntime): number {
   return boss.parts.reduce((sum, part) => sum + Math.max(0, part.hp), 0);
 }
 
+export interface BossHpBarLayout {
+  /** 0–1 fill of the phases 1–2 slot. */
+  mainFill: number;
+  /** Width of the phase-3 slot as a fraction of the bar. 0 when that segment is unarmed. */
+  phase3Span: number;
+  /** 0–1 fill inside the phase-3 slot. Stays full until that segment is live. */
+  phase3Fill: number;
+}
+
+const PHASE3_BAR_LIVE = new Set<BossPhase>(['transition3', 'phase3', 'death', 'clear', 'done']);
+
 /**
- * HP bar fill. The phase-3 segment is already in the bar during phases 1–2,
- * then moves onto the core when that segment becomes the live target.
+ * Two slots when phase 3 is armed. Phases 1–2 share the left slot. The right
+ * slot is the phase-3 HP and does not shrink while those phases take damage.
+ * Easy and Medium are one slot (`phase3Span` 0).
  */
+export function bossHpBarLayout(boss: BossRuntime): BossHpBarLayout {
+  const phase3Max = boss.phase3Armed ? boss.phase3Max : 0;
+  const total = Math.max(1, boss.fightMax);
+  const phase3Span = phase3Max > 0 ? phase3Max / total : 0;
+  const mainMax = Math.max(1, total - phase3Max);
+  let mainHp = 0;
+  let phase3Hp = 0;
+  if (phase3Max <= 0) {
+    mainHp = bossHpRemaining(boss);
+  } else if (PHASE3_BAR_LIVE.has(boss.phase)) {
+    if (boss.phase === 'transition3' || boss.phase === 'phase3') {
+      phase3Hp = Math.max(0, bossPart(boss, 'core')?.hp ?? 0);
+    }
+  } else {
+    mainHp = bossHpRemaining(boss);
+    phase3Hp = phase3Max;
+  }
+  return {
+    mainFill: clamp01(mainHp / mainMax),
+    phase3Span,
+    phase3Fill: phase3Max > 0 ? clamp01(phase3Hp / phase3Max) : 0,
+  };
+}
+
+/**
+ * Warning-bar fill, left to right across the same slots as `bossHpBarLayout`.
+ * `phase3Span` is 0 on Easy and Medium, so the whole bar stays one segment.
+ */
+export function bossIntroBarLayout(fill: number, phase3Span: number): BossHpBarLayout {
+  const span = clamp01(phase3Span);
+  const u = clamp01(fill);
+  if (span <= 0) return { mainFill: u, phase3Span: 0, phase3Fill: 0 };
+  const mainSpan = 1 - span;
+  if (u <= mainSpan) {
+    return { mainFill: mainSpan > 0 ? u / mainSpan : 0, phase3Span: span, phase3Fill: 0 };
+  }
+  return { mainFill: 1, phase3Span: span, phase3Fill: (u - mainSpan) / span };
+}
+
+/** Overall remaining fraction. The drawn bar splits this into two slots on Hard. */
 export function bossBarRatio(boss: BossRuntime): number {
-  const max = Math.max(1, boss.fightMax);
-  const banked =
-    boss.phase3Armed &&
-    boss.phase !== 'transition3' &&
-    boss.phase !== 'phase3' &&
-    boss.phase !== 'death' &&
-    boss.phase !== 'clear' &&
-    boss.phase !== 'done'
-      ? boss.phase3Max
-      : 0;
-  return (bossHpRemaining(boss) + banked) / max;
+  const layout = bossHpBarLayout(boss);
+  return (1 - layout.phase3Span) * layout.mainFill + layout.phase3Span * layout.phase3Fill;
+}
+
+/**
+ * Ring, sweep laser, and enrage. With a phase-3 pattern on the stage, phase 2
+ * plays the spiral and this pattern waits for phase 3. Without one, phase 2
+ * still sweeps.
+ */
+export function bossRingLaserPhase(boss: BossRuntime, config: BossConfig): boolean {
+  if (config.phase3) return boss.phase === 'phase3';
+  return boss.phase === 'phase2';
 }
 
 export function bossPart(boss: BossRuntime, id: BossPartId): BossPartRuntime | undefined {
@@ -251,7 +304,7 @@ export function bossIntroBarFill(
 }
 
 export interface BossSpawnOptions {
-  /** Arm the hard-only spiral / aimed segment. Easy and Medium leave this false. */
+  /** Arm the hard-only third HP segment. Easy and Medium leave this false. */
   phase3?: boolean;
 }
 
@@ -352,6 +405,9 @@ export function updateBoss(boss: BossRuntime, dt: number, config: BossConfig): B
       boss.phase = 'phase2';
       boss.phaseTime = leftover;
       boss.invulnerable = false;
+      boss.pattern = 'spiral';
+      boss.patternTime = 0;
+      boss.spiralRot = 0;
       boss.laser.mode = 'idle';
       boss.laser.elapsed = 0;
       boss.laserCooldown = 0;
@@ -374,9 +430,11 @@ export function updateBoss(boss: BossRuntime, dt: number, config: BossConfig): B
       boss.phase = 'phase3';
       boss.phaseTime = leftover;
       boss.invulnerable = false;
-      boss.pattern = 'spiral';
-      boss.patternTime = 0;
-      boss.spiralRot = 0;
+      boss.laser.mode = 'idle';
+      boss.laser.elapsed = 0;
+      boss.laser.angleDeg = 0;
+      boss.laserCooldown = 0;
+      boss.enraged = false;
       boss.guns.ring = freshGun();
       boss.guns.aimed = freshGun();
       attackDt = leftover;
@@ -403,8 +461,11 @@ export function updateBoss(boss: BossRuntime, dt: number, config: BossConfig): B
   if (boss.hitFlash > 0) boss.hitFlash = Math.max(0, boss.hitFlash - dt);
 
   if (attackDt > 0 && boss.phase === 'phase1') tickPhase1(boss, attackDt, config, ev);
-  if (attackDt > 0 && boss.phase === 'phase2') tickPhase2(boss, attackDt, config, ev);
-  if (attackDt > 0 && boss.phase === 'phase3') tickPhase3(boss, attackDt, config, ev);
+  if (attackDt > 0 && boss.phase === 'phase2') {
+    if (config.phase3) tickSpiralAimed(boss, attackDt, config, ev);
+    else tickRingLaser(boss, attackDt, config, ev);
+  }
+  if (attackDt > 0 && boss.phase === 'phase3') tickRingLaser(boss, attackDt, config, ev);
   return ev;
 }
 
@@ -420,7 +481,7 @@ export function releaseBossResult(boss: BossRuntime): BossEvents {
 
 export function applyBossBomb(boss: BossRuntime, config: BossConfig): BossEvents {
   const ev = emptyBossEvents();
-  if (boss.phase === 'phase2') interruptLaser(boss);
+  if (bossRingLaserPhase(boss, config)) interruptLaser(boss);
 
   if (!canTakeDamage(boss)) return ev;
 
@@ -517,7 +578,7 @@ export function bossLaserHits(
   px: number,
   py: number
 ): boolean {
-  if (boss.phase !== 'phase2' || boss.laser.mode !== 'sweep') return false;
+  if (!bossRingLaserPhase(boss, config) || boss.laser.mode !== 'sweep') return false;
   const core = bossPart(boss, 'core');
   if (!core) return false;
   const ang = Math.PI / 2 + (boss.laser.angleDeg * Math.PI) / 180;
@@ -548,7 +609,7 @@ function tickPhase1(boss: BossRuntime, dt: number, config: BossConfig, ev: BossE
   }
 }
 
-function tickPhase3(boss: BossRuntime, dt: number, config: BossConfig, ev: BossEvents): void {
+function tickSpiralAimed(boss: BossRuntime, dt: number, config: BossConfig, ev: BossEvents): void {
   const phase = config.phase3;
   if (!phase) return;
   const core = bossPart(boss, 'core');
@@ -599,7 +660,7 @@ function firePhase3Slice(
   }
 }
 
-function tickPhase2(boss: BossRuntime, dt: number, config: BossConfig, ev: BossEvents): void {
+function tickRingLaser(boss: BossRuntime, dt: number, config: BossConfig, ev: BossEvents): void {
   tickLaser(boss, dt, config);
   const phase = config.phase2;
   const core = bossPart(boss, 'core');
@@ -848,10 +909,10 @@ function beginPhase3(
   boss.phaseTime = 0;
   boss.invulnerable = true;
   boss.laser.mode = 'idle';
+  boss.laser.elapsed = 0;
+  boss.laser.angleDeg = 0;
+  boss.laserCooldown = 0;
   boss.enraged = false;
-  boss.pattern = 'spiral';
-  boss.patternTime = 0;
-  boss.spiralRot = 0;
   ev.convertBullets = true;
 }
 
@@ -888,7 +949,7 @@ function emitDeathExplosion(boss: BossRuntime, index: number, ev: BossEvents): v
 }
 
 function refreshEnrage(boss: BossRuntime, config: BossConfig): void {
-  if (boss.phase !== 'phase2') return;
+  if (!bossRingLaserPhase(boss, config)) return;
   const core = bossPart(boss, 'core');
   if (!core) return;
   if (core.hp <= core.maxHp * config.phase2.enrageAtHpRatio) boss.enraged = true;

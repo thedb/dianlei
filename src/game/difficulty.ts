@@ -26,7 +26,7 @@ export function scaleHp(baseHp: number, difficulty: Difficulty): number {
   return baseHp * difficultyHpScale(difficulty);
 }
 
-/** Only Hard fights the spiral / aimed final segment. */
+/** Only Hard fights the third HP segment (ring and laser after the swap). */
 export function bossUsesPhase3(difficulty: Difficulty): boolean {
   return difficulty === 'hard';
 }

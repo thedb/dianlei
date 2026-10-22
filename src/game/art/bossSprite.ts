@@ -7,8 +7,8 @@
 import { BOSS_HULL_H, BOSS_HULL_W, BOSS_TURRET_SIZE, LOGICAL_H } from '@/game/config';
 import type { BossConfig } from '@/game/levels/types';
 import { PALETTE, COLOR } from '@/game/palette';
-import type { BossRuntime } from '@/game/systems/boss';
-import { bossPart } from '@/game/systems/boss';
+import type { BossHpBarLayout, BossRuntime } from '@/game/systems/boss';
+import { bossPart, bossRingLaserPhase } from '@/game/systems/boss';
 import type { SpriteData, SpriteFrame } from './types';
 import { createGrid, fillEllipse, fillPoly, fillRect, outline, plot } from './pixelDraw';
 import { renderSprite } from './spriteRenderer';
@@ -408,7 +408,7 @@ export function drawBossLaser(
   config: BossConfig,
   time: number
 ): void {
-  if (boss.phase !== 'phase2' || boss.laser.mode === 'idle') return;
+  if (!bossRingLaserPhase(boss, config) || boss.laser.mode === 'idle') return;
   const core = bossPart(boss, 'core');
   if (!core) return;
   const ang = Math.PI / 2 + (boss.laser.angleDeg * Math.PI) / 180;
@@ -438,20 +438,57 @@ export function drawBossLaser(
   ctx.restore();
 }
 
-/** Top HUD bar. `fill` is 0–1. */
+function clampUnit(v: number): number {
+  return Math.max(0, Math.min(1, v));
+}
+
+/**
+ * Top HUD bar. Easy and Medium are one red fill. Hard reserves a yellow slot
+ * on the right for the phase-3 segment; damage to phases 1–2 does not eat it.
+ */
 export function drawBossHpBar(
   ctx: CanvasRenderingContext2D,
-  fill: number,
+  layout: BossHpBarLayout,
   x = 48,
   y = 32,
   w = 264,
   h = 8
 ): void {
-  const clamped = Math.max(0, Math.min(1, fill));
+  const mainFill = clampUnit(layout.mainFill);
+  const phase3Fill = clampUnit(layout.phase3Fill);
+  const phase3Span = clampUnit(layout.phase3Span);
   ctx.fillStyle = '#000000';
   ctx.fillRect(x, y, w, h);
-  ctx.fillStyle = PALETTE[COLOR.ENEMY_VIVID_RED];
-  ctx.fillRect(x + 1, y + 1, Math.max(0, (w - 2) * clamped), h - 2);
+
+  const innerX = x + 1;
+  const innerY = y + 1;
+  const innerW = Math.max(0, w - 2);
+  const innerH = Math.max(0, h - 2);
+  const split = phase3Span > 0.001 && innerW > 4;
+  const phase3W = split ? Math.max(2, Math.min(innerW - 3, Math.round(innerW * phase3Span))) : 0;
+  const divider = split ? 1 : 0;
+  const mainW = innerW - phase3W - divider;
+
+  if (mainW > 0 && mainFill > 0) {
+    const mainDraw = Math.max(0, Math.min(mainW, Math.round(mainW * mainFill)));
+    if (mainDraw > 0) {
+      ctx.fillStyle = PALETTE[COLOR.ENEMY_VIVID_RED];
+      ctx.fillRect(innerX, innerY, mainDraw, innerH);
+    }
+  }
+  if (split) {
+    const phaseX = innerX + mainW + divider;
+    ctx.fillStyle = PALETTE[COLOR.ENEMY_CRIMSON];
+    ctx.fillRect(phaseX, innerY, phase3W, innerH);
+    const phaseDraw = Math.max(0, Math.min(phase3W, Math.round(phase3W * phase3Fill)));
+    if (phaseDraw > 0) {
+      ctx.fillStyle = PALETTE[COLOR.EXPLOSION_YELLOW];
+      ctx.fillRect(phaseX, innerY, phaseDraw, innerH);
+    }
+    ctx.fillStyle = PALETTE[COLOR.WHITE];
+    ctx.fillRect(innerX + mainW, innerY, divider, innerH);
+  }
+
   ctx.strokeStyle = PALETTE[COLOR.ENEMY_BRIGHT_RED];
   ctx.lineWidth = 1;
   ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
