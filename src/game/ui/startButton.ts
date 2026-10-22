@@ -1,6 +1,6 @@
 /**
- * Big touch-first 开始游戏 button, shared by boot and title so it sits in the
- * same place on both screens (a tap during the hand-off still lands on it).
+ * Big touch-first 开始游戏 button on the title screen.
+ * Boot does not draw or hit-test it. Loading shows only the game name.
  */
 
 import { LOGICAL_W, LOGICAL_H } from '@/game/config';

@@ -4,11 +4,12 @@
  * kinds plus a slot list; the planner fills the slots deterministically from
  * the map seed, mirrors some chunks, and only joins chunks whose edges match.
  *
- * Edge contract, so roads and streams run on across chunk joins:
- * - The main road crosses the top and bottom rows at `ROAD_COL` in every chunk.
- * - A stream crosses an edge on the left (`STREAM_COLS.left`) or right side,
- *   or not at all. Mirroring swaps left and right.
- * Nothing else may touch the top or bottom row of a chunk with road or water.
+ * Edge contract, so roads and water run on across chunk joins. A stream side is
+ * `none`, `left`, `right`, or `center`. Mirroring swaps left and right; center
+ * stays. Column sets are per map: 陆地A uses 3-wide `STREAM_COLS` plus a
+ * one-tile road at `ROAD_COL`; 陆地B uses a wider runway spine and no water;
+ * 海面A uses its own 5-wide canal table and no road on the edge row.
+ * Nothing else may touch row 0 or the last row with road or water.
  */
 
 import { MAP_CHUNK_ROWS, MAP_TILES_X } from '@/game/config';
@@ -18,12 +19,19 @@ import type { TileGrid } from './types';
 
 export const ROAD_COL = Math.floor(MAP_TILES_X / 2);
 
-export type StreamSide = 'none' | 'left' | 'right';
+export type StreamSide = 'none' | 'left' | 'right' | 'center';
 
-/** Water columns a stream uses where it crosses a chunk edge. */
-export const STREAM_COLS: Readonly<Record<Exclude<StreamSide, 'none'>, readonly number[]>> = {
+/** Water columns for one side. Each map picks a table; both sides of a join must share it. */
+export type EdgeColumns = Readonly<Record<Exclude<StreamSide, 'none'>, readonly number[]>>;
+
+/**
+ * 陆地A stream columns (3 tiles). `center` is the third slot; 陆地A itself
+ * only uses left, right, and none. 海面A passes a wider table to `sealEdges`.
+ */
+export const STREAM_COLS: EdgeColumns = {
   left: [2, 3, 4],
   right: [MAP_TILES_X - 5, MAP_TILES_X - 4, MAP_TILES_X - 3],
+  center: [ROAD_COL - 1, ROAD_COL, ROAD_COL + 1],
 };
 
 export interface ChunkDef {
@@ -58,7 +66,7 @@ export interface ChunkMapSpec {
 export function mirrorSide(side: StreamSide): StreamSide {
   if (side === 'left') return 'right';
   if (side === 'right') return 'left';
-  return 'none';
+  return side;
 }
 
 export function chunkEdges(def: ChunkDef, flip: boolean): { bottom: StreamSide; top: StreamSide } {
@@ -154,15 +162,62 @@ export function composeChunks(spec: ChunkMapSpec, plan = planChunks(spec)): Tile
   return grid;
 }
 
-const ROADLIKE: ReadonlySet<TileId> = new Set<TileId>([TileId.road, TileId.street, TileId.bridge]);
-const WATERLIKE: ReadonlySet<TileId> = new Set<TileId>([TileId.lake, TileId.bridge]);
+const ROADLIKE: ReadonlySet<TileId> = new Set<TileId>([
+  TileId.road,
+  TileId.street,
+  TileId.bridge,
+  TileId.runway,
+  TileId.runwayMark,
+]);
+const WATERLIKE: ReadonlySet<TileId> = new Set<TileId>([
+  TileId.lake,
+  TileId.bridge,
+  TileId.water,
+  TileId.waterB,
+  TileId.shallow,
+]);
 
 export function isRoadTile(id: TileId): boolean {
   return ROADLIKE.has(id);
 }
 
+/** Lake, bridge, or a legacy water tile. Bridge also counts as road. */
 export function isStreamTile(id: TileId): boolean {
   return WATERLIKE.has(id);
+}
+
+/**
+ * Stamp row 0 and the last row so they match this map's edge contract.
+ * Water columns become lake. Spine columns become `spineId` unless they are
+ * water. Any other road or water tile on those rows becomes meadow.
+ * Call at the end of `paint`, before the chunk is mirrored.
+ */
+export function sealEdges(
+  p: ChunkPainter,
+  bottom: StreamSide,
+  top: StreamSide,
+  spine: readonly number[],
+  spineId: TileId = TileId.road,
+  channels: EdgeColumns = STREAM_COLS
+): void {
+  const spineSet = new Set<number>(spine);
+  const apply = (row: number, side: StreamSide) => {
+    const water = new Set<number>(side === 'none' ? [] : channels[side]);
+    for (let c = 0; c < p.cols; c++) {
+      if (water.has(c)) {
+        p.set(c, row, TileId.lake);
+        continue;
+      }
+      if (spineSet.has(c)) {
+        p.set(c, row, spineId);
+        continue;
+      }
+      const id = p.get(c, row);
+      if (id !== null && (isRoadTile(id) || isStreamTile(id))) p.set(c, row, TileId.meadow);
+    }
+  };
+  apply(0, bottom);
+  apply(p.rows - 1, top);
 }
 
 /** Columns of one row holding road (or bridge) tiles, and those holding water. */

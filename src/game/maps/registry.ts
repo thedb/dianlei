@@ -3,15 +3,16 @@
  * 地图预览, the background renderer, and tests ask here.
  *
  * Adding a map: write its `MapDef` (a chunk library plus `composeChunks` for a
- * new tile map, like `landA.ts`), add it to `MAPS`, and reference its id from a
- * stage's `maps.run` (or `maps.boss` for a starfield). 地图预览 lists it
- * automatically.
+ * new tile map, like `landA.ts` / `landB.ts` / `seaA.ts`), add it to `MAPS`,
+ * and reference its id from a stage's `maps.run` (or `maps.boss` for a
+ * starfield). 地图预览 lists it automatically. Stage 1's run stays `landA`.
  */
 
-import { LAND_B_ROWS, MAP_CHUNK_ROWS, SEA_A_ROWS, SPACE_A_PREVIEW_SECONDS } from '@/game/config';
-import { buildBaseMap, buildCoastMap } from '@/game/art/tiles';
+import { MAP_CHUNK_ROWS, SPACE_A_PREVIEW_SECONDS } from '@/game/config';
 import { composeChunks } from './chunks';
 import { LAND_A_SPEC } from './landA';
+import { LAND_B_SPEC } from './landB';
+import { SEA_A_SPEC } from './seaA';
 import type { MapDef, StarfieldMapDef, TileGrid, TileMapDef } from './types';
 
 export const LAND_A: TileMapDef = {
@@ -23,22 +24,30 @@ export const LAND_A: TileMapDef = {
   cloudShadows: true,
 };
 
-/** Old stage-1 base section (runway, hangars, wall), kept as is. */
+/**
+ * Military airfield (P13). Preview and future stages only — stage 1 stays on 陆地A.
+ * Outskirts, runway core, then ruins. See `landB.ts`.
+ */
 export const LAND_B: TileMapDef = {
   id: 'landB',
   label: '陆地B',
   kind: 'tiles',
-  rows: LAND_B_ROWS,
-  build: () => buildBaseMap(LAND_B_ROWS),
+  rows: LAND_B_SPEC.slots.length * MAP_CHUNK_ROWS,
+  build: () => composeChunks(LAND_B_SPEC),
+  cloudShadows: true,
 };
 
-/** Old stage-1 coast section (winding river, island forts, docks), kept as is. */
+/**
+ * Inland canal and forest banks (P13). Preview and future stages only.
+ * The canal joins on a fixed left / right / center slot. See `seaA.ts`.
+ */
 export const SEA_A: TileMapDef = {
   id: 'seaA',
   label: '海面A',
   kind: 'tiles',
-  rows: SEA_A_ROWS,
-  build: () => buildCoastMap(SEA_A_ROWS),
+  rows: SEA_A_SPEC.slots.length * MAP_CHUNK_ROWS,
+  build: () => composeChunks(SEA_A_SPEC),
+  cloudShadows: true,
 };
 
 /** The post-WARNING starfield behind the boss. */

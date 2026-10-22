@@ -60,17 +60,27 @@ describe('map raster', () => {
     expect(used.size).toBeGreaterThan(8);
   });
 
-  it('copies the legacy 陆地B tiles pixel for pixel', () => {
-    const grid = getMapGrid('landB');
-    const strip = rasterStrip(grid, 40, MAP_CHUNK_ROWS);
+  it('copies legacy tile ids pixel for pixel', () => {
+    const legacy = [
+      TileId.grass,
+      TileId.water,
+      TileId.runway,
+      TileId.hangar,
+      TileId.wall,
+      TileId.dock,
+    ];
+    const grid = Array.from({ length: MAP_CHUNK_ROWS + 2 }, (_, r) =>
+      Array.from({ length: MAP_TILES_X }, (_, c) => legacy[(r + c) % legacy.length]!)
+    );
+    const strip = rasterStrip(grid, 1, MAP_CHUNK_ROWS);
     const tiles = getTilePixels();
     for (let r = 0; r < MAP_CHUNK_ROWS; r++) {
-      const mapRow = 40 + r;
+      const mapRow = 1 + r;
       const top = (MAP_CHUNK_ROWS - 1 - r) * TILE_SIZE;
       for (let c = 0; c < MAP_TILES_X; c++) {
         const tile = tiles[grid[mapRow]![c]!]!;
-        for (let y = 0; y < TILE_SIZE; y += 5) {
-          for (let x = 0; x < TILE_SIZE; x += 5) {
+        for (let y = 0; y < TILE_SIZE; y += 4) {
+          for (let x = 0; x < TILE_SIZE; x += 4) {
             expect(strip.data[(top + y) * WIDTH + c * TILE_SIZE + x]).toBe(tile[y]![x]);
           }
         }
