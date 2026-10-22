@@ -2,8 +2,8 @@
  * Map strip raster (P12): turns rows of a tile grid into palette indices.
  * Pure (no canvas), so tests can read pixels.
  *
- * Legacy tiles (ids below `TileId.meadow`) are copied as is, so 海面A and
- * 陆地B look exactly as before. 陆地A tiles are finished per neighbour:
+ * Legacy tiles (ids below `TileId.meadow`) are copied as is. 陆地A tiles, and
+ * the same tiles on 陆地B / 海面A, are finished per neighbour:
  * - roads / streets get a band that joins the neighbouring road tiles,
  * - lake water shades from foam to deep by distance to the shore, and land
  *   next to it gets a sand rim,

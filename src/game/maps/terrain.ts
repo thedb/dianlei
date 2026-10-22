@@ -28,6 +28,9 @@ const LAND: readonly TileId[] = [
   TileId.forest,
   TileId.oak,
   TileId.fir,
+  TileId.scorch,
+  TileId.crater,
+  TileId.snag,
 ];
 
 const WATER: readonly TileId[] = [TileId.water, TileId.waterB, TileId.shallow, TileId.lake];

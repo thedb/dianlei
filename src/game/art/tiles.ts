@@ -3,12 +3,13 @@
  * Maps are 23 tiles (368px) wide and drawn at x = -4 so the 360-wide screen
  * crops 4px from each side (design doc §3.7).
  *
- * Ids 0–32 are the original stage-1 tiles, still used by 海面A and 陆地B.
- * Ids from 33 on are the 陆地A set.
+ * Ids 0–32 are the original stage-1 tiles (runway, hangar, dock, bunker, …).
+ * Ids 33–58 are the 陆地A set. Ids 59–63 are the P13 ruin set (scorch, crater,
+ * trench, wreck, snag), used by 陆地B.
  */
 
 import { COLOR } from '@/game/palette';
-import { LOGICAL_H, MAP_TILES_X, TILE_SIZE } from '@/game/config';
+import { LOGICAL_H, TILE_SIZE } from '@/game/config';
 import { createGrid, fillEllipse, fillPoly, fillRect, plot } from './pixelDraw';
 import type { SpriteData } from './types';
 
@@ -94,11 +95,16 @@ export const TileId = {
   houseBrownBR: 56,
   plaza: 57,
   reeds: 58,
+  scorch: 59,
+  crater: 60,
+  trench: 61,
+  wreck: 62,
+  snag: 63,
 } as const;
 
 export type TileId = (typeof TileId)[keyof typeof TileId];
 
-export const TILE_COUNT = 59;
+export const TILE_COUNT = 64;
 
 function grassTile(base: number, light: number, dark: number, phase: number): SpriteData {
   const g = createGrid(TILE_SIZE, TILE_SIZE, base);
@@ -653,12 +659,74 @@ function flowersTile(): SpriteData {
   return g;
 }
 
+function scorchTile(): SpriteData {
+  const g = meadowTile(MX, MD, NV, 3);
+  const ash: Array<[number, number]> = [
+    [2, 3],
+    [8, 6],
+    [13, 4],
+    [5, 11],
+    [11, 13],
+    [7, 2],
+    [14, 9],
+  ];
+  for (const [x, y] of ash) plot(g, x, y, NV);
+  plot(g, 4, 8, COLOR.EXPLOSION_ORANGE);
+  plot(g, 12, 10, COLOR.GROUND_DARK_OLIVE);
+  return g;
+}
+
+function craterTile(): SpriteData {
+  const g = scorchTile();
+  fillEllipse(g, 8, 8.5, 6.2, 5.2, DI);
+  fillEllipse(g, 8, 8.2, 4.4, 3.4, AD);
+  fillEllipse(g, 8, 8.4, 2.2, 1.6, K);
+  fillEllipse(g, 6.2, 6.4, 1.3, 0.8, CD);
+  return g;
+}
+
+function trenchTile(): SpriteData {
+  const g = createGrid(TILE_SIZE, TILE_SIZE, BR);
+  fillRect(g, 0, 0, TILE_SIZE, 3, BL);
+  fillRect(g, 0, 3, TILE_SIZE, 10, DI);
+  fillRect(g, 0, 6, TILE_SIZE, 4, NV);
+  fillRect(g, 0, 13, TILE_SIZE, 3, AD);
+  for (let x = 2; x < TILE_SIZE; x += 4) plot(g, x, 8, K);
+  return g;
+}
+
+function wreckTile(): { pixels: SpriteData; tall: boolean[][] } {
+  return overlay(scorchTile(), tallMask(TILE_SIZE, TILE_SIZE), (g) => {
+    fillRect(g, 2, 8, 12, 3, AD);
+    fillRect(g, 3, 6, 7, 2, CD);
+    fillRect(g, 10, 4, 3, 6, GR);
+    fillRect(g, 4, 10, 5, 2, DI);
+    plot(g, 5, 8, COLOR.ENEMY_DARK_RED);
+    plot(g, 11, 5, CL);
+  });
+}
+
+function snagTile(): { pixels: SpriteData; tall: boolean[][] } {
+  return overlay(scorchTile(), tallMask(TILE_SIZE, TILE_SIZE), (g) => {
+    fillRect(g, 7, 5, 2, 8, DI);
+    fillRect(g, 6, 13, 4, 2, AD);
+    plot(g, 5, 7, K);
+    plot(g, 10, 6, K);
+    plot(g, 4, 5, DI);
+    plot(g, 11, 4, DI);
+    plot(g, 8, 3, NV);
+  });
+}
+
 function paintLandTiles(tiles: SpriteData[], tall: Array<boolean[][] | null>): void {
   tiles[TileId.meadow] = meadowTile(M, ML, MD, 0);
   tiles[TileId.meadowB] = meadowTile(M, ML, MD, 1);
   tiles[TileId.meadowDark] = meadowTile(MD, M, MF, 2);
   tiles[TileId.flowers] = flowersTile();
   tiles[TileId.reeds] = reedsTile();
+  tiles[TileId.scorch] = scorchTile();
+  tiles[TileId.crater] = craterTile();
+  tiles[TileId.trench] = trenchTile();
   tiles[TileId.plaza] = plazaTile();
   tiles[TileId.cropGreen] = cropGreenTile();
   tiles[TileId.cropWheat] = cropWheatTile();
@@ -675,6 +743,8 @@ function paintLandTiles(tiles: SpriteData[], tall: Array<boolean[][] | null>): v
     [TileId.fir, firTile()],
     [TileId.boulder, boulderTile()],
     [TileId.shed, shedTile()],
+    [TileId.wreck, wreckTile()],
+    [TileId.snag, snagTile()],
   ];
   for (const [id, art] of sprites) {
     tiles[id] = art.pixels;
@@ -711,172 +781,6 @@ export const HOUSE_BROWN = [
   TileId.houseBrownBR,
 ] as const;
 
-function clampCol(n: number): number {
-  return Math.max(1, Math.min(MAP_TILES_X - 2, n));
-}
-
-function riverCenter(y: number): number {
-  const sway = Math.sin(y * 0.07) * 5 + Math.sin(y * 0.021 + 2) * 2;
-  return clampCol(Math.round(11 + sway));
-}
-
-function paintRiver(grid: TileId[][], y: number, x0: number, x1: number): void {
-  const row = grid[y];
-  if (!row) return;
-  for (let x = x0; x <= x1; x++) {
-    if (x < 0 || x >= MAP_TILES_X) continue;
-    const edge = x === x0 || x === x1;
-    row[x] = edge
-      ? hash(x, y) % 3 === 0
-        ? TileId.shallow
-        : TileId.waterB
-      : hash(x, y) % 4 === 0
-        ? TileId.waterB
-        : TileId.water;
-  }
-}
-
-function stampFort(grid: TileId[][], cx: number, cy: number): void {
-  const rows = grid.length;
-  for (let dy = -3; dy <= 3; dy++) {
-    for (let dx = -3; dx <= 3; dx++) {
-      const x = cx + dx;
-      const y = cy + dy;
-      if (y < 0 || y >= rows || x < 0 || x >= MAP_TILES_X) continue;
-      const ax = Math.abs(dx);
-      const ay = Math.abs(dy);
-      const cell =
-        ax === 3 && ay === 3
-          ? TileId.bunker
-          : ax === 3 || ay === 3
-            ? TileId.fortWall
-            : dx === 0 && dy === 0
-              ? TileId.bunker
-              : TileId.fortYard;
-      grid[y]![x] = cell;
-    }
-  }
-}
-
-function fortBand(y: number): boolean {
-  return [36, 96, 150].some((c) => Math.abs(y - c) <= 7);
-}
-
-/** 海面A (old stage-1 coast): a winding river, bridges, and stone forts on the islands it splits around. */
-export function buildCoastMap(rows: number): TileId[][] {
-  const grid = emptyGrid(rows);
-  for (let y = 0; y < rows; y++) {
-    for (let x = 0; x < MAP_TILES_X; x++) {
-      const h = hash(x + 9, y + 3);
-      const clump = hash((x + 2) >> 1, y >> 1);
-      let id: TileId = h % 7 === 0 ? TileId.grassB : TileId.grass;
-      if (x === 0 || x === MAP_TILES_X - 1) id = h % 2 === 0 ? TileId.mountain : TileId.rock;
-      else if (clump % 5 === 0) id = TileId.tree;
-      else if (h % 19 === 0) id = TileId.bush;
-      grid[y]![x] = id;
-    }
-  }
-  for (let y = 0; y < rows; y++) {
-    if (fortBand(y)) {
-      paintRiver(grid, y, 1, 5);
-      paintRiver(grid, y, MAP_TILES_X - 6, MAP_TILES_X - 2);
-    } else {
-      const c = riverCenter(y);
-      paintRiver(grid, y, c - 2, c + 2);
-      for (const x of [c - 3, c + 3]) {
-        if (x < 0 || x >= MAP_TILES_X) continue;
-        const id = grid[y]![x];
-        if (id === TileId.grass || id === TileId.grassB || id === TileId.tree) {
-          grid[y]![x] = TileId.sand;
-        }
-      }
-    }
-  }
-  for (const y of [18, 58, 78, 120]) {
-    if (y + 1 >= rows || fortBand(y)) continue;
-    const c = riverCenter(y);
-    for (let x = c - 2; x <= c + 2; x++) {
-      grid[y]![x] = TileId.dock;
-      grid[y + 1]![x] = TileId.dock;
-    }
-  }
-  for (const cy of [36, 96, 150]) {
-    if (cy >= 3 && cy < rows - 3) stampFort(grid, 11, cy);
-  }
-  for (let y = 0; y < rows; y++) {
-    if (fortBand(y)) continue;
-    const x = clampCol(riverCenter(y) + 6);
-    const id = grid[y]![x];
-    if (id === TileId.grass || id === TileId.grassB || id === TileId.sand || id === TileId.bush) {
-      grid[y]![x] = TileId.coastRoad;
-    }
-  }
-  const top = Math.min(6, rows);
-  for (let y = 0; y < top; y++) {
-    for (let x = 0; x < MAP_TILES_X; x++) {
-      const id = grid[y]![x];
-      if (id === TileId.water || id === TileId.waterB || id === TileId.shallow) continue;
-      if ((x + y) % 2 === 0) grid[y]![x] = TileId.sand;
-    }
-  }
-  const blend = 8;
-  for (let y = Math.max(0, rows - blend); y < rows; y++) {
-    for (let x = 0; x < MAP_TILES_X; x++) {
-      const id = grid[y]![x];
-      if (id === TileId.water || id === TileId.waterB || id === TileId.dock) continue;
-      if ((x + y) % 3 !== 0) grid[y]![x] = TileId.concrete;
-    }
-  }
-  return grid;
-}
-
-/** 陆地B (old stage-1 base): perimeter wall, runway, hangar rows, pads, then mountains outside the fence. */
-export function buildBaseMap(rows: number): TileId[][] {
-  const grid = emptyGrid(rows);
-  for (let y = 0; y < rows; y++) {
-    for (let x = 0; x < MAP_TILES_X; x++) {
-      const h = hash(x, y + 9);
-      const outside = x === 0 || x === MAP_TILES_X - 1 || y === 0 || y === rows - 1;
-      const wallLine = x === 1 || x === MAP_TILES_X - 2 || y === 2 || y === rows - 3;
-      if (outside) {
-        grid[y]![x] = h % 2 === 0 ? TileId.mountain : TileId.grassDark;
-      } else if (y === 2 && x >= 9 && x <= 13) {
-        grid[y]![x] = x === 9 || x === 13 ? TileId.wall : TileId.gate;
-      } else if (wallLine) {
-        grid[y]![x] = TileId.wall;
-      } else {
-        grid[y]![x] = h % 9 === 0 ? TileId.concreteDark : TileId.concrete;
-      }
-    }
-  }
-  if (rows > 8) stamp(grid, 3, 4, 2, 2, TileId.radar);
-  const runwayEnd = Math.max(4, rows - 4);
-  for (let y = 4; y < runwayEnd; y++) {
-    for (let x = 9; x <= 13; x++) grid[y]![x] = TileId.runway;
-    if (y % 2 === 0) grid[y]![11] = TileId.runwayMark;
-  }
-  for (let y = 8; y + 3 < rows - 6; y += 26) {
-    stamp(grid, 3, y, 4, 1, TileId.hangarRoof);
-    stamp(grid, 3, y + 1, 4, 2, TileId.hangar);
-    const rightY = y + 12;
-    if (rightY + 3 < rows - 6) {
-      stamp(grid, 16, rightY, 4, 1, TileId.hangarRoof);
-      stamp(grid, 16, rightY + 1, 4, 2, TileId.hangar);
-    }
-  }
-  for (let y = 18; y + 2 < rows - 6; y += 24) {
-    stamp(grid, 7, y, 2, 2, TileId.pad);
-    stamp(grid, 15, y, 2, 2, TileId.pad);
-  }
-  const top = Math.min(2, rows);
-  for (let y = 0; y < top; y++) {
-    for (let x = 2; x < MAP_TILES_X - 2; x++) {
-      if ((x + y) % 2 === 0) grid[y]![x] = TileId.sand;
-    }
-  }
-  return grid;
-}
-
 let tilePixels: SpriteData[] | null = null;
 let tileTall: Array<boolean[][] | null> | null = null;
 
@@ -901,29 +805,6 @@ export function hash(x: number, y: number): number {
   let n = x * 374761393 + y * 668265263;
   n = Math.imul(n ^ (n >>> 13), 1274126177);
   return (n ^ (n >>> 16)) >>> 0;
-}
-
-function stamp(grid: TileId[][], x: number, y: number, w: number, h: number, id: TileId): void {
-  const rows = grid.length;
-  const cols = grid[0]?.length ?? 0;
-  for (let yy = y; yy < y + h; yy++) {
-    if (yy < 0 || yy >= rows) continue;
-    const row = grid[yy]!;
-    for (let xx = x; xx < x + w; xx++) {
-      if (xx < 0 || xx >= cols) continue;
-      row[xx] = id;
-    }
-  }
-}
-
-export function emptyGrid(rows: number, fill: TileId = TileId.grass): TileId[][] {
-  const grid: TileId[][] = [];
-  for (let y = 0; y < rows; y++) {
-    const row: TileId[] = [];
-    for (let x = 0; x < MAP_TILES_X; x++) row.push(fill);
-    grid.push(row);
-  }
-  return grid;
 }
 
 export interface Star {
