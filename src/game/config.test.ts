@@ -15,6 +15,10 @@ import {
   HOMING_FIRE_RATE,
   HOMING_DAMAGE,
   HOMING_MAX_LEVEL,
+  MATE_MAX_LEVEL,
+  MATE_OFFSET_X,
+  MATE_SCALE,
+  DEATH_MATE_LOSS,
   BOMB_MEDIUM_RATIO,
   BOMB_BOSS_RATIO,
   BOMB_WAVE_TIME,
@@ -89,6 +93,10 @@ describe('Game Config', () => {
     expect(HOMING_MAX_LEVEL).toBe(2);
     expect(DEATH_POWER_LOSS).toBe(1);
     expect(DEATH_SUB_LOSS).toBe(1);
+    expect(MATE_MAX_LEVEL).toBe(2);
+    expect(MATE_OFFSET_X).toBe(32);
+    expect(MATE_SCALE).toBeCloseTo(1 / 3);
+    expect(DEATH_MATE_LOSS).toBe(1);
   });
 
   it('keeps the bomb rules in range', () => {

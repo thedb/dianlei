@@ -101,14 +101,24 @@ export function drawPlayerFlames(
   centerY: number,
   nozzleOffsets: Array<{ x: number; y: number }>,
   velocityY: number,
-  time: number
+  time: number,
+  scale = 1
 ): void {
+  const config =
+    scale === 1
+      ? PLAYER_FLAME_CONFIG
+      : {
+          ...PLAYER_FLAME_CONFIG,
+          baseLength: PLAYER_FLAME_CONFIG.baseLength * scale,
+          baseWidth: PLAYER_FLAME_CONFIG.baseWidth * scale,
+          flickerAmount: PLAYER_FLAME_CONFIG.flickerAmount * scale,
+        };
   for (const nozzle of nozzleOffsets) {
     drawEngineFlame(
       ctx,
-      centerX + nozzle.x,
-      centerY + nozzle.y,
-      PLAYER_FLAME_CONFIG,
+      centerX + nozzle.x * scale,
+      centerY + nozzle.y * scale,
+      config,
       velocityY,
       time
     );

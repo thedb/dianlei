@@ -147,7 +147,7 @@ describe('weapon registry', () => {
 describe('weapon pickup rules', () => {
   it('levels the same main weapon up to its max, then pays the overflow score', () => {
     const l = createLoadout();
-    expect(l).toEqual({ main: { id: 'vulcan', level: 1 }, sub: null });
+    expect(l).toEqual({ main: { id: 'vulcan', level: 1 }, sub: null, mate: 0 });
     expect(applyWeaponPickup(l, 'vulcan')).toBe('levelUp');
     expect(applyWeaponPickup(l, 'vulcan')).toBe('levelUp');
     expect(l.main.level).toBe(3);
@@ -203,6 +203,7 @@ describe('weapon death rules', () => {
     applyDeathPenalty(l);
     applyDeathPenalty(l);
     expect(l.main.level).toBe(1);
+    expect(l.mate).toBe(0);
   });
 
   it('drops sub one level and empties the slot from Lv1', () => {

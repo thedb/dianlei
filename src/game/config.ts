@@ -122,6 +122,9 @@ export const LV2_GAP = 10;
 /** Lv3 spread angle in degrees */
 export const LV3_SPREAD_DEG = 15;
 
+/** Distance from the ship center up to the vulcan muzzle. */
+export const VULCAN_MUZZLE_Y = 16;
+
 // ============================================================================
 // §14.4.1 Sub weapon: T homing missile
 // ============================================================================
@@ -161,6 +164,31 @@ export const HOMING_HIT_SIZE = 6;
 
 /** Sub-weapon levels lost on death. Lv0 means the slot is empty. */
 export const DEATH_SUB_LOSS = 1;
+
+// ============================================================================
+// §14.4.2 Wingmen (M). Not a WEAPONS row and not an item this milestone.
+// ============================================================================
+
+/** Highest M level. 0 is none, 1 is the left ship, 2 is one ship on each side. */
+export const MATE_MAX_LEVEL = 2;
+
+/** Center-to-center gap from the player to each wingman, logical pixels. */
+export const MATE_OFFSET_X = 32;
+
+/** Vertical nudge from the player center. 0 keeps the wingmen at the same height. */
+export const MATE_OFFSET_Y = 0;
+
+/**
+ * Wingman sprite scale relative to the player ship.
+ * Drawn size is rounded to whole pixels (28×32 becomes 9×11).
+ */
+export const MATE_SCALE = 1 / 3;
+
+/** Nose offset above the wingman center. The full-ship muzzle, scaled down. */
+export const MATE_MUZZLE_Y = VULCAN_MUZZLE_Y * MATE_SCALE;
+
+/** Mate levels lost on death. 0 means no wingmen. */
+export const DEATH_MATE_LOSS = 1;
 
 // ============================================================================
 // §14.5 Lives, Bombs & Invincibility

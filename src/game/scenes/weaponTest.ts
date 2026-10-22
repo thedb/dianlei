@@ -3,8 +3,9 @@
  * The battle scene owns the player, the real loadout, and the projectiles.
  * This module owns the target, the damage log, the top-right hit targets,
  * and the session-only rate / damage tune.
- * P writes state.main, T writes state.sub (homing, or null when off), and B
- * writes state.bombs. P速 / P伤 / T速 / T伤 write a WeaponTestTune object.
+ * P writes state.main, T writes state.sub (homing, or null when off), M writes
+ * state.mate (0–2), and B writes state.bombs. P速 / P伤 / T速 / T伤 write a
+ * WeaponTestTune object. M is a level, like P and T: reset does not clear it.
  * Holding fire uses the battle scene's stepFireClock / fireVolley path, so
  * missiles spawn and can hit the target. The tune never mutates WEAPONS.
  */
@@ -53,16 +54,18 @@ const LABEL_W = 40;
 const PAD_TOP = 8;
 const PAD_BOTTOM = 10;
 
-/** P速, P伤, T速, T伤 sit under B. Reset is the last row. */
+/** M sits under T. B, then P速 / P伤 / T速 / T伤. Reset is the last row. */
+const MATE_ROW = 2;
+const BOMB_ROW = 3;
 const TUNE_ROW = {
-  mainRate: 3,
-  mainDamage: 4,
-  homingRate: 5,
-  homingDamage: 6,
+  mainRate: 4,
+  mainDamage: 5,
+  homingRate: 6,
+  homingDamage: 7,
 } as const;
-const RESET_ROW = 7;
+const RESET_ROW = 8;
 
-export const WEAPON_TEST_STATS_PANEL: Rect = { x: STATS_X, y: STATS_Y, w: 160, h: 150 };
+export const WEAPON_TEST_STATS_PANEL: Rect = { x: STATS_X, y: STATS_Y, w: 160, h: 172 };
 
 export const WEAPON_TEST_CTRL_PANEL: Rect = {
   x: CTRL_X,
@@ -92,16 +95,20 @@ export function weaponTestSubRect(level: 0 | 1 | 2): Rect {
   return slot(1, level);
 }
 
+export function weaponTestMateRect(level: 0 | 1 | 2): Rect {
+  return slot(MATE_ROW, level);
+}
+
 export function weaponTestBombDecRect(): Rect {
-  return slot(2, 0);
+  return slot(BOMB_ROW, 0);
 }
 
 export function weaponTestBombCountRect(): Rect {
-  return slot(2, 1);
+  return slot(BOMB_ROW, 1);
 }
 
 export function weaponTestBombIncRect(): Rect {
-  return slot(2, 2);
+  return slot(BOMB_ROW, 2);
 }
 
 export function weaponTestResetRect(): Rect {
@@ -149,6 +156,7 @@ export function weaponTestTuneIncRect(field: WeaponTestTuneField): Rect {
 export type WeaponTestCommand =
   | { kind: 'main'; level: 1 | 2 | 3 }
   | { kind: 'sub'; level: 0 | 1 | 2 }
+  | { kind: 'mate'; level: 0 | 1 | 2 }
   | { kind: 'bombs'; delta: -1 | 1 }
   | { kind: WeaponTestTuneField; delta: -1 | 1 }
   | { kind: 'reset' };
@@ -160,6 +168,9 @@ export function weaponTestCommandAt(x: number, y: number): WeaponTestCommand | n
   }
   for (const level of [0, 1, 2] as const) {
     if (hitRect(weaponTestSubRect(level), x, y)) return { kind: 'sub', level };
+  }
+  for (const level of [0, 1, 2] as const) {
+    if (hitRect(weaponTestMateRect(level), x, y)) return { kind: 'mate', level };
   }
   if (hitRect(weaponTestBombDecRect(), x, y)) return { kind: 'bombs', delta: -1 };
   if (hitRect(weaponTestBombIncRect(), x, y)) return { kind: 'bombs', delta: 1 };
@@ -277,6 +288,8 @@ export interface WeaponTestStats {
   mainLevel: number;
   /** 0 means sub weapon T is off. */
   subLevel: number;
+  /** Wingman slot M. 0, 1, or 2. */
+  mateLevel: number;
   bombs: number;
   /** Live tune. Equals the config constants until a stepper or reset changes it. */
   mainRate: number;

@@ -267,6 +267,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
         mainWeapon: state.main.id,
         subWeapon: state.sub?.id ?? null,
         subLevel: state.sub?.level ?? 0,
+        mateLevel: state.mate,
         missileCount: b.missiles.getActiveCount(),
         lives: state.lives,
         paused: b.pause.isOpen(),

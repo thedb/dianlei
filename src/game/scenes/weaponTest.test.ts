@@ -48,6 +48,7 @@ import {
   weaponTestBombIncRect,
   weaponTestCommandAt,
   weaponTestMainRect,
+  weaponTestMateRect,
   weaponTestResetRect,
   weaponTestSubRect,
   weaponTestTuneDecRect,
@@ -141,6 +142,12 @@ describe('weapon-test damage log and setters', () => {
       kind: 'sub',
       level: 0,
     });
+    expect(weaponTestCommandAt(tap(weaponTestMateRect(2)).x, tap(weaponTestMateRect(2)).y)).toEqual(
+      {
+        kind: 'mate',
+        level: 2,
+      }
+    );
     expect(
       weaponTestCommandAt(tap(weaponTestBombIncRect()).x, tap(weaponTestBombIncRect()).y)
     ).toEqual({
@@ -177,6 +184,7 @@ describe('weapon-test damage log and setters', () => {
       weaponTestBombIncRect(),
       ...([1, 2, 3] as const).map((level) => weaponTestMainRect(level)),
       ...([0, 1, 2] as const).map((level) => weaponTestSubRect(level)),
+      ...([0, 1, 2] as const).map((level) => weaponTestMateRect(level)),
     ];
     for (const field of WEAPON_TEST_TUNE_FIELDS) {
       const dec = weaponTestTuneDecRect(field);
@@ -316,6 +324,8 @@ describe('weapon-test battle', () => {
     expect(info.bossPhase).toBeUndefined();
     expect(info.power).toBe(1);
     expect(scene.getWeaponTestStats()?.mainLevel).toBe(1);
+    expect(scene.getWeaponTestStats()?.mateLevel).toBe(0);
+    expect(info.mateLevel).toBe(0);
   });
 
   it('writes the real main weapon and records vulcan damage', () => {
@@ -523,6 +533,7 @@ describe('weapon-test battle', () => {
     flyIn(scene);
     scene.update(DT, makeInput({ taps: [tap(weaponTestMainRect(3))] }));
     scene.update(DT, makeInput({ taps: [tap(weaponTestSubRect(2))] }));
+    scene.update(DT, makeInput({ taps: [tap(weaponTestMateRect(2))] }));
     scene.update(DT, makeInput({ taps: [tap(weaponTestBombIncRect())] }));
     scene.update(DT, makeInput({ taps: [tap(weaponTestTuneIncRect('mainRate'))] }));
     scene.update(DT, makeInput({ taps: [tap(weaponTestTuneDecRect('homingDamage'))] }));
@@ -538,6 +549,7 @@ describe('weapon-test battle', () => {
       dps: 0,
       mainLevel: POWER_MAX,
       subLevel: 2,
+      mateLevel: 2,
       bombs,
       mainRate: FIRE_RATE,
       mainDamage: PLAYER_BULLET_DAMAGE,
@@ -550,6 +562,7 @@ describe('weapon-test battle', () => {
     const { scene } = setup();
     flyIn(scene);
     scene.update(DT, makeInput({ taps: [tap(weaponTestMainRect(2))] }));
+    scene.update(DT, makeInput({ taps: [tap(weaponTestMateRect(1))] }));
     scene.update(DT, makeInput({ taps: [tap(weaponTestTuneIncRect('mainDamage'))] }));
     scene.update(DT, makeInput({ buttonA: true }));
     expect(scene.getWeaponTestStats()?.mainDamage).toBe(
@@ -560,6 +573,7 @@ describe('weapon-test battle', () => {
     expect(scene.getWeaponTestStats()).toMatchObject({
       totalDamage: 0,
       mainLevel: 2,
+      mateLevel: 1,
       mainDamage: PLAYER_BULLET_DAMAGE,
       mainRate: FIRE_RATE,
       homingDamage: HOMING_DAMAGE,
@@ -571,11 +585,107 @@ describe('weapon-test battle', () => {
       totalDamage: 0,
       mainLevel: 1,
       subLevel: 0,
+      mateLevel: 0,
       mainDamage: PLAYER_BULLET_DAMAGE,
       mainRate: FIRE_RATE,
       homingDamage: HOMING_DAMAGE,
       homingRate: HOMING_FIRE_RATE,
     });
+  });
+
+  it('starts a stage and boss practice at M = 0', () => {
+    expect(setup('play').scene.getDebugInfo!().mateLevel).toBe(0);
+    const boss = setup('play', 'boss');
+    expect(boss.scene.getDebugInfo!().mateLevel).toBe(0);
+    expect(boss.scene.getDebugInfo!().power).toBe(POWER_MAX);
+  });
+
+  it('adds one straight shot per wingman on the main gun beat, not the P pattern', () => {
+    const { scene } = setup();
+    flyIn(scene);
+
+    const fireDelta = (): { bullets: number; missiles: number } => {
+      const beforeB = scene.getDebugInfo!().bulletCount ?? 0;
+      const beforeM = scene.getDebugInfo!().missileCount ?? 0;
+      scene.update(DT, makeInput({ buttonA: true }));
+      return {
+        bullets: (scene.getDebugInfo!().bulletCount ?? 0) - beforeB,
+        missiles: (scene.getDebugInfo!().missileCount ?? 0) - beforeM,
+      };
+    };
+    const clearShots = (): void => {
+      for (let i = 0; i < 90; i++) scene.update(DT, makeInput());
+      expect(scene.getDebugInfo!().bulletCount).toBe(0);
+      expect(scene.getDebugInfo!().missileCount).toBe(0);
+    };
+
+    expect(fireDelta()).toEqual({ bullets: 1, missiles: 0 });
+    const held = scene.getDebugInfo!().bulletCount ?? 0;
+    scene.update(DT, makeInput({ buttonA: true }));
+    expect(scene.getDebugInfo!().bulletCount).toBe(held);
+
+    clearShots();
+    scene.update(DT, makeInput({ taps: [tap(weaponTestMateRect(1))] }));
+    expect(scene.getWeaponTestStats()?.mateLevel).toBe(1);
+    expect(fireDelta()).toEqual({ bullets: 2, missiles: 0 });
+
+    clearShots();
+    scene.update(DT, makeInput({ taps: [tap(weaponTestMateRect(2))] }));
+    expect(fireDelta()).toEqual({ bullets: 3, missiles: 0 });
+
+    clearShots();
+    scene.update(DT, makeInput({ taps: [tap(weaponTestMainRect(3))] }));
+    expect(fireDelta()).toEqual({ bullets: 5, missiles: 0 });
+
+    clearShots();
+    scene.update(DT, makeInput({ taps: [tap(weaponTestMateRect(1))] }));
+    scene.update(DT, makeInput({ taps: [tap(weaponTestSubRect(2))] }));
+    expect(fireDelta()).toEqual({ bullets: 4, missiles: 2 });
+    expect(scene.getDebugInfo!().subLevel).toBe(2);
+    expect(scene.getWeaponTestStats()?.mateLevel).toBe(1);
+  });
+
+  it('keeps wingman damage at the base vulcan value when P伤 is raised', () => {
+    const { scene } = setup();
+    flyIn(scene);
+    scene.update(DT, makeInput({ taps: [tap(weaponTestMateRect(1))] }));
+    scene.update(DT, makeInput({ taps: [tap(weaponTestTuneIncRect('mainDamage'))] }));
+    scene.update(DT, makeInput({ taps: [tap(weaponTestTuneIncRect('mainDamage'))] }));
+    const tuned = PLAYER_BULLET_DAMAGE + 2 * WEAPON_TEST_DAMAGE_STEP;
+    expect(scene.getWeaponTestStats()?.mainDamage).toBe(tuned);
+
+    let sawPlayer = false;
+    let sawMate = false;
+    for (let i = 0; i < Math.ceil(1.1 / DT); i++) {
+      scene.update(DT, makeInput({ buttonA: true }));
+      const stats = scene.getWeaponTestStats()!;
+      if (!sawPlayer && stats.totalDamage === tuned && stats.lastHit === tuned) sawPlayer = true;
+      if (
+        sawPlayer &&
+        stats.totalDamage === tuned + PLAYER_BULLET_DAMAGE &&
+        stats.lastHit === PLAYER_BULLET_DAMAGE
+      ) {
+        sawMate = true;
+        break;
+      }
+    }
+    expect(sawPlayer).toBe(true);
+    expect(sawMate).toBe(true);
+  });
+
+  it('drops M one level when the ship is destroyed', () => {
+    const { scene } = setup();
+    flyIn(scene);
+    scene.update(DT, makeInput({ taps: [tap(weaponTestMateRect(2))] }));
+    scene.update(DT, makeInput({ taps: [tap(weaponTestMainRect(3))] }));
+    scene.update(DT, makeInput({ taps: [tap(weaponTestSubRect(2))] }));
+    expect(scene.applyTestDeath()).toBe(true);
+    expect(scene.getWeaponTestStats()).toMatchObject({
+      mateLevel: 1,
+      mainLevel: 2,
+      subLevel: 1,
+    });
+    expect(scene.getDebugInfo!().mateLevel).toBe(1);
   });
 
   it('leaves for the title from pause 返回标题 without a second confirm', () => {

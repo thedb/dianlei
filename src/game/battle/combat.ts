@@ -244,6 +244,7 @@ export function resolveCollisions(b: Battle, warningWindow: boolean): void {
     resolveShot(b, m, HOMING_HIT_SIZE, HOMING_HIT_SIZE, () => b.missiles.release(m), true);
   });
 
+  // Wingmen (M) have no hitbox. Only the player center is tested below.
   const { player, boss } = b;
   if (isPlayerVulnerable(b) && !warningWindow) {
     b.enemyBullets.forEach((bullet) => {

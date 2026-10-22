@@ -64,7 +64,7 @@ export interface PlayerShip {
   velocityY: number;
 }
 
-/** Run state. `main` / `sub` are the weapon slots (see playerWeapons.ts). */
+/** Run state. `main` / `sub` are the weapon slots; `mate` is the M wingman level. */
 export interface GameState extends Loadout {
   lives: number;
   bombs: number;
@@ -165,6 +165,7 @@ export function createBattle(scene: SceneContext): Battle {
       score: 0,
       main: { id: 'vulcan', level: 1 },
       sub: null,
+      mate: 0,
       bombCooldown: 0,
       bombInvincible: 0,
       bombFlashTimer: 0,

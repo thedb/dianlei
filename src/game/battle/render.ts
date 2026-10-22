@@ -13,6 +13,7 @@ import {
   INVINCIBLE_ALPHA_MIN,
   INVINCIBLE_BLINK_FAST,
   INVINCIBLE_BLINK_INTERVAL,
+  MATE_SCALE,
   SHOW_HITBOX,
 } from '@/game/config';
 import {
@@ -28,8 +29,10 @@ import {
   drawHomingExhaust,
   drawPlayerFlames,
   explosionDrawKey,
+  type BankFrame,
   type GameAssets,
 } from '@/game/art';
+import { matePixels, matePlacements } from '@/game/systems/mate';
 import { ENEMY_DEFS } from '@/game/entities/enemyDefs';
 import { isGroundEnemy, type Enemy } from '@/game/entities/enemy';
 import { isItemFlashing } from '@/game/entities/item';
@@ -75,6 +78,29 @@ function drawEnemy(
   if (def.barrel) drawGunBarrel(ctx, ex, ey, enemy.aimAngle, def.barrel === 'twin');
 }
 
+/** Same bank frame as the player, scaled, stuck to the player center. No hitbox. */
+function drawMates(
+  renderer: Renderer,
+  ctx: CanvasRenderingContext2D,
+  b: Battle,
+  frame: BankFrame,
+  renderX: number,
+  renderY: number
+): void {
+  const places = matePlacements(b.state.mate);
+  if (places.length === 0) return;
+  const w = matePixels(frame.width);
+  const h = matePixels(frame.height);
+  const ax = matePixels(frame.anchorX);
+  const ay = matePixels(frame.anchorY);
+  for (const mate of places) {
+    const x = renderX + mate.dx;
+    const y = renderY + mate.dy;
+    drawPlayerFlames(ctx, x, y, frame.nozzles, b.player.velocityY, b.gameTime, MATE_SCALE);
+    renderer.drawImage(frame.canvas, x - ax, y - ay, w, h);
+  }
+}
+
 function drawShip(renderer: Renderer, b: Battle, assets: GameAssets, alpha: number): void {
   const { player, state, gameTime } = b;
   const ctx = renderer.getContext();
@@ -91,6 +117,7 @@ function drawShip(renderer: Renderer, b: Battle, assets: GameAssets, alpha: numb
 
   const bankFrame = assets.player.bankFrames[player.lastBankFrame]!;
   ctx.globalAlpha = playerAlpha;
+  drawMates(renderer, ctx, b, bankFrame, renderX, renderY);
   drawPlayerFlames(ctx, renderX, renderY, bankFrame.nozzles, player.velocityY, gameTime);
   renderer.drawImage(bankFrame.canvas, renderX - bankFrame.anchorX, renderY - bankFrame.anchorY);
   ctx.globalAlpha = 1;
