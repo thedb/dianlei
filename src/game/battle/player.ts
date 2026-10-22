@@ -1,6 +1,6 @@
 /**
- * The player ship: steering and bank animation, both weapon slots, pickups,
- * death and respawn, and extends.
+ * The player ship: steering and bank animation, both weapon slots, wingmen,
+ * pickups, death and respawn, and extends.
  */
 
 import type { InputState } from '@/engine/input';
@@ -32,6 +32,7 @@ import {
 import { getBankFrameIndex, PLAYER_DEATH_EXPLOSION } from '@/game/art';
 import { ITEM_DEFS, type ItemType } from '@/game/entities/item';
 import { isPlayerVulnerable as isVulnerable } from '@/game/systems/collision';
+import { fireMates } from '@/game/systems/mate';
 import {
   WEAPONS,
   applyDeathPenalty,
@@ -103,7 +104,13 @@ function fireVolley(b: Battle, weapon: EquippedWeapon): void {
   const damage = weaponTestVolleyDamage(b.rules().range, b.tune, weapon.id);
   const emit = damage === null ? b.emitter : emitWithDamage(b.emitter, damage);
   level.fire(b.player.x, b.player.y, emit);
-  if (WEAPONS[weapon.id].slot === 'main') b.sfx('shoot');
+  if (WEAPONS[weapon.id].slot === 'main') {
+    // Same beat as the main gun, including a weapon-test P速 change.
+    // The raw emitter keeps the damage on PLAYER_BULLET_DAMAGE, so P伤
+    // and the vulcan pattern do not leak onto the wingmen.
+    fireMates(b.state.mate, b.player.x, b.player.y, b.emitter);
+    b.sfx('shoot');
+  }
 }
 
 export function isPlayerControllable(b: Battle): boolean {

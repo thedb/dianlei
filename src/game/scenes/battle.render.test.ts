@@ -225,7 +225,7 @@ const EXPECTED: Record<string, RenderResult> = {
   'stage demo': { outcome: 'gameover', frames: 4956, renders: 217, calls: 30352, hash: 3569853036 },
   'boss hard': { outcome: 'result', frames: 5205, renders: 228, calls: 34209, hash: 2214869741 },
   attract: { outcome: 'timeout', frames: 5400, renders: 318, calls: 24665, hash: 2185208717 },
-  weaponTest: { outcome: 'timeout', frames: 600, renders: 55, calls: 23578, hash: 1094835362 },
+  weaponTest: { outcome: 'timeout', frames: 600, renders: 55, calls: 26053, hash: 4198131389 },
   pause: { outcome: 'timeout', frames: 720, renders: 56, calls: 5607, hash: 1977861426 },
 };
 

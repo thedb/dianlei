@@ -3,6 +3,7 @@
  * at most one sub weapon at the same time. Each weapon is one definition: its
  * slot, pickup letter, max level, and a rate / damage / fire function per level.
  * A new weapon is a new entry here plus an item letter and an icon.
+ * Wingmen (M) are not a weapon: see systems/mate.ts and Loadout.mate.
  */
 
 import {
@@ -20,8 +21,10 @@ import {
   PLAYER_BULLET_SPEED,
   POWER_MAX,
   P_OVERFLOW_SCORE,
+  VULCAN_MUZZLE_Y,
 } from '@/game/config';
 import type { ItemType } from '@/game/entities/item';
+import { applyMateDeath } from '@/game/systems/mate';
 
 export type WeaponSlot = 'main' | 'sub';
 export type WeaponId = 'vulcan' | 'homing';
@@ -55,7 +58,7 @@ export interface WeaponDef {
 }
 
 const UP = -Math.PI / 2;
-const MUZZLE_Y = 16;
+const MUZZLE_Y = VULCAN_MUZZLE_Y;
 
 function straight(emit: WeaponEmitter, x: number, y: number): void {
   emit.bullet(x, y, 0, -PLAYER_BULLET_SPEED, PLAYER_BULLET_DAMAGE);
@@ -150,15 +153,21 @@ export interface EquippedWeapon {
 export interface Loadout {
   main: EquippedWeapon;
   sub: EquippedWeapon | null;
+  /**
+   * Wingman slot M. 0 = none, 1 = left ship, 2 = both sides.
+   * Not a weapon id. P and T never write this.
+   */
+  mate: number;
 }
 
 export function createLoadout(): Loadout {
-  return { main: { id: DEFAULT_MAIN_WEAPON, level: 1 }, sub: null };
+  return { main: { id: DEFAULT_MAIN_WEAPON, level: 1 }, sub: null, mate: 0 };
 }
 
 export function resetLoadout(loadout: Loadout): void {
   loadout.main = { id: DEFAULT_MAIN_WEAPON, level: 1 };
   loadout.sub = null;
+  loadout.mate = 0;
 }
 
 export type PickupResult = 'equip' | 'levelUp' | 'switch' | 'overflow';
@@ -192,13 +201,17 @@ export function applyWeaponPickup(
   return 'overflow';
 }
 
-/** Death: main loses DEATH_POWER_LOSS (never below Lv1); sub loses DEATH_SUB_LOSS and may empty. */
+/**
+ * Death: main loses DEATH_POWER_LOSS (never below Lv1); sub loses DEATH_SUB_LOSS
+ * and may empty; M loses one level and may reach 0.
+ */
 export function applyDeathPenalty(loadout: Loadout): void {
   loadout.main.level = Math.max(1, loadout.main.level - DEATH_POWER_LOSS);
   if (loadout.sub) {
     const level = loadout.sub.level - DEATH_SUB_LOSS;
     loadout.sub = level >= 1 ? { id: loadout.sub.id, level } : null;
   }
+  loadout.mate = applyMateDeath(loadout.mate);
 }
 
 /** Raise a slot to its weapon's max (boss practice starts at full main power). */

@@ -7,6 +7,7 @@
 import type { InputState } from '@/engine/input';
 import { LOGICAL_H, LOGICAL_W } from '@/game/config';
 import { PALETTE, COLOR } from '@/game/palette';
+import { mateLevel } from '@/game/systems/mate';
 import { weaponForItem } from '@/game/systems/playerWeapons';
 import { drawButton, drawPanel, drawText, UI_COLORS } from '@/game/ui/widgets';
 import {
@@ -19,6 +20,7 @@ import {
   weaponTestBombIncRect,
   weaponTestCommandAt,
   weaponTestMainRect,
+  weaponTestMateRect,
   weaponTestResetRect,
   weaponTestRowLabelY,
   weaponTestSubRect,
@@ -74,6 +76,10 @@ function applyWeaponCommand(b: Battle, command: WeaponTestCommand): void {
     if (arming) b.guns.sub = volleyInterval(b, state.sub);
     return;
   }
+  if (command.kind === 'mate') {
+    state.mate = mateLevel(command.level);
+    return;
+  }
   state.bombs = clampWeaponTestBombs(state.bombs + command.delta);
 }
 
@@ -92,6 +98,7 @@ export function rangeStats(b: Battle): WeaponTestStats {
     lastHit: meter.lastHit(),
     mainLevel: state.main.level,
     subLevel: state.sub?.level ?? 0,
+    mateLevel: state.mate,
     bombs: state.bombs,
     mainRate: tune.mainRate,
     mainDamage: tune.mainDamage,
@@ -139,10 +146,11 @@ export function drawRangeHud(ctx: CanvasRenderingContext2D, b: Battle): void {
   line(`DPS ${stats.dps.toFixed(1)}`);
   line(`主武器 Lv${stats.mainLevel}`);
   line(stats.subLevel === 0 ? '副武器 无' : `副武器 Lv${stats.subLevel}`);
+  line(`僚机 Lv${stats.mateLevel}`);
   line(`上次 ${stats.lastHit}`);
 
   drawPanel(ctx, WEAPON_TEST_CTRL_PANEL);
-  (['P', 'T', 'B'] as const).forEach((label, row) => {
+  (['P', 'T', 'M', 'B'] as const).forEach((label, row) => {
     drawText(ctx, label, WEAPON_TEST_CTRL_PANEL.x + 8, weaponTestRowLabelY(row), 13, UI_COLORS.dim);
   });
   ([1, 2, 3] as const).forEach((level) => {
@@ -151,6 +159,9 @@ export function drawRangeHud(ctx: CanvasRenderingContext2D, b: Battle): void {
   drawButton(ctx, weaponTestSubRect(0), '关', stats.subLevel === 0);
   drawButton(ctx, weaponTestSubRect(1), '1', stats.subLevel === 1);
   drawButton(ctx, weaponTestSubRect(2), '2', stats.subLevel === 2);
+  ([0, 1, 2] as const).forEach((level) => {
+    drawButton(ctx, weaponTestMateRect(level), String(level), stats.mateLevel === level);
+  });
   drawButton(ctx, weaponTestBombDecRect(), '-', false);
   const count = weaponTestBombCountRect();
   drawText(

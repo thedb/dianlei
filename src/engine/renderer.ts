@@ -41,6 +41,8 @@ export interface GameDebugInfo {
   subWeapon?: string | null;
   /** Sub weapon level, 0 while empty */
   subLevel?: number;
+  /** Wingman slot M. 0, 1, or 2. */
+  mateLevel?: number;
   /** Player homing missiles in flight */
   missileCount?: number;
   lives?: number;
