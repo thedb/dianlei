@@ -18,11 +18,13 @@ This document defines the coding conventions and constraints for all AI agents w
 - Platform features accessed through `src/platform/` adapter interface
 
 ### Resolution & Scaling
-- Fixed logical resolution: **360×640** portrait
-- Nearest-neighbor scaling (`imageSmoothingEnabled = false`)
-- Integer or closest scale factor, letterboxed with black
-- Handle `devicePixelRatio` correctly (combined scale = DPR × logical scale)
-- Leave room for safe areas (HUD top +4, controls bottom +12)
+- Fixed logical resolution: **360×640** portrait. Do not widen the playfield
+- Nearest-neighbor scaling (`imageSmoothingEnabled = false`, CSS `image-rendering: pixelated`)
+- Integer or closest scale factor (`calculateScaling` snaps when the fractional part is under 0.2 and the integer is at least 1), letterboxed
+- Handle `devicePixelRatio` correctly (combined scale = DPR × logical scale). The backing store is that product
+- Window `resize`, `orientationchange`, a `ResizeObserver` on the game container, and a DPR media-query change call `renderer.resize()`. The same playfield canvas is kept. H5 `setCanvas` on that canvas refreshes the touch scale and does not stack listeners. Input stays at scale 1 because the platform already returns logical pixels
+- Letterbox bars are a static exterior behind the playfield (`engine/exterior.ts`): palette deep-ocean void, sparse stars, soft vertical vignette. `pointer-events: none`. No text and no controls in the bars. iPad landscape stays a centered phone frame, so the side bars are large
+- Leave room for safe areas (HUD top +4, controls bottom +12). Insets are still the values read at boot
 
 ### Game Loop
 - Fixed **60Hz update** timestep (`FIXED_DT = 1/60`)

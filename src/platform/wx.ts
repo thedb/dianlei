@@ -30,11 +30,15 @@ declare const wx: {
   onTouchCancel: (callback: (res: { touches: TouchPoint[] }) => void) => void;
   onHide: (callback: () => void) => void;
   onShow: (callback: () => void) => void;
+  onWindowResize?: (callback: () => void) => void;
   createWebAudioContext?: () => AudioContext;
 };
 
 export function createWxPlatform(): PlatformAdapter {
-  const windowInfo = wx.getWindowInfo();
+  let windowInfo = wx.getWindowInfo();
+  wx.onWindowResize?.(() => {
+    windowInfo = wx.getWindowInfo();
+  });
   const perf = wx.getPerformance();
 
   return {

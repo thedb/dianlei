@@ -98,8 +98,9 @@ export function createH5Platform(container: HTMLElement): H5Platform {
 
   return {
     setCanvas(c: HTMLCanvasElement, scale: number): void {
-      canvas = c;
       canvasScale = scale;
+      if (canvas === c) return;
+      canvas = c;
       registerTouchHandlers();
     },
 
