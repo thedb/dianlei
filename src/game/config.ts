@@ -518,8 +518,9 @@ export const LAND_BOSS_SEED = 41;
  * Alpha stays low so one silhouette reads without muddying the ground.
  * Scroll is relative to the tiles. `2` moves shadows twice as fast as the
  * ground so they drift ahead instead of sticking to it. Stamps repeat every
- * `CLOUD_SHADOW_SPAN` pixels and are drawn this far above their stored y
- * so they enter from the top.
+ * `CLOUD_SHADOW_SPAN` pixels. Placement is edge-only (partly off the left or
+ * right edge); `CLOUD_SHADOW_MARGIN` only lets those edge stamps start above
+ * the view. Nothing sits in a center lane.
  */
 export const CLOUD_SHADOW_ALPHA = 0.18;
 export const CLOUD_SHADOW_SCROLL = 2;
