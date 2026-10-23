@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { MATE_SCALE } from '@/game/config';
+import { LOGICAL_W, MATE_OFFSET_X, MATE_SCALE, PLAYER_SPAWN_Y } from '@/game/config';
 import { matePixels } from '@/game/systems/mate';
-import { fittedNozzle, type FlameSpriteBox } from './engineFlame';
+import { fittedNozzle, flooredSpriteCenter, type FlameSpriteBox } from './engineFlame';
 import { PLAYER_SPRITE_H, PLAYER_SPRITE_W, createPlayerNozzles } from './playerSprite';
 
 const source: FlameSpriteBox = {
@@ -57,5 +57,64 @@ describe('fitted wingman flames', () => {
       (left.x + right.x) / 2;
     expect(fittedShift).toBeCloseTo((bankMid - centerMid) * scaleX);
     expect(fittedShift).not.toBeCloseTo((bankMid - centerMid) * MATE_SCALE);
+  });
+
+  it('floors the blit origin the same way Renderer.drawImage does', () => {
+    expect(flooredSpriteCenter(10.9, 20.2, 5, 5)).toEqual({ x: 10, y: 20 });
+    expect(flooredSpriteCenter(10, 20, 5, 5)).toEqual({ x: 10, y: 20 });
+    // Floor toward -infinity, matching canvas, not toward zero.
+    expect(flooredSpriteCenter(-0.1, 3, 5, 4)).toEqual({ x: -1, y: 3 });
+  });
+
+  it('centers level-flight wingman flames on the snapped ship at every x', () => {
+    const nozzles = createPlayerNozzles()[5]!;
+    const mid =
+      (fittedNozzle(source, nozzles[0]!, drawn).x + fittedNozzle(source, nozzles[1]!, drawn).x) / 2;
+    expect(mid).toBeCloseTo(-drawn.anchorX + drawn.width / 2);
+
+    const snappedGaps: number[] = [];
+    const rawGaps: number[] = [];
+    for (let step = 0; step < 100; step++) {
+      const playerX = LOGICAL_W / 2 + step * 0.01;
+      for (const dx of [-MATE_OFFSET_X, MATE_OFFSET_X]) {
+        const cx = playerX + dx;
+        const at = flooredSpriteCenter(cx, PLAYER_SPAWN_Y, drawn.anchorX, drawn.anchorY);
+        const blitCenter = Math.floor(cx - drawn.anchorX) + drawn.width / 2;
+        snappedGaps.push(at.x + mid - blitCenter);
+        rawGaps.push(cx + mid - blitCenter);
+      }
+    }
+
+    for (const gap of snappedGaps) expect(gap).toBeCloseTo(0, 8);
+    // Integer spawn plus the 25.6 gap: both mates are already off the blit.
+    const spawnRaw = [-MATE_OFFSET_X, MATE_OFFSET_X].map((dx) => {
+      const cx = LOGICAL_W / 2 + dx;
+      const blitCenter = Math.floor(cx - drawn.anchorX) + drawn.width / 2;
+      return cx + mid - blitCenter;
+    });
+    expect(Math.min(...spawnRaw.map(Math.abs))).toBeGreaterThan(0.2);
+    // Moving sweeps that leftover fraction across a full pixel.
+    expect(Math.max(...rawGaps) - Math.min(...rawGaps)).toBeGreaterThan(0.9);
+  });
+
+  it('keeps a banked flame shift fixed while the ship moves', () => {
+    const bank = createPlayerNozzles()[10]!;
+    const mid =
+      (fittedNozzle(source, bank[0]!, drawn).x + fittedNozzle(source, bank[1]!, drawn).x) / 2;
+    const blitOffset = -drawn.anchorX + drawn.width / 2;
+    expect(mid).not.toBeCloseTo(blitOffset);
+    const shift = mid - blitOffset;
+    const raw: number[] = [];
+    for (let step = 0; step <= 20; step++) {
+      const cx = 100 + step * 0.37 + MATE_OFFSET_X;
+      const cy = 400 + step * 0.37;
+      const at = flooredSpriteCenter(cx, cy, drawn.anchorX, drawn.anchorY);
+      const blitCenter = Math.floor(cx - drawn.anchorX) + drawn.width / 2;
+      const top = Math.floor(cy - drawn.anchorY);
+      expect(at.x + mid - blitCenter).toBeCloseTo(shift, 8);
+      expect(at.y).toBe(top + drawn.anchorY);
+      raw.push(cx + mid - blitCenter);
+    }
+    expect(Math.max(...raw) - Math.min(...raw)).toBeGreaterThan(0.5);
   });
 });

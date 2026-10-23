@@ -29,6 +29,7 @@ import {
   drawHomingExhaust,
   drawPlayerFlames,
   explosionDrawKey,
+  flooredSpriteCenter,
   type BankFrame,
   type GameAssets,
 } from '@/game/art';
@@ -96,10 +97,13 @@ function drawMates(
   for (const mate of places) {
     const x = renderX + mate.dx;
     const y = renderY + mate.dy;
+    // drawImage floors the top-left. The flame has to use that same origin
+    // or it drifts across the snapped ship while the player moves.
+    const at = flooredSpriteCenter(x, y, ax, ay);
     drawFittedPlayerFlames(
       ctx,
-      x,
-      y,
+      at.x,
+      at.y,
       frame,
       { width: w, height: h, anchorX: ax, anchorY: ay },
       b.player.velocityY,

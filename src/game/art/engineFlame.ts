@@ -125,6 +125,25 @@ export interface FlameSpriteBox {
 }
 
 /**
+ * Center of a sprite after `Renderer.drawImage` floors the top-left.
+ * Flame drawing must use this, not the sub-pixel ship center: the blit
+ * throws away the fraction, so a raw center sits up to one pixel to the
+ * right of the snapped pixels, and that gap changes on every move.
+ * Native player flames do not use this — they stay on the raw center.
+ */
+export function flooredSpriteCenter(
+  centerX: number,
+  centerY: number,
+  anchorX: number,
+  anchorY: number
+): { x: number; y: number } {
+  return {
+    x: Math.floor(centerX - anchorX) + anchorX,
+    y: Math.floor(centerY - anchorY) + anchorY,
+  };
+}
+
+/**
  * Where a source nozzle lands once the sprite is drawn at `drawn` size.
  * Source nozzles are relative to the source anchor. The result is relative
  * to the same center the sprite is placed on, using that draw's anchor and
