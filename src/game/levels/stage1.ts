@@ -684,15 +684,34 @@ export const stage1: StageData = {
   // 陆地A's grid. Rows keep each building's old spawn scroll: ground rows are
   // unchanged, coast rows were 122.5 rows in (rounded down, 8 px earlier),
   // base rows 235 rows in. Sea guns sit on 陆地A's pond, stream, and lake.
+  //
+  // Drops (P20a): a letter is fixed. `{ exclusive: 's1-sea-mate' }` is the
+  // B07/B08 coin flip — battle enter draws one stage-RNG value and locks M
+  // onto that id (placement order, so index 0 is B07). Everyone else uses
+  // BUILDING_DROP_RULES (50% P / 50% B, or B only at POWER_MAX).
   buildings: [
-    { id: 'B01', type: 'pillbox', map: 'landA', row: 60, col: 14 },
+    { id: 'B01', type: 'pillbox', map: 'landA', row: 60, col: 14, drop: 'T' },
     { id: 'B02', type: 'fuel_depot', map: 'landA', row: 69, col: 15 },
     { id: 'B03', type: 'pillbox', map: 'landA', row: 88, col: 3 },
     { id: 'B04', type: 'fuel_depot', map: 'landA', row: 101, col: 12 },
-    { id: 'B05', type: 'pillbox', map: 'landA', row: 112, col: 15 },
-    { id: 'B06', type: 'sea_gun', map: 'landA', row: 184, col: 5 },
-    { id: 'B07', type: 'sea_gun', map: 'landA', row: 211, col: 2 },
-    { id: 'B08', type: 'sea_gun', map: 'landA', row: 216, col: 18 },
+    { id: 'B05', type: 'pillbox', map: 'landA', row: 112, col: 15, drop: 'T' },
+    { id: 'B06', type: 'sea_gun', map: 'landA', row: 184, col: 5, drop: 'M' },
+    {
+      id: 'B07',
+      type: 'sea_gun',
+      map: 'landA',
+      row: 211,
+      col: 2,
+      drop: { exclusive: 's1-sea-mate', item: 'M' },
+    },
+    {
+      id: 'B08',
+      type: 'sea_gun',
+      map: 'landA',
+      row: 216,
+      col: 18,
+      drop: { exclusive: 's1-sea-mate', item: 'M' },
+    },
     { id: 'B09', type: 'radar_station', map: 'landA', row: 291, col: 15 },
     { id: 'B10', type: 'radar_station', map: 'landA', row: 313, col: 3 },
     { id: 'B11', type: 'radar_station', map: 'landA', row: 339, col: 17 },

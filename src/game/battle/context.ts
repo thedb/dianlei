@@ -27,7 +27,7 @@ import {
   spawnEnemyBullet,
   type BulletSpawner,
 } from '@/game/entities/enemyBullet';
-import { createItem } from '@/game/entities/item';
+import { createItem, type ItemType } from '@/game/entities/item';
 import {
   createHomingMissile,
   spawnHomingMissile,
@@ -122,6 +122,8 @@ export interface Battle {
   waves: WaveScheduler | null;
   /** Maps under the battle: the stage's, or the 地图预览 target. */
   track: BackgroundTrack;
+  /** Placement ids locked to an item for this run. Rolled once in `enter`. */
+  fixedDrops: ReadonlyMap<string, ItemType>;
   buildingScheduler: BuildingScheduler;
   scroller: Scroller;
   scrollFrame: ScrollFrame;
@@ -223,6 +225,7 @@ export function createBattle(scene: SceneContext): Battle {
     boss: null,
     waves: null,
     track,
+    fixedDrops: new Map(),
     buildingScheduler: new BuildingScheduler(
       placeBuildings(stage.buildings, track),
       stage.warningAt

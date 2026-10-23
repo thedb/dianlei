@@ -7,10 +7,13 @@ import {
   BOMBS_START,
   HOMING_FIRE_RATE,
   LOGICAL_H,
+  M_OVERFLOW_SCORE,
   P_OVERFLOW_SCORE,
   POWER_MAX,
 } from '@/game/config';
 import type { ControlsView } from '@/engine/input';
+import { getStage } from '@/game/levels/registry';
+import * as dropRules from '@/game/systems/dropRules';
 import type { BattleEntry, SceneContext } from './types';
 import { createBattleScene } from './battle';
 import { attractInput } from './titleAttract';
@@ -122,7 +125,9 @@ describe('battle weapon slots', () => {
     scene.grantItem('P');
     scene.grantItem('T');
     scene.grantItem('T');
-    expect(scene.getDebugInfo!().buildingDrop).toBe('B');
+    expect(scene.getDebugInfo!().power).toBe(2);
+    expect(scene.getDebugInfo!().buildingDrop).toBe('P/B');
+    expect(scene.getDebugInfo!().mateLevel).toBe(0);
 
     const dieOnce = (): void => {
       for (let i = 0; i < Math.ceil(30 / DT); i++) {
@@ -139,25 +144,55 @@ describe('battle weapon slots', () => {
     dieOnce();
     expect(scene.getDebugInfo!().power).toBe(1);
     expect(scene.getDebugInfo!().subLevel).toBe(1);
-    expect(scene.getDebugInfo!().buildingDrop).toBe('T');
+    expect(scene.getDebugInfo!().buildingDrop).toBe('P/B');
+    expect(scene.getDebugInfo!().mateLevel).toBe(0);
     respawn();
     dieOnce();
     expect(scene.getDebugInfo!().power).toBe(1);
     expect(scene.getDebugInfo!().subWeapon).toBeNull();
     expect(scene.getDebugInfo!().subLevel).toBe(0);
-    expect(scene.getDebugInfo!().buildingDrop).toBe('T');
+    expect(scene.getDebugInfo!().buildingDrop).toBe('P/B');
   });
 
-  it('building drop follows the live sub slot, including an empty one', () => {
+  it('previews B only once main power is max; the sub slot does not change it', () => {
     const scene = setup();
-    expect(scene.getDebugInfo!().buildingDrop).toBe('T');
+    expect(scene.getDebugInfo!().buildingDrop).toBe('P/B');
     scene.grantItem('T');
+    scene.grantItem('T');
+    expect(scene.getDebugInfo!().subLevel).toBe(2);
+    expect(scene.getDebugInfo!().buildingDrop).toBe('P/B');
+    scene.grantItem('P');
+    scene.grantItem('P');
+    expect(scene.getDebugInfo!().power).toBe(POWER_MAX);
+    expect(scene.getDebugInfo!().buildingDrop).toBe('B');
+  });
+
+  it('M raises wingmen to the cap, then pays the weapon overflow score', () => {
+    const scene = setup();
+    expect(scene.getDebugInfo!().mateLevel).toBe(0);
+    scene.grantItem('M');
+    expect(scene.getDebugInfo!().mateLevel).toBe(1);
+    scene.grantItem('M');
+    expect(scene.getDebugInfo!().mateLevel).toBe(2);
+    const score = scene.getDebugInfo!().score ?? 0;
+    scene.grantItem('M');
+    expect(scene.getDebugInfo!().mateLevel).toBe(2);
+    expect(scene.getDebugInfo!().score).toBe(score + M_OVERFLOW_SCORE);
+    scene.grantItem('P');
+    scene.grantItem('T');
+    expect(scene.getDebugInfo!().mateLevel).toBe(2);
+    expect(scene.getDebugInfo!().power).toBe(2);
     expect(scene.getDebugInfo!().subLevel).toBe(1);
-    expect(scene.getDebugInfo!().buildingDrop).toBe('T');
-    scene.grantItem('T');
-    expect(scene.getDebugInfo!().buildingDrop).toBe('B');
-    scene.grantItem('T');
-    expect(scene.getDebugInfo!().buildingDrop).toBe('B');
+  });
+
+  it('rolls exclusive building drops once when the battle starts', () => {
+    const spy = vi.spyOn(dropRules, 'resolvePlacementDrops');
+    const scene = setup();
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy.mock.calls[0]![0]).toBe(getStage('1').buildings);
+    scene.enter();
+    expect(spy).toHaveBeenCalledTimes(2);
+    spy.mockRestore();
   });
 
   it('the title demo runs the same weapon code as a real run', () => {
@@ -197,6 +232,8 @@ describe('battle weapon slots', () => {
     const scene = setup('play', 'boss');
     expect(scene.getDebugInfo!().power).toBe(POWER_MAX);
     expect(scene.getDebugInfo!().subWeapon).toBeNull();
+    expect(scene.getDebugInfo!().buildingDrop).toBe('B');
+    expect(scene.getDebugInfo!().mateLevel).toBe(0);
   });
 });
 

@@ -6,12 +6,9 @@
  */
 
 import type { Poolable } from '@/engine/pool';
-import type { EquippedWeapon } from '@/game/systems/playerWeapons';
-import type { ItemType } from '@/game/entities/item';
 import type { BuildingPlacement, BuildingType, Fire } from '@/game/levels/types';
 import type { BulletSpawner } from '@/game/entities/enemyBullet';
 import { executeFirePattern, fireInterval } from '@/game/systems/danmaku';
-import { BUILDING_DROP_RULES, pickDrop, type DropRule } from '@/game/systems/dropRules';
 import { footprintOn } from '@/game/maps/terrain';
 import { layerIndexOf, type BackgroundTrack } from '@/game/maps/track';
 import type { TileGrid } from '@/game/maps/types';
@@ -321,20 +318,4 @@ export function buildingBlocksTank(b: Building, x: number, y: number): boolean {
     Math.abs(x - b.x) < b.width / 2 + BUILDING_TANK_CLEARANCE &&
     Math.abs(y - b.y) < b.height / 2 + BUILDING_TANK_CLEARANCE
   );
-}
-
-export type BuildingDrop = ItemType;
-
-/**
- * The one item a destroyed building drops (`BUILDING_DROP_RULES`).
- * Pass the live sub slot (`state.sub` at the moment of the kill). A copy taken
- * earlier in the run is stale: equipping or leveling T must change the next drop.
- * No sub, level 0, or T below HOMING_MAX_LEVEL → T. Homing already at max → B.
- * Buildings never drop P. Wave-table carriers still drop only P and B.
- */
-export function chooseBuildingDrop(
-  sub: EquippedWeapon | null,
-  rules: readonly DropRule[] = BUILDING_DROP_RULES
-): BuildingDrop {
-  return pickDrop(rules, { sub });
 }

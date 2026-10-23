@@ -6,6 +6,9 @@
  * values. Captured on the pre-split battle scene: a change here is a visual
  * change. P18 follow-up recaptured the draw digest: the stage-clear exit
  * lasts longer, and every ship flame draw now carries the exhaust boost.
+ * P20a recaptured stage, attract, boss-practice, and pause draws: the stage
+ * HUD shows the M icon, and different building drops change what is on screen.
+ * The weapon-test draw digest did not move.
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -221,13 +224,13 @@ function stageRun(
 }
 
 const EXPECTED: Record<string, RenderResult> = {
-  'stage easy': { outcome: 'result', frames: 13201, renders: 575, calls: 86068, hash: 121961687 },
-  'stage hard': { outcome: 'result', frames: 14136, renders: 616, calls: 92204, hash: 2028146597 },
-  'stage demo': { outcome: 'gameover', frames: 4956, renders: 217, calls: 30452, hash: 1833601964 },
-  'boss hard': { outcome: 'result', frames: 5453, renders: 239, calls: 35299, hash: 2622144378 },
-  attract: { outcome: 'timeout', frames: 5400, renders: 318, calls: 24665, hash: 2584350729 },
+  'stage easy': { outcome: 'result', frames: 11734, renders: 512, calls: 83074, hash: 3374521315 },
+  'stage hard': { outcome: 'result', frames: 13221, renders: 576, calls: 96771, hash: 1991871279 },
+  'stage demo': { outcome: 'gameover', frames: 5106, renders: 223, calls: 31771, hash: 4243311574 },
+  'boss hard': { outcome: 'result', frames: 5453, renders: 239, calls: 36255, hash: 3992588818 },
+  attract: { outcome: 'timeout', frames: 5400, renders: 318, calls: 24791, hash: 3199217799 },
   weaponTest: { outcome: 'timeout', frames: 600, renders: 55, calls: 26053, hash: 1189635685 },
-  pause: { outcome: 'timeout', frames: 720, renders: 56, calls: 5797, hash: 271416174 },
+  pause: { outcome: 'timeout', frames: 720, renders: 56, calls: 6021, hash: 2351038240 },
 };
 
 function check(name: string, got: RenderResult): void {

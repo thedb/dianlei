@@ -15,7 +15,10 @@ import {
   HOMING_FIRE_RATE,
   HOMING_DAMAGE,
   HOMING_MAX_LEVEL,
+  BUILDING_DROP_P_SHARE,
+  M_OVERFLOW_SCORE,
   MATE_MAX_LEVEL,
+  P_OVERFLOW_SCORE,
   MATE_OFFSET_X,
   MATE_SCALE,
   DEATH_MATE_LOSS,
@@ -94,6 +97,9 @@ describe('Game Config', () => {
     expect(DEATH_POWER_LOSS).toBe(1);
     expect(DEATH_SUB_LOSS).toBe(1);
     expect(MATE_MAX_LEVEL).toBe(2);
+    expect(M_OVERFLOW_SCORE).toBe(1000);
+    expect(M_OVERFLOW_SCORE).toBe(P_OVERFLOW_SCORE);
+    expect(BUILDING_DROP_P_SHARE).toBe(0.5);
     expect(MATE_OFFSET_X).toBe(25.6);
     expect(MATE_OFFSET_X).toBeCloseTo(32 * 0.8);
     expect(MATE_SCALE).toBeCloseTo(1 / 3);

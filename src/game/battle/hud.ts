@@ -51,11 +51,24 @@ function drawStageHud(renderer: Renderer, b: Battle, assets: GameAssets): void {
   ctx.globalAlpha = 1;
 
   // Weapon slots: each shows its pickup icon and level. Sub sits left of main.
+  // M sits left of sub, same gap, so a wingman pickup is visible in the stage HUD.
   const mainIcon = assets.items.byType[WEAPONS[state.main.id].item].idle;
   const mainX = LOGICAL_W - mainIcon.width - 32;
   renderer.drawImage(mainIcon.canvas, mainX, iconY);
   renderer.fillText(`Lv${state.main.level}`, mainX + mainIcon.width + 2, iconY + 4, '#fff', 10);
   const subX = mainX - 40;
+  const mateIcon = assets.items.byType.M.idle;
+  const mateX = subX - 40;
+  ctx.globalAlpha = state.mate > 0 ? 1 : 0.4;
+  renderer.drawImage(mateIcon.canvas, mateX, iconY);
+  ctx.globalAlpha = 1;
+  renderer.fillText(
+    `Lv${state.mate}`,
+    mateX + mateIcon.width + 2,
+    iconY + 4,
+    state.mate > 0 ? '#fff' : '#666',
+    10
+  );
   if (state.sub) {
     const subIcon = assets.items.byType[WEAPONS[state.sub.id].item].idle;
     renderer.drawImage(subIcon.canvas, subX, iconY);

@@ -1,6 +1,7 @@
 /**
  * Wingman slot M (design §5.3.2). Independent of the weapon registry:
- * P and T never change these ships, and nothing here is an item.
+ * P and T never change these ships. The M pickup raises the level
+ * (`applyMatePickup`); it is not a `WEAPONS` row.
  * Levels: 0 none, 1 the left ship, 2 one ship on each side.
  * They draw and shoot. They are not colliders.
  */
@@ -77,4 +78,16 @@ export function fireMates(level: number, x: number, y: number, emit: MateShotEmi
 /** Death drops one level and stops at 0. */
 export function applyMateDeath(level: number): number {
   return Math.max(0, mateLevel(level) - DEATH_MATE_LOSS);
+}
+
+export type MatePickupResult = 'levelUp' | 'overflow';
+
+/**
+ * Collect one M. +1 up to MATE_MAX_LEVEL, then overflow (the caller pays
+ * M_OVERFLOW_SCORE). P and T never call this.
+ */
+export function applyMatePickup(level: number): { level: number; result: MatePickupResult } {
+  const current = mateLevel(level);
+  if (current >= MATE_MAX_LEVEL) return { level: current, result: 'overflow' };
+  return { level: current + 1, result: 'levelUp' };
 }

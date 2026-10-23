@@ -19,12 +19,15 @@ import { spawnItem } from '@/game/entities/item';
 import {
   buildingOnScreen,
   bulletHitsBuilding,
-  chooseBuildingDrop,
   damageBuilding,
   type Building,
 } from '@/game/entities/building';
 import { buildingClass, enemyClass } from '@/game/entities/objectClass';
-import type { DropRule } from '@/game/systems/dropRules';
+import {
+  chooseBuildingDrop,
+  previewDefaultBuildingDrop,
+  type DropRule,
+} from '@/game/systems/dropRules';
 import {
   checkBulletEnemyCollision,
   checkItemPickup,
@@ -58,9 +61,12 @@ function buildingDropRules(b: Battle): readonly DropRule[] | undefined {
   return runProfile(b).buildingDrops ?? b.stage.buildingDrops;
 }
 
-/** What a building destroyed right now would drop. */
+/**
+ * Debug preview of the default table (P/B, or B at POWER_MAX).
+ * Does not roll and does not reveal a placement lock.
+ */
 export function nextBuildingDrop(b: Battle): string {
-  return chooseBuildingDrop(b.state.sub, buildingDropRules(b));
+  return previewDefaultBuildingDrop(b.state.main.level);
 }
 
 /** Score, explosion, drop and release for an enemy whose HP just reached 0. */
@@ -84,8 +90,16 @@ export function destroyBuilding(b: Battle, building: Building): void {
   spawnExplosion(b.fx, building.x - building.width / 4, building.y + 4, kind, 0.06);
   spawnExplosion(b.fx, building.x + building.width / 4, building.y - 4, kind, 0.12);
   b.sfx('enemyExplode');
-  // Live slot. Read state.sub here, not a copy taken when the scene started.
-  const drop = chooseBuildingDrop(b.state.sub, buildingDropRules(b));
+  // Live loadout and the locks rolled at enter. A copy from scene start is stale.
+  const rules = buildingDropRules(b);
+  const drop = chooseBuildingDrop({
+    id: building.placement.id,
+    mainLevel: b.state.main.level,
+    sub: b.state.sub,
+    rng: b.rng,
+    fixed: b.fixedDrops,
+    ...(rules ? { rules } : {}),
+  });
   spawnItem(b.items.acquire(), drop, building.x, building.y, b.rng);
 }
 

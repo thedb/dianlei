@@ -6,6 +6,8 @@
  * - Power pickup (item type `P`, still the 火力 rule): gold finned missile + M
  * - Bomb pickup (item type `B`): steel-blue octagon badge + B, fuse and spark
  * - Homing pickup (item type `T`, sub weapon): teal capsule + T
+ * - Wingman pickup (item type `M`): teal shield with gold wings + M.
+ *   Not the gold missile (that icon already paints an M for "missile").
  *
  * 16×18: width stays on the 16px item grid; +2px height fits the spark / flame
  * without shrinking the letters below readability at 360×640.
@@ -187,11 +189,55 @@ export function missileEnergyPixels(flash = false): SpriteData {
   return flash ? MISSILE_FLASH : MISSILE;
 }
 
+/**
+ * Wingman badge — teal shield, gold wings, letter M.
+ * Wider at the wing row than at the crest, with no nose, fin gap, or flame
+ * (those belong to the P missile) and no octagon spark (B) or straight
+ * capsule sides (T). Letter counters stay cyan so M survives the flash.
+ */
+const MATE_ROWS = [
+  '................',
+  '................',
+  '.....KKKKKK.....',
+  '....KLCCCCLK....',
+  '...KLCCCCCCLK...',
+  '..YLKCCCCCCKLY..',
+  '.YYLKCCCCCCKLYY.',
+  'OYYLKWWCCWWKLYYO',
+  'OYYLKWWCCWWKLYYO',
+  '.YYLKWCWWCWKLYY.',
+  '..YLKWCCCCWKLY..',
+  '...KLWCCCCWLK...',
+  '....KWCCCCWK....',
+  '.....KCCCCK.....',
+  '......KKKK......',
+  '................',
+  '................',
+  '................',
+] as const;
+
+const MATE = sprite(MATE_ROWS);
+
+const MATE_FLASH = recolor(
+  MATE,
+  new Map([
+    [COLOR.PLAYER_CYAN, COLOR.PLAYER_PALE_CYAN],
+    [COLOR.TERRAIN_LIGHT_GRASS, COLOR.PLAYER_PALE_CYAN],
+    [COLOR.EXPLOSION_YELLOW, COLOR.WHITE],
+    [COLOR.EXPLOSION_ORANGE, COLOR.EXPLOSION_YELLOW],
+  ])
+);
+
+export function mateEnergyPixels(flash = false): SpriteData {
+  return flash ? MATE_FLASH : MATE;
+}
+
 /** Pixel data per pickup letter. A new item adds its pair here. */
 export const ITEM_PIXELS: Readonly<Record<ItemType, { idle: SpriteData; flash: SpriteData }>> = {
   P: { idle: MISSILE, flash: MISSILE_FLASH },
   B: { idle: BOMB, flash: BOMB_FLASH },
   T: { idle: HOMING, flash: HOMING_FLASH },
+  M: { idle: MATE, flash: MATE_FLASH },
 };
 
 export interface ItemSprite {

@@ -13,6 +13,7 @@ import {
   BOMBS_ON_RESPAWN,
   BOMBS_START,
   B_OVERFLOW_SCORE,
+  M_OVERFLOW_SCORE,
   EXTEND_EVERY,
   EXTEND_OVERFLOW_SCORE,
   EXTEND_REPEAT,
@@ -32,7 +33,7 @@ import {
 import { getBankFrameIndex, PLAYER_DEATH_EXPLOSION } from '@/game/art';
 import { ITEM_DEFS, type ItemType } from '@/game/entities/item';
 import { isPlayerVulnerable as isVulnerable } from '@/game/systems/collision';
-import { fireMates } from '@/game/systems/mate';
+import { applyMatePickup, fireMates } from '@/game/systems/mate';
 import {
   WEAPONS,
   applyDeathPenalty,
@@ -253,6 +254,13 @@ export function collectItem(b: Battle, type: ItemType): void {
     if (state.bombs < BOMBS_MAX) state.bombs++;
     else state.score += B_OVERFLOW_SCORE;
     b.sfx('itemPickup');
+    return;
+  }
+  if (ITEM_DEFS[type].effect === 'mate') {
+    const picked = applyMatePickup(state.mate);
+    state.mate = picked.level;
+    if (picked.result === 'overflow') state.score += M_OVERFLOW_SCORE;
+    b.sfx(picked.result === 'overflow' ? 'itemPickup' : 'powerUp');
     return;
   }
   const weapon = weaponForItem(type);
