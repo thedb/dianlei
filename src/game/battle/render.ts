@@ -36,6 +36,7 @@ import {
 import { matePixels, matePlacements } from '@/game/systems/mate';
 import { ENEMY_DEFS } from '@/game/entities/enemyDefs';
 import { isGroundEnemy, type Enemy } from '@/game/entities/enemy';
+import type { RiskCrate } from '@/game/entities/riskCrate';
 import { isItemFlashing } from '@/game/entities/item';
 import { bombWaveRadius } from '@/game/systems/bomb';
 import { warningBulletAlpha } from '@/game/systems/background';
@@ -77,6 +78,31 @@ function drawEnemy(
   }
 
   if (def.barrel) drawGunBarrel(ctx, ex, ey, enemy.aimAngle, def.barrel === 'twin');
+}
+
+function drawRiskCrate(
+  renderer: Renderer,
+  assets: GameAssets,
+  crate: RiskCrate,
+  alpha: number
+): void {
+  const x = lerp(crate.prevX, crate.x, alpha);
+  const y = lerp(crate.prevY, crate.y, alpha);
+  const sheet = assets.crates;
+  const flash = crate.hitFlashTimer > 0;
+  const shielded = crate.shield > 0;
+  const frame = shielded
+    ? flash
+      ? sheet.intactFlash
+      : sheet.intact
+    : flash
+      ? sheet.wreckFlash
+      : sheet.wreck;
+  renderer.drawImage(frame.canvas, x - frame.anchorX, y - frame.anchorY);
+  if (shielded && !flash) {
+    const shield = sheet.shield;
+    renderer.drawImage(shield.canvas, x - shield.anchorX, y - shield.anchorY);
+  }
 }
 
 /** Same bank frame as the player, scaled, stuck to the player center. No hitbox. */
@@ -208,6 +234,7 @@ export function drawField(renderer: Renderer, b: Battle, assets: GameAssets, alp
   b.enemies.forEach((enemy) => {
     if (!isGroundEnemy(enemy.type)) drawEnemy(ctx, renderer, assets, enemy, alpha, gameTime);
   });
+  b.crates.forEach((crate) => drawRiskCrate(renderer, assets, crate, alpha));
 
   if (boss && assets.bosses) drawBossWorld(ctx, renderer, boss, assets.bosses, gameTime);
 

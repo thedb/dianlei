@@ -262,6 +262,18 @@ export interface BuildingPlacement {
   drop?: PlacementDrop;
 }
 
+/**
+ * One risk crate (P20b). The stage lists every slot. The difficulty profile
+ * keeps a prefix of that list, in this order, not in time order.
+ */
+export interface RiskCrateSlot {
+  id: string;
+  /** Stage time in seconds, from the start of the run. */
+  t: number;
+  /** X when the sway is at zero. Fixed; spawning does not roll it. */
+  x: number;
+}
+
 export interface StageData {
   /** Registry key (`levels/registry.ts`). */
   id: string;
@@ -273,6 +285,12 @@ export interface StageData {
   maps: StageMaps;
   waves: Wave[];
   buildings: BuildingPlacement[];
+  /**
+   * Risk crates, in difficulty-prefix order. Omit for none. Easy keeps 0,
+   * Medium the first `riskCrateCount`, Hard the longer prefix. Times may be
+   * out of order; the scheduler sorts its own copy.
+   */
+  riskCrates?: readonly RiskCrateSlot[];
   boss: BossDef;
   /** Building drop rules. Omit for `BUILDING_DROP_RULES`. */
   buildingDrops?: readonly DropRule[];

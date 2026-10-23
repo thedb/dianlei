@@ -467,6 +467,49 @@ export const BUILDING_FIRE_MIN_Y = 8;
 /** Bullet hitbox is the footprint shrunk by this much on each side */
 export const BUILDING_HIT_INSET = 2;
 
+// ============================================================================
+// Risk crates (P20b)
+// ============================================================================
+
+/** Disc sprite. The cyan shield outline is drawn in the same box, outside the hull. */
+export const RISK_CRATE_SIZE = 28;
+
+/** Circle over the red rim. The shield graphic is not extra hitbox. */
+export const RISK_CRATE_HIT_RADIUS = 12;
+
+/** Emptied before the body can be hurt. Breaking it scores nothing. */
+export const RISK_CRATE_SHIELD_HP = 12;
+
+/** Hull HP. Not scaled by difficulty; difficulty only changes how many spawn. */
+export const RISK_CRATE_BODY_HP = 6;
+
+/**
+ * Paid when the body reaches 0. Same as a medium fighter (`SCORE_MEDIUM_FIGHTER`).
+ * A shield break adds nothing.
+ */
+export const RISK_CRATE_SCORE = 1000;
+
+/** Downward drift, matched to map scroll so the disc does not race the ground. */
+export const RISK_CRATE_VY = BG_SCROLL_SPEED;
+
+/** Gentle horizontal sway. Small on purpose: this is not a formation fighter. */
+export const RISK_CRATE_SINE_AMP = 12;
+
+/** Seconds for one full sway. */
+export const RISK_CRATE_SINE_PERIOD = 3.5;
+
+/**
+ * Drop shares once mate is already at least 1: this fraction M, then P, and the
+ * rest T. No B. Mate 0 skips the roll and always drops M.
+ */
+export const RISK_CRATE_DROP_M_SHARE = 0.5;
+export const RISK_CRATE_DROP_P_SHARE = 0.25;
+
+/** How many of the stage's authored slots spawn, in authored order. */
+export const RISK_CRATE_COUNT_EASY = 0;
+export const RISK_CRATE_COUNT_MEDIUM = 2;
+export const RISK_CRATE_COUNT_HARD = 3;
+
 /** Tank centers stay this far outside an intact building (half a tank) */
 export const BUILDING_TANK_CLEARANCE = 12;
 

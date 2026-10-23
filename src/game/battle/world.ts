@@ -23,6 +23,7 @@ import {
   updateBuilding,
   validateBuildingFootprint,
 } from '@/game/entities/building';
+import { spawnRiskCrate, updateRiskCrate } from '@/game/entities/riskCrate';
 import { updateEnemyWeapons } from '@/game/systems/weapons';
 import { resetVictoryExit } from '@/game/systems/victoryExit';
 import { warningBulletAlpha } from '@/game/systems/background';
@@ -184,6 +185,8 @@ export function jumpTo(b: Battle, time: number): void {
   b.waves?.reset();
   b.waves?.setPowerLevel(state.main.level);
   b.waves?.seek(time);
+  b.riskCrates.reset();
+  b.riskCrates.seek(time);
   releaseAllPools(b);
   b.bombWave.active = false;
   b.buildingScheduler.reset();
@@ -201,4 +204,15 @@ export function jumpTo(b: Battle, time: number): void {
   if (state.lives <= 0) state.lives = 1;
   player.y = PLAYER_SPAWN_Y;
   player.prevY = PLAYER_SPAWN_Y;
+}
+
+/** Risk crates enter on the stage clock. Modes with spawns off never call this. */
+export function stepRiskCrates(b: Battle, dt: number): void {
+  if (!b.rules().spawns) return;
+  for (const slot of b.riskCrates.update(b.gameTime)) {
+    spawnRiskCrate(b.crates.acquire(), slot);
+  }
+  b.crates.forEach((crate) => {
+    if (updateRiskCrate(crate, dt)) b.crates.release(crate);
+  });
 }

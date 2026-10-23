@@ -5,8 +5,10 @@
  * The expected values were captured on the pre-P11 code path (with the same
  * seeded generator standing in for `Math.random`), so any change here is a
  * gameplay change. P20a recaptured the stage and attract digests: building
- * drops changed what the pilot picks up. Boss practice and weapon test did
- * not move; their first stage-RNG draw is unused.
+ * drops changed what the pilot picks up. P20b recaptured medium, hard, and
+ * the hard demo: risk crates are on those runs. Easy, boss practice, attract,
+ * and weapon test did not move (easy spawns no crates; boss practice seeks
+ * past them). The first stage-RNG draw is still the building-group roll.
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -290,11 +292,13 @@ const CASES: ReadonlyArray<{
     pilot: 'dodge',
   },
   {
-    name: 'stage 1 hard, full clear with phase 3',
+    name: 'stage 1 hard, phase 3 then game over',
     entry: 'stage',
     difficulty: 'hard',
     seed: 37,
-    seconds: 240,
+    // This pilot no longer clears: crates change what it shoots and picks up,
+    // and it dies in phase 3 just after 250s. 300 leaves room for that ending.
+    seconds: 300,
     pilot: 'dodge',
   },
   {
@@ -358,53 +362,50 @@ const EXPECTED: Record<string, ReplayResult> = {
   },
   'stage 1 medium, full clear': {
     outcome: 'result',
-    frames: 12255,
-    score: 76960,
+    frames: 12961,
+    score: 66360,
     lives: 3,
     report: {
       outcome: 'clear',
-      baseScore: 76960,
-      kills: 95,
+      baseScore: 66360,
+      kills: 74,
       spawned: 149,
       deaths: 0,
-      time: 197.36666666671587,
+      time: 209.1333333333919,
     },
     bossPhases: [
       'enter@9299',
       'phase1@9479',
-      'transition@10127',
-      'phase2@10218',
-      'death@11690',
-      'clear@11841',
-      'done@12255',
+      'transition@10487',
+      'phase2@10578',
+      'death@12396',
+      'clear@12547',
+      'done@12961',
     ],
-    digest: 4221160962,
+    digest: 1346337111,
   },
-  'stage 1 hard, full clear with phase 3': {
-    outcome: 'result',
-    frames: 13221,
-    score: 77780,
-    lives: 2,
+  'stage 1 hard, phase 3 then game over': {
+    outcome: 'gameover',
+    frames: 15012,
+    score: 45420,
+    lives: 0,
     report: {
-      outcome: 'clear',
-      baseScore: 77780,
-      kills: 109,
-      spawned: 148,
-      deaths: 1,
-      time: 213.46666666672868,
+      outcome: 'gameover',
+      baseScore: 45420,
+      kills: 98,
+      spawned: 149,
+      deaths: 3,
+      time: 250.21666666675793,
     },
     bossPhases: [
       'enter@9299',
       'phase1@9479',
-      'transition@10260',
-      'phase2@10351',
-      'transition3@11806',
-      'phase3@11878',
-      'death@12656',
-      'clear@12807',
-      'done@13221',
+      'transition@10799',
+      'phase2@10890',
+      'transition3@13439',
+      'phase3@13511',
     ],
-    digest: 1249734778,
+    digest: 3157582452,
   },
   'stage 1 easy, demo pilot game over': {
     outcome: 'gameover',
@@ -436,7 +437,7 @@ const EXPECTED: Record<string, ReplayResult> = {
       time: 83.8166666666632,
     },
     bossPhases: [],
-    digest: 518403006,
+    digest: 2061797799,
   },
   'boss practice 普通': {
     outcome: 'result',
@@ -575,6 +576,7 @@ const EXPECTED_MODES: Record<string, unknown> = {
       waveSpawned: 0,
       buildingCount: 0,
       buildingDrop: 'B',
+      crateCount: 0,
     },
   },
 };

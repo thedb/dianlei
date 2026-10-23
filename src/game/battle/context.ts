@@ -34,6 +34,7 @@ import {
   type HomingTarget,
 } from '@/game/entities/homingMissile';
 import { BuildingScheduler, createBuilding, placeBuildings } from '@/game/entities/building';
+import { createRiskCrate, RiskCrateScheduler, type RiskCrate } from '@/game/entities/riskCrate';
 import { SpatialGrid } from '@/game/systems/collision';
 import { WaveScheduler } from '@/game/systems/waveScheduler';
 import { getAudioSystem, type SfxType } from '@/game/systems/audio';
@@ -104,6 +105,9 @@ export interface Battle {
   readonly enemyBullets: ObjectPool<ReturnType<typeof createEnemyBullet>>;
   readonly items: ObjectPool<ReturnType<typeof createItem>>;
   readonly buildings: ObjectPool<ReturnType<typeof createBuilding>>;
+  readonly crates: ObjectPool<RiskCrate>;
+  /** Slots this difficulty actually spawns. Rebuilt in `enter`. */
+  riskCrates: RiskCrateScheduler;
   readonly fx: Fx;
   readonly bombWave: BombWave;
   readonly homingTargets: HomingTarget[];
@@ -185,6 +189,8 @@ export function createBattle(scene: SceneContext): Battle {
     enemyBullets,
     items: new ObjectPool(createItem, 10),
     buildings: new ObjectPool(createBuilding, 16),
+    crates: new ObjectPool(createRiskCrate, 4),
+    riskCrates: new RiskCrateScheduler([]),
     fx: createFx(),
     bombWave: { active: false, x: 0, y: 0, t: 0 },
     homingTargets: [],
@@ -294,6 +300,7 @@ export function releaseAllPools(b: Battle): void {
   b.enemyBullets.releaseAll();
   b.items.releaseAll();
   b.buildings.releaseAll();
+  b.crates.releaseAll();
 }
 
 /** Count and clear every live enemy bullet. */

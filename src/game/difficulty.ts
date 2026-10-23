@@ -1,9 +1,10 @@
 /**
  * Run difficulty (P10.1). Easy is the authored wave table.
  *
- * Each difficulty is a profile with several knobs. Today only `hpScale` and
- * `bossGates` differ; bullet speed, fire rate, and drop rules are wired slots
- * that every profile leaves at the authored values.
+ * Each difficulty is a profile with several knobs. `hpScale`, `bossGates`, and
+ * `riskCrateCount` differ. Bullet speed, fire rate, and drop rules are wired
+ * slots that every profile leaves at the authored values. Risk-crate HP is
+ * not scaled; the count is the difficulty knob.
  *
  * The HP scale is one multiply, applied to enemies, buildings, and boss parts.
  * It is not rounded, so a 3 HP fighter becomes 3.45 on Medium.
@@ -11,7 +12,14 @@
  * scene context for that run (retry included) and is not written to settings.
  */
 
-import { DIFFICULTY_HP_EASY, DIFFICULTY_HP_HARD, DIFFICULTY_HP_MEDIUM } from '@/game/config';
+import {
+  DIFFICULTY_HP_EASY,
+  DIFFICULTY_HP_HARD,
+  DIFFICULTY_HP_MEDIUM,
+  RISK_CRATE_COUNT_EASY,
+  RISK_CRATE_COUNT_HARD,
+  RISK_CRATE_COUNT_MEDIUM,
+} from '@/game/config';
 import type { BossDef } from '@/game/levels/types';
 import type { DropRule } from '@/game/systems/dropRules';
 
@@ -34,16 +42,34 @@ export interface DifficultyProfile {
   bossGates: readonly string[];
   /** Replaces the stage's building drop rules when set. */
   buildingDrops?: readonly DropRule[];
+  /**
+   * How many risk-crate slots to keep from the stage list, in authored order.
+   * Easy 0, Medium 2, Hard 3.
+   */
+  riskCrateCount: number;
 }
 
 export const DIFFICULTY_PROFILES: Readonly<Record<Difficulty, DifficultyProfile>> = {
-  easy: { hpScale: DIFFICULTY_HP_EASY, bulletSpeedScale: 1, fireRateScale: 1, bossGates: [] },
-  medium: { hpScale: DIFFICULTY_HP_MEDIUM, bulletSpeedScale: 1, fireRateScale: 1, bossGates: [] },
+  easy: {
+    hpScale: DIFFICULTY_HP_EASY,
+    bulletSpeedScale: 1,
+    fireRateScale: 1,
+    bossGates: [],
+    riskCrateCount: RISK_CRATE_COUNT_EASY,
+  },
+  medium: {
+    hpScale: DIFFICULTY_HP_MEDIUM,
+    bulletSpeedScale: 1,
+    fireRateScale: 1,
+    bossGates: [],
+    riskCrateCount: RISK_CRATE_COUNT_MEDIUM,
+  },
   hard: {
     hpScale: DIFFICULTY_HP_HARD,
     bulletSpeedScale: 1,
     fireRateScale: 1,
     bossGates: [HARD_PHASE_GATE],
+    riskCrateCount: RISK_CRATE_COUNT_HARD,
   },
 };
 

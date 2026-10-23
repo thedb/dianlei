@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 import type { BuildingType, EnemyType } from '@/game/levels/types';
 import { ENEMY_STATS, isGroundEnemy } from './enemy';
 import { BUILDING_SPECS } from './building';
-import { BOSS_CLASS, BUILDING_CLASS, ENEMY_CLASS, buildingClass, enemyClass } from './objectClass';
+import {
+  BOSS_CLASS,
+  BUILDING_CLASS,
+  ENEMY_CLASS,
+  RISK_CRATE_CLASS,
+  buildingClass,
+  enemyClass,
+} from './objectClass';
 
 const ENEMY_SIZES: Record<EnemyType, 'small' | 'medium'> = {
   small: 'small',
@@ -46,5 +53,9 @@ describe('object size class', () => {
 
   it('makes the boss large', () => {
     expect(BOSS_CLASS).toEqual({ size: 'large', category: 'boss' });
+  });
+
+  it('makes a risk crate small and airborne', () => {
+    expect(RISK_CRATE_CLASS).toEqual({ size: 'small', category: 'air' });
   });
 });

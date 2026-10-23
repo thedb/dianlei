@@ -717,6 +717,16 @@ export const stage1: StageData = {
     { id: 'B11', type: 'radar_station', map: 'landA', row: 339, col: 17 },
   ],
 
+  // Risk crates (P20b). Authored order is the difficulty prefix: Easy keeps
+  // none, Medium the first two, Hard all three. R3's time sits between R1 and
+  // R2; its x is fixed inside 180±40 so the stage RNG is not spent on it.
+  // R1 is the left side, R2 the opposite side.
+  riskCrates: [
+    { id: 'R1', t: 50, x: 90 },
+    { id: 'R2', t: 100, x: 270 },
+    { id: 'R3', t: 75, x: 160 },
+  ],
+
   boss: ORBITAL_BATTLESHIP,
 };
 

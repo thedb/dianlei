@@ -6,6 +6,7 @@ import { bossPhaseDef } from '@/game/systems/boss';
 import {
   DIFFICULTY_HP_SCALE,
   bossUsesPhase3,
+  difficultyProfile,
   prepareBossConfig,
   scaleHp,
   type Difficulty,
@@ -16,6 +17,12 @@ const stage1 = getStage('1');
 const DIFFICULTIES: Difficulty[] = ['easy', 'medium', 'hard'];
 
 describe('difficulty HP scale', () => {
+  it('spawns 0, 2, and 3 risk crates', () => {
+    expect(difficultyProfile('easy').riskCrateCount).toBe(0);
+    expect(difficultyProfile('medium').riskCrateCount).toBe(2);
+    expect(difficultyProfile('hard').riskCrateCount).toBe(3);
+  });
+
   it('uses 1, 1.15, and 1.3', () => {
     expect(DIFFICULTY_HP_SCALE).toEqual({ easy: 1, medium: 1.15, hard: 1.3 });
   });

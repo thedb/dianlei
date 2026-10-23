@@ -11,6 +11,7 @@ import { createGameAssets } from '@/game/art';
 import { getStage } from '@/game/levels/registry';
 import type { ItemType } from '@/game/entities/item';
 import { resolvePlacementDrops } from '@/game/systems/dropRules';
+import { RiskCrateScheduler, selectRiskCrateSlots } from '@/game/entities/riskCrate';
 import { WaveScheduler } from '@/game/systems/waveScheduler';
 import { maxOut } from '@/game/systems/playerWeapons';
 import { resetVictoryExit, victoryExitBlocksInput } from '@/game/systems/victoryExit';
@@ -25,6 +26,7 @@ import {
   leaveToTitle,
   publishRun,
   releaseAllPools,
+  runProfile,
   unlockAudio,
 } from '@/game/battle/context';
 import { clearFx, resetShake, stepShake, updateFx } from '@/game/battle/fx';
@@ -49,6 +51,7 @@ import { armBoss, stepBoss } from '@/game/battle/bossFight';
 import {
   jumpTo,
   stageWindow,
+  stepRiskCrates,
   stepEnemies,
   stepMissiles,
   stepPlayerBullets,
@@ -99,6 +102,9 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       b.stage = stage;
       // First stage-RNG draw of the run: which exclusive building drops M.
       b.fixedDrops = resolvePlacementDrops(stage.buildings, b.rng);
+      b.riskCrates = new RiskCrateScheduler(
+        selectRiskCrateSlots(stage.riskCrates, runProfile(b).riskCrateCount)
+      );
       const stageTrack = buildStageTrack(stage);
       b.track = b.rules().track === 'preview' ? buildPreviewTrack(sceneCtx.previewMap) : stageTrack;
       b.buildingScheduler = new BuildingScheduler(
@@ -213,7 +219,10 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       const { pastWarning, warningWindow } = stageWindow(b);
       stepPlayerBullets(b, dt);
       if (rules.scroll) stepScroll(b, dt);
-      if (rules.spawns) stepSpawns(b, dt, pastWarning);
+      if (rules.spawns) {
+        stepSpawns(b, dt, pastWarning);
+        stepRiskCrates(b, dt);
+      }
       stepEnemies(b, dt, pastWarning);
       updateBombHits(b, dt);
       stepMissiles(b, dt);
@@ -280,6 +289,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
         waveSpawned: b.waves?.getDebugInfo().spawned ?? 0,
         buildingCount: b.buildings.getActiveCount(),
         buildingDrop: nextBuildingDrop(b),
+        crateCount: b.crates.getActiveCount(),
       };
       if (b.boss) {
         info.bossPhase = b.boss.phase;

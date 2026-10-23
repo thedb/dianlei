@@ -17,7 +17,13 @@ import {
 } from '@/game/config';
 import { damageEnemy, type Enemy } from '@/game/entities/enemy';
 import { damageBuilding, type Building } from '@/game/entities/building';
-import { buildingClass, enemyClass, type SizeClass } from '@/game/entities/objectClass';
+import { damageRiskCrate, type RiskCrate } from '@/game/entities/riskCrate';
+import {
+  buildingClass,
+  enemyClass,
+  RISK_CRATE_CLASS,
+  type SizeClass,
+} from '@/game/entities/objectClass';
 
 export interface BombBox {
   x: number;
@@ -100,4 +106,14 @@ export function bombHitEnemy(enemy: Enemy): boolean {
 export function bombHitBuilding(b: Building): boolean {
   if (b.wrecked) return false;
   return damageBuilding(b, bombDamage(buildingClass(b.type).size, b.hp, BUILDING_HP));
+}
+
+/**
+ * A small crate loses shield and body together. Damage still empties the
+ * shield before the body, so the score is the body kill.
+ */
+export function bombHitRiskCrate(crate: RiskCrate): boolean {
+  const hp = crate.shield + crate.hp;
+  const maxHp = crate.shieldMax + crate.maxHp;
+  return damageRiskCrate(crate, bombDamage(RISK_CRATE_CLASS.size, hp, maxHp));
 }

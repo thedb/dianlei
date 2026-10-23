@@ -11,6 +11,7 @@ import {
   BOMB_INVINCIBLE_TIME,
   BOMB_WAVE_TIME,
   HOMING_HIT_SIZE,
+  RISK_CRATE_SCORE,
 } from '@/game/config';
 import { explosionKindForSize } from '@/game/art';
 import { ENEMY_DEFS, ENEMY_MAX_HIT_RADIUS } from '@/game/entities/enemyDefs';
@@ -22,7 +23,8 @@ import {
   damageBuilding,
   type Building,
 } from '@/game/entities/building';
-import { buildingClass, enemyClass } from '@/game/entities/objectClass';
+import { buildingClass, enemyClass, RISK_CRATE_CLASS } from '@/game/entities/objectClass';
+import { chooseRiskCrateDrop, damageRiskCrate, type RiskCrate } from '@/game/entities/riskCrate';
 import {
   chooseBuildingDrop,
   previewDefaultBuildingDrop,
@@ -38,6 +40,7 @@ import {
   bombArrives,
   bombHitBuilding,
   bombHitEnemy,
+  bombHitRiskCrate,
   boxOnScreen,
   markBombTarget,
 } from '@/game/systems/bomb';
@@ -115,6 +118,23 @@ function hitBuilding(b: Battle, building: Building, damage: number, x: number, y
   else b.sfx('enemyHit');
 }
 
+/** Body kill only. The shield breaking pays nothing and does not drop. */
+export function destroyRiskCrate(b: Battle, crate: RiskCrate): void {
+  b.state.score += RISK_CRATE_SCORE;
+  const kind = explosionKindForSize(RISK_CRATE_CLASS.size);
+  spawnExplosion(b.fx, crate.x, crate.y, kind);
+  b.sfx('enemyExplode');
+  const drop = chooseRiskCrateDrop(b.state.mate, b.rng);
+  spawnItem(b.items.acquire(), drop, crate.x, crate.y, b.rng);
+  b.crates.release(crate);
+}
+
+function hitRiskCrate(b: Battle, crate: RiskCrate, damage: number, x: number, y: number): void {
+  spawnHitSpark(b.fx, x, y);
+  if (damageRiskCrate(crate, damage)) destroyRiskCrate(b, crate);
+  else b.sfx('enemyHit');
+}
+
 /** Bomb: clear bullets now, then hit what was on screen as the ring reaches it. */
 export function activateBomb(b: Battle): void {
   const { state, player } = b;
@@ -135,6 +155,7 @@ export function activateBomb(b: Battle): void {
   b.buildings.forEach((building) => {
     if (!building.wrecked) markBombTarget(building, player.x, player.y);
   });
+  b.crates.forEach((crate) => markBombTarget(crate, player.x, player.y));
 
   if (b.boss) applyBossEvents(b, applyBossBomb(b.boss));
   b.sfx('bomb');
@@ -152,6 +173,9 @@ export function updateBombHits(b: Battle, dt: number): void {
   });
   b.buildings.forEach((building) => {
     if (bombArrives(building, dt) && bombHitBuilding(building)) destroyBuilding(b, building);
+  });
+  b.crates.forEach((crate) => {
+    if (bombArrives(crate, dt) && bombHitRiskCrate(crate)) destroyRiskCrate(b, crate);
   });
 }
 
@@ -171,6 +195,9 @@ export function collectHomingTargets(b: Battle): void {
   });
   b.buildings.forEach((building) => {
     if (!building.wrecked && buildingOnScreen(building)) targets.push(building);
+  });
+  b.crates.forEach((crate) => {
+    if (boxOnScreen(crate)) targets.push(crate);
   });
   if (b.boss) {
     for (const part of bossMissileTargets(b.boss)) {
@@ -234,6 +261,18 @@ function resolveShot(
     }
   );
   if (!shot.active) return;
+  b.crates.forEach((crate) => {
+    if (!shot.active) return;
+    if (!checkBulletEnemyCollision(shot.x, shot.y, w, h, crate.x, crate.y, crate.hitRadius)) {
+      return;
+    }
+    const damage = shot.damage;
+    const hx = shot.x;
+    const hy = shot.y;
+    release();
+    hitRiskCrate(b, crate, damage, hx, hy);
+  });
+  if (!shot.active) return;
   b.buildings.forEach((building) => {
     if (!shot.active) return;
     if (!bulletHitsBuilding(building, shot.x, shot.y, w, h)) return;
@@ -281,6 +320,7 @@ export function resolveCollisions(b: Battle, warningWindow: boolean): void {
   }
 
   // The hull and laser kill on contact; ground units never body-kill.
+  // Risk crates never body-kill either: they have no gun, and the hull is safe to overlap.
   if (isPlayerVulnerable(b) && boss && bossHitsPlayer(boss, player.x, player.y)) killPlayer(b);
   if (isPlayerVulnerable(b) && boss && bossLaserHits(boss, player.x, player.y)) killPlayer(b);
   if (isPlayerVulnerable(b)) {
