@@ -6,6 +6,7 @@ import type { H5Platform } from '@/platform/h5';
 import { createGameLoop, type GameLoop } from '@/engine/loop';
 import { createInputHandler, type InputHandler } from '@/engine/input';
 import { createRenderer, type Renderer } from '@/engine/renderer';
+import { watchViewport } from '@/engine/viewport';
 import { clockSeed, createRng } from '@/engine/rng';
 import { createSceneManager, type SceneContext } from './scenes';
 import { createSettingsStore, type Settings } from './settings';
@@ -34,11 +35,22 @@ export function createGame(platform: H5Platform): Game {
     screenHeight: screen.height,
     dpr,
     container,
+    getViewport: () => {
+      const next = platform.getScreenSize();
+      return { width: next.width, height: next.height, dpr: platform.getDevicePixelRatio() };
+    },
   });
 
-  // Register canvas with platform for touch coordinate conversion
-  const scaleInfo = renderer.getScaleInfo();
-  platform.setCanvas(renderer.getCanvas(), scaleInfo.scale);
+  // Register canvas with platform for touch coordinate conversion.
+  // Resize keeps the same canvas element and only refreshes the scale.
+  const syncTouchScale = (): void => {
+    platform.setCanvas(renderer.getCanvas(), renderer.getScaleInfo().scale);
+  };
+  syncTouchScale();
+  const stopViewportWatch = watchViewport(container, () => {
+    renderer.resize();
+    syncTouchScale();
+  });
 
   // Settings persist through the platform storage hook
   const settings = createSettingsStore(platform);
@@ -129,6 +141,7 @@ export function createGame(platform: H5Platform): Game {
     },
 
     stop(): void {
+      stopViewportWatch();
       loop.stop();
     },
 

@@ -3,6 +3,7 @@
  */
 
 import { LOGICAL_W, LOGICAL_H } from '@/game/config';
+import { EXTERIOR_VOID, paintExterior } from './exterior';
 import type { LoopDebugInfo } from './loop';
 import type { InputDebugInfo } from './input';
 
@@ -98,48 +99,114 @@ export function calculateScaling(
   return { scale, canvasWidth, canvasHeight, offsetX, offsetY };
 }
 
+export interface ViewportSize {
+  width: number;
+  height: number;
+  dpr: number;
+}
+
 export interface RendererOptions {
   screenWidth: number;
   screenHeight: number;
   dpr: number;
   container: HTMLElement;
+  /** Read by resize(). Omit to use the window viewport and devicePixelRatio. */
+  getViewport?: () => ViewportSize;
 }
 
 export function createRenderer(options: RendererOptions): Renderer {
-  const { screenWidth, screenHeight, dpr, container } = options;
+  const { container, getViewport } = options;
 
-  const { scale, canvasWidth, canvasHeight, offsetX, offsetY } = calculateScaling(
-    screenWidth,
-    screenHeight
-  );
+  container.style.backgroundColor = EXTERIOR_VOID;
 
-  // Create canvas element
+  // Full-window plate behind the playfield. Pointer events pass through so
+  // taps on the bars never hit this canvas, and taps on the playfield hit
+  // the game canvas (it is later in the tree and above this plate).
+  const backdrop = document.createElement('canvas');
+  backdrop.style.position = 'absolute';
+  backdrop.style.left = '0';
+  backdrop.style.top = '0';
+  backdrop.style.zIndex = '0';
+  backdrop.style.pointerEvents = 'none';
+  backdrop.style.touchAction = 'none';
+  backdrop.style.imageRendering = 'pixelated';
+  backdrop.setAttribute('aria-hidden', 'true');
+
+  // Playfield. Kept for the lifetime of the renderer so touch listeners
+  // registered by the platform stay attached across resizes.
   const canvas = document.createElement('canvas');
-
-  // Backing store size (physical pixels)
-  canvas.width = canvasWidth * dpr;
-  canvas.height = canvasHeight * dpr;
-
-  // CSS size (logical CSS pixels)
-  canvas.style.width = `${canvasWidth}px`;
-  canvas.style.height = `${canvasHeight}px`;
+  canvas.style.position = 'absolute';
+  canvas.style.zIndex = '1';
   canvas.style.imageRendering = 'pixelated';
   canvas.style.touchAction = 'none';
 
-  // Position for letterboxing
-  canvas.style.position = 'absolute';
-  canvas.style.left = `${offsetX}px`;
-  canvas.style.top = `${offsetY}px`;
-
-  container.appendChild(canvas);
-
+  const backdropCtx = backdrop.getContext('2d');
   const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Failed to get 2D context');
+  if (!backdropCtx || !ctx) throw new Error('Failed to get 2D context');
 
-  // Combined transform: DPR * scale to map logical coords to backing store
-  const combinedScale = scale * dpr;
-  ctx.setTransform(combinedScale, 0, 0, combinedScale, 0, 0);
-  ctx.imageSmoothingEnabled = false;
+  let scale = 1;
+  let offsetX = 0;
+  let offsetY = 0;
+
+  const layout = (screenWidth: number, screenHeight: number, nextDpr: number): void => {
+    if (
+      !Number.isFinite(screenWidth) ||
+      !Number.isFinite(screenHeight) ||
+      !Number.isFinite(nextDpr) ||
+      screenWidth <= 0 ||
+      screenHeight <= 0 ||
+      nextDpr <= 0
+    ) {
+      return;
+    }
+
+    const next = calculateScaling(screenWidth, screenHeight);
+    const gameW = Math.floor(next.canvasWidth * nextDpr);
+    const gameH = Math.floor(next.canvasHeight * nextDpr);
+    const plateW = Math.floor(screenWidth * nextDpr);
+    const plateH = Math.floor(screenHeight * nextDpr);
+    if (gameW < 1 || gameH < 1 || plateW < 1 || plateH < 1) return;
+
+    canvas.style.width = `${next.canvasWidth}px`;
+    canvas.style.height = `${next.canvasHeight}px`;
+    canvas.style.left = `${next.offsetX}px`;
+    canvas.style.top = `${next.offsetY}px`;
+    // Assigning canvas.width clears the bitmap and resets context state.
+    if (canvas.width !== gameW || canvas.height !== gameH) {
+      canvas.width = gameW;
+      canvas.height = gameH;
+      const combined = next.scale * nextDpr;
+      ctx.setTransform(combined, 0, 0, combined, 0, 0);
+      ctx.imageSmoothingEnabled = false;
+    }
+
+    backdrop.style.width = `${screenWidth}px`;
+    backdrop.style.height = `${screenHeight}px`;
+    if (backdrop.width !== plateW || backdrop.height !== plateH) {
+      backdrop.width = plateW;
+      backdrop.height = plateH;
+      backdropCtx.setTransform(nextDpr, 0, 0, nextDpr, 0, 0);
+      backdropCtx.imageSmoothingEnabled = false;
+      paintExterior(backdropCtx, screenWidth, screenHeight);
+    }
+
+    scale = next.scale;
+    offsetX = next.offsetX;
+    offsetY = next.offsetY;
+  };
+
+  const readViewport = (): ViewportSize => {
+    if (getViewport) return getViewport();
+    return {
+      width: window.innerWidth,
+      height: window.innerHeight,
+      dpr: window.devicePixelRatio || 1,
+    };
+  };
+
+  layout(options.screenWidth, options.screenHeight, options.dpr);
+  container.appendChild(backdrop);
+  container.appendChild(canvas);
 
   return {
     clear(color: string): void {
@@ -257,7 +324,8 @@ export function createRenderer(options: RendererOptions): Renderer {
     },
 
     resize(): void {
-      // TODO: In P1+, handle window resize by recalculating scale and recreating canvas
+      const vp = readViewport();
+      layout(vp.width, vp.height, vp.dpr);
     },
 
     getContext(): CanvasRenderingContext2D {

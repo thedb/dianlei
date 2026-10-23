@@ -2,6 +2,7 @@
  * H5 shell entry point
  */
 
+import { EXTERIOR_VOID } from '@/engine/exterior';
 import { createH5Platform } from '@/platform/h5';
 import { createGame } from '@/game';
 
@@ -12,7 +13,8 @@ const container = document.getElementById('game') ?? document.body;
 document.body.style.margin = '0';
 document.body.style.padding = '0';
 document.body.style.overflow = 'hidden';
-document.body.style.backgroundColor = '#000';
+document.body.style.backgroundColor = EXTERIOR_VOID;
+document.documentElement.style.backgroundColor = EXTERIOR_VOID;
 document.body.style.touchAction = 'none';
 document.body.style.userSelect = 'none';
 

@@ -12,5 +12,6 @@ export {
   type Renderer,
   type RendererOptions,
   type GameDebugInfo,
+  type ViewportSize,
 } from './renderer';
 export { createRng, clockSeed, type Rng } from './rng';
