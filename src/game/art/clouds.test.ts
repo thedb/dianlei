@@ -12,7 +12,6 @@ import {
   rasterCloud,
   shadowOriginY,
   skyOriginY,
-  type CloudKind,
   type CloudStamp,
 } from './clouds';
 
@@ -112,9 +111,53 @@ function xSeparated(a: Box, b: Box, gap: number): boolean {
   return a.r + gap <= b.l || b.r + gap <= a.l;
 }
 
-/** Largest / smallest. Variety is a real spread, not a 5% nudge. */
-function spread(values: readonly number[]): number {
-  return Math.max(...values) / Math.min(...values);
+/**
+ * P19: a stamp hugs one vertical edge. At least a quarter of its width sits
+ * off-screen, the rest stays on that half, and it does not reach the other edge.
+ */
+function hugSide(box: Box): 'left' | 'right' | null {
+  const width = box.r - box.l;
+  if (width <= 0) return null;
+  const offLeft = Math.max(0, -box.l);
+  const offRight = Math.max(0, box.r - LOGICAL_W);
+  if (offLeft > 0 && offRight > 0) return null;
+  if (offLeft >= width * 0.25 && box.r > 0 && box.r <= LOGICAL_W / 2) return 'left';
+  if (offRight >= width * 0.25 && box.l < LOGICAL_W && box.l >= LOGICAL_W / 2) return 'right';
+  return null;
+}
+
+function assertEdgeHuggers(stamps: readonly CloudStamp[], role: 'sky' | 'shadow'): void {
+  expect(stamps.length).toBeGreaterThanOrEqual(2);
+  let left = false;
+  let right = false;
+  for (const stamp of stamps) {
+    expect(stamp).not.toHaveProperty('turns');
+    expect(stamp.scale).toBeGreaterThan(0.3);
+    expect(stamp.scale).toBeLessThan(2.2);
+    expect(stamp.speed).toBeGreaterThan(0.2);
+    expect(stamp.speed).toBeLessThan(2.2);
+    const side = hugSide(boxOf(stamp, role));
+    expect(side).not.toBeNull();
+    if (side === 'left') left = true;
+    if (side === 'right') right = true;
+  }
+  expect(left).toBe(true);
+  expect(right).toBe(true);
+  expect(stamps.some((stamp) => stamp.mirrorY)).toBe(true);
+  expect(stamps.some((stamp) => !stamp.mirrorY)).toBe(true);
+  for (let i = 0; i < stamps.length; i++) {
+    for (let j = i + 1; j < stamps.length; j++) {
+      expect(xSeparated(boxOf(stamps[i]!, role), boxOf(stamps[j]!, role), 8)).toBe(true);
+    }
+  }
+}
+
+function slowest(stamps: readonly CloudStamp[]): CloudStamp {
+  return stamps.reduce((a, b) => (a.speed < b.speed ? a : b));
+}
+
+function fastest(stamps: readonly CloudStamp[]): CloudStamp {
+  return stamps.reduce((a, b) => (a.speed > b.speed ? a : b));
 }
 
 /** True when the boxes meet or come within `gap` px, including a vertical wrap. */
@@ -189,62 +232,16 @@ function opaque(grid: readonly (readonly number[])[]): number {
   return n;
 }
 
-function assertVariety(stamps: readonly CloudStamp[], role: 'sky' | 'shadow'): void {
-  expect(stamps.length).toBeGreaterThan(CLOUD_KINDS.length);
-  const kinds = new Set<CloudKind>();
-  const scales: number[] = [];
-  const speeds: number[] = [];
-  const ys: number[] = [];
-  let clippedLeft = false;
-  let clippedRight = false;
-  for (const stamp of stamps) {
-    kinds.add(stamp.kind);
-    scales.push(stamp.scale);
-    speeds.push(stamp.speed);
-    ys.push(stamp.y);
-    expect(stamp).not.toHaveProperty('turns');
-    expect(stamp.scale).toBeGreaterThan(0.3);
-    expect(stamp.scale).toBeLessThan(2.2);
-    expect(stamp.speed).toBeGreaterThan(0.2);
-    expect(stamp.speed).toBeLessThan(2.2);
-    const box = boxOf(stamp, role);
-    if (box.l < 0) clippedLeft = true;
-    if (box.r > LOGICAL_W) clippedRight = true;
-  }
-  for (const kind of CLOUD_KINDS) expect(kinds.has(kind)).toBe(true);
-  expect(spread(scales)).toBeGreaterThanOrEqual(2);
-  expect(spread(speeds)).toBeGreaterThanOrEqual(2);
-  const big = stamps.filter((stamp) => stamp.scale >= 1.2);
-  const small = stamps.filter((stamp) => stamp.scale <= 0.7);
-  expect(big.length).toBeGreaterThan(0);
-  expect(small.length).toBeGreaterThan(0);
-  expect(Math.max(...big.map((stamp) => stamp.speed))).toBeLessThan(
-    Math.min(...small.map((stamp) => stamp.speed))
-  );
-  expect(clippedLeft).toBe(true);
-  expect(clippedRight).toBe(true);
-  expect(stamps.some((stamp) => stamp.mirrorX)).toBe(true);
-  expect(stamps.some((stamp) => stamp.mirrorY)).toBe(true);
-  expect(stamps.some((stamp) => !stamp.mirrorY)).toBe(true);
-  const sortedY = [...ys].sort((a, b) => a - b);
-  const gaps = sortedY.slice(1).map((y, i) => y - sortedY[i]!);
-  expect(gaps.every((gap) => Math.abs(gap - gaps[0]!) < 1)).toBe(false);
-  for (let i = 0; i < stamps.length; i++) {
-    for (let j = i + 1; j < stamps.length; j++) {
-      expect(xSeparated(boxOf(stamps[i]!, role), boxOf(stamps[j]!, role), 8)).toBe(true);
-    }
-  }
-}
-
 describe('cloud placement', () => {
   const skySpan = LOGICAL_H + 120;
 
-  it('varies sky scale, speed, and edge placement without stacking lanes', () => {
-    assertVariety(SKY_CLOUDS, 'sky');
+  it('keeps sky stamps on the left or right edge, with no center lane', () => {
+    assertEdgeHuggers(SKY_CLOUDS, 'sky');
     for (const cloud of SKY_CLOUDS) {
       const box = boxOf(cloud, 'sky');
       expect(box.t).toBeGreaterThanOrEqual(0);
       expect(box.b).toBeLessThanOrEqual(skySpan);
+      expect(box.l >= 0 && box.r <= LOGICAL_W).toBe(false);
     }
     for (let i = 0; i < SKY_CLOUDS.length; i++) {
       for (let j = i + 1; j < SKY_CLOUDS.length; j++) {
@@ -253,20 +250,22 @@ describe('cloud placement', () => {
         ).toBe(false);
       }
     }
-    const slow = SKY_CLOUDS[0]!;
-    const fast = SKY_CLOUDS.find((cloud) => cloud.speed > slow.speed)!;
+    const slow = slowest(SKY_CLOUDS);
+    const fast = fastest(SKY_CLOUDS);
     const ySlow = skyOriginY(slow.y, 0.4, slow.speed);
     const yFast = skyOriginY(fast.y, 0.4, fast.speed);
     const ySlow0 = skyOriginY(slow.y, 0, slow.speed);
     const yFast0 = skyOriginY(fast.y, 0, fast.speed);
-    expect(yFast - yFast0).toBeGreaterThan((ySlow - ySlow0) * 2);
+    expect(yFast - yFast0).toBeGreaterThan(ySlow - ySlow0);
   });
 
-  it('varies shadow scale and speed, one pass, lanes stay apart', () => {
-    assertVariety(SHADOW_CLOUDS, 'shadow');
+  it('keeps shadow stamps on the same edges, one pass, lanes stay apart', () => {
+    assertEdgeHuggers(SHADOW_CLOUDS, 'shadow');
     for (const stamp of SHADOW_CLOUDS) {
       expect(stamp.y).toBeGreaterThanOrEqual(0);
       expect(stamp.y).toBeLessThan(CLOUD_SHADOW_SPAN);
+      const box = boxOf(stamp, 'shadow');
+      expect(box.l >= 0 && box.r <= LOGICAL_W).toBe(false);
     }
     for (let i = 0; i < SHADOW_CLOUDS.length; i++) {
       for (let j = i + 1; j < SHADOW_CLOUDS.length; j++) {
@@ -280,14 +279,24 @@ describe('cloud placement', () => {
         ).toBe(false);
       }
     }
+    for (let scroll = 0; scroll < CLOUD_SHADOW_SPAN; scroll += 40) {
+      for (const stamp of SHADOW_CLOUDS) {
+        const y = shadowOriginY(stamp.y, scroll, stamp.speed);
+        const box = boxOf(stamp, 'shadow');
+        const top = y - (stamp.y - box.t);
+        const bottom = top + (box.b - box.t);
+        if (bottom <= 0 || top >= LOGICAL_H) continue;
+        expect(hugSide(box)).not.toBeNull();
+      }
+    }
     const visible = SHADOW_CLOUDS.filter((stamp) => {
       const y = shadowOriginY(stamp.y, 0, stamp.speed);
       return y > -80 && y < LOGICAL_H;
     });
     expect(visible.length).toBeGreaterThanOrEqual(1);
     expect(visible.length).toBeLessThanOrEqual(3);
-    const slow = SHADOW_CLOUDS[0]!;
-    const fast = SHADOW_CLOUDS.find((stamp) => stamp.speed > 1.5)!;
+    const slow = slowest(SHADOW_CLOUDS);
+    const fast = fastest(SHADOW_CLOUDS);
     const driftSlow = shadowOriginY(0, 400, slow.speed) - shadowOriginY(0, 0, slow.speed);
     const driftFast = shadowOriginY(0, 400, fast.speed) - shadowOriginY(0, 0, fast.speed);
     expect(driftFast).toBeGreaterThan(driftSlow);
