@@ -8,8 +8,6 @@
  * lasts longer, and every ship flame draw now carries the exhaust boost.
  * P20a recaptured stage, attract, boss-practice, and pause draws: the stage
  * HUD shows the M icon, and different building drops change what is on screen.
- * P20b recaptured the hard stage draw: risk crates are on screen. Easy, the
- * easy demo, boss practice, attract, weapon test, and pause did not move.
  * The weapon-test draw digest did not move.
  */
 
@@ -136,7 +134,6 @@ vi.mock('@/game/art', async (importOriginal) => {
       items: rec.stub('items'),
       explosions: rec.stub('explosions'),
       bosses: rec.stub('bosses'),
-      crates: rec.stub('crates'),
     }),
     drawPlayerFlames: logged('drawPlayerFlames'),
     drawEnemyFlame: logged('drawEnemyFlame'),
@@ -228,13 +225,7 @@ function stageRun(
 
 const EXPECTED: Record<string, RenderResult> = {
   'stage easy': { outcome: 'result', frames: 11734, renders: 512, calls: 83074, hash: 3374521315 },
-  'stage hard': {
-    outcome: 'gameover',
-    frames: 15012,
-    renders: 654,
-    calls: 104645,
-    hash: 3980387721,
-  },
+  'stage hard': { outcome: 'result', frames: 13221, renders: 576, calls: 96771, hash: 1991871279 },
   'stage demo': { outcome: 'gameover', frames: 5106, renders: 223, calls: 31771, hash: 4243311574 },
   'boss hard': { outcome: 'result', frames: 5453, renders: 239, calls: 36255, hash: 3992588818 },
   attract: { outcome: 'timeout', frames: 5400, renders: 318, calls: 24791, hash: 3199217799 },
@@ -257,7 +248,7 @@ describe('render replay', () => {
   });
 
   it('stage 1 hard, phase 3 and deaths', () => {
-    check('stage hard', stageRun('stage', 'hard', 37, 300, 'dodge'));
+    check('stage hard', stageRun('stage', 'hard', 37, 240, 'dodge'));
   });
 
   it('stage 1 easy, demo pilot game over', () => {

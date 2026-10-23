@@ -29,7 +29,7 @@ export interface PlayModeRules {
   onDeath: 'respawn' | 'hold' | 'title';
   /** The map scrolls and the background track is drawn. */
   scroll: boolean;
-  /** Waves, buildings, risk crates, the warning, and the boss. */
+  /** Waves, buildings, the warning, and the boss. */
   spawns: boolean;
   /** Background track: the stage's maps, or the 地图预览 target (`SceneContext.previewMap`). */
   track: 'stage' | 'preview';

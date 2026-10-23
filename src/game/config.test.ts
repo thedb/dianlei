@@ -17,15 +17,6 @@ import {
   HOMING_MAX_LEVEL,
   BUILDING_DROP_P_SHARE,
   M_OVERFLOW_SCORE,
-  RISK_CRATE_BODY_HP,
-  RISK_CRATE_COUNT_EASY,
-  RISK_CRATE_COUNT_HARD,
-  RISK_CRATE_COUNT_MEDIUM,
-  RISK_CRATE_DROP_M_SHARE,
-  RISK_CRATE_DROP_P_SHARE,
-  RISK_CRATE_SCORE,
-  RISK_CRATE_SHIELD_HP,
-  SCORE_MEDIUM_FIGHTER,
   MATE_MAX_LEVEL,
   P_OVERFLOW_SCORE,
   MATE_OFFSET_X,
@@ -113,19 +104,6 @@ describe('Game Config', () => {
     expect(MATE_OFFSET_X).toBeCloseTo(32 * 0.8);
     expect(MATE_SCALE).toBeCloseTo(1 / 3);
     expect(DEATH_MATE_LOSS).toBe(1);
-  });
-
-  it('keeps risk-crate HP, score, and drop shares', () => {
-    expect(RISK_CRATE_SHIELD_HP).toBe(12);
-    expect(RISK_CRATE_BODY_HP).toBe(6);
-    expect(RISK_CRATE_SCORE).toBe(1000);
-    expect(RISK_CRATE_SCORE).toBe(SCORE_MEDIUM_FIGHTER);
-    expect(RISK_CRATE_DROP_M_SHARE).toBe(0.5);
-    expect(RISK_CRATE_DROP_P_SHARE).toBe(0.25);
-    expect(RISK_CRATE_DROP_M_SHARE + RISK_CRATE_DROP_P_SHARE).toBeLessThan(1);
-    expect(RISK_CRATE_COUNT_EASY).toBe(0);
-    expect(RISK_CRATE_COUNT_MEDIUM).toBe(2);
-    expect(RISK_CRATE_COUNT_HARD).toBe(3);
   });
 
   it('keeps the bomb rules in range', () => {

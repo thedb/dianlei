@@ -68,8 +68,6 @@ export interface GameDebugInfo {
    * Does not roll, and does not name a placement lock.
    */
   buildingDrop?: string;
-  /** Risk crates still on screen. */
-  crateCount?: number;
 }
 
 /**

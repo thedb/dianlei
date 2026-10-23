@@ -14,7 +14,6 @@ export * from './explosionSprite';
 export * from './buildingSprite';
 export * from './weaponFx';
 export * from './gunBarrel';
-export * from './riskCrateSprite';
 
 import type { PlayerSpriteSheet } from './playerSprite';
 import type { EnemyAssets } from './enemySprite';
@@ -24,7 +23,6 @@ import type { ItemAssets } from './itemSprite';
 import type { ExplosionAssets } from './explosionSprite';
 import type { BackgroundArt } from './mapDraw';
 import type { BossAssets } from './bossSprite';
-import type { RiskCrateAssets } from './riskCrateSprite';
 
 import { createPlayerSpriteSheet } from './playerSprite';
 import { createEnemyAssets } from './enemySprite';
@@ -34,7 +32,6 @@ import { createItemAssets } from './itemSprite';
 import { createExplosionAssets } from './explosionSprite';
 import { createBackgroundArt } from './mapDraw';
 import { createBossAssets } from './bossSprite';
-import { createRiskCrateAssets } from './riskCrateSprite';
 
 export { drawBackground } from './mapDraw';
 export { drawBossWorld, drawBossHpBar, drawBossLaser } from './bossSprite';
@@ -49,7 +46,6 @@ export interface GameAssets {
   explosions: ExplosionAssets;
   background: BackgroundArt;
   bosses: Record<string, BossAssets>;
-  crates: RiskCrateAssets;
 }
 
 /** Initialize all game assets (call once at boot) */
@@ -63,6 +59,5 @@ export function createGameAssets(): GameAssets {
     explosions: createExplosionAssets(),
     background: createBackgroundArt(),
     bosses: createBossAssets(),
-    crates: createRiskCrateAssets(),
   };
 }

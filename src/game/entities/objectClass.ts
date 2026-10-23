@@ -32,12 +32,6 @@ export const BUILDING_CLASS: Record<BuildingType, ObjectClass> = {
 
 export const BOSS_CLASS: ObjectClass = { size: 'large', category: 'boss' };
 
-/**
- * Risk crate. Small, so a bomb that reaches it destroys shield and body together.
- * It is air for the homing picker, and it never body-kills the player.
- */
-export const RISK_CRATE_CLASS: ObjectClass = { size: 'small', category: 'air' };
-
 export function enemyClass(type: EnemyType): ObjectClass {
   return ENEMY_CLASS[type];
 }
