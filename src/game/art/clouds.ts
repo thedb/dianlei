@@ -8,11 +8,12 @@
  * - billow 双峰积云: two humps on one compact body.
  * - lump 不规则团块: heavier on the lower right, so a mirror changes it.
  *
- * Placement keeps each stamp in its own horizontal lane, so a faster cloud
- * can pass a slower one without the pixels stacking into a dark blob. Variety
- * is scale, speed, and horizontal / vertical flips — never a 90° turn. Large
- * stamps are slow and may sit past the screen edge on purpose; small ones are
- * fast wisps. A frame only blits the bake.
+ * Placement (P19) is edge-only. Every stamp is clipped by the left or right
+ * screen edge and partly off-screen, so nothing scrolls in from the top
+ * through a center lane (those read as fighters). Sky and shadow lists follow
+ * the same rule. Variety is scale, speed, and horizontal / vertical flips —
+ * never a 90° turn. Different speeds stay in separate lanes so they cannot
+ * stack. A frame only blits the bake.
  */
 
 import {
@@ -154,29 +155,22 @@ export function cloudExtent(kind: CloudKind, role: 'sky' | 'shadow'): { w: numbe
 }
 
 /**
- * Starfield warning band. Four shapes, several sizes. Lanes stay apart in x
- * so different speeds never share pixels. The left lump and the right puff
- * are clipped by the screen edge. A tile-boss handoff does not draw this band
- * (it reads as a white sheet).
+ * Starfield warning band. Edge-hugging only: the left lump and the right puff
+ * are clipped by the screen. No center-lane stamp enters from the top.
+ * A tile-boss handoff does not draw this band (it reads as a white sheet).
  */
 export const SKY_CLOUDS: readonly CloudStamp[] = [
   { kind: 'lump', x: 12, y: 70, mirrorX: false, mirrorY: false, scale: 1.8, speed: 0.42 },
-  { kind: 'puff', x: 124, y: 310, mirrorX: true, mirrorY: false, scale: 0.55, speed: 1.85 },
-  { kind: 'lobes', x: 200, y: 150, mirrorX: false, mirrorY: true, scale: 0.95, speed: 0.95 },
-  { kind: 'billow', x: 278, y: 520, mirrorX: true, mirrorY: true, scale: 0.58, speed: 1.6 },
   { kind: 'puff', x: 378, y: 400, mirrorX: false, mirrorY: true, scale: 1.7, speed: 0.5 },
 ];
 
 /**
- * Ground shadows. Same four shapes, own scales and speeds, still one pass.
- * Lanes do not overlap, so a fast wisp crossing a slow mass stays a separate
- * shadow. The left lump and the right puff hang off the screen edge.
+ * Ground shadows. Same edge rule as the sky, own scales and speeds, still one
+ * pass. The interior stamps are gone, so a removed sky cloud leaves no shadow.
+ * The left lump and the right puff hang off the screen edge.
  */
 export const SHADOW_CLOUDS: readonly CloudStamp[] = [
   { kind: 'lump', x: 6, y: 190, mirrorX: false, mirrorY: false, scale: 1.55, speed: 0.45 },
-  { kind: 'puff', x: 114, y: 500, mirrorX: true, mirrorY: false, scale: 0.5, speed: 1.9 },
-  { kind: 'billow', x: 184, y: 820, mirrorX: false, mirrorY: true, scale: 0.78, speed: 1.1 },
-  { kind: 'lobes', x: 262, y: 1280, mirrorX: true, mirrorY: true, scale: 0.55, speed: 1.55 },
   { kind: 'puff', x: 368, y: 1520, mirrorX: false, mirrorY: true, scale: 1.35, speed: 0.55 },
 ];
 
