@@ -6,6 +6,7 @@
  * Enemy: orange-yellow, shorter, no particles
  */
 
+import { VICTORY_FLAME_BOOST, VICTORY_FLAME_GIRTH } from '@/game/config';
 import { PALETTE, COLOR } from '@/game/palette';
 
 export interface FlameConfig {
@@ -43,6 +44,7 @@ export const ENEMY_FLAME_CONFIG: FlameConfig = {
  * @param config Flame configuration
  * @param velocityY Player vertical velocity (-1 to 1, negative = moving up)
  * @param time Current game time for animation
+ * @param boost Stage-clear exhaust, 0 cruise to 1 full. Same value for every ship.
  */
 export function drawEngineFlame(
   ctx: CanvasRenderingContext2D,
@@ -50,18 +52,21 @@ export function drawEngineFlame(
   y: number,
   config: FlameConfig,
   velocityY: number = 0,
-  time: number = 0
+  time: number = 0,
+  boost: number = 0
 ): void {
   // Flame length varies with vertical velocity
   // Moving up = longer flame, moving down = shorter
   const velocityMod = 1 - velocityY * 0.3;
+  const thrust = 1 + Math.max(0, boost) * VICTORY_FLAME_BOOST;
+  const girth = 1 + Math.max(0, boost) * VICTORY_FLAME_GIRTH;
 
   // Flicker based on time
   const flicker1 = Math.sin(time * 30) * config.flickerAmount;
   const flicker2 = Math.sin(time * 45 + 1.5) * config.flickerAmount * 0.7;
 
-  const length = config.baseLength * velocityMod + flicker1;
-  const width = config.baseWidth + flicker2 * 0.3;
+  const length = (config.baseLength * velocityMod + flicker1) * thrust;
+  const width = (config.baseWidth + flicker2 * 0.3) * girth;
 
   // Draw glow first
   const gradient = ctx.createLinearGradient(x, y, x, y + length * 1.5);
@@ -102,7 +107,8 @@ export function drawPlayerFlames(
   centerY: number,
   nozzleOffsets: Array<{ x: number; y: number }>,
   velocityY: number,
-  time: number
+  time: number,
+  boost = 0
 ): void {
   for (const nozzle of nozzleOffsets) {
     drawEngineFlame(
@@ -111,7 +117,8 @@ export function drawPlayerFlames(
       centerY + nozzle.y,
       PLAYER_FLAME_CONFIG,
       velocityY,
-      time
+      time,
+      boost
     );
   }
 }
@@ -193,14 +200,15 @@ export function drawFittedPlayerFlames(
   source: FlameSpriteBox & { nozzles: ReadonlyArray<{ x: number; y: number }> },
   drawn: FlameSpriteBox,
   velocityY: number,
-  time: number
+  time: number,
+  boost = 0
 ): void {
   const scaleX = drawn.width / source.width;
   const scaleY = drawn.height / source.height;
   const config = fittedFlameConfig(scaleX, scaleY);
   for (const nozzle of source.nozzles) {
     const at = fittedNozzle(source, nozzle, drawn);
-    drawEngineFlame(ctx, centerX + at.x, centerY + at.y, config, velocityY, time);
+    drawEngineFlame(ctx, centerX + at.x, centerY + at.y, config, velocityY, time, boost);
   }
 }
 

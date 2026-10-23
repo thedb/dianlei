@@ -8,8 +8,11 @@
  * - billow 双峰积云: two humps on one compact body.
  * - lump 不规则团块: heavier on the lower right, so a mirror changes it.
  *
- * Placement is spaced so the baked boxes do not overlap. Variety is horizontal
- * and vertical flips only — never a 90° turn. A frame only blits the bake.
+ * Placement keeps each stamp in its own horizontal lane, so a faster cloud
+ * can pass a slower one without the pixels stacking into a dark blob. Variety
+ * is scale, speed, and horizontal / vertical flips — never a 90° turn. Large
+ * stamps are slow and may sit past the screen edge on purpose; small ones are
+ * fast wisps. A frame only blits the bake.
  */
 
 import {
@@ -39,6 +42,10 @@ export interface CloudStamp {
   y: number;
   mirrorX: boolean;
   mirrorY: boolean;
+  /** Uniform draw scale. Large masses are slower; wisps are faster. */
+  scale: number;
+  /** Multiplier on the role's base drift (`WARNING_CLOUD_DRIFT` or `CLOUD_SHADOW_SCROLL`). */
+  speed: number;
 }
 
 const PUFF = [
@@ -147,25 +154,30 @@ export function cloudExtent(kind: CloudKind, role: 'sky' | 'shadow'): { w: numbe
 }
 
 /**
- * Starfield warning band. One of each shape, spread so the boxes do not meet.
- * A tile-boss handoff does not draw this band (it reads as a white sheet).
+ * Starfield warning band. Four shapes, several sizes. Lanes stay apart in x
+ * so different speeds never share pixels. The left lump and the right puff
+ * are clipped by the screen edge. A tile-boss handoff does not draw this band
+ * (it reads as a white sheet).
  */
 export const SKY_CLOUDS: readonly CloudStamp[] = [
-  { kind: 'puff', x: 78, y: 90, mirrorX: false, mirrorY: false },
-  { kind: 'lobes', x: 270, y: 270, mirrorX: true, mirrorY: false },
-  { kind: 'billow', x: 96, y: 460, mirrorX: false, mirrorY: true },
-  { kind: 'lump', x: 248, y: 650, mirrorX: true, mirrorY: true },
+  { kind: 'lump', x: 12, y: 70, mirrorX: false, mirrorY: false, scale: 1.8, speed: 0.42 },
+  { kind: 'puff', x: 124, y: 310, mirrorX: true, mirrorY: false, scale: 0.55, speed: 1.85 },
+  { kind: 'lobes', x: 200, y: 150, mirrorX: false, mirrorY: true, scale: 0.95, speed: 0.95 },
+  { kind: 'billow', x: 278, y: 520, mirrorX: true, mirrorY: true, scale: 0.58, speed: 1.6 },
+  { kind: 'puff', x: 378, y: 400, mirrorX: false, mirrorY: true, scale: 1.7, speed: 0.5 },
 ];
 
 /**
- * Ground shadows. One stamp each, far enough apart that a screen shows one
- * and the wrap does not pile them. Same flips as the sky, no quarter-turns.
+ * Ground shadows. Same four shapes, own scales and speeds, still one pass.
+ * Lanes do not overlap, so a fast wisp crossing a slow mass stays a separate
+ * shadow. The left lump and the right puff hang off the screen edge.
  */
 export const SHADOW_CLOUDS: readonly CloudStamp[] = [
-  { kind: 'puff', x: 80, y: 140, mirrorX: false, mirrorY: false },
-  { kind: 'lump', x: 250, y: 560, mirrorX: true, mirrorY: false },
-  { kind: 'billow', x: 110, y: 980, mirrorX: false, mirrorY: true },
-  { kind: 'lobes', x: 240, y: 1400, mirrorX: true, mirrorY: true },
+  { kind: 'lump', x: 6, y: 190, mirrorX: false, mirrorY: false, scale: 1.55, speed: 0.45 },
+  { kind: 'puff', x: 114, y: 500, mirrorX: true, mirrorY: false, scale: 0.5, speed: 1.9 },
+  { kind: 'billow', x: 184, y: 820, mirrorX: false, mirrorY: true, scale: 0.78, speed: 1.1 },
+  { kind: 'lobes', x: 262, y: 1280, mirrorX: true, mirrorY: true, scale: 0.55, speed: 1.55 },
+  { kind: 'puff', x: 368, y: 1520, mirrorX: false, mirrorY: true, scale: 1.35, speed: 0.55 },
 ];
 
 function edgeCell(mask: readonly string[], c: number, r: number): boolean {
@@ -230,19 +242,29 @@ function blit(
   x: number,
   y: number,
   mirrorX: boolean,
-  mirrorY: boolean
+  mirrorY: boolean,
+  scale: number
 ): void {
   ctx.save();
   ctx.translate(Math.round(x), Math.round(y));
-  if (mirrorX || mirrorY) ctx.scale(mirrorX ? -1 : 1, mirrorY ? -1 : 1);
+  const sx = (mirrorX ? -1 : 1) * scale;
+  const sy = (mirrorY ? -1 : 1) * scale;
+  if (sx !== 1 || sy !== 1) ctx.scale(sx, sy);
   ctx.drawImage(frame.canvas, -frame.anchorX, -frame.anchorY);
   ctx.restore();
 }
 
-/** Screen y of a shadow stamp. Wraps across `CLOUD_SHADOW_SPAN`. */
-export function shadowOriginY(stampY: number, scroll: number): number {
-  const drift = scroll * CLOUD_SHADOW_SCROLL;
+/** Screen y of a shadow stamp. `speed` scales `CLOUD_SHADOW_SCROLL`. */
+export function shadowOriginY(stampY: number, scroll: number, speed = 1): number {
+  const drift = scroll * CLOUD_SHADOW_SCROLL * speed;
   return ((stampY + drift) % CLOUD_SHADOW_SPAN) - CLOUD_SHADOW_MARGIN;
+}
+
+/** Screen y of a sky stamp. `speed` scales `WARNING_CLOUD_DRIFT`. */
+export function skyOriginY(stampY: number, time: number, speed = 1): number {
+  const span = LOGICAL_H + 120;
+  const drift = time * WARNING_CLOUD_DRIFT * speed;
+  return ((stampY + drift) % span) - 40;
 }
 
 export function drawCloudShadows(
@@ -255,9 +277,9 @@ export function drawCloudShadows(
   ctx.save();
   ctx.globalAlpha = layerAlpha * CLOUD_SHADOW_ALPHA;
   for (const stamp of SHADOW_CLOUDS) {
-    const y = shadowOriginY(stamp.y, scroll);
+    const y = shadowOriginY(stamp.y, scroll, stamp.speed);
     const frame = sheet.shadow[stamp.kind];
-    blit(ctx, frame, stamp.x, y, stamp.mirrorX, stamp.mirrorY);
+    blit(ctx, frame, stamp.x, y, stamp.mirrorX, stamp.mirrorY, stamp.scale);
   }
   ctx.restore();
 }
@@ -271,11 +293,9 @@ export function drawSkyClouds(
   if (alpha <= 0.01) return;
   ctx.save();
   ctx.globalAlpha = alpha * WARNING_CLOUD_ALPHA;
-  const drift = time * WARNING_CLOUD_DRIFT;
-  const span = LOGICAL_H + 120;
   for (const cloud of SKY_CLOUDS) {
-    const y = ((cloud.y + drift) % span) - 40;
-    blit(ctx, sheet.sky[cloud.kind], cloud.x, y, cloud.mirrorX, cloud.mirrorY);
+    const y = skyOriginY(cloud.y, time, cloud.speed);
+    blit(ctx, sheet.sky[cloud.kind], cloud.x, y, cloud.mirrorX, cloud.mirrorY, cloud.scale);
   }
   ctx.restore();
 }

@@ -1,20 +1,25 @@
 /**
- * Scripted fly-off after the boss death animation.
- * defeat (boss phase `clear`) → wait → return to the battle spawn → fly off
- * the top → victory, which is when the result screen may open.
- * The machine ignores input. The battle scene freezes the ship while it runs.
+ * Shared stage-clear exit. Every stage and every player ship use this
+ * machine: `stepBoss` calls it whenever the play mode has `victoryExit`,
+ * and the exhaust boost is a 0–1 level on the exit, not a per-ship branch.
+ * A later bomber or fighter draws through `drawEngineFlame` and reads the
+ * same `flame` value.
+ *
+ * defeat (boss phase `clear`) → wait → ease back to the battle spawn →
+ * swell the tail flame → accelerate off the top → victory, which is when
+ * the result screen may open. The machine ignores input the whole way.
  */
 
 import {
   VICTORY_EXIT_WAIT,
+  VICTORY_FLAME_TIME,
   VICTORY_FLYOFF_ACCEL,
   VICTORY_FLYOFF_MARGIN,
   VICTORY_FLYOFF_SPEED,
-  VICTORY_RETURN_ARRIVE,
-  VICTORY_RETURN_SPEED,
+  VICTORY_RETURN_TIME,
 } from '@/game/config';
 
-export type VictoryExitPhase = 'idle' | 'wait' | 'return' | 'flyoff' | 'done';
+export type VictoryExitPhase = 'idle' | 'wait' | 'return' | 'flame' | 'flyoff' | 'done';
 
 export type VictoryCue = 'none' | 'cinematic' | 'victory';
 
@@ -26,10 +31,19 @@ export interface VictoryExit {
   y: number;
   /** Climb velocity. Negative y is up. */
   vy: number;
+  /**
+   * Tail-flame boost, 0 (cruise) to 1 (full). Stays 0 through the return,
+   * eases to 1 while holding at the spawn, then stays 1 for the climb.
+   * `drawEngineFlame` is the only consumer.
+   */
+  flame: number;
+  /** Position where the return ease started. */
+  fromX: number;
+  fromY: number;
 }
 
 export function createVictoryExit(): VictoryExit {
-  return { phase: 'idle', t: 0, x: 0, y: 0, vy: 0 };
+  return { phase: 'idle', t: 0, x: 0, y: 0, vy: 0, flame: 0, fromX: 0, fromY: 0 };
 }
 
 export function resetVictoryExit(exit: VictoryExit): void {
@@ -38,11 +52,20 @@ export function resetVictoryExit(exit: VictoryExit): void {
   exit.x = 0;
   exit.y = 0;
   exit.vy = 0;
+  exit.flame = 0;
+  exit.fromX = 0;
+  exit.fromY = 0;
 }
 
-/** Wait, return, and climb ignore the stick, fire, and bomb. */
+/** Wait, return, flame swell, and climb ignore the stick, fire, and bomb. */
 export function victoryExitBlocksInput(phase: VictoryExitPhase): boolean {
-  return phase === 'wait' || phase === 'return' || phase === 'flyoff';
+  return phase === 'wait' || phase === 'return' || phase === 'flame' || phase === 'flyoff';
+}
+
+/** Zero slope at both ends. `u` is clamped to 0–1. */
+export function smoothstep(u: number): number {
+  const t = Math.min(1, Math.max(0, u));
+  return t * t * (3 - 2 * t);
 }
 
 /**
@@ -67,14 +90,39 @@ export function stepVictoryExit(
     exit.x = playerX;
     exit.y = playerY;
     exit.vy = 0;
+    exit.flame = 0;
   }
   return stepMotion(exit, dt, spawnX, spawnY) ? 'victory' : 'cinematic';
+}
+
+function beginFlame(exit: VictoryExit, spawnX: number, spawnY: number): void {
+  exit.phase = 'flame';
+  exit.t = 0;
+  exit.x = spawnX;
+  exit.y = spawnY;
+  exit.vy = 0;
+  exit.flame = 0;
+}
+
+function beginFlyoff(exit: VictoryExit): void {
+  exit.phase = 'flyoff';
+  exit.t = 0;
+  exit.vy = -VICTORY_FLYOFF_SPEED;
+  exit.flame = 1;
+}
+
+function placeReturn(exit: VictoryExit, spawnX: number, spawnY: number): void {
+  const s = smoothstep(exit.t / VICTORY_RETURN_TIME);
+  exit.x = exit.fromX + (spawnX - exit.fromX) * s;
+  exit.y = exit.fromY + (spawnY - exit.fromY) * s;
+  exit.vy = 0;
+  exit.flame = 0;
 }
 
 /** Returns true on the step the ship leaves the top. */
 function stepMotion(exit: VictoryExit, dt: number, spawnX: number, spawnY: number): boolean {
   let left = Math.max(0, dt);
-  for (let guard = 0; guard < 4 && left > 1e-9; guard++) {
+  for (let guard = 0; guard < 8 && left > 1e-9; guard++) {
     if (exit.phase === 'wait') {
       const need = VICTORY_EXIT_WAIT - exit.t;
       if (left + 1e-9 < need) {
@@ -83,45 +131,52 @@ function stepMotion(exit: VictoryExit, dt: number, spawnX: number, spawnY: numbe
       }
       left -= Math.max(0, need);
       exit.t = 0;
-      exit.phase = 'return';
+      exit.fromX = exit.x;
+      exit.fromY = exit.y;
       exit.vy = 0;
+      exit.flame = 0;
+      if (Math.hypot(spawnX - exit.x, spawnY - exit.y) <= 1) {
+        beginFlame(exit, spawnX, spawnY);
+      } else {
+        exit.phase = 'return';
+      }
       continue;
     }
 
     if (exit.phase === 'return') {
-      const dx = spawnX - exit.x;
-      const dy = spawnY - exit.y;
-      const dist = Math.hypot(dx, dy);
-      if (dist <= VICTORY_RETURN_ARRIVE) {
+      const need = VICTORY_RETURN_TIME - exit.t;
+      if (left + 1e-9 < need) {
+        exit.t += left;
+        placeReturn(exit, spawnX, spawnY);
+        return false;
+      }
+      left -= Math.max(0, need);
+      beginFlame(exit, spawnX, spawnY);
+      continue;
+    }
+
+    if (exit.phase === 'flame') {
+      const need = VICTORY_FLAME_TIME - exit.t;
+      if (left + 1e-9 < need) {
+        exit.t += left;
         exit.x = spawnX;
         exit.y = spawnY;
-        exit.t = 0;
-        exit.phase = 'flyoff';
-        exit.vy = -VICTORY_FLYOFF_SPEED;
-        continue;
+        exit.vy = 0;
+        exit.flame = smoothstep(exit.t / VICTORY_FLAME_TIME);
+        return false;
       }
-      const step = VICTORY_RETURN_SPEED * left;
-      const arrive = dist - VICTORY_RETURN_ARRIVE;
-      if (step >= arrive) {
-        const used = arrive / VICTORY_RETURN_SPEED;
-        exit.x = spawnX;
-        exit.y = spawnY;
-        left -= Math.max(0, used);
-        exit.t = 0;
-        exit.phase = 'flyoff';
-        exit.vy = -VICTORY_FLYOFF_SPEED;
-        continue;
-      }
-      exit.x += (dx / dist) * step;
-      exit.y += (dy / dist) * step;
-      exit.t += left;
-      return false;
+      left -= Math.max(0, need);
+      exit.x = spawnX;
+      exit.y = spawnY;
+      beginFlyoff(exit);
+      continue;
     }
 
     if (exit.phase === 'flyoff') {
       const vy0 = exit.vy;
       exit.vy = vy0 - VICTORY_FLYOFF_ACCEL * left;
       exit.y += ((vy0 + exit.vy) / 2) * left;
+      exit.flame = 1;
       exit.t += left;
       left = 0;
       if (exit.y < -VICTORY_FLYOFF_MARGIN) {

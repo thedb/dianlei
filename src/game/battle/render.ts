@@ -107,7 +107,8 @@ function drawMates(
       frame,
       { width: w, height: h, anchorX: ax, anchorY: ay },
       b.player.velocityY,
-      b.gameTime
+      b.gameTime,
+      b.victory.flame
     );
     renderer.drawImage(frame.canvas, x - ax, y - ay, w, h);
   }
@@ -130,7 +131,15 @@ function drawShip(renderer: Renderer, b: Battle, assets: GameAssets, alpha: numb
   const bankFrame = assets.player.bankFrames[player.lastBankFrame]!;
   ctx.globalAlpha = playerAlpha;
   drawMates(renderer, ctx, b, bankFrame, renderX, renderY);
-  drawPlayerFlames(ctx, renderX, renderY, bankFrame.nozzles, player.velocityY, gameTime);
+  drawPlayerFlames(
+    ctx,
+    renderX,
+    renderY,
+    bankFrame.nozzles,
+    player.velocityY,
+    gameTime,
+    b.victory.flame
+  );
   renderer.drawImage(bankFrame.canvas, renderX - bankFrame.anchorX, renderY - bankFrame.anchorY);
   ctx.globalAlpha = 1;
 

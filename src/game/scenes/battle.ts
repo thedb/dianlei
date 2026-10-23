@@ -199,7 +199,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       } else if (victoryExitBlocksInput(b.victory.phase)) {
         player.bank = 0;
         player.targetBank = 0;
-        player.velocityY = b.victory.phase === 'flyoff' ? -1 : 0;
+        player.velocityY = 0;
       } else if (state.isFlying) {
         stepFlyIn(b, dt);
       } else {

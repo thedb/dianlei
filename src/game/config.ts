@@ -616,19 +616,27 @@ export const BOSS_HULL_H = 140;
 export const BOSS_TURRET_SIZE = 40;
 
 /**
- * After the boss death animation the ship freezes, flies back to the battle
- * spawn, then leaves through the top before the result screen.
- * Spawn is `(LOGICAL_W / 2, PLAYER_SPAWN_Y)`, the same point the fly-in parks on.
+ * Stage-clear exit, shared by every stage and every player ship.
+ * After the boss death animation: freeze, ease back to the battle spawn,
+ * swell the tail flame, then climb off the top. Spawn is
+ * `(LOGICAL_W / 2, PLAYER_SPAWN_Y)`, the same point the fly-in parks on.
+ * `stepVictoryExit` in `systems/victoryExit.ts` is the only path.
  */
 export const VICTORY_EXIT_WAIT = 2;
-/** Scripted return toward the spawn point, pixels/second. */
-export const VICTORY_RETURN_SPEED = 420;
-/** Close enough to the spawn to start the climb, pixels. */
-export const VICTORY_RETURN_ARRIVE = 1.5;
-/** Upward speed at the moment the climb starts, pixels/second. */
-export const VICTORY_FLYOFF_SPEED = 360;
+/** Smoothstep back to the spawn, seconds. Zero speed at both ends. */
+export const VICTORY_RETURN_TIME = 2;
+/** Hold at the spawn while the exhaust eases from cruise to full, seconds. */
+export const VICTORY_FLAME_TIME = 0.85;
+/**
+ * Extra length at full boost: drawn length is `base * (1 + flame * BOOST)`.
+ * `flame` is 0–1 on the exit. Girth is the same for width.
+ */
+export const VICTORY_FLAME_BOOST = 1.75;
+export const VICTORY_FLAME_GIRTH = 0.65;
+/** Upward speed when the climb starts, pixels/second. The flame is already full. */
+export const VICTORY_FLYOFF_SPEED = 70;
 /** Upward acceleration during the climb, pixels/second². */
-export const VICTORY_FLYOFF_ACCEL = 1600;
+export const VICTORY_FLYOFF_ACCEL = 220;
 /** The climb ends once the ship is this far above the top edge. */
 export const VICTORY_FLYOFF_MARGIN = 48;
 

@@ -4,9 +4,8 @@
  * named by their path, and the art draw helpers log their arguments, so the
  * digest covers what the battle scene draws, in which order, with which
  * values. Captured on the pre-split battle scene: a change here is a visual
- * change. P18 recaptured the draw digest: the boss layer is stitched at the
- * end of 陆地A, so the track origin in every background draw changed. Frames
- * and call counts are the same.
+ * change. P18 follow-up recaptured the draw digest: the stage-clear exit
+ * lasts longer, and every ship flame draw now carries the exhaust boost.
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -222,13 +221,13 @@ function stageRun(
 }
 
 const EXPECTED: Record<string, RenderResult> = {
-  'stage easy': { outcome: 'result', frames: 12957, renders: 565, calls: 85138, hash: 1811958058 },
-  'stage hard': { outcome: 'result', frames: 13885, renders: 605, calls: 91162, hash: 141051093 },
-  'stage demo': { outcome: 'gameover', frames: 4956, renders: 217, calls: 30452, hash: 4193505322 },
-  'boss hard': { outcome: 'result', frames: 5205, renders: 228, calls: 34289, hash: 3582396244 },
-  attract: { outcome: 'timeout', frames: 5400, renders: 318, calls: 24665, hash: 1671637245 },
-  weaponTest: { outcome: 'timeout', frames: 600, renders: 55, calls: 26053, hash: 4198131389 },
-  pause: { outcome: 'timeout', frames: 720, renders: 56, calls: 5797, hash: 3519864302 },
+  'stage easy': { outcome: 'result', frames: 13201, renders: 575, calls: 86068, hash: 121961687 },
+  'stage hard': { outcome: 'result', frames: 14136, renders: 616, calls: 92204, hash: 2028146597 },
+  'stage demo': { outcome: 'gameover', frames: 4956, renders: 217, calls: 30452, hash: 1833601964 },
+  'boss hard': { outcome: 'result', frames: 5453, renders: 239, calls: 35299, hash: 2622144378 },
+  attract: { outcome: 'timeout', frames: 5400, renders: 318, calls: 24665, hash: 2584350729 },
+  weaponTest: { outcome: 'timeout', frames: 600, renders: 55, calls: 26053, hash: 1189635685 },
+  pause: { outcome: 'timeout', frames: 720, renders: 56, calls: 5797, hash: 271416174 },
 };
 
 function check(name: string, got: RenderResult): void {
