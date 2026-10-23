@@ -332,7 +332,7 @@ const CASES: ReadonlyArray<{
 const EXPECTED: Record<string, ReplayResult> = {
   'stage 1 easy, full clear': {
     outcome: 'result',
-    frames: 12957,
+    frames: 13201,
     score: 88520,
     lives: 3,
     report: {
@@ -350,13 +350,13 @@ const EXPECTED: Record<string, ReplayResult> = {
       'phase2@10574',
       'death@12636',
       'clear@12787',
-      'done@12957',
+      'done@13201',
     ],
-    digest: 2911893839,
+    digest: 40326956,
   },
   'stage 1 medium, full clear': {
     outcome: 'result',
-    frames: 12060,
+    frames: 12305,
     score: 88560,
     lives: 3,
     report: {
@@ -374,13 +374,13 @@ const EXPECTED: Record<string, ReplayResult> = {
       'phase2@10278',
       'death@11740',
       'clear@11891',
-      'done@12060',
+      'done@12305',
     ],
-    digest: 3486602057,
+    digest: 3897150201,
   },
   'stage 1 hard, full clear with phase 3': {
     outcome: 'result',
-    frames: 13885,
+    frames: 14136,
     score: 87650,
     lives: 1,
     report: {
@@ -400,9 +400,9 @@ const EXPECTED: Record<string, ReplayResult> = {
       'phase3@12334',
       'death@13571',
       'clear@13722',
-      'done@13885',
+      'done@14136',
     ],
-    digest: 4037038383,
+    digest: 2162283556,
   },
   'stage 1 easy, demo pilot game over': {
     outcome: 'gameover',
@@ -438,7 +438,7 @@ const EXPECTED: Record<string, ReplayResult> = {
   },
   'boss practice 普通': {
     outcome: 'result',
-    frames: 3221,
+    frames: 3467,
     score: 40220,
     lives: 3,
     report: {
@@ -456,13 +456,13 @@ const EXPECTED: Record<string, ReplayResult> = {
       'phase2@1133',
       'death@2902',
       'clear@3053',
-      'done@3221',
+      'done@3467',
     ],
-    digest: 3466715180,
+    digest: 2811161559,
   },
   'boss practice 困难': {
     outcome: 'result',
-    frames: 5205,
+    frames: 5453,
     score: 40520,
     lives: 1,
     report: {
@@ -482,9 +482,9 @@ const EXPECTED: Record<string, ReplayResult> = {
       'phase3@3701',
       'death@4888',
       'clear@5039',
-      'done@5205',
+      'done@5453',
     ],
-    digest: 3812299598,
+    digest: 3094511211,
   },
 };
 

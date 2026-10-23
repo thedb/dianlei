@@ -515,18 +515,23 @@ export const LAND_BOSS_SEED = 41;
 
 /**
  * Cloud shadows over maps that set `cloudShadows` (陆地A / 陆地B / 河流A / 百战要塞).
- * Alpha stays low so the silhouettes read without muddying the ground.
- * Scroll is relative to the tiles (faster than 1 drifts the shadows ahead).
- * Clusters repeat every `CLOUD_SHADOW_SPAN` pixels and are drawn this far
- * above their stored y so they enter from the top.
+ * Alpha stays low so one silhouette reads without muddying the ground.
+ * Scroll is relative to the tiles. `2` moves shadows twice as fast as the
+ * ground so they drift ahead instead of sticking to it. Stamps repeat every
+ * `CLOUD_SHADOW_SPAN` pixels and are drawn this far above their stored y
+ * so they enter from the top.
  */
 export const CLOUD_SHADOW_ALPHA = 0.18;
-export const CLOUD_SHADOW_SCROLL = 1.25;
+export const CLOUD_SHADOW_SCROLL = 2;
 export const CLOUD_SHADOW_SPAN = 1600;
 export const CLOUD_SHADOW_MARGIN = 180;
 
-/** Warning cloud band: pixels per second, and opacity at full fade. */
-export const WARNING_CLOUD_DRIFT = 70;
+/**
+ * Starfield warning band only (a tile boss does not draw it).
+ * Pixels per second, and opacity at full fade. Fast enough to cross the
+ * screen during the warning instead of hanging in place.
+ */
+export const WARNING_CLOUD_DRIFT = 140;
 export const WARNING_CLOUD_ALPHA = 0.9;
 
 /**
@@ -541,13 +546,26 @@ export const PLANET_PARALLAX_SMALL = 0.5;
 export const PLANET_LARGE_RADIUS = 176;
 export const PLANET_LARGE_CLIP = 0.27;
 
-/** Warning scroll ramps from BG_SCROLL_SPEED to this, then the tiles fade */
+/** Starfield warning scroll ramps from BG_SCROLL_SPEED to this, then the tiles fade. */
 export const BG_WARNING_SCROLL = 200;
 
-/** Seconds of the warning spent accelerating and fading the ground tiles */
+/** Seconds of a starfield warning spent accelerating and fading the ground tiles. */
 export const WARNING_TILE_FADE_NUM = 8;
 export const WARNING_TILE_FADE_DEN = 5;
 export const WARNING_TILE_FADE = WARNING_TILE_FADE_NUM / WARNING_TILE_FADE_DEN;
+
+/**
+ * Tile-boss handoff (P18). The run map stays opaque and the boss map is
+ * stitched on past its far edge, so the scroll has to finish that edge and
+ * bring the approach on screen before the boss enters. Speed rises from
+ * BG_SCROLL_SPEED to this peak over TILE_HANDOFF_RAMP, holds, then falls
+ * back over the same ramp, reaching cruise at TILE_HANDOFF_FAST_END
+ * (before `warningAt + WARNING_DURATION`). A starfield handoff ignores these
+ * and keeps the short fade above.
+ */
+export const TILE_HANDOFF_PEAK = 280;
+export const TILE_HANDOFF_RAMP = 0.5;
+export const TILE_HANDOFF_FAST_END = 4.5;
 
 /** How long the warning sequence lasts after warningAt (2:30–2:35) */
 export const WARNING_DURATION = 5;
@@ -598,19 +616,27 @@ export const BOSS_HULL_H = 140;
 export const BOSS_TURRET_SIZE = 40;
 
 /**
- * After the boss death animation the ship freezes, flies back to the battle
- * spawn, then leaves through the top before the result screen.
- * Spawn is `(LOGICAL_W / 2, PLAYER_SPAWN_Y)`, the same point the fly-in parks on.
+ * Stage-clear exit, shared by every stage and every player ship.
+ * After the boss death animation: freeze, ease back to the battle spawn,
+ * swell the tail flame, then climb off the top. Spawn is
+ * `(LOGICAL_W / 2, PLAYER_SPAWN_Y)`, the same point the fly-in parks on.
+ * `stepVictoryExit` in `systems/victoryExit.ts` is the only path.
  */
 export const VICTORY_EXIT_WAIT = 2;
-/** Scripted return toward the spawn point, pixels/second. */
-export const VICTORY_RETURN_SPEED = 420;
-/** Close enough to the spawn to start the climb, pixels. */
-export const VICTORY_RETURN_ARRIVE = 1.5;
-/** Upward speed at the moment the climb starts, pixels/second. */
-export const VICTORY_FLYOFF_SPEED = 360;
+/** Smoothstep back to the spawn, seconds. Zero speed at both ends. */
+export const VICTORY_RETURN_TIME = 2;
+/** Hold at the spawn while the exhaust eases from cruise to full, seconds. */
+export const VICTORY_FLAME_TIME = 0.85;
+/**
+ * Extra length at full boost: drawn length is `base * (1 + flame * BOOST)`.
+ * `flame` is 0–1 on the exit. Girth is the same for width.
+ */
+export const VICTORY_FLAME_BOOST = 1.75;
+export const VICTORY_FLAME_GIRTH = 0.65;
+/** Upward speed when the climb starts, pixels/second. The flame is already full. */
+export const VICTORY_FLYOFF_SPEED = 70;
 /** Upward acceleration during the climb, pixels/second². */
-export const VICTORY_FLYOFF_ACCEL = 1600;
+export const VICTORY_FLYOFF_ACCEL = 220;
 /** The climb ends once the ship is this far above the top edge. */
 export const VICTORY_FLYOFF_MARGIN = 48;
 

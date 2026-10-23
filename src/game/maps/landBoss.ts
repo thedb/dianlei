@@ -1,10 +1,12 @@
 /**
  * 百战要塞: Stage 1's boss arena. Two screens, reusing the land tileset.
  *
- * Chunk 0 is the approach. It continues 陆地A's road, then scorched ground,
- * cliffs, and a gate. Chunk 1 is the courtyard. Its top and bottom rows match,
- * and the stage track loops that chunk for the rest of the fight.
- * No water: tanks still on screen when the warning hits must not get stuck.
+ * Chunk 0 is the approach. Its bottom row is the same road contract as
+ * 陆地A's sealed top (road at ROAD_COL, no water), so the stage track can
+ * butt the two maps together. The first `APPROACH_HANDOFF_ROWS` are that
+ * countryside band; above them the ground scorches, cliffs rise, and a gate
+ * meets the courtyard. Chunk 1 loops. No water: tanks still on screen when
+ * the warning hits must not get stuck.
  */
 
 import { LAND_BOSS_CHUNKS, LAND_BOSS_SEED, MAP_CHUNK_ROWS } from '@/game/config';
@@ -30,6 +32,12 @@ function sideWalls(p: ChunkPainter, r0: number, r1: number): void {
   }
 }
 
+/**
+ * Countryside rows at the bottom of the approach, before the scorch field.
+ * Row 0 is the stitch onto 陆地A.
+ */
+export const APPROACH_HANDOFF_ROWS = 18;
+
 /** Countryside at the bottom, fortress gate at the top. */
 const approach: ChunkDef = {
   id: 'approach',
@@ -38,7 +46,7 @@ const approach: ChunkDef = {
   variants: 1,
   paint(p) {
     p.meadow();
-    p.rect(2, 18, p.cols - 4, 21, TileId.scorch);
+    p.rect(2, APPROACH_HANDOFF_ROWS, p.cols - 4, p.rows - 1 - APPROACH_HANDOFF_ROWS, TileId.scorch);
     for (let r = 1; r <= 30; r++) p.set(ROAD_COL, r, TileId.road);
 
     const trees: Array<[number, number, TileId]> = [

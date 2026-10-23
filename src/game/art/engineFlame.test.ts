@@ -1,7 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { LOGICAL_W, MATE_OFFSET_X, MATE_SCALE, PLAYER_SPAWN_Y } from '@/game/config';
+import {
+  LOGICAL_W,
+  MATE_OFFSET_X,
+  MATE_SCALE,
+  PLAYER_SPAWN_Y,
+  VICTORY_FLAME_BOOST,
+} from '@/game/config';
 import { matePixels } from '@/game/systems/mate';
-import { fittedNozzle, flooredSpriteCenter, type FlameSpriteBox } from './engineFlame';
+import {
+  PLAYER_FLAME_CONFIG,
+  drawEngineFlame,
+  fittedNozzle,
+  flooredSpriteCenter,
+  type FlameSpriteBox,
+} from './engineFlame';
 import { PLAYER_SPRITE_H, PLAYER_SPRITE_W, createPlayerNozzles } from './playerSprite';
 
 const source: FlameSpriteBox = {
@@ -18,6 +30,31 @@ const drawn: FlameSpriteBox = {
   anchorX: matePixels(source.anchorX),
   anchorY: matePixels(source.anchorY),
 };
+
+describe('stage-clear exhaust', () => {
+  it('grows the tail flame with the shared boost', () => {
+    const tips: number[] = [];
+    const ctx = {
+      fillStyle: '',
+      createLinearGradient: () => ({ addColorStop: () => undefined }),
+      beginPath: () => undefined,
+      ellipse: () => undefined,
+      moveTo: () => undefined,
+      lineTo: (_x: number, y: number) => {
+        tips.push(y);
+      },
+      closePath: () => undefined,
+      fill: () => undefined,
+    } as unknown as CanvasRenderingContext2D;
+    drawEngineFlame(ctx, 10, 100, PLAYER_FLAME_CONFIG, 0, 0, 0);
+    const cruise = Math.max(...tips) - 100;
+    tips.length = 0;
+    drawEngineFlame(ctx, 10, 100, PLAYER_FLAME_CONFIG, 0, 0, 1);
+    const full = Math.max(...tips) - 100;
+    expect(cruise).toBeGreaterThan(0);
+    expect(full).toBeCloseTo(cruise * (1 + VICTORY_FLAME_BOOST));
+  });
+});
 
 describe('fitted wingman flames', () => {
   it('keeps native nozzles on the player ship', () => {
