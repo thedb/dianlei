@@ -13,6 +13,17 @@ import { getMap, getMapGrid, getTileMap } from './registry';
 import { terrainAt } from './terrain';
 import type { TileGrid, TileMapDef } from './types';
 
+/** `run` is the stage approach. `boss` fades in at the warning and may loop. */
+export type LayerRole = 'run' | 'boss';
+
+/**
+ * What the warning does to the ground.
+ * `starfield`: tiles fade out, stars fade in, scroll stops (a space stage).
+ * `tiles`: the run fades into the boss tile layer and scroll continues.
+ * `none`: no warning sequence (map preview, or a stage run that stops at the warning).
+ */
+export type MapHandoff = 'starfield' | 'tiles' | 'none';
+
 export interface TrackLayer {
   map: TileMapDef;
   grid: TileGrid;
@@ -21,46 +32,144 @@ export interface TrackLayer {
   inAt: number | null;
   /** Handover time (s) the next layer takes over; null = stays to the end. */
   outAt: number | null;
+  role: LayerRole;
+  /** Tile row where this layer starts repeating. Null = finite. */
+  loopFrom: number | null;
 }
 
 export interface BackgroundTrack {
   label: string;
   layers: readonly TrackLayer[];
-  /** Tiles speed up and fade into clouds, then stars, from here. Null = never. */
+  /** Warning clock. Null = the track never plays the warning. */
   warningAt: number | null;
   /** Starfield from the first frame, no tiles (宇宙A preview). */
   starsOnly: boolean;
+  handoff: MapHandoff;
   /** Game time at which the track is over (地图预览 leaves). Null = never. */
   endAt: number | null;
+}
+
+/** One blit of a background layer: authored pixels `[y0, y1)` at scroll `local`. */
+export interface BackdropSegment {
+  local: number;
+  y0: number;
+  y1: number;
+}
+
+/**
+ * Visible pieces of a layer. A looping layer splits into two segments when the
+ * seam is on screen: the end of the loop, then its start again above that.
+ * `local` is the integer world scroll minus the layer origin. Y grows upward.
+ */
+export function backdropSegments(
+  local: number,
+  mapPx: number,
+  loopFromPx: number | null,
+  viewH: number
+): BackdropSegment[] {
+  const view1 = local + viewH;
+  if (loopFromPx === null || loopFromPx >= mapPx || mapPx - loopFromPx <= 0) {
+    const y0 = Math.max(0, local);
+    const y1 = Math.min(mapPx, view1);
+    return y1 > y0 ? [{ local, y0, y1 }] : [];
+  }
+  const span = mapPx - loopFromPx;
+  const segs: BackdropSegment[] = [];
+  let u = local;
+  while (u < view1 && segs.length < 3) {
+    const y = u < loopFromPx ? u : loopFromPx + ((u - loopFromPx) % span);
+    const room = u < loopFromPx ? loopFromPx - u : span - (y - loopFromPx);
+    const run = Math.min(view1 - u, room);
+    if (run <= 0) break;
+    segs.push({ local: local - u + y, y0: y, y1: y + run });
+    u += run;
+  }
+  return segs;
+}
+
+function tilePreviewEnd(map: TileMapDef): number {
+  const mapPx = map.rows * TILE_SIZE;
+  if (map.loopFrom === undefined) return (mapPx - LOGICAL_H) / BG_SCROLL_SPEED;
+  const span = mapPx - map.loopFrom * TILE_SIZE;
+  return (mapPx + span - LOGICAL_H) / BG_SCROLL_SPEED;
+}
+
+function runLayer(
+  entry: StageData['maps']['run'][number],
+  index: number,
+  nextAt: number | undefined
+): TrackLayer {
+  return {
+    map: getTileMap(entry.map),
+    grid: getMapGrid(entry.map),
+    origin: index === 0 ? 0 : (entry.at - MAP_BLEND_LEAD) * BG_SCROLL_SPEED,
+    inAt: index === 0 ? null : entry.at,
+    outAt: nextAt ?? null,
+    role: 'run',
+    loopFrom: null,
+  };
 }
 
 /**
  * The stage's maps in order. Entry `i > 0` starts `MAP_BLEND_LEAD` seconds
  * before its handover time so it is already scrolling as it fades in.
+ * A tile boss is an extra layer that fades in at the warning and then loops.
+ * A starfield boss keeps the warning-to-stars handoff and is not a layer.
  */
 export function buildStageTrack(stage: StageData): BackgroundTrack {
   const run = stage.maps.run;
   const boss = getMap(stage.maps.boss);
-  if (boss.kind !== 'starfield') throw new Error(`stage ${stage.id}: boss map must be a starfield`);
-  const layers = run.map((entry, i): TrackLayer => {
-    const next = run[i + 1];
+  const layers = run.map((entry, i) => runLayer(entry, i, run[i + 1]?.at));
+  if (boss.kind === 'starfield') {
     return {
-      map: getTileMap(entry.map),
-      grid: getMapGrid(entry.map),
-      origin: i === 0 ? 0 : (entry.at - MAP_BLEND_LEAD) * BG_SCROLL_SPEED,
-      inAt: i === 0 ? null : entry.at,
-      outAt: next ? next.at : null,
+      label: stage.label,
+      layers,
+      warningAt: stage.warningAt,
+      starsOnly: false,
+      handoff: 'starfield',
+      endAt: null,
     };
+  }
+  if (boss.loopFrom === undefined) {
+    throw new Error(`stage ${stage.id}: boss map ${boss.id} must set loopFrom`);
+  }
+  layers.push({
+    map: boss,
+    grid: getMapGrid(boss.id),
+    origin: stage.warningAt * BG_SCROLL_SPEED,
+    inAt: null,
+    outAt: null,
+    role: 'boss',
+    loopFrom: boss.loopFrom,
   });
-  return { label: stage.label, layers, warningAt: stage.warningAt, starsOnly: false, endAt: null };
+  return {
+    label: stage.label,
+    layers,
+    warningAt: stage.warningAt,
+    starsOnly: false,
+    handoff: 'tiles',
+    endAt: null,
+  };
 }
 
-/** A stage's maps up to the warning, with no warning sequence. */
+/** A stage's maps up to the warning, with no warning sequence and no boss layer. */
 export function buildStageRunTrack(stage: StageData, label: string): BackgroundTrack {
-  return { ...buildStageTrack(stage), label, warningAt: null, endAt: stage.warningAt };
+  const full = buildStageTrack(stage);
+  return {
+    ...full,
+    label,
+    layers: full.layers.filter((layer) => layer.role !== 'boss'),
+    warningAt: null,
+    handoff: 'none',
+    endAt: stage.warningAt,
+  };
 }
 
-/** One map from its first row until its last row reaches the top of the screen. */
+/**
+ * One map from its first row. A finite map ends when its last row reaches the
+ * top of the screen. A looping map plays the approach plus one extra pass of
+ * the loop, so the seam is on screen, then ends.
+ */
 export function buildMapTrack(id: string): BackgroundTrack {
   const map = getMap(id);
   if (map.kind === 'starfield') {
@@ -69,15 +178,27 @@ export function buildMapTrack(id: string): BackgroundTrack {
       layers: [],
       warningAt: null,
       starsOnly: true,
+      handoff: 'none',
       endAt: map.previewSeconds,
     };
   }
   return {
     label: map.label,
-    layers: [{ map, grid: getMapGrid(id), origin: 0, inAt: null, outAt: null }],
+    layers: [
+      {
+        map,
+        grid: getMapGrid(id),
+        origin: 0,
+        inAt: null,
+        outAt: null,
+        role: 'run',
+        loopFrom: map.loopFrom ?? null,
+      },
+    ],
     warningAt: null,
     starsOnly: false,
-    endAt: (map.rows * TILE_SIZE - LOGICAL_H) / BG_SCROLL_SPEED,
+    handoff: 'none',
+    endAt: tilePreviewEnd(map),
   };
 }
 

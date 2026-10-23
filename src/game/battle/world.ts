@@ -25,7 +25,7 @@ import {
 } from '@/game/entities/building';
 import { updateEnemyWeapons } from '@/game/systems/weapons';
 import { resetVictoryExit } from '@/game/systems/victoryExit';
-import { backgroundFade, warningBulletAlpha } from '@/game/systems/background';
+import { warningBulletAlpha } from '@/game/systems/background';
 import { releaseAllPools, runDifficulty, runProfile, type Battle } from './context';
 import { clearFx, resetShake } from './fx';
 import { collectHomingTargets } from './combat';
@@ -191,11 +191,7 @@ export function jumpTo(b: Battle, time: number): void {
   b.boss = time >= stage.boss.enterAt ? spawnBoss(b) : null;
   resetVictoryExit(b.victory);
   b.warningPlayed = time >= stage.warningAt + WARNING_BANNER_DELAY;
-  b.scrollFrame = {
-    ...b.scrollFrame,
-    tileDelta: 0,
-    fade: backgroundFade(b.gameTime, b.track),
-  };
+  b.scrollFrame = b.scroller.seek(time);
   b.finishedAt = null;
   resetShake(b.fx);
   state.isDead = false;
