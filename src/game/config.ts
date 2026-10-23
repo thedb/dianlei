@@ -172,8 +172,11 @@ export const DEATH_SUB_LOSS = 1;
 /** Highest M level. 0 is none, 1 is the left ship, 2 is one ship on each side. */
 export const MATE_MAX_LEVEL = 2;
 
-/** Center-to-center gap from the player to each wingman, logical pixels. */
-export const MATE_OFFSET_X = 32;
+/**
+ * Center-to-center gap from the player to each wingman, logical pixels.
+ * 80% of the original 32px gap (32 × 0.8).
+ */
+export const MATE_OFFSET_X = 25.6;
 
 /** Vertical nudge from the player center. 0 keeps the wingmen at the same height. */
 export const MATE_OFFSET_Y = 0;

@@ -94,7 +94,8 @@ describe('Game Config', () => {
     expect(DEATH_POWER_LOSS).toBe(1);
     expect(DEATH_SUB_LOSS).toBe(1);
     expect(MATE_MAX_LEVEL).toBe(2);
-    expect(MATE_OFFSET_X).toBe(32);
+    expect(MATE_OFFSET_X).toBe(25.6);
+    expect(MATE_OFFSET_X).toBeCloseTo(32 * 0.8);
     expect(MATE_SCALE).toBeCloseTo(1 / 3);
     expect(DEATH_MATE_LOSS).toBe(1);
   });
