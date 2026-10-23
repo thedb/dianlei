@@ -19,7 +19,7 @@ export type LayerRole = 'run' | 'boss';
 /**
  * What the warning does to the ground.
  * `starfield`: tiles fade out, stars fade in, scroll stops (a space stage).
- * `tiles`: the run fades into the boss tile layer and scroll continues.
+ * `tiles`: the run stays opaque and the boss map is stitched on past it.
  * `none`: no warning sequence (map preview, or a stage run that stops at the warning).
  */
 export type MapHandoff = 'starfield' | 'tiles' | 'none';
@@ -75,7 +75,10 @@ export function backdropSegments(
   }
   const span = mapPx - loopFromPx;
   const segs: BackdropSegment[] = [];
-  let u = local;
+  // A negative local means the layer has not reached the view yet. Start at
+  // its first pixel so the bottom row enters from the top instead of the
+  // whole first screen popping on.
+  let u = Math.max(0, local);
   while (u < view1 && segs.length < 3) {
     const y = u < loopFromPx ? u : loopFromPx + ((u - loopFromPx) % span);
     const room = u < loopFromPx ? loopFromPx - u : span - (y - loopFromPx);
@@ -85,6 +88,15 @@ export function backdropSegments(
     u += run;
   }
   return segs;
+}
+
+/** Screen interval of one backdrop segment. Y grows downward. */
+export function segmentScreenSpan(
+  seg: BackdropSegment,
+  viewH = LOGICAL_H
+): { top: number; bottom: number } {
+  const top = seg.local + viewH - seg.y1;
+  return { top, bottom: top + (seg.y1 - seg.y0) };
 }
 
 function tilePreviewEnd(map: TileMapDef): number {
@@ -113,8 +125,9 @@ function runLayer(
 /**
  * The stage's maps in order. Entry `i > 0` starts `MAP_BLEND_LEAD` seconds
  * before its handover time so it is already scrolling as it fades in.
- * A tile boss is an extra layer that fades in at the warning and then loops.
- * A starfield boss keeps the warning-to-stars handoff and is not a layer.
+ * A tile boss is stitched on past the last run map (its row 0 meets that
+ * map's last row) and then loops. A starfield boss keeps the warning-to-stars
+ * handoff and is not a layer.
  */
 export function buildStageTrack(stage: StageData): BackgroundTrack {
   const run = stage.maps.run;
@@ -133,10 +146,16 @@ export function buildStageTrack(stage: StageData): BackgroundTrack {
   if (boss.loopFrom === undefined) {
     throw new Error(`stage ${stage.id}: boss map ${boss.id} must set loopFrom`);
   }
+  const lastRun = layers[layers.length - 1];
+  const runEnd = lastRun ? lastRun.origin + lastRun.grid.length * TILE_SIZE : 0;
+  // If the run already ended above the warning view, start the boss at the
+  // top of that view so the screen is not empty. Stage 1's landA is longer,
+  // so the seam is the real end of the map.
+  const origin = Math.max(runEnd, stage.warningAt * BG_SCROLL_SPEED + LOGICAL_H);
   layers.push({
     map: boss,
     grid: getMapGrid(boss.id),
-    origin: stage.warningAt * BG_SCROLL_SPEED,
+    origin,
     inAt: null,
     outAt: null,
     role: 'boss',

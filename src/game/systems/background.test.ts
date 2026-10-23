@@ -10,18 +10,22 @@ import {
   backgroundFade,
   scrollDistance,
   scrollSpeedAt,
+  tileHandoffDistance,
+  tileHandoffSpeed,
   warningBulletAlpha,
   Scroller,
 } from './background';
 import { TileId } from '@/game/art/tiles';
 import { getStage } from '@/game/levels/registry';
 import {
+  backdropSegments,
   buildMapTrack,
   buildStageTrack,
   getMapGrid,
   getTileMap,
   logicalMapY,
   mapPixelScreenY,
+  segmentScreenSpan,
   terrainAt,
   terrainBlocksTank,
   type BackgroundTrack,
@@ -80,18 +84,44 @@ describe('stage background', () => {
     expect(backgroundFade(120, track).layers[2]).toBe(1);
   });
 
-  it('fades stage 1 into the land boss arena and never into stars', () => {
-    const early = backgroundFade(150.2, stage1);
-    expect(early.layers[0]).toBeLessThan(1);
-    expect(early.layers[1]).toBeGreaterThan(0);
-    expect(early.stars).toBe(0);
-    const clouds = backgroundFade(151.6, stage1);
-    expect(clouds.clouds).toBeGreaterThan(0.5);
-    expect(clouds.stars).toBe(0);
+  it('stitches stage 1 onto the land boss without a cloud sheet', () => {
+    const land = stage1.layers[0]!;
+    const boss = stage1.layers[1]!;
+    expect(boss.origin).toBe(land.grid.length * TILE_SIZE);
+    expect(backgroundFade(0, stage1)).toEqual({ layers: [1, 0], clouds: 0, stars: 0 });
+    const armed = backgroundFade(150, stage1);
+    expect(armed).toEqual({ layers: [1, 1], clouds: 0, stars: 0 });
+    const oldCloudWindow = backgroundFade(151.6, stage1);
+    expect(oldCloudWindow.clouds).toBe(0);
+    expect(oldCloudWindow.stars).toBe(0);
+    expect(oldCloudWindow.layers[0]).toBe(1);
     const arena = backgroundFade(154, stage1);
-    expect(arena.layers).toEqual([0, 1]);
-    expect(arena.clouds).toBe(0);
-    expect(arena.stars).toBe(0);
+    expect(arena).toEqual({ layers: [0, 1], clouds: 0, stars: 0 });
+  });
+
+  it('meets landA and the boss map on one screen edge during the join', () => {
+    const land = stage1.layers[0]!;
+    const boss = stage1.layers[1]!;
+    const scroll = boss.origin - LOGICAL_H / 2;
+    const landSeg = backdropSegments(
+      scroll - land.origin,
+      land.grid.length * TILE_SIZE,
+      null,
+      LOGICAL_H
+    );
+    const bossSeg = backdropSegments(
+      scroll - boss.origin,
+      boss.grid.length * TILE_SIZE,
+      (boss.loopFrom ?? 0) * TILE_SIZE,
+      LOGICAL_H
+    );
+    expect(landSeg).toHaveLength(1);
+    expect(bossSeg).toHaveLength(1);
+    const landSpan = segmentScreenSpan(landSeg[0]!);
+    const bossSpan = segmentScreenSpan(bossSeg[0]!);
+    expect(bossSpan.top).toBe(0);
+    expect(landSpan.bottom).toBe(LOGICAL_H);
+    expect(landSpan.top).toBe(bossSpan.bottom);
   });
 
   it('still fades a starfield boss into clouds and then stars', () => {
@@ -114,29 +144,35 @@ describe('stage background', () => {
     expect(backgroundFade(155, land)).toEqual({ layers: [1], clouds: 0, stars: 0 });
   });
 
-  it('ramps the scroll, then stops a starfield and keeps a tile boss moving', () => {
+  it('ramps a starfield to a stop and rushes a tile boss back to cruise', () => {
     expect(scrollSpeedAt(10, WARNING)).toBe(BG_SCROLL_SPEED);
     const mid = scrollSpeedAt(150.8, WARNING);
     expect(mid).toBeGreaterThan(BG_SCROLL_SPEED);
     expect(mid).toBeLessThan(200);
     expect(scrollSpeedAt(154, WARNING)).toBe(0);
-    expect(scrollSpeedAt(154, WARNING, 'tiles')).toBe(BG_SCROLL_SPEED);
     expect(scrollSpeedAt(154, null)).toBe(BG_SCROLL_SPEED);
     expect(warningTileScrollPx()).toBe(192);
+    expect(tileHandoffSpeed(0)).toBe(BG_SCROLL_SPEED);
+    expect(tileHandoffSpeed(2)).toBe(280);
+    expect(tileHandoffSpeed(5)).toBe(BG_SCROLL_SPEED);
+    expect(tileHandoffDistance(5)).toBe(1160);
+    expect(scrollSpeedAt(152, WARNING, 'tiles')).toBe(280);
+    expect(scrollSpeedAt(155, WARNING, 'tiles')).toBe(BG_SCROLL_SPEED);
     expect(scrollDistance(WARNING, WARNING, 'tiles')).toBe(WARNING * BG_SCROLL_SPEED);
-    expect(scrollDistance(WARNING + 1.6, WARNING, 'tiles')).toBe(
-      WARNING * BG_SCROLL_SPEED + warningTileScrollPx()
+    expect(scrollDistance(WARNING + 5, WARNING, 'tiles')).toBe(
+      WARNING * BG_SCROLL_SPEED + tileHandoffDistance(5)
     );
   });
 
   it('seeks challenge boss onto the approach strip and keeps that strip scrolling', () => {
     const stage = getStage('1');
-    const origin = stage.warningAt * BG_SCROLL_SPEED;
+    const origin = stage1.layers[1]!.origin;
     const scroller = new Scroller(stage1);
     const frame = scroller.seek(stage.boss.enterAt);
     const local = frame.scroll - origin;
     const approachPx = (getTileMap('landBoss').loopFrom ?? 0) * TILE_SIZE;
     expect(frame.fade.stars).toBe(0);
+    expect(frame.fade.clouds).toBe(0);
     expect(frame.fade.layers).toEqual([0, 1]);
     expect(local).toBeGreaterThan(0);
     expect(local).toBeLessThan(approachPx);

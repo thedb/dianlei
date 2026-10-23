@@ -200,7 +200,9 @@ function drawLayer(
   alpha: number,
   prefetch: boolean
 ): void {
-  const local = Math.max(0, Math.floor(scroll - layer.origin));
+  // Negative local keeps the layer above the view so its first row enters
+  // from the top. Clamping to 0 would pop the whole first screen on.
+  const local = Math.floor(scroll - layer.origin);
   const mapPx = layer.grid.length * TILE_SIZE;
   const loopPx = layer.loopFrom === null ? null : layer.loopFrom * TILE_SIZE;
   const segs = backdropSegments(local, mapPx, loopPx, LOGICAL_H);
@@ -214,10 +216,10 @@ function drawLayer(
       const index =
         next >= chunkCount(layer) && loopPx !== null ? Math.floor(loopPx / CHUNK_PX) : next;
       art.chunks.prefetch(layer, index);
+    } else if (local < 0) {
+      art.chunks.prefetch(layer, 0);
     }
   }
-
-  if (layer.map.cloudShadows) drawCloudShadows(ctx, art.clouds, scroll, alpha);
 }
 
 /**
@@ -232,11 +234,16 @@ export function drawBackground(
   time: number
 ): void {
   const { fade } = frame;
+  let shadowAlpha = 0;
   track.layers.forEach((layer, i) => {
     const alpha = fade.layers[i] ?? 0;
     if (alpha <= 0.01) return;
     drawLayer(ctx, art, layer, frame.scroll, alpha, alpha > 0.2);
+    if (layer.map.cloudShadows) shadowAlpha = Math.max(shadowAlpha, alpha);
   });
+  // One shadow pass. Drawing it per layer stacks the stamps into a dark blob
+  // wherever two maps overlap on the boss join.
+  if (shadowAlpha > 0.01) drawCloudShadows(ctx, art.clouds, frame.scroll, shadowAlpha);
 
   if (fade.clouds > 0.01) drawSkyClouds(ctx, art.clouds, time, fade.clouds);
 

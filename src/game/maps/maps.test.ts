@@ -12,13 +12,14 @@ import {
 import { TILE_COUNT, TileId } from '@/game/art/tiles';
 import { getStage } from '@/game/levels/registry';
 import { AIRFIELD_SPINE, LAND_B_LIBRARY, LAND_B_SPEC } from './landB';
-import { LAND_BOSS_LIBRARY, LAND_BOSS_SPEC } from './landBoss';
+import { APPROACH_HANDOFF_ROWS, LAND_BOSS_LIBRARY, LAND_BOSS_SPEC } from './landBoss';
 import { LAND_A_LIBRARY, LAND_A_SPEC } from './landA';
 import { RIVER_A_LIBRARY, RIVER_A_SPEC, RIVER_EDGE_COLS } from './riverA';
 import {
   ROAD_COL,
   STREAM_COLS,
   backdropSegments,
+  segmentScreenSpan,
   buildMapTrack,
   buildPreviewTrack,
   buildStageRunTrack,
@@ -645,7 +646,7 @@ describe('tracks', () => {
       track.layers.map((l) => [l.map.id, l.origin, l.inAt, l.outAt, l.role, l.loopFrom])
     ).toEqual([
       ['landA', 0, null, null, 'run', null],
-      ['landBoss', stage.warningAt * BG_SCROLL_SPEED, null, null, 'boss', MAP_CHUNK_ROWS],
+      ['landBoss', getTileMap('landA').rows * TILE_SIZE, null, null, 'boss', MAP_CHUNK_ROWS],
     ]);
     expect(track.warningAt).toBe(150);
     expect(trackFinished(track, 1e6)).toBe(false);
@@ -707,6 +708,20 @@ describe('百战要塞', () => {
     expect(composeChunks(LAND_BOSS_SPEC)).toEqual(grid);
   });
 
+  it('stitches onto 陆地A through the handoff band', () => {
+    const land = getMapGrid('landA');
+    const top = land[land.length - 1]!;
+    const bottom = grid[0]!;
+    expect(rowConnectors(top).road).toEqual([ROAD_COL]);
+    expect(rowConnectors(top).water).toEqual([]);
+    expect(rowConnectors(bottom).road).toEqual([ROAD_COL]);
+    expect(rowConnectors(bottom).water).toEqual([]);
+    expect(countTile(grid, TileId.scorch, 0, APPROACH_HANDOFF_ROWS)).toBeLessThan(
+      countTile(grid, TileId.scorch, APPROACH_HANDOFF_ROWS, loop)
+    );
+    expect(grid[APPROACH_HANDOFF_ROWS]![ROAD_COL]).not.toBe(TileId.lake);
+  });
+
   it('has no water, keeps the land road on the bottom, and matches the loop seam', () => {
     for (const row of grid) {
       for (const id of row) expect(tileTerrain(id)).not.toBe('water');
@@ -736,6 +751,12 @@ describe('backdrop segments', () => {
     expect(backdropSegments(100, 7040, null, LOGICAL_H)).toEqual([
       { local: 100, y0: 100, y1: 740 },
     ]);
+  });
+
+  it('lets a layer enter from the top when its local scroll is still negative', () => {
+    expect(backdropSegments(-340, 1280, 640, LOGICAL_H)).toEqual([{ local: -340, y0: 0, y1: 300 }]);
+    expect(segmentScreenSpan({ local: -340, y0: 0, y1: 300 })).toEqual({ top: 0, bottom: 300 });
+    expect(backdropSegments(-700, 1280, 640, LOGICAL_H)).toEqual([]);
   });
 
   it('splits a looping arena when the seam is on screen', () => {
