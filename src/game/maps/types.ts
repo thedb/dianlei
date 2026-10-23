@@ -30,6 +30,11 @@ export interface TileMapDef extends MapDefBase {
   build(): TileGrid;
   /** Soft cloud shadows drift over the map. */
   cloudShadows?: boolean;
+  /**
+   * First tile row of a seamless loop. Rows below it play once (an approach
+   * strip). Omit on a map that scrolls through and ends.
+   */
+  loopFrom?: number;
 }
 
 /** A tile-less backdrop: the parallax starfield (宇宙A). */

@@ -4,7 +4,8 @@
  * named by their path, and the art draw helpers log their arguments, so the
  * digest covers what the battle scene draws, in which order, with which
  * values. Captured on the pre-split battle scene: a change here is a visual
- * change.
+ * change. P17 recaptured the draw digest: the stage track now carries the
+ * land boss handoff, and the stage HUD draws the subtitle bar.
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -220,13 +221,13 @@ function stageRun(
 }
 
 const EXPECTED: Record<string, RenderResult> = {
-  'stage easy': { outcome: 'result', frames: 12957, renders: 565, calls: 84948, hash: 1970209475 },
-  'stage hard': { outcome: 'result', frames: 13885, renders: 605, calls: 90982, hash: 1537338769 },
-  'stage demo': { outcome: 'gameover', frames: 4956, renders: 217, calls: 30352, hash: 3569853036 },
-  'boss hard': { outcome: 'result', frames: 5205, renders: 228, calls: 34209, hash: 2214869741 },
-  attract: { outcome: 'timeout', frames: 5400, renders: 318, calls: 24665, hash: 2185208717 },
+  'stage easy': { outcome: 'result', frames: 12957, renders: 565, calls: 85138, hash: 2901987326 },
+  'stage hard': { outcome: 'result', frames: 13885, renders: 605, calls: 91162, hash: 2584441371 },
+  'stage demo': { outcome: 'gameover', frames: 4956, renders: 217, calls: 30452, hash: 2894444585 },
+  'boss hard': { outcome: 'result', frames: 5205, renders: 228, calls: 34289, hash: 2866016611 },
+  attract: { outcome: 'timeout', frames: 5400, renders: 318, calls: 24665, hash: 162214219 },
   weaponTest: { outcome: 'timeout', frames: 600, renders: 55, calls: 26053, hash: 4198131389 },
-  pause: { outcome: 'timeout', frames: 720, renders: 56, calls: 5607, hash: 1977861426 },
+  pause: { outcome: 'timeout', frames: 720, renders: 56, calls: 5797, hash: 2876827040 },
 };
 
 function check(name: string, got: RenderResult): void {

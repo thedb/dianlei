@@ -4,13 +4,15 @@
  *
  * Adding a map: write its `MapDef` (a chunk library plus `composeChunks` for a
  * new tile map, like `landA.ts` / `landB.ts` / `riverA.ts`), add it to `MAPS`,
- * and reference its id from a stage's `maps.run` (or `maps.boss` for a
- * starfield). 地图预览 lists it automatically. Stage 1's run stays `landA`.
+ * and reference its id from a stage's `maps.run`, or from `maps.boss` (a
+ * looping tile arena, or a starfield on a real space stage). 地图预览 lists it
+ * automatically. Stage 1's run stays `landA`; its boss is `landBoss`.
  */
 
 import { MAP_CHUNK_ROWS, SPACE_A_PREVIEW_SECONDS } from '@/game/config';
 import { composeChunks } from './chunks';
 import { LAND_A_SPEC } from './landA';
+import { LAND_BOSS_LOOP_ROW, LAND_BOSS_SPEC } from './landBoss';
 import { LAND_B_SPEC } from './landB';
 import { RIVER_A_SPEC } from './riverA';
 import type { MapDef, StarfieldMapDef, TileGrid, TileMapDef } from './types';
@@ -50,7 +52,21 @@ export const RIVER_A: TileMapDef = {
   cloudShadows: true,
 };
 
-/** The post-WARNING starfield behind the boss. Planets are drawn with the stars, not as tiles. */
+/**
+ * Stage 1 boss arena (百战). One approach chunk, then a courtyard that loops
+ * from `loopFrom`. Same land tiles as 陆地A. Not the stage's run map.
+ */
+export const LAND_BOSS: TileMapDef = {
+  id: 'landBoss',
+  label: '百战要塞',
+  kind: 'tiles',
+  rows: LAND_BOSS_SPEC.slots.length * MAP_CHUNK_ROWS,
+  build: () => composeChunks(LAND_BOSS_SPEC),
+  cloudShadows: true,
+  loopFrom: LAND_BOSS_LOOP_ROW,
+};
+
+/** Starfield for a real space stage and for 地图预览. Stage 1's boss does not use it. */
 export const SPACE_A: StarfieldMapDef = {
   id: 'spaceA',
   label: '宇宙A',
@@ -58,7 +74,7 @@ export const SPACE_A: StarfieldMapDef = {
   previewSeconds: SPACE_A_PREVIEW_SECONDS,
 };
 
-const MAPS: readonly MapDef[] = [LAND_A, LAND_B, RIVER_A, SPACE_A];
+const MAPS: readonly MapDef[] = [LAND_A, LAND_B, RIVER_A, LAND_BOSS, SPACE_A];
 
 export function listMaps(): readonly MapDef[] {
   return MAPS;

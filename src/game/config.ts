@@ -507,7 +507,14 @@ export const RIVER_A_SEED = 21;
 export const SPACE_A_PREVIEW_SECONDS = 24;
 
 /**
- * Cloud shadows over maps that set `cloudShadows` (陆地A / 陆地B / 河流A).
+ * 百战要塞 (`landBoss`): one approach screen, then one courtyard that loops.
+ * Stage 1's boss map. 2 × 640 px. Not used before the warning.
+ */
+export const LAND_BOSS_CHUNKS = 2;
+export const LAND_BOSS_SEED = 41;
+
+/**
+ * Cloud shadows over maps that set `cloudShadows` (陆地A / 陆地B / 河流A / 百战要塞).
  * Alpha stays low so the silhouettes read without muddying the ground.
  * Scroll is relative to the tiles (faster than 1 drifts the shadows ahead).
  * Clusters repeat every `CLOUD_SHADOW_SPAN` pixels and are drawn this far
@@ -644,6 +651,15 @@ export const BOSS_TURRET_FALL_GRAVITY = 220;
 export const INTRO_STAGE_UNTIL = 1.6;
 export const INTRO_READY_UNTIL = 3.6;
 export const INTRO_GO_UNTIL = 4.4;
+
+/**
+ * Story subtitle hold, seconds. The next beat replaces the line immediately.
+ * The stage-open line starts at `CAPTION_OPEN_AT` and ends with the GO card.
+ */
+export const CAPTION_HOLD = 4;
+export const CAPTION_OPEN_AT = 0.4;
+/** Subtitle bar height. Its top sits above the tallest joystick. */
+export const CAPTION_BAR_H = 22;
 
 // ============================================================================
 // Title debug entry & weapon test (design §7.1, §14.11)

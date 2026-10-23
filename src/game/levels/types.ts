@@ -96,11 +96,26 @@ export interface StageMapEntry {
 
 /**
  * Which map assets a stage scrolls through and when. `run` plays from the
- * start to the warning; `boss` is the starfield the warning fades into.
+ * start to the warning. `boss` is the arena the warning hands off to: a tile
+ * map (approach strip, then a seamless loop) or a starfield on a real space
+ * stage. Stage 1's boss is land, not 宇宙A.
  */
 export interface StageMaps {
   run: readonly StageMapEntry[];
   boss: string;
+}
+
+/**
+ * When a story line is shown.
+ * `mid` and `cutscene` are reserved for later beats (s4_wreck, s4_ufo, s5)
+ * and are not fired yet — `activeCaption` draws nothing for them.
+ */
+export type CaptionAt = 'open' | 'clear' | 'mid' | 'cutscene';
+
+/** One story cue. The Chinese line lives in `story/captions.ts`, keyed by `id`. */
+export interface StageCaption {
+  id: string;
+  at: CaptionAt;
 }
 
 export interface Wave {
@@ -254,4 +269,9 @@ export interface StageData {
   boss: BossDef;
   /** Building drop rules. Omit for `BUILDING_DROP_RULES`. */
   buildingDrops?: readonly DropRule[];
+  /**
+   * Story lines for this stage. `open` after the clock starts, `clear` when
+   * the boss is beaten. Omit to stay silent. Later triggers are stubs.
+   */
+  captions?: readonly StageCaption[];
 }

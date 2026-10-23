@@ -8,6 +8,7 @@ import type { Renderer } from '@/engine/renderer';
 import {
   BOMB_FLASH_TIME,
   BOMBS_MAX,
+  CAPTION_BAR_H,
   LOGICAL_H,
   LOGICAL_W,
   WARNING_BANNER_DELAY,
@@ -23,7 +24,9 @@ import {
   type BossHpBarLayout,
 } from '@/game/systems/boss';
 import { introBanner } from '@/game/systems/score';
+import { activeCaption, captionBarY } from '@/game/story/captions';
 import { drawControls, drawPauseButton } from '@/game/ui/controlsOverlay';
+import { drawText } from '@/game/ui/widgets';
 import { runProfile, type Battle } from './context';
 import { drawRangeHud } from './range';
 
@@ -97,6 +100,21 @@ function drawStageHud(renderer: Renderer, b: Battle, assets: GameAssets): void {
       20
     );
   }
+
+  if (!state.gameOver && !b.pause.isOpen()) {
+    const line = activeCaption(stage.captions, gameTime, b.finishedAt);
+    if (line) drawCaption(ctx, line.text, b.scene.safeArea.bottom);
+  }
+}
+
+/** Bottom subtitle bar. Chinese uses the UI font; the rest of the HUD is monospace. */
+function drawCaption(ctx: CanvasRenderingContext2D, text: string, safeBottom: number): void {
+  const y = captionBarY(safeBottom);
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+  ctx.fillRect(0, y, LOGICAL_W, CAPTION_BAR_H);
+  ctx.fillStyle = PALETTE[COLOR.PLAYER_CYAN];
+  ctx.fillRect(0, y, LOGICAL_W, 1);
+  drawText(ctx, text, LOGICAL_W / 2, y + CAPTION_BAR_H / 2, 13, '#fff', 'center');
 }
 
 function clock(seconds: number): string {

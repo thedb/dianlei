@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { makeInput } from '@/test/fakes';
 import { createMemoryStorage, createSettingsStore, SETTINGS_STORAGE_KEY } from '@/game/settings';
 import { computeControlLayout } from '@/game/controls';
-import { DEBUG_HOT_SIZE, DEBUG_HOT_TAPS, LOGICAL_W } from '@/game/config';
+import { DEBUG_HOT_SIZE, DEBUG_HOT_TAPS, LOGICAL_H, LOGICAL_W } from '@/game/config';
 import { HIGH_SCORE_KEY } from '@/game/highScore';
 import { getStage } from '@/game/levels/registry';
 import { buildPreviewTrack, type MapPreviewTarget } from '@/game/maps';
@@ -98,7 +98,7 @@ describe('map preview play mode', () => {
   });
 
   it('ends a single-map preview when the map runs out, and the starfield after its seconds', () => {
-    for (const target of ['map:landB', 'map:spaceA'] as const) {
+    for (const target of ['map:landB', 'map:spaceA', 'map:landBoss'] as const) {
       const scene = createBattleScene(context(target));
       scene.enter();
       const end = buildPreviewTrack(target).endAt!;
@@ -165,14 +165,17 @@ describe('地图预览 entry on the title', () => {
     return title;
   }
 
-  it('lists 陆地A, 陆地B, 河流A, 宇宙A, then 返回', () => {
+  it('lists 陆地A, 陆地B, 河流A, 百战要塞, 宇宙A, then 返回', () => {
     expect(MAP_PREVIEW_ROWS.map((r) => r.title)).toEqual([
       '陆地A',
       '陆地B',
       '河流A',
+      '百战要塞',
       '宇宙A',
       '返回',
     ]);
+    const back = mapPreviewButton('back');
+    expect(back.y + back.h).toBeLessThan(LOGICAL_H);
   });
 
   it('pauses the attract demo while open and starts the chosen map', () => {

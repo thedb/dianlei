@@ -1,5 +1,6 @@
 /**
- * Stage 1 boss: the orbital battleship (wave table §5).
+ * Stage 1 boss 百战. The fight is still this battleship skeleton (wave table §5);
+ * the arena is `landBoss`, not a reskin and not the starfield.
  *
  * Phase 1: two turrets and the hull guns. Killing one turret speeds the other.
  * Phase 2: the core opens and alternates the spiral and a fast aimed volley.

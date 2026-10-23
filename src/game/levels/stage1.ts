@@ -61,8 +61,12 @@ export const stage1: StageData = {
   stage: 1,
   scrollSpeed: 40,
   warningAt: 150,
-  // 陆地A covers the whole run to the warning; the boss fight is over 宇宙A.
-  maps: { run: [{ map: 'landA', at: 0 }], boss: 'spaceA' },
+  // 陆地A until the warning. The boss fight scrolls 百战要塞 (approach, then loop).
+  maps: { run: [{ map: 'landA', at: 0 }], boss: 'landBoss' },
+  captions: [
+    { id: 's1_open', at: 'open' },
+    { id: 's1_end', at: 'clear' },
+  ],
 
   waves: [
     // ========================================================================

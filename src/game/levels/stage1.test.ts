@@ -34,9 +34,13 @@ describe('stage1 waves', () => {
     expect(last.t).toBeLessThan(stage1.warningAt);
   });
 
-  it('runs on 陆地A alone until the warning, then 宇宙A for the boss', () => {
+  it('runs on 陆地A until the warning, then 百战要塞 for the boss', () => {
     expect(stage1.maps.run).toEqual([{ map: 'landA', at: 0 }]);
-    expect(stage1.maps.boss).toBe('spaceA');
+    expect(stage1.maps.boss).toBe('landBoss');
+    expect(stage1.captions).toEqual([
+      { id: 's1_open', at: 'open' },
+      { id: 's1_end', at: 'clear' },
+    ]);
   });
 
   it('has 陆地A rows for the whole pre-boss run and the warning speed-up, without looping', () => {

@@ -12,11 +12,13 @@ import {
 import { TILE_COUNT, TileId } from '@/game/art/tiles';
 import { getStage } from '@/game/levels/registry';
 import { AIRFIELD_SPINE, LAND_B_LIBRARY, LAND_B_SPEC } from './landB';
+import { LAND_BOSS_LIBRARY, LAND_BOSS_SPEC } from './landBoss';
 import { LAND_A_LIBRARY, LAND_A_SPEC } from './landA';
 import { RIVER_A_LIBRARY, RIVER_A_SPEC, RIVER_EDGE_COLS } from './riverA';
 import {
   ROAD_COL,
   STREAM_COLS,
+  backdropSegments,
   buildMapTrack,
   buildPreviewTrack,
   buildStageRunTrack,
@@ -45,11 +47,12 @@ import {
 } from './index';
 
 describe('map registry', () => {
-  it('lists the four stage-1 map assets in order', () => {
+  it('lists the map assets in order', () => {
     expect(listMaps().map((m) => [m.id, m.label, m.kind])).toEqual([
       ['landA', '陆地A', 'tiles'],
       ['landB', '陆地B', 'tiles'],
       ['riverA', '河流A', 'tiles'],
+      ['landBoss', '百战要塞', 'tiles'],
       ['spaceA', '宇宙A', 'starfield'],
     ]);
   });
@@ -70,8 +73,9 @@ describe('map registry', () => {
     expect(() => getMapGrid('spaceA')).toThrow();
   });
 
-  it('keeps stage 1 on 陆地A and the boss on 宇宙A', () => {
-    expect(getStage('1').maps).toEqual({ run: [{ map: 'landA', at: 0 }], boss: 'spaceA' });
+  it('keeps stage 1 on 陆地A and the boss on 百战要塞', () => {
+    expect(getStage('1').maps).toEqual({ run: [{ map: 'landA', at: 0 }], boss: 'landBoss' });
+    expect(getTileMap('landBoss').loopFrom).toBe(MAP_CHUNK_ROWS);
   });
 
   it('gives 陆地B and 河流A cloud shadows and a preview a bit shorter than 陆地A', () => {
@@ -633,13 +637,25 @@ describe('河流A channel', () => {
 });
 
 describe('tracks', () => {
-  it('builds stage 1 from 陆地A with no handovers', () => {
-    const track = buildStageTrack(getStage('1'));
-    expect(track.layers.map((l) => [l.map.id, l.origin, l.inAt, l.outAt])).toEqual([
-      ['landA', 0, null, null],
+  it('builds stage 1 from 陆地A plus a looping land boss', () => {
+    const stage = getStage('1');
+    const track = buildStageTrack(stage);
+    expect(track.handoff).toBe('tiles');
+    expect(
+      track.layers.map((l) => [l.map.id, l.origin, l.inAt, l.outAt, l.role, l.loopFrom])
+    ).toEqual([
+      ['landA', 0, null, null, 'run', null],
+      ['landBoss', stage.warningAt * BG_SCROLL_SPEED, null, null, 'boss', MAP_CHUNK_ROWS],
     ]);
     expect(track.warningAt).toBe(150);
     expect(trackFinished(track, 1e6)).toBe(false);
+  });
+
+  it('keeps a starfield boss off the tile layers', () => {
+    const stage = getStage('1');
+    const track = buildStageTrack({ ...stage, maps: { run: stage.maps.run, boss: 'spaceA' } });
+    expect(track.handoff).toBe('starfield');
+    expect(track.layers.map((l) => l.map.id)).toEqual(['landA']);
   });
 
   it('ends a map preview when the last row reaches the top of the screen', () => {
@@ -667,10 +683,68 @@ describe('tracks', () => {
       { target: 'map:landA', label: '陆地A' },
       { target: 'map:landB', label: '陆地B' },
       { target: 'map:riverA', label: '河流A' },
+      { target: 'map:landBoss', label: '百战要塞' },
       { target: 'map:spaceA', label: '宇宙A' },
     ]);
+    const bossPreview = buildMapTrack('landBoss');
+    expect(bossPreview.layers[0]!.loopFrom).toBe(MAP_CHUNK_ROWS);
+    expect(bossPreview.endAt).toBeGreaterThan(0);
+    expect(bossPreview.starsOnly).toBe(false);
     expect(buildPreviewTrack('map:riverA').layers[0]!.map.id).toBe('riverA');
     expect(buildPreviewTrack('stage:1').label).toBe('第一关全程');
     expect(buildPreviewTrack(undefined).label).toBe('第一关全程');
+  });
+});
+
+describe('百战要塞', () => {
+  const grid = getMapGrid('landBoss');
+  const loop = MAP_CHUNK_ROWS;
+
+  it('is the approach chunk then the courtyard, built once', () => {
+    expect(LAND_BOSS_LIBRARY.map((c) => c.id)).toEqual(['approach', 'courtyard']);
+    expect(planChunks(LAND_BOSS_SPEC).map((p) => p.chunk)).toEqual(['approach', 'courtyard']);
+    expect(grid).toHaveLength(loop * 2);
+    expect(composeChunks(LAND_BOSS_SPEC)).toEqual(grid);
+  });
+
+  it('has no water, keeps the land road on the bottom, and matches the loop seam', () => {
+    for (const row of grid) {
+      for (const id of row) expect(tileTerrain(id)).not.toBe('water');
+    }
+    expect(rowConnectors(grid[0]!).road).toEqual([ROAD_COL]);
+    expect(rowConnectors(grid[0]!).water).toEqual([]);
+    const edge = grid[loop - 1];
+    expect(grid[loop]).toEqual(edge);
+    expect(grid[grid.length - 1]).toEqual(edge);
+    expect(edge![0]).toBe(TileId.fortWall);
+    expect(edge![ROAD_COL]).toBe(TileId.scorch);
+  });
+
+  it('scorches toward the gate and walls the courtyard', () => {
+    expect(countTile(grid, TileId.scorch, 24, loop)).toBeGreaterThan(
+      countTile(grid, TileId.scorch, 0, 12)
+    );
+    expect(countTile(grid, TileId.fortWall, loop, grid.length)).toBeGreaterThan(100);
+    expect(countTile(grid, TileId.crater, loop, grid.length)).toBeGreaterThan(0);
+    expect(countTile(grid, TileId.bunker, loop, grid.length)).toBeGreaterThan(0);
+    expect(grid[loop + 20]![0]).toBe(TileId.fortWall);
+  });
+});
+
+describe('backdrop segments', () => {
+  it('clips a finite map to the view', () => {
+    expect(backdropSegments(100, 7040, null, LOGICAL_H)).toEqual([
+      { local: 100, y0: 100, y1: 740 },
+    ]);
+  });
+
+  it('splits a looping arena when the seam is on screen', () => {
+    expect(backdropSegments(1000, 1280, 640, LOGICAL_H)).toEqual([
+      { local: 1000, y0: 1000, y1: 1280 },
+      { local: 360, y0: 640, y1: 1000 },
+    ]);
+    expect(backdropSegments(640, 1280, 640, LOGICAL_H)).toEqual([
+      { local: 640, y0: 640, y1: 1280 },
+    ]);
   });
 });

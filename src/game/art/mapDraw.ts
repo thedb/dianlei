@@ -12,6 +12,7 @@
 
 import {
   LOGICAL_H,
+  LOGICAL_W,
   MAP_CHUNK_CACHE,
   MAP_CHUNK_ROWS,
   MAP_CROP_X,
@@ -19,7 +20,7 @@ import {
   TILE_SIZE,
 } from '@/game/config';
 import { PALETTE } from '@/game/palette';
-import type { BackgroundTrack, TrackLayer } from '@/game/maps/track';
+import { backdropSegments, type BackgroundTrack, type TrackLayer } from '@/game/maps/track';
 import type { ScrollFrame } from '@/game/systems/background';
 import { createCloudSheet, drawCloudShadows, drawSkyClouds, type CloudSheet } from './clouds';
 import {
@@ -165,6 +166,32 @@ export function visibleChunks(layer: TrackLayer, localScroll: number): [number, 
   return [Math.max(0, first), Math.min(chunkCount(layer) - 1, last)];
 }
 
+function blitSegment(
+  ctx: CanvasRenderingContext2D,
+  art: BackgroundArt,
+  layer: TrackLayer,
+  local: number,
+  y0: number,
+  y1: number,
+  alpha: number
+): void {
+  const first = Math.max(0, Math.floor(y0 / CHUNK_PX));
+  const last = Math.min(chunkCount(layer) - 1, Math.floor((y1 - 1) / CHUNK_PX));
+  if (last < first) return;
+  const top = local + LOGICAL_H - y1;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(-MAP_CROP_X, top, LOGICAL_W + MAP_CROP_X * 2, y1 - y0);
+  ctx.clip();
+  ctx.globalAlpha = alpha;
+  for (let k = first; k <= last; k++) {
+    const canvas = art.chunks.get(layer, k);
+    const dy = local + LOGICAL_H - k * CHUNK_PX - canvas.height;
+    ctx.drawImage(canvas, -MAP_CROP_X, dy);
+  }
+  ctx.restore();
+}
+
 function drawLayer(
   ctx: CanvasRenderingContext2D,
   art: BackgroundArt,
@@ -174,14 +201,21 @@ function drawLayer(
   prefetch: boolean
 ): void {
   const local = Math.max(0, Math.floor(scroll - layer.origin));
-  const [first, last] = visibleChunks(layer, local);
-  ctx.globalAlpha = alpha;
-  for (let k = first; k <= last; k++) {
-    const canvas = art.chunks.get(layer, k);
-    const dy = local + LOGICAL_H - k * CHUNK_PX - canvas.height;
-    ctx.drawImage(canvas, -MAP_CROP_X, dy);
+  const mapPx = layer.grid.length * TILE_SIZE;
+  const loopPx = layer.loopFrom === null ? null : layer.loopFrom * TILE_SIZE;
+  const segs = backdropSegments(local, mapPx, loopPx, LOGICAL_H);
+  for (const seg of segs) {
+    blitSegment(ctx, art, layer, seg.local, seg.y0, seg.y1, alpha);
   }
-  if (prefetch) art.chunks.prefetch(layer, last + 1);
+  if (prefetch) {
+    const top = segs[segs.length - 1];
+    if (top) {
+      const next = Math.floor(top.y1 / CHUNK_PX);
+      const index =
+        next >= chunkCount(layer) && loopPx !== null ? Math.floor(loopPx / CHUNK_PX) : next;
+      art.chunks.prefetch(layer, index);
+    }
+  }
 
   if (layer.map.cloudShadows) drawCloudShadows(ctx, art.clouds, scroll, alpha);
 }
@@ -201,7 +235,7 @@ export function drawBackground(
   track.layers.forEach((layer, i) => {
     const alpha = fade.layers[i] ?? 0;
     if (alpha <= 0.01) return;
-    drawLayer(ctx, art, layer, frame.scroll, alpha, alpha >= 0.99);
+    drawLayer(ctx, art, layer, frame.scroll, alpha, alpha > 0.2);
   });
 
   if (fade.clouds > 0.01) drawSkyClouds(ctx, art.clouds, time, fade.clouds);
