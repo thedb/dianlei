@@ -4,8 +4,9 @@
  * named by their path, and the art draw helpers log their arguments, so the
  * digest covers what the battle scene draws, in which order, with which
  * values. Captured on the pre-split battle scene: a change here is a visual
- * change. P17 recaptured the draw digest: the stage track now carries the
- * land boss handoff, and the stage HUD draws the subtitle bar.
+ * change. P18 recaptured the draw digest: the boss layer is stitched at the
+ * end of 陆地A, so the track origin in every background draw changed. Frames
+ * and call counts are the same.
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -221,13 +222,13 @@ function stageRun(
 }
 
 const EXPECTED: Record<string, RenderResult> = {
-  'stage easy': { outcome: 'result', frames: 12957, renders: 565, calls: 85138, hash: 2901987326 },
-  'stage hard': { outcome: 'result', frames: 13885, renders: 605, calls: 91162, hash: 2584441371 },
-  'stage demo': { outcome: 'gameover', frames: 4956, renders: 217, calls: 30452, hash: 2894444585 },
-  'boss hard': { outcome: 'result', frames: 5205, renders: 228, calls: 34289, hash: 2866016611 },
-  attract: { outcome: 'timeout', frames: 5400, renders: 318, calls: 24665, hash: 162214219 },
+  'stage easy': { outcome: 'result', frames: 12957, renders: 565, calls: 85138, hash: 1811958058 },
+  'stage hard': { outcome: 'result', frames: 13885, renders: 605, calls: 91162, hash: 141051093 },
+  'stage demo': { outcome: 'gameover', frames: 4956, renders: 217, calls: 30452, hash: 4193505322 },
+  'boss hard': { outcome: 'result', frames: 5205, renders: 228, calls: 34289, hash: 3582396244 },
+  attract: { outcome: 'timeout', frames: 5400, renders: 318, calls: 24665, hash: 1671637245 },
   weaponTest: { outcome: 'timeout', frames: 600, renders: 55, calls: 26053, hash: 4198131389 },
-  pause: { outcome: 'timeout', frames: 720, renders: 56, calls: 5797, hash: 2876827040 },
+  pause: { outcome: 'timeout', frames: 720, renders: 56, calls: 5797, hash: 3519864302 },
 };
 
 function check(name: string, got: RenderResult): void {
