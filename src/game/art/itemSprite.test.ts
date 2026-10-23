@@ -7,6 +7,7 @@ import {
   ITEM_SPRITE_W,
   bombEnergyPixels,
   homingEnergyPixels,
+  mateEnergyPixels,
   missileEnergyPixels,
 } from './itemSprite';
 import { ITEM_DEFS } from '@/game/entities/item';
@@ -203,5 +204,77 @@ describe('T homing capsule', () => {
     expect(countColor(homing, green)).toBeGreaterThan(10);
     expect(countColor(homing, gold)).toBe(0);
     expect(countColor(bomb, green)).toBe(0);
+  });
+});
+
+describe('M wingman badge', () => {
+  const mate = mateEnergyPixels();
+  const mateFlash = mateEnergyPixels(true);
+
+  it('fits the item grid, stays on the palette, and flashes in place', () => {
+    expect(ITEM_PIXELS.M.idle).toBe(mate);
+    expect(ITEM_PIXELS.M.flash).toBe(mateFlash);
+    for (const grid of [mate, mateFlash]) {
+      expect(grid).toHaveLength(ITEM_SPRITE_H);
+      for (const row of grid) {
+        expect(row).toHaveLength(ITEM_SPRITE_W);
+        for (const cell of row) {
+          expect(
+            cell === -1 || (Number.isInteger(cell) && cell >= 0 && cell < PALETTE.length)
+          ).toBe(true);
+        }
+      }
+    }
+    expect(mask(mateFlash)).toEqual(mask(mate));
+    for (const y of [7, 8, 10, 12]) {
+      expect(mateFlash[y]![5]).toBe(COLOR.WHITE);
+      expect(mateFlash[y]![10]).toBe(COLOR.WHITE);
+    }
+  });
+
+  it('is a symmetric winged shield, not the missile, octagon, or capsule', () => {
+    for (const row of mate) {
+      const bits = row.map((cell) => cell >= 0);
+      expect(bits).toEqual([...bits].reverse());
+    }
+    expect(opaqueRun(mate[2]!)).toBe(6);
+    expect(opaqueRun(mate[7]!)).toBe(16);
+    expect(opaqueRun(mate[14]!)).toBe(4);
+    expect(opaqueRun(mate[7]!)).toBeGreaterThan(opaqueRun(mate[2]!));
+    expect(mask(mate)).not.toEqual(mask(bomb));
+    expect(mask(mate)).not.toEqual(mask(missile));
+    expect(mask(mate)).not.toEqual(mask(homing));
+    // The missile's fins leave a hole. The wing row is solid.
+    expect(mate[7]!.every((cell) => cell >= 0)).toBe(true);
+  });
+
+  it('draws a white M on a teal body with gold wings', () => {
+    for (const y of [7, 8]) {
+      expect(mate[y]![5]).toBe(COLOR.WHITE);
+      expect(mate[y]![6]).toBe(COLOR.WHITE);
+      expect(mate[y]![7]).not.toBe(COLOR.WHITE);
+      expect(mate[y]![8]).not.toBe(COLOR.WHITE);
+      expect(mate[y]![9]).toBe(COLOR.WHITE);
+      expect(mate[y]![10]).toBe(COLOR.WHITE);
+    }
+    expect(mate[9]![5]).toBe(COLOR.WHITE);
+    expect(mate[9]![6]).not.toBe(COLOR.WHITE);
+    expect(mate[9]![7]).toBe(COLOR.WHITE);
+    expect(mate[9]![8]).toBe(COLOR.WHITE);
+    expect(mate[9]![9]).not.toBe(COLOR.WHITE);
+    expect(mate[9]![10]).toBe(COLOR.WHITE);
+    for (const y of [10, 11, 12]) {
+      expect(mate[y]![5]).toBe(COLOR.WHITE);
+      expect(mate[y]![10]).toBe(COLOR.WHITE);
+      expect(mate[y]![7]).not.toBe(COLOR.WHITE);
+      expect(mate[y]![8]).not.toBe(COLOR.WHITE);
+    }
+
+    const teal = new Set<number>([COLOR.PLAYER_CYAN, COLOR.TERRAIN_LIGHT_GRASS]);
+    const gold = new Set<number>([COLOR.EXPLOSION_YELLOW, COLOR.EXPLOSION_ORANGE]);
+    expect(countColor(mate, teal)).toBeGreaterThan(20);
+    expect(countColor(mate, gold)).toBeGreaterThan(10);
+    expect(mate[7]![0]).toBe(COLOR.EXPLOSION_ORANGE);
+    expect(mate[7]![1]).toBe(COLOR.EXPLOSION_YELLOW);
   });
 });

@@ -63,7 +63,10 @@ export interface GameDebugInfo {
   waveSpawned?: number;
   /** Buildings on the map, intact or wrecked. */
   buildingCount?: number;
-  /** Item the next destroyed building would drop, from the live sub slot. */
+  /**
+   * Default building-drop preview: `B` at max main power, otherwise `P/B`.
+   * Does not roll, and does not name a placement lock.
+   */
   buildingDrop?: string;
 }
 

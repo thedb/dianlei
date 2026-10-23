@@ -10,6 +10,7 @@ import type { InputState } from '@/engine/input';
 import { createGameAssets } from '@/game/art';
 import { getStage } from '@/game/levels/registry';
 import type { ItemType } from '@/game/entities/item';
+import { resolvePlacementDrops } from '@/game/systems/dropRules';
 import { WaveScheduler } from '@/game/systems/waveScheduler';
 import { maxOut } from '@/game/systems/playerWeapons';
 import { resetVictoryExit, victoryExitBlocksInput } from '@/game/systems/victoryExit';
@@ -96,6 +97,8 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
 
       const stage = getStage(sceneCtx.battleEntry === 'boss' ? sceneCtx.challengeStage : undefined);
       b.stage = stage;
+      // First stage-RNG draw of the run: which exclusive building drops M.
+      b.fixedDrops = resolvePlacementDrops(stage.buildings, b.rng);
       const stageTrack = buildStageTrack(stage);
       b.track = b.rules().track === 'preview' ? buildPreviewTrack(sceneCtx.previewMap) : stageTrack;
       b.buildingScheduler = new BuildingScheduler(

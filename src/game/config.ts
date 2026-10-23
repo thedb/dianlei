@@ -166,7 +166,7 @@ export const HOMING_HIT_SIZE = 6;
 export const DEATH_SUB_LOSS = 1;
 
 // ============================================================================
-// §14.4.2 Wingmen (M). Not a WEAPONS row and not an item this milestone.
+// §14.4.2 Wingmen (M). Not a WEAPONS row. The M item raises this level.
 // ============================================================================
 
 /** Highest M level. 0 is none, 1 is the left ship, 2 is one ship on each side. */
@@ -287,8 +287,14 @@ export const ITEM_P_LIFETIME = 8;
 /** B item fall speed */
 export const ITEM_B_FALL_SPEED = 45;
 
-/** Score for collecting P at max power */
+/** Score for collecting P at max power. T at max uses this too. */
 export const P_OVERFLOW_SCORE = 1000;
+
+/**
+ * Score for collecting M when wingmen are already at MATE_MAX_LEVEL.
+ * Same 1000 as a maxed weapon pickup, not the bomb's 2000.
+ */
+export const M_OVERFLOW_SCORE = 1000;
 
 /** Score for collecting B at max bombs */
 export const B_OVERFLOW_SCORE = 2000;
@@ -445,10 +451,12 @@ export const MISSILE_TURN_RATE = 240;
 export const BUILDING_HP = 3;
 
 /**
- * Building drops are not a chance. `chooseBuildingDrop` in `entities/building.ts`
- * always returns one item from the live sub slot: T until homing is at
- * HOMING_MAX_LEVEL, then B. There is no BUILDING_DROP_CHANCE.
+ * Share of default building drops that are P while main power is below
+ * POWER_MAX. The rest are B. Every building still drops one item: this is
+ * not a chance to drop nothing. At POWER_MAX the default drop is B and the
+ * roll is skipped. Placement locks (T / M) ignore this.
  */
+export const BUILDING_DROP_P_SHARE = 0.5;
 
 /** Sea gun fixed2 interval, seconds. Ground turrets use 1.6–1.8. */
 export const SEA_GUN_FIRE_INTERVAL = 2.2;

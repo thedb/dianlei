@@ -23,6 +23,7 @@ import {
 } from '@/game/systems/playerWeapons';
 import {
   applyMateDeath,
+  applyMatePickup,
   fireMates,
   mateCount,
   mateLevel,
@@ -59,6 +60,10 @@ describe('wingman slot M', () => {
     expect(mateLevel(9)).toBe(2);
     expect(mateLevel(-3)).toBe(0);
     expect(mateLevel(Number.NaN)).toBe(0);
+    expect(applyMatePickup(0)).toEqual({ level: 1, result: 'levelUp' });
+    expect(applyMatePickup(1)).toEqual({ level: 2, result: 'levelUp' });
+    expect(applyMatePickup(2)).toEqual({ level: 2, result: 'overflow' });
+    expect(applyMatePickup(9)).toEqual({ level: 2, result: 'overflow' });
     expect(mateCount(0)).toBe(0);
     expect(mateCount(1)).toBe(1);
     expect(mateCount(2)).toBe(2);

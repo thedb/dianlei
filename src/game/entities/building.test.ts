@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   BG_SCROLL_SPEED,
   BUILDING_HP,
-  HOMING_MAX_LEVEL,
   LOGICAL_H,
   SCORE_BUILDING,
   SCORE_SMALL_FIGHTER,
@@ -26,7 +25,6 @@ import {
   buildingSpawnScroll,
   bulletHitsBuilding,
   createBuilding,
-  chooseBuildingDrop,
   damageBuilding,
   spawnBuilding,
   updateBuilding,
@@ -255,28 +253,7 @@ describe('building damage and wreck', () => {
 });
 
 describe('building drops', () => {
-  it('always drops T until the live homing slot is at max, then only B', () => {
-    expect(chooseBuildingDrop(null)).toBe('T');
-    const sub: { id: 'homing' | 'vulcan'; level: number } = { id: 'homing', level: 0 };
-    expect(chooseBuildingDrop(sub)).toBe('T');
-    sub.level = 1;
-    expect(chooseBuildingDrop(sub)).toBe('T');
-    sub.level = HOMING_MAX_LEVEL;
-    expect(chooseBuildingDrop(sub)).toBe('B');
-    sub.id = 'vulcan';
-    expect(chooseBuildingDrop(sub)).toBe('T');
-  });
-
-  it('reads the slot object it is given, so a later level change is the next drop', () => {
-    const sub = { id: 'homing' as const, level: 1 };
-    expect(chooseBuildingDrop(sub)).toBe('T');
-    sub.level = HOMING_MAX_LEVEL;
-    expect(chooseBuildingDrop(sub)).toBe('B');
-    sub.level = 1;
-    expect(chooseBuildingDrop(sub)).toBe('T');
-  });
-
-  it('is the only source of T: wave-table carriers drop only P and B', () => {
+  it('keeps wave-table carriers on P and B', () => {
     for (const wave of stage1.waves) {
       for (const g of wave.groups) {
         for (const d of g.drops ?? []) expect(['P', 'B']).toContain(d.item);

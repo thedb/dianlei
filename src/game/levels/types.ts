@@ -3,7 +3,7 @@
  */
 
 import type { PatternSpec } from '@/game/systems/danmaku';
-import type { DropRule } from '@/game/systems/dropRules';
+import type { DropRule, PlacementDrop } from '@/game/systems/dropRules';
 
 export type { EnemyType } from '@/game/entities/enemyDefs';
 import type { EnemyType } from '@/game/entities/enemyDefs';
@@ -253,6 +253,13 @@ export interface BuildingPlacement {
   map: string;
   row: number;
   col: number;
+  /**
+   * Locked drop for this placement. A letter always drops that item.
+   * `{ exclusive, item }` joins a group: battle enter draws one member with
+   * the stage RNG, and only that member drops `item`. Omit to use the
+   * stage's default building-drop rules.
+   */
+  drop?: PlacementDrop;
 }
 
 export interface StageData {

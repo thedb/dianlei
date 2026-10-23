@@ -1,6 +1,6 @@
 /**
  * Item entity system
- * Design doc §5.6: weapon items (P, T) bounce around, B falls down
+ * Design doc §5.6: weapon capsules (P, T, M) bounce around, B falls down
  */
 
 import type { Poolable } from '@/engine/pool';
@@ -15,22 +15,24 @@ import {
 
 /**
  * Pickup letters. Weapon letters map to a weapon through the weapon registry
- * (`systems/playerWeapons.ts`); B is the bomb stock.
+ * (`systems/playerWeapons.ts`). B is the bomb stock. M raises the wingman
+ * slot and is not a `WEAPONS` row (`systems/mate.ts`).
  */
-export type ItemType = 'P' | 'B' | 'T';
+export type ItemType = 'P' | 'B' | 'T' | 'M';
 
 /** How the pickup moves: weapon capsules bounce around, bombs fall. */
 export type ItemMotion = 'bounce' | 'fall';
 
 export interface ItemDef {
   type: ItemType;
-  effect: 'weapon' | 'bomb';
+  effect: 'weapon' | 'bomb' | 'mate';
   motion: ItemMotion;
 }
 
 export const ITEM_DEFS: Readonly<Record<ItemType, ItemDef>> = {
   P: { type: 'P', effect: 'weapon', motion: 'bounce' },
   T: { type: 'T', effect: 'weapon', motion: 'bounce' },
+  M: { type: 'M', effect: 'mate', motion: 'bounce' },
   B: { type: 'B', effect: 'bomb', motion: 'fall' },
 };
 
