@@ -3,6 +3,7 @@ import {
   TIEBAO_CAR_GAP,
   TIEBAO_CAR_H,
   TIEBAO_CAR_PITCH,
+  TIEBAO_CARS,
   TIEBAO_CORE_ROW,
   TIEBAO_FULL_H,
   TIEBAO_HULL_H,
@@ -13,6 +14,7 @@ import {
 } from '@/game/config';
 import { FACTORY_LOOK_IDS, FACTORY_LOOK_NAMES, paintFactoryLook } from '@/game/art/factoryLooks';
 import { TIEBAO_LOOK_IDS, TIEBAO_LOOK_NAMES, buildTiebaoHull } from '@/game/art/tiebaoLooks';
+import { COLOR } from '@/game/palette';
 import { tiebaoCarBodyY } from '@/game/systems/tiebaoShed';
 import type { SpriteData } from '@/game/art/types';
 
@@ -86,6 +88,21 @@ describe('铁堡外观', () => {
         expect(hull[y]?.[cx]).toBeGreaterThanOrEqual(0);
       }
       expect(TIEBAO_LOCO_H).toBeGreaterThan(TIEBAO_CAR_H + TIEBAO_CAR_GAP);
+      let locoMuzzle = false;
+      for (let y = 30; y < TIEBAO_LOCO_H; y++) {
+        if (hull[y]?.[cx] === COLOR.EXPLOSION_YELLOW) locoMuzzle = true;
+      }
+      expect(locoMuzzle).toBe(true);
+      for (let car = 0; car < TIEBAO_CARS; car++) {
+        const top = tiebaoCarBodyY(car);
+        let muzzles = 0;
+        for (let y = top; y < top + TIEBAO_CAR_H; y++) {
+          for (let x = 16; x < 64; x++) {
+            if (hull[y]?.[x] === COLOR.EXPLOSION_YELLOW) muzzles++;
+          }
+        }
+        expect(muzzles).toBeGreaterThan(0);
+      }
       expect(hashSprite(buildTiebaoHull(id, true))).not.toBe(hashSprite(hull));
     }
   });

@@ -5,8 +5,8 @@
  * top of this sprite: a long locomotive and the first two boxcars.
  *
  * Look A is the locked style. B–E share the chassis and only change the
- * nose, the cab, and the two end cars. Mid cars are one repeated module,
- * so a shed car takes its roof mount with it.
+ * nose, the cab, and the two end cars. Every car carries at least one
+ * hardpoint; cropping a shed car takes that turret with it.
  *
  * Anchors are nose rows (`TIEBAO_CORE_ROW` / `TIEBAO_ROOF_*_ROW`):
  *   core      (40, 18)    nose
@@ -226,14 +226,72 @@ function boxcar(g: SpriteData, y: number): void {
   roof(g, CAR_X, y, CAR_W, TIEBAO_CAR_H, G);
 }
 
-/** Small roof fitting on a mid car. Cropping the car removes the mount. */
-function moduleMount(g: SpriteData, index: number): void {
-  const y = tiebaoCarBodyY(index) + 22;
-  const x = CX + (index % 2 === 0 ? -6 : 4);
-  fillRect(g, x, y, 10, 14, S);
-  fillRect(g, x + 2, y + 2, 6, 10, DG);
-  hline(g, x + 2, y + 2, 6, LG);
-  plot(g, x + 4, y + 6, MG);
+/** Short barrel toward the player. The yellow pixel is the muzzle. */
+function downBarrel(g: SpriteData, x: number, y: number, len: number): void {
+  fillRect(g, x - 1, y, 3, len, DG);
+  const muzzle = y + len - 2;
+  fillRect(g, x - 2, muzzle, 5, 2, K);
+  plot(g, x, muzzle, EY);
+}
+
+/** Round cupola in look A's roof-gun language. */
+function cupola(g: SpriteData, x: number, y: number): void {
+  fillEllipse(g, x, y, 6, 5, S);
+  fillEllipse(g, x, y, 4, 3, MG);
+  plot(g, x, y, G);
+  plot(g, x - 3, y - 2, LG);
+  plot(g, x + 3, y - 2, LG);
+}
+
+/** Two missile tubes on the roof, muzzles toward the player. */
+function tubePair(g: SpriteData, x: number, y: number): void {
+  fillRect(g, x, y, 4, 16, S);
+  fillRect(g, x + 6, y, 4, 16, S);
+  fillRect(g, x + 1, y + 2, 2, 10, DG);
+  fillRect(g, x + 7, y + 2, 2, 10, DG);
+  hline(g, x, y, 4, LG);
+  hline(g, x + 6, y, 4, LG);
+  plot(g, x + 1, y + 13, EY);
+  plot(g, x + 7, y + 13, EY);
+}
+
+/**
+ * One visible hardpoint on boxcar `index`. Painted into that car's rows,
+ * so the live crop drops it when the car is shed.
+ * 0, 3, 6: center AA cupola. 4, 7: cupola plus missile tubes.
+ * 2, 5, 8: cupola plus side sponsons. Car 1 keeps the real rear gun.
+ */
+function carHardpoint(g: SpriteData, index: number): void {
+  const top = tiebaoCarBodyY(index);
+  if (index === 1) {
+    downBarrel(g, CX, top + 42, 12);
+    return;
+  }
+  const kind = index % 3;
+  if (kind === 1) {
+    cupola(g, CX, top + 16);
+    tubePair(g, CX - 12, top + 20);
+    downBarrel(g, CX, top + 20, 8);
+    return;
+  }
+  if (kind === 2) {
+    cupola(g, CX, top + 18);
+    downBarrel(g, CX, top + 22, 8);
+    fillRect(g, CX - 16, top + 30, 8, 3, DG);
+    fillRect(g, CX + 8, top + 30, 8, 3, DG);
+    plot(g, CX - 16, top + 31, EY);
+    plot(g, CX + 14, top + 31, EY);
+    return;
+  }
+  cupola(g, CX, top + 16);
+  downBarrel(g, CX, top + 20, 12);
+}
+
+/** Hood cupola plus a longer barrel on the cab gun. Both point down-screen. */
+function strengthenLocoGuns(g: SpriteData): void {
+  cupola(g, CX, 36);
+  downBarrel(g, CX, 40, 10);
+  downBarrel(g, LOCO_GUN.x, LOCO_GUN.y + 6, 16);
 }
 
 function pods(g: SpriteData, y: number): void {
@@ -245,6 +303,10 @@ function pods(g: SpriteData, y: number): void {
   fillRect(g, 16, y + 4, 3, 4, K);
   fillRect(g, 61, y + 4, 3, 4, K);
   fillRect(g, 66, y + 4, 3, 4, K);
+  plot(g, 12, y + 11, EY);
+  plot(g, 17, y + 11, EY);
+  plot(g, 62, y + 11, EY);
+  plot(g, 67, y + 11, EY);
 }
 
 function broadside(g: SpriteData, y: number): void {
@@ -292,7 +354,6 @@ function consist(g: SpriteData, nose: Nose, heavy: boolean, tallBuffer: boolean)
   for (let i = 0; i < TIEBAO_CARS; i++) {
     coupler(g, TIEBAO_LOCO_H + i * TIEBAO_CAR_PITCH, heavy);
     boxcar(g, tiebaoCarBodyY(i));
-    if (i >= 2) moduleMount(g, i);
   }
   const lead = tiebaoCarBodyY(0);
   pods(g, lead + 28);
@@ -355,8 +416,11 @@ function corePlate(g: SpriteData, open: boolean, plate: Plate): void {
 }
 
 function finish(g: SpriteData, open: boolean, kind: Mount, plate: Plate): SpriteData {
+  fillEllipse(g, LOCO_GUN.x, LOCO_GUN.y, 8, 7, S);
   mount(g, LOCO_GUN.x, LOCO_GUN.y, kind);
   mount(g, CAR_GUN.x, CAR_GUN.y, kind);
+  strengthenLocoGuns(g);
+  for (let i = 0; i < TIEBAO_CARS; i++) carHardpoint(g, i);
   corePlate(g, open, plate);
   outline(g, K);
   return g;
