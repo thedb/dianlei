@@ -25,6 +25,7 @@ import {
   leaveToTitle,
   publishRun,
   releaseAllPools,
+  runDifficulty,
   unlockAudio,
 } from '@/game/battle/context';
 import { clearFx, resetShake, stepShake, updateFx } from '@/game/battle/fx';
@@ -114,7 +115,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       b.bombWave.active = false;
 
       // Full wave table, including ground units and the conditional relief ship
-      b.waves = new WaveScheduler({ mvpOnly: false, stage });
+      b.waves = new WaveScheduler({ mvpOnly: false, stage, difficulty: runDifficulty(b) });
 
       // Weapon-test tune returns to the permanent constants.
       resetWeaponTestTune(b.tune);

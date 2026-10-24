@@ -234,5 +234,12 @@ describe('enemy movement', () => {
     expect(ENEMY_STATS.tank).toMatchObject({ hp: 8, width: 24, height: 24, score: 200 });
     expect(ENEMY_STATS.turret2).toMatchObject({ hp: 30, width: 32, height: 32, score: 1000 });
     expect(ENEMY_STATS.missile_car).toMatchObject({ hp: 12, width: 24, height: 32, score: 300 });
+    expect(ENEMY_STATS.risk_crate).toMatchObject({
+      hp: 6,
+      shield: 12,
+      width: 32,
+      height: 16,
+      score: 500,
+    });
   });
 });

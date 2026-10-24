@@ -4,10 +4,20 @@
  * MVP small-fighter formations (W01/W02/W06/W07/W10/W13/W17/W21) keep the
  * playtest density bump already on main: 94 MVP enemies including W27,
  * 148 fixed stage enemies, 149 when the W27 relief ship spawns.
+ * Risk crates sit beside that list (`riskCrates`) and are not in the 148.
  * Non-MVP counts follow the wave table. Docs win where a formation's
  * geometry was wrong (V stagger, hover stopY, escort angles).
  */
 
+import {
+  LOGICAL_W,
+  RISK_CRATE_EASY_T,
+  RISK_CRATE_EDGE_INSET,
+  RISK_CRATE_EDGE_T,
+  RISK_CRATE_LATE_T,
+  RISK_CRATE_OFFCENTER_T,
+  RISK_CRATE_OFFCENTER_X,
+} from '@/game/config';
 import { ORBITAL_BATTLESHIP } from './bosses/orbitalBattleship';
 import { stageEnemyCount, stageMvpEnemyCount, stageMvpWaves } from './stageStats';
 import type { SpawnGroup, StageData } from './types';
@@ -718,6 +728,20 @@ export const stage1: StageData = {
   ],
 
   boss: ORBITAL_BATTLESHIP,
+
+  // P22. Not a wave: the 148-ship tally and the kill rate ignore these.
+  // Easy is the ground/coast handoff (t=50, center). Medium swaps edges.
+  // Hard keeps those two and adds one slightly right of center at t=75.
+  riskCrates: [
+    { t: RISK_CRATE_EASY_T, x: LOGICAL_W / 2, difficulties: ['easy'] },
+    { t: RISK_CRATE_EDGE_T, x: RISK_CRATE_EDGE_INSET, difficulties: ['medium', 'hard'] },
+    { t: RISK_CRATE_OFFCENTER_T, x: RISK_CRATE_OFFCENTER_X, difficulties: ['hard'] },
+    {
+      t: RISK_CRATE_LATE_T,
+      x: LOGICAL_W - RISK_CRATE_EDGE_INSET,
+      difficulties: ['medium', 'hard'],
+    },
+  ],
 };
 
 /** Waves marked playable in the MVP (★ and ☆). */

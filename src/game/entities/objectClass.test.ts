@@ -10,6 +10,7 @@ const ENEMY_SIZES: Record<EnemyType, 'small' | 'medium'> = {
   interceptor: 'small',
   tank: 'small',
   missile_car: 'small',
+  risk_crate: 'small',
   medium: 'medium',
   bomber: 'medium',
   turret2: 'medium',

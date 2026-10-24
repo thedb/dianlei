@@ -13,6 +13,9 @@ import {
   INVINCIBLE_ALPHA_MIN,
   INVINCIBLE_BLINK_FAST,
   INVINCIBLE_BLINK_INTERVAL,
+  SHIELD_RING_COLOR,
+  SHIELD_RING_PAD,
+  SHIELD_RING_WIDTH,
   SHOW_HITBOX,
 } from '@/game/config';
 import {
@@ -77,6 +80,16 @@ function drawEnemy(
   }
 
   if (def.barrel) drawGunBarrel(ctx, ex, ey, enemy.aimAngle, def.barrel === 'twin');
+
+  if (enemy.shield > 0) {
+    renderer.strokeCircle(
+      ex,
+      ey,
+      enemy.hitRadius + SHIELD_RING_PAD,
+      SHIELD_RING_COLOR,
+      SHIELD_RING_WIDTH
+    );
+  }
 }
 
 /** Same bank frame as the player, scaled, stuck to the player center. No hitbox. */

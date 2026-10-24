@@ -19,7 +19,13 @@
  */
 
 import type { Rng } from '@/engine/rng';
-import { BUILDING_DROP_P_SHARE, POWER_MAX } from '@/game/config';
+import {
+  BUILDING_DROP_P_SHARE,
+  POWER_MAX,
+  RISK_CRATE_DROP_M,
+  RISK_CRATE_DROP_P,
+} from '@/game/config';
+import type { KillDropKind } from '@/game/entities/enemyDefs';
 import type { ItemType } from '@/game/entities/item';
 import type { EquippedWeapon } from '@/game/systems/playerWeapons';
 
@@ -113,6 +119,27 @@ export interface BuildingDropInput {
   fixed?: ReadonlyMap<string, ItemType>;
   /** Replaces `BUILDING_DROP_RULES` when the stage or difficulty supplies one. */
   rules?: readonly DropRule[];
+}
+
+/**
+ * Risk-crate drop (P22). Mate 0 always returns M and does not call `rng`.
+ * Otherwise one roll: M `RISK_CRATE_DROP_M`, then P `RISK_CRATE_DROP_P`, else T.
+ * Never B. The pickup itself is a normal M / P / T item.
+ */
+export function chooseRiskCrateDrop(mateLevel: number, rng: Rng): ItemType {
+  if (mateLevel <= 0) return 'M';
+  const roll = rng();
+  if (roll < RISK_CRATE_DROP_M) return 'M';
+  if (roll < RISK_CRATE_DROP_M + RISK_CRATE_DROP_P) return 'P';
+  return 'T';
+}
+
+/** Kill-time drop named by `EnemyDef.killDrop`. */
+export function chooseKillDrop(kind: KillDropKind, mateLevel: number, rng: Rng): ItemType {
+  switch (kind) {
+    case 'risk_crate':
+      return chooseRiskCrateDrop(mateLevel, rng);
+  }
 }
 
 /** The one item a building drops right now. A lock wins before the rule list. */

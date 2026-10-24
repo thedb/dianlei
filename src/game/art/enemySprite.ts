@@ -12,7 +12,7 @@ import { COLOR } from '@/game/palette';
 import type { EnemyType } from '@/game/levels/types';
 import type { SpriteData, SpriteFrame } from './types';
 import { renderSprite, createHitFlashSprite } from './spriteRenderer';
-import { createGrid, plot, rim } from './pixelDraw';
+import { createGrid, fillEllipse, plot, rim } from './pixelDraw';
 
 const K = COLOR.BLACK;
 const S = COLOR.SHADOW;
@@ -441,6 +441,46 @@ function drawMissileCar(): EnemyArt {
   return art(g, []);
 }
 
+/**
+ * Flat saucer (P22, look B6). Magenta canopy, yellow/black equator, cyan lamps,
+ * gray metal belly. The cyan shield ring is drawn in the battle renderer
+ * while `shield` is up, not baked here.
+ */
+function drawRiskCrate(): EnemyArt {
+  const w = 32;
+  const h = 16;
+  const g = createGrid(w, h);
+  // fillEllipse samples pixel centers, so the disc center is w/2 (not (w-1)/2).
+  const cx = w / 2;
+  const bandCx = (w - 1) / 2;
+
+  fillEllipse(g, cx, 9.2, 14.2, 5.2, COLOR.DARK_GRAY);
+  fillEllipse(g, cx, 9.6, 12.2, 4, COLOR.MEDIUM_GRAY);
+  fillEllipse(g, cx, 10.4, 9, 2.6, COLOR.GRAY);
+  fillEllipse(g, cx, 11.2, 5.5, 1.4, COLOR.LIGHT_GRAY);
+
+  fillEllipse(g, cx, 4.4, 8.4, 4, COLOR.BULLET_DARK);
+  fillEllipse(g, cx, 4, 6.2, 2.8, COLOR.BULLET_MAGENTA);
+  fillEllipse(g, cx, 3.2, 3.2, 1.6, COLOR.BULLET_PINK);
+
+  for (let y = 7; y <= 8; y++) {
+    const row = g[y];
+    if (!row) continue;
+    for (let x = 0; x < w; x++) {
+      if (row[x]! < 0) continue;
+      const band = Math.floor(Math.abs(x - bandCx) / 2) % 2 === 0;
+      row[x] = band ? COLOR.EXPLOSION_YELLOW : COLOR.BLACK;
+    }
+  }
+
+  for (const x of [6, 10, 21, 25]) {
+    if ((g[7]?.[x] ?? -1) >= 0) plot(g, x, 7, COLOR.PLAYER_CYAN);
+    if ((g[8]?.[x] ?? -1) >= 0) plot(g, x, 8, COLOR.PLAYER_MED_CYAN);
+  }
+
+  return art(g, []);
+}
+
 const BUILDERS: Record<EnemyType, () => EnemyArt> = {
   small: drawSmall,
   medium: drawMedium,
@@ -450,6 +490,7 @@ const BUILDERS: Record<EnemyType, () => EnemyArt> = {
   tank: drawTank,
   turret2: drawTurret,
   missile_car: drawMissileCar,
+  risk_crate: drawRiskCrate,
 };
 
 /** Palette-index art for one enemy. Safe to call in unit tests (no canvas). */

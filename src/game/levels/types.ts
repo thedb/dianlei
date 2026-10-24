@@ -262,6 +262,16 @@ export interface BuildingPlacement {
   drop?: PlacementDrop;
 }
 
+/**
+ * One shielded floater on the stage clock (P22). `t` is seconds, same as `Wave.t`.
+ * `x` is the horizontal center. A difficulty that is not listed does not spawn it.
+ */
+export interface RiskCrateSpawn {
+  t: number;
+  x: number;
+  difficulties: readonly ('easy' | 'medium' | 'hard')[];
+}
+
 export interface StageData {
   /** Registry key (`levels/registry.ts`). */
   id: string;
@@ -272,6 +282,8 @@ export interface StageData {
   warningAt: number;
   maps: StageMaps;
   waves: Wave[];
+  /** Shielded floaters. Omitted stages spawn none. Not part of the ship count. */
+  riskCrates?: readonly RiskCrateSpawn[];
   buildings: BuildingPlacement[];
   boss: BossDef;
   /** Building drop rules. Omit for `BUILDING_DROP_RULES`. */

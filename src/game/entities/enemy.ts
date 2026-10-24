@@ -1,10 +1,12 @@
 /**
  * Enemy entity system
- * Eight stage-1 types. Ground units scroll with the tiles and do not body-kill.
+ * Stage-1 types. Ground units scroll with the tiles and do not body-kill.
+ * A shield, when the def has one, is spent before body HP.
  */
 
 import type { Poolable } from '@/engine/pool';
 import type { EnemyType, Move, Fire } from '@/game/levels/types';
+import { scaleHp, type Difficulty } from '@/game/difficulty';
 import { ENEMY_DEFS } from '@/game/entities/enemyDefs';
 import { fireUsesBarrel } from '@/game/systems/danmaku';
 import {
@@ -49,6 +51,9 @@ export interface Enemy extends Poolable {
   prevY: number;
   hp: number;
   maxHp: number;
+  /** Remaining shield. Bullets and bombs spend this before `hp`. */
+  shield: number;
+  maxShield: number;
   score: number;
   width: number;
   height: number;
@@ -91,6 +96,8 @@ export function createEnemy(): Enemy {
     prevY: 0,
     hp: 3,
     maxHp: 3,
+    shield: 0,
+    maxShield: 0,
     score: 100,
     width: 24,
     height: 24,
@@ -121,6 +128,8 @@ export function createEnemy(): Enemy {
       this.prevY = -30;
       this.hp = 3;
       this.maxHp = 3;
+      this.shield = 0;
+      this.maxShield = 0;
       this.score = 100;
       this.width = 24;
       this.height = 24;
@@ -156,7 +165,8 @@ export function spawnEnemy(
   fire: Fire,
   drop: 'P' | 'B' | null = null,
   hpOverride?: number,
-  scoreOverride?: number
+  scoreOverride?: number,
+  shieldOverride?: number
 ): void {
   const stats = ENEMY_STATS[type];
 
@@ -167,6 +177,8 @@ export function spawnEnemy(
   enemy.prevY = y;
   enemy.hp = hpOverride ?? stats.hp;
   enemy.maxHp = enemy.hp;
+  enemy.shield = shieldOverride ?? stats.shield ?? 0;
+  enemy.maxShield = enemy.shield;
   enemy.score = scoreOverride ?? stats.score;
   enemy.width = stats.width;
   enemy.height = stats.height;
@@ -444,9 +456,32 @@ function updateEnemyMovement(
   }
 }
 
-/** Deal damage to enemy, return true if killed */
+/**
+ * Body HP and shield for a spawn. `hpOverride` replaces the def's body HP
+ * before the difficulty scale. Shield always comes from the def, then the
+ * same scale. Easy leaves both at the authored values.
+ */
+export function scaledEnemyVitals(
+  type: EnemyType,
+  difficulty: Difficulty,
+  hpOverride?: number
+): { hp: number; shield: number } {
+  const stats = ENEMY_DEFS[type];
+  return {
+    hp: scaleHp(hpOverride ?? stats.hp, difficulty),
+    shield: scaleHp(stats.shield ?? 0, difficulty),
+  };
+}
+
+/** Deal damage. Shield absorbs first; the body dies at 0 HP. */
 export function damageEnemy(enemy: Enemy, damage: number): boolean {
-  enemy.hp -= damage;
+  let left = damage;
+  if (enemy.shield > 0 && left > 0) {
+    const taken = Math.min(enemy.shield, left);
+    enemy.shield -= taken;
+    left -= taken;
+  }
+  if (left > 0) enemy.hp -= left;
   enemy.hitFlashTimer = HIT_FLASH_TIME;
   return enemy.hp <= 0;
 }

@@ -348,6 +348,8 @@ export const SCORE_BOSS_PART = 5000;
 export const SCORE_BOSS_CORE = 30000;
 /** Any destroyed building (pillbox, fuel depot, radar station, sea gun) */
 export const SCORE_BUILDING = 500;
+/** Risk crate. Same as a building: the pickup is the reward, not a fighter bounty. */
+export const SCORE_RISK_CRATE = 500;
 export const BONUS_KILL_RATE_PER_PCT = 200;
 export const BONUS_KILL_RATE_PERFECT = 10000;
 export const BONUS_NO_DEATH = 30000;
@@ -457,6 +459,44 @@ export const BUILDING_HP = 3;
  * roll is skipped. Placement locks (T / M) ignore this.
  */
 export const BUILDING_DROP_P_SHARE = 0.5;
+
+/**
+ * Risk crate (P22). Shield is spent before body HP. These are the authored
+ * Easy numbers; Medium and Hard go through `scaleHp` like every other enemy.
+ * A bomb still uses the size class (small): the ring deals shield + body.
+ */
+export const RISK_CRATE_SHIELD = 12;
+export const RISK_CRATE_HP = 6;
+
+/**
+ * Kill drop when mate is already at least 1. Mate 0 always drops M and does
+ * not roll. T is the rest (`1 - M - P` = 0.25). Never B.
+ */
+export const RISK_CRATE_DROP_M = 0.5;
+export const RISK_CRATE_DROP_P = 0.25;
+
+/**
+ * Stage-1 clock, seconds, same origin as `Wave.t`.
+ * Easy uses t=50: the ground section ends there and the coast breather
+ * (0:49–0:52, W11 at 52) is the mid-stage anchor inside the 50–60s window.
+ * Medium is the two edge passes. Hard adds the off-center one.
+ */
+export const RISK_CRATE_EASY_T = 50;
+export const RISK_CRATE_EDGE_T = 50;
+export const RISK_CRATE_OFFCENTER_T = 75;
+export const RISK_CRATE_LATE_T = 100;
+/** Coast missile-car inset. Left lane is this; the late crate uses the other side. */
+export const RISK_CRATE_EDGE_INSET = 48;
+/** 40px right of center (180). Near the middle, not an edge lane. */
+export const RISK_CRATE_OFFCENTER_X = 220;
+/** Hover park and how long it sits there. Same `hover` move as a carrier. */
+export const RISK_CRATE_STOP_Y = 160;
+export const RISK_CRATE_HOLD = 6;
+
+/** Code-drawn cyan ring while `enemy.shield` is still up. Not part of the sprite. */
+export const SHIELD_RING_PAD = 4;
+export const SHIELD_RING_WIDTH = 2;
+export const SHIELD_RING_COLOR = 'rgba(0, 229, 255, 0.55)';
 
 /** Sea gun fixed2 interval, seconds. Ground turrets use 1.6–1.8. */
 export const SEA_GUN_FIRE_INTERVAL = 2.2;
