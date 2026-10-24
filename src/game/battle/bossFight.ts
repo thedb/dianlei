@@ -17,6 +17,10 @@ import {
 import { stepVictoryExit, victoryExitBlocksInput } from '@/game/systems/victoryExit';
 import { clearEnemyBullets, publishRun, runDifficulty, runProfile, type Battle } from './context';
 import { spawnExplosion, triggerShake } from './fx';
+import { isPlayerVulnerable, killPlayer } from './player';
+
+/** Fight-start WARNING, once per boss. Separate from the pre-enter cue. */
+const fightWarningPlayed = new WeakSet<BossRuntime>();
 
 /** Scale the stage boss for this run's difficulty. Call at enter. */
 export function armBoss(b: Battle): void {
@@ -37,6 +41,21 @@ export function applyBossEvents(b: Battle, ev: BossEvents): void {
       rotation: shot.rotation,
     });
   }
+  for (const bolt of ev.bolts) {
+    if (bolt.hitRadius !== undefined) {
+      b.spawner.spawnBullet(
+        bolt.x,
+        bolt.y,
+        bolt.vx,
+        bolt.vy,
+        bolt.type,
+        bolt.homing,
+        bolt.hitRadius
+      );
+    } else {
+      b.spawner.spawnBullet(bolt.x, bolt.y, bolt.vx, bolt.vy, bolt.type, bolt.homing);
+    }
+  }
   if (ev.clearBullets) b.enemyBullets.releaseAll();
   for (const boom of ev.explosions) {
     spawnExplosion(b.fx, boom.x, boom.y, boom.size, boom.delay);
@@ -49,7 +68,20 @@ export function applyBossEvents(b: Battle, ev: BossEvents): void {
 export function stepBoss(b: Battle, dt: number): 'result' | null {
   const boss = b.boss;
   if (!boss || boss.phase === 'done') return null;
-  applyBossEvents(b, updateBoss(boss, dt));
+  const ev = updateBoss(boss, dt, { playerX: b.player.x, playerY: b.player.y, rng: b.rng });
+  applyBossEvents(b, ev);
+  if (ev.hurtPlayer && isPlayerVulnerable(b)) killPlayer(b);
+  const warnFor = boss.def.fightWarning;
+  if (
+    warnFor !== undefined &&
+    !fightWarningPlayed.has(boss) &&
+    boss.stage === 'fight' &&
+    boss.phaseIndex === 0 &&
+    boss.phaseTime < warnFor
+  ) {
+    fightWarningPlayed.add(boss);
+    b.sfx('warning');
+  }
   if (boss.phase === 'clear' && b.finishedAt === null) b.finishedAt = b.gameTime;
   if (!b.rules().victoryExit) return null;
 

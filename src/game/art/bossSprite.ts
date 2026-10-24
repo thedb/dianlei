@@ -4,10 +4,22 @@
  * Engine flame, core glow, laser, and hit flash are drawn in code.
  */
 
-import { BOSS_HULL_H, BOSS_HULL_W, BOSS_TURRET_SIZE, LOGICAL_H } from '@/game/config';
+import {
+  BOSS_HULL_H,
+  BOSS_HULL_W,
+  BOSS_TURRET_SIZE,
+  LOGICAL_H,
+  TIEBAO_BUFFER,
+  TIEBAO_HULL_W,
+  TIEBAO_LOOK,
+  TIEBAO_RAIL_X,
+  TIEBAO_SWITCH_SPAN,
+} from '@/game/config';
 import { PALETTE, COLOR } from '@/game/palette';
 import type { BossHpBarLayout, BossRuntime } from '@/game/systems/boss';
 import { bossActiveLaser, bossLook } from '@/game/systems/boss';
+import { tiebaoLiveHull, tiebaoSwitchX, tiebaoVisual } from '@/game/systems/tiebao';
+import { buildTiebaoHull } from './tiebaoLooks';
 import { laserSweepRadians } from '@/game/systems/danmaku';
 import type { SpriteData, SpriteFrame } from './types';
 import { createGrid, fillEllipse, fillPoly, fillRect, outline, plot } from './pixelDraw';
@@ -307,11 +319,41 @@ export interface BossAssets {
 }
 
 /** Boss art registry, keyed by `BossDef.art`. A new boss adds one builder here. */
+/** Roof gun. Barrel points down-screen, back at the player chasing the train. */
+export function buildTiebaoAa(broken: boolean): SpriteData {
+  const g = createGrid(16, 16, -1);
+  const EY = COLOR.EXPLOSION_YELLOW;
+  fillRect(g, 2, 2, 12, 5, MG);
+  fillRect(g, 4, 6, 8, 3, G);
+  fillRect(g, 2, 3, 4, 2, EY);
+  fillRect(g, 10, 3, 4, 2, K);
+  if (!broken) {
+    fillRect(g, 7, 7, 2, 7, DG);
+    fillRect(g, 5, 13, 6, 2, K);
+    plot(g, 8, 14, EH);
+  } else {
+    fillRect(g, 4, 8, 8, 3, K);
+    plot(g, 3, 11, COLOR.EXPLOSION_ORANGE);
+    plot(g, 12, 11, EY);
+    plot(g, 8, 9, W);
+  }
+  outline(g, K);
+  return g;
+}
+
 export const BOSS_ART: Readonly<Record<string, () => BossAssets>> = {
   orbital: () => ({
     hull: renderSprite(buildBossHull(false)),
     hullOpen: renderSprite(buildBossHull(true)),
     parts: { turret: renderSprite(buildBossTurret()) },
+  }),
+  tiebao: () => ({
+    hull: renderSprite(buildTiebaoHull(TIEBAO_LOOK, false)),
+    hullOpen: renderSprite(buildTiebaoHull(TIEBAO_LOOK, true)),
+    parts: {
+      aa: renderSprite(buildTiebaoAa(false)),
+      aaBroken: renderSprite(buildTiebaoAa(true)),
+    },
   }),
 };
 
@@ -329,6 +371,7 @@ export interface BossDraw {
 const GLOW_COLOR = {
   magenta: COLOR.BULLET_MAGENTA,
   yellow: COLOR.EXPLOSION_YELLOW,
+  orange: COLOR.EXPLOSION_ORANGE,
 } as const;
 
 /** Hull, part sprites, engine flame, and the phase glow. The laser is drawn separately. */
@@ -345,14 +388,24 @@ export function drawBossWorld(
 
   const open = look.hull === 'open';
   const hull = open ? assets.hullOpen : assets.hull;
-  const top = boss.y - boss.def.hull.h / 2;
-  drawEnemyFlame(ctx, boss.x - 16, top + 6, time);
-  drawEnemyFlame(ctx, boss.x + 16, top + 6, time);
-  draw.drawImage(hull.canvas, boss.x - hull.anchorX, boss.y - hull.anchorY);
+  const tiebao = boss.def.art === 'tiebao';
+  const top = boss.y - (tiebao ? tiebaoLiveHull(boss).h : boss.def.hull.h) / 2;
+  if (tiebao) drawTiebaoGround(ctx, boss, time);
+  else {
+    drawEnemyFlame(ctx, boss.x - 16, top + 6, time);
+    drawEnemyFlame(ctx, boss.x + 16, top + 6, time);
+  }
+  if (tiebao) drawTiebaoHull(ctx, hull, boss);
+  else draw.drawImage(hull.canvas, boss.x - hull.anchorX, boss.y - hull.anchorY);
 
   for (const part of boss.parts) {
     if (!part.sprite) continue;
     if (!part.alive && !part.falling) {
+      const broken = assets.parts[`${part.sprite}Broken`];
+      if (broken) {
+        draw.drawImage(broken.canvas, part.worldX - broken.anchorX, part.worldY - broken.anchorY);
+        continue;
+      }
       if (open) drawSocketSparks(ctx, part.worldX, part.worldY, time);
       continue;
     }
@@ -361,11 +414,14 @@ export function drawBossWorld(
     draw.drawImage(frame.canvas, part.worldX - frame.anchorX, part.worldY - frame.anchorY);
   }
 
+  if (tiebao) drawTiebaoAir(ctx, boss, time, look.smoke);
+
   if (boss.hitFlash > 0) {
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     ctx.globalAlpha = 0.45;
-    draw.drawImage(hull.canvas, boss.x - hull.anchorX, boss.y - hull.anchorY);
+    if (tiebao) drawTiebaoHull(ctx, hull, boss);
+    else draw.drawImage(hull.canvas, boss.x - hull.anchorX, boss.y - hull.anchorY);
     ctx.restore();
   }
 
@@ -385,6 +441,137 @@ export function drawBossWorld(
     ctx.fill();
     ctx.restore();
   }
+}
+
+/**
+ * Crop the full consist to the cars still attached and paste the tail beam
+ * onto the bottom. Shed cars, and the mounts painted on them, leave with the crop.
+ */
+function drawTiebaoHull(
+  ctx: CanvasRenderingContext2D,
+  frame: SpriteFrame,
+  boss: BossRuntime
+): void {
+  const height = tiebaoLiveHull(boss).h;
+  const left = Math.floor(boss.x - TIEBAO_HULL_W / 2);
+  const top = Math.floor(boss.y - height / 2);
+  const stamp = Math.min(TIEBAO_BUFFER, height);
+  const body = height - stamp;
+  if (body > 0) {
+    ctx.drawImage(frame.canvas, 0, 0, TIEBAO_HULL_W, body, left, top, TIEBAO_HULL_W, body);
+  }
+  ctx.drawImage(
+    frame.canvas,
+    0,
+    frame.height - stamp,
+    TIEBAO_HULL_W,
+    stamp,
+    left,
+    top + body,
+    TIEBAO_HULL_W,
+    stamp
+  );
+}
+
+/**
+ * Background frog. The train body stays on a rail center; this is paint only.
+ * Map tiles keep the three straight rails.
+ */
+function drawTurnout(
+  ctx: CanvasRenderingContext2D,
+  fromX: number,
+  toX: number,
+  u: number,
+  tailY: number
+): void {
+  const y0 = Math.max(0, Math.floor(tailY - TIEBAO_SWITCH_SPAN + u * TIEBAO_SWITCH_SPAN));
+  const y1 = Math.min(LOGICAL_H, Math.ceil(y0 + TIEBAO_SWITCH_SPAN));
+  ctx.fillStyle = PALETTE[COLOR.TERRAIN_CONCRETE];
+  for (let y = y0; y < y1; y += 8) {
+    const x = Math.round(tiebaoSwitchX(y, fromX, toX, u, tailY));
+    ctx.fillRect(x - 8, y, 16, 2);
+  }
+  for (let y = y0; y < y1; y++) {
+    const x = Math.round(tiebaoSwitchX(y, fromX, toX, u, tailY));
+    ctx.fillStyle = PALETTE[COLOR.BLACK];
+    ctx.fillRect(x - 2, y, 1, 1);
+    ctx.fillRect(x + 2, y, 1, 1);
+    ctx.fillStyle = PALETTE[COLOR.PALE_GRAY];
+    ctx.fillRect(x - 1, y, 2, 1);
+  }
+}
+
+/** Turnout, warning circles, and the rail-break sparks under the train. */
+function drawTiebaoGround(ctx: CanvasRenderingContext2D, boss: BossRuntime, time: number): void {
+  const visual = tiebaoVisual(boss);
+  ctx.save();
+  if (visual?.switch) {
+    drawTurnout(ctx, visual.switch.fromX, visual.switch.toX, visual.switch.u, visual.switch.tailY);
+  }
+  if (visual?.rocketWarn) {
+    ctx.fillStyle = PALETTE[COLOR.EXPLOSION_YELLOW];
+    for (const x of TIEBAO_RAIL_X) ctx.fillRect(x - 1, 4, 3, 3);
+  }
+  if (visual?.broken) {
+    ctx.fillStyle = PALETTE[COLOR.EXPLOSION_ORANGE];
+    for (let i = 0; i < TIEBAO_RAIL_X.length; i++) {
+      const x = TIEBAO_RAIL_X[i] ?? 0;
+      if (Math.floor(time * 12 + i) % 2 === 0) {
+        ctx.fillRect(x - 1, 180 + ((time * 40 + i * 50) % 280), 3, 3);
+      }
+    }
+  }
+  if (visual) {
+    for (const circle of visual.circles) {
+      ctx.globalAlpha = 0.35 + 0.45 * circle.u;
+      ctx.strokeStyle = PALETTE[COLOR.EXPLOSION_ORANGE];
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(circle.x, circle.y, circle.radius * (0.35 + 0.65 * circle.u), 0, Math.PI * 2);
+      ctx.stroke();
+      const shellY = circle.fromY + (circle.y - circle.fromY) * circle.u;
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = PALETTE[COLOR.EXPLOSION_YELLOW];
+      ctx.fillRect(circle.x - 1, shellY - 2, 3, 4);
+    }
+  }
+  ctx.restore();
+}
+
+/** Falling crates and overload smoke. Drawn over the hull. */
+function drawTiebaoAir(
+  ctx: CanvasRenderingContext2D,
+  boss: BossRuntime,
+  time: number,
+  smoke: boolean
+): void {
+  const visual = tiebaoVisual(boss);
+  if (!visual) return;
+  ctx.save();
+  for (const crate of visual.crates) {
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = PALETTE[COLOR.GROUND_OLIVE];
+    ctx.fillRect(crate.x - 6, crate.y - 5, 12, 10);
+    ctx.fillStyle = PALETTE[Math.floor(time * 8) % 2 === 0 ? COLOR.EXPLOSION_YELLOW : COLOR.BLACK];
+    ctx.fillRect(crate.x - 6, crate.y - 1, 12, 2);
+  }
+  if (smoke || visual.smoke) {
+    ctx.fillStyle = PALETTE[COLOR.LIGHT_GRAY];
+    boss.parts.forEach((part, i) => {
+      const rise = (time * 18 + i * 9) % 22;
+      ctx.globalAlpha = 0.35 * (1 - rise / 22);
+      ctx.beginPath();
+      ctx.arc(part.worldX, part.worldY - 8 - rise, 3, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+  const lampY = boss.y + tiebaoLiveHull(boss).h / 2 - 10;
+  const flashing = visual.ramWarn && Math.floor(time * 16) % 2 === 0;
+  ctx.globalAlpha = flashing ? 0.95 : 0.55;
+  ctx.fillStyle = PALETTE[COLOR.EXPLOSION_YELLOW];
+  ctx.fillRect(boss.x - 16, lampY, 8, 3);
+  ctx.fillRect(boss.x + 8, lampY, 8, 3);
+  ctx.restore();
 }
 
 /** Code-drawn sparks on a destroyed turret socket. Not baked into the hull. */

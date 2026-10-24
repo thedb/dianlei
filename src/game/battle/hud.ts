@@ -25,6 +25,7 @@ import {
 } from '@/game/systems/boss';
 import { introBanner } from '@/game/systems/score';
 import { activeCaption, captionBarY } from '@/game/story/captions';
+import { tiebaoReadout } from '@/game/systems/tiebao';
 import { drawControls, drawPauseButton } from '@/game/ui/controlsOverlay';
 import { drawText } from '@/game/ui/widgets';
 import { runProfile, type Battle } from './context';
@@ -99,10 +100,40 @@ function drawStageHud(renderer: Renderer, b: Battle, assets: GameAssets): void {
   if (barLayout) drawBossHpBar(ctx, barLayout, 48, 32, 264, 8);
 
   if (
-    !state.gameOver &&
-    gameTime >= stage.warningAt + WARNING_BANNER_DELAY &&
-    gameTime < stage.boss.enterAt
+    boss &&
+    boss.def.title &&
+    (boss.stage === 'enter' || boss.stage === 'fight' || boss.stage === 'transition')
   ) {
+    drawText(ctx, boss.def.title, LOGICAL_W / 2, 48, 13, '#fff', 'center');
+    if (boss.def.subtitle) {
+      drawText(
+        ctx,
+        boss.def.subtitle,
+        LOGICAL_W / 2,
+        62,
+        10,
+        PALETTE[COLOR.EXPLOSION_ORANGE],
+        'center'
+      );
+    }
+    const readout = tiebaoReadout(boss);
+    if (readout) {
+      drawText(ctx, readout.text, LOGICAL_W - 8, 48, 10, readout.hot ? '#ff4444' : '#ccc', 'right');
+    }
+  }
+
+  const fightWarn = stage.boss.fightWarning;
+  const legacyWarning =
+    fightWarn === undefined &&
+    gameTime >= stage.warningAt + WARNING_BANNER_DELAY &&
+    gameTime < stage.boss.enterAt;
+  const fightWarning =
+    fightWarn !== undefined &&
+    boss !== null &&
+    boss.stage === 'fight' &&
+    boss.phaseIndex === 0 &&
+    boss.phaseTime < fightWarn;
+  if (!state.gameOver && (legacyWarning || fightWarning)) {
     const blink = Math.floor(gameTime * 6) % 2 === 0;
     renderer.fillRect(0, LOGICAL_H / 2 - 28, LOGICAL_W, 40, 'rgba(0, 0, 0, 0.45)');
     renderer.fillText(

@@ -9,6 +9,7 @@
  * transition id, `death`, `clear`, or `done`.
  */
 
+import type { Rng } from '@/engine/rng';
 import {
   BOMB_BOSS_RATIO,
   BOSS_HP_BAR_FILL_START,
@@ -21,6 +22,7 @@ import {
   SHAKE_SMALL_DURATION,
   SHAKE_SMALL_INTENSITY,
 } from '@/game/config';
+import type { EnemyBulletType } from '@/game/entities/enemyBullet';
 import type {
   BossAttack,
   BossCycleAttack,
@@ -48,6 +50,16 @@ import {
   type GunClock,
   type LaserSweepState,
 } from '@/game/systems/danmaku';
+import {
+  stepTiebao,
+  tiebaoLiveHull,
+  tiebaoMarkBomb,
+  tiebaoOnDeath,
+  tiebaoOnFight,
+  tiebaoPlaceEnter,
+  tiebaoResolveBomb,
+  tiebaoTryShot,
+} from '@/game/systems/tiebao';
 
 export type BossStage = 'enter' | 'transition' | 'fight' | 'death' | 'clear' | 'done';
 
@@ -116,8 +128,8 @@ export interface BossExplosion {
   x: number;
   y: number;
   delay: number;
-  /** Part pop is medium. The death sequence is the large multi-blast. */
-  size: 'medium' | 'large';
+  /** Crate pop is small. Part pop is medium. The death sequence is large. */
+  size: 'small' | 'medium' | 'large';
 }
 
 export interface BossShot {
@@ -125,6 +137,24 @@ export interface BossShot {
   x: number;
   y: number;
   rotation: number;
+}
+
+/** A bolt with an explicit velocity. Fan shots stay on `shots`. */
+export interface BossBolt {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  type: EnemyBulletType;
+  homing: number;
+  hitRadius?: number;
+}
+
+/** Player position and the stage RNG. Omitted callers keep the sine drift. */
+export interface BossWorld {
+  playerX: number;
+  playerY: number;
+  rng: Rng;
 }
 
 export interface BossShake {
@@ -136,6 +166,9 @@ export interface BossEvents {
   score: number;
   explosions: BossExplosion[];
   shots: BossShot[];
+  bolts: BossBolt[];
+  /** A ground blast reached the player. */
+  hurtPlayer: boolean;
   /** Phase change: on-screen enemy bullets become score. */
   convertBullets: boolean;
   /** Boss death: clear enemy bullets with no score. */
@@ -163,6 +196,8 @@ export function emptyBossEvents(): BossEvents {
     score: 0,
     explosions: [],
     shots: [],
+    bolts: [],
+    hurtPlayer: false,
     convertBullets: false,
     clearBullets: false,
     shake: null,
@@ -307,6 +342,10 @@ export function bossPart(boss: BossRuntime, id: string): BossPartRuntime | undef
 }
 
 export function bossHullRect(boss: BossRuntime): { x: number; y: number; w: number; h: number } {
+  if (boss.def.script === 'tiebao') {
+    const hull = tiebaoLiveHull(boss);
+    return { x: boss.x - hull.w / 2, y: boss.y - hull.h / 2, w: hull.w, h: hull.h };
+  }
   const { w, h } = boss.def.hull;
   return { x: boss.x - w / 2, y: boss.y - h / 2, w, h };
 }
@@ -319,7 +358,8 @@ export function bossCurrentPhase(boss: BossRuntime): BossPhaseDef | null {
 
 export interface BossLook {
   hull: 'closed' | 'open';
-  glow: { part: BossPartRuntime; color: 'magenta' | 'yellow'; opening: number } | null;
+  glow: { part: BossPartRuntime; color: 'magenta' | 'yellow' | 'orange'; opening: number } | null;
+  smoke: boolean;
 }
 
 /**
@@ -339,7 +379,8 @@ export function bossLook(boss: BossRuntime): BossLook | null {
       glow = { part, color: phase.look.glow.color, opening };
     }
   }
-  return { hull: phase.look.hull, glow };
+  const smoke = phase.look.smoke === true && boss.stage !== 'enter';
+  return { hull: phase.look.hull, glow, smoke };
 }
 
 export interface BossActiveLaser {
@@ -417,7 +458,7 @@ export function createBoss(def: BossDef, options: BossSpawnOptions = {}): BossRu
       worldY: def.enterY + part.offset.y,
       intervalMul: 1,
     })),
-    invulnerable: true,
+    invulnerable: def.vulnerableEnter !== true,
     enraged: false,
     guns,
     cycle: { step: 0, time: 0, gun: createGunClock(), rot: 0 },
@@ -435,44 +476,56 @@ export function createBoss(def: BossDef, options: BossSpawnOptions = {}): BossRu
   return boss;
 }
 
-export function updateBoss(boss: BossRuntime, dt: number): BossEvents {
+export function updateBoss(boss: BossRuntime, dt: number, world?: BossWorld): BossEvents {
   const ev = emptyBossEvents();
   if (boss.stage === 'done') return ev;
   const def = boss.def;
+  const scripted = def.script === 'tiebao';
 
   boss.prevX = boss.x;
   boss.prevY = boss.y;
   let attackDt = 0;
+  let scriptDt = 0;
 
   if (boss.stage === 'enter') {
     boss.phaseTime += dt;
     const duration = Math.max(0.0001, def.enterDuration);
     const u = Math.min(1, boss.phaseTime / duration);
     boss.x = def.anchorX;
-    boss.y = def.enterY + (def.parkY - def.enterY) * u;
+    if (scripted) tiebaoPlaceEnter(boss, u);
+    else boss.y = def.enterY + (def.parkY - def.enterY) * u;
     if (boss.phaseTime >= duration) {
       const leftover = boss.phaseTime - duration;
+      if (scripted) tiebaoPlaceEnter(boss, 1);
+      else boss.y = def.parkY;
       startFight(boss);
       boss.phaseTime = leftover;
       boss.driftTime = leftover;
-      boss.y = def.parkY;
       attackDt = leftover;
+      scriptDt = leftover;
     }
   } else if (boss.stage === 'fight') {
     boss.phaseTime += dt;
     boss.driftTime += dt;
-    drift(boss);
+    if (scripted) scriptDt = dt;
+    else drift(boss);
     attackDt = dt;
   } else if (boss.stage === 'transition') {
     boss.phaseTime += dt;
     boss.driftTime += dt;
-    drift(boss);
     const duration = Math.max(0.0001, boss.phases[boss.phaseIndex]?.transition?.duration ?? 0);
     if (boss.phaseTime >= duration) {
       const leftover = boss.phaseTime - duration;
+      const held = Math.max(0, dt - leftover);
+      if (scripted && held > 0) stepTiebao(boss, held, world, ev);
       startFight(boss);
       boss.phaseTime = leftover;
       attackDt = leftover;
+      scriptDt = leftover;
+    } else if (scripted) {
+      scriptDt = dt;
+    } else {
+      drift(boss);
     }
   } else if (boss.stage === 'death') {
     boss.phaseTime += dt;
@@ -490,6 +543,10 @@ export function updateBoss(boss: BossRuntime, dt: number): BossEvents {
   syncParts(boss);
   if (boss.hitFlash > 0) boss.hitFlash = Math.max(0, boss.hitFlash - dt);
 
+  if (scriptDt > 0 && scripted) {
+    stepTiebao(boss, scriptDt, world, ev);
+    syncParts(boss);
+  }
   if (attackDt > 0 && boss.stage === 'fight') tickAttacks(boss, attackDt, ev);
   return ev;
 }
@@ -533,6 +590,7 @@ export function resolveBossBullet(
 ): BossEvents {
   const ev = emptyBossEvents();
   if (!bossBlocksShots(boss)) return ev;
+  if (boss.def.script === 'tiebao' && tiebaoTryShot(boss, bullet, damage, ev)) return ev;
 
   const hittable = damageableParts(boss);
 
@@ -559,6 +617,13 @@ export function resolveBossBullet(
   const left = bullet.x - bullet.w / 2;
   const top = bullet.y - bullet.h / 2;
   if (!rectsOverlap(left, top, bullet.w, bullet.h, hull.x, hull.y, hull.w, hull.h)) return ev;
+
+  if (boss.def.hullTransfers) {
+    const any = nearestPart(hittable, bullet, () => true);
+    if (any) return connect(any);
+    ev.consumedBullet = true;
+    return ev;
+  }
 
   // The nose (part center down to the hull's player-facing edge) is the
   // weak-point face. A shot into that face damages the nearest living part
@@ -643,6 +708,7 @@ function startFight(boss: BossRuntime): void {
     }
   }
   resetLaserSweep(boss.laser);
+  if (boss.def.script === 'tiebao') tiebaoOnFight(boss);
 }
 
 function drift(boss: BossRuntime): void {
@@ -818,6 +884,7 @@ function beginDeath(boss: BossRuntime, ev: BossEvents): void {
   boss.deathSpawned = 0;
   ev.clearBullets = true;
   ev.shake = { intensity: SHAKE_BIG_INTENSITY, duration: boss.def.death.duration };
+  if (boss.def.script === 'tiebao') tiebaoOnDeath(boss, ev);
   emitDeathExplosion(boss, 0, ev);
   boss.deathSpawned = 1;
 }
@@ -853,7 +920,21 @@ function refreshEnrage(boss: BossRuntime): void {
 }
 
 function canTakeDamage(boss: BossRuntime): boolean {
-  return boss.stage === 'fight' && !boss.invulnerable;
+  if (boss.invulnerable) return false;
+  if (boss.stage === 'fight') return true;
+  return boss.stage === 'enter' && boss.def.vulnerableEnter === true;
+}
+
+/** Queue bomb-ring hits on script props (ammo crates). No-op for other bosses. */
+export function markBossBombProps(boss: BossRuntime, ox: number, oy: number): void {
+  if (boss.def.script === 'tiebao') tiebaoMarkBomb(boss, ox, oy);
+}
+
+/** Resolve bomb-ring hits on script props. No score and no ground blast. */
+export function resolveBossBombProps(boss: BossRuntime, dt: number): BossEvents {
+  const ev = emptyBossEvents();
+  if (boss.def.script === 'tiebao') tiebaoResolveBomb(boss, dt, ev);
+  return ev;
 }
 
 function bossBlocksShots(boss: BossRuntime): boolean {

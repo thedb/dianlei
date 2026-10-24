@@ -1,6 +1,6 @@
 /**
  * Story subtitles. Lines come from `docs/电雷_故事资产表_v1.md` §2.
- * This milestone wires Stage 1 only (`s1_open`, `s1_end`).
+ * Stage 1 uses `s1_open` / `s1_end`. Stage 2 uses `s2_open` / `s2_end`.
  *
  * `mid` and `cutscene` are extension points for s4_wreck / s4_ufo / s5_end.
  * They are accepted on a stage cue and draw nothing until a later milestone
@@ -23,6 +23,8 @@ import type { CaptionAt, StageCaption } from '@/game/levels/types';
 export const CAPTION_LINES: Readonly<Record<string, string>> = {
   s1_open: '边境机场遇袭。电雷，立即起飞。',
   s1_end: '前线已肃清。叛军残部向工业带撤退。',
+  s2_open: '目标：沿岸兵工厂。切断叛军补给。',
+  s2_end: '工厂记录提到「打捞物」。继续追查。',
 };
 
 export interface ShownCaption {

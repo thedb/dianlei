@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "art:preview": "vite-node scripts/render-player-preview.ts"
+    "art:preview": "vite-node scripts/render-player-preview.ts",
+    "art:tiebao": "vite-node scripts/render-tiebao-looks.ts"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",

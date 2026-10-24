@@ -49,6 +49,7 @@ export function stepScroll(b: Battle, dt: number): void {
   const { stage } = b;
   b.scrollFrame = b.scroller.update(dt, b.gameTime);
   if (
+    stage.boss.fightWarning === undefined &&
     b.rules().spawns &&
     !b.warningPlayed &&
     b.gameTime >= stage.warningAt + WARNING_BANNER_DELAY &&

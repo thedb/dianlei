@@ -6,12 +6,15 @@
  * Ids 0–32 are the original stage-1 tiles (runway, hangar, dock, bunker, …).
  * Ids 33–58 are the 陆地A set. Ids 59–63 are the P13 ruin set (scorch, crater,
  * trench, wreck, snag). Ids 64–69 are the P14 props: a 2×2 parked plane,
- * a water wheel, and a thatched hut. Planes, wheels, and huts are map
- * decoration only.
+ * a water wheel, and a thatched hut. Ids 70–75 are the 铁堡厂轨 floor:
+ * concrete, wall, a high window, and three rail tiles whose stripe sits on
+ * screen X 72 / 180 / 288 after the 4px crop. Planes, wheels, and huts are
+ * map decoration only.
  */
 
 import { COLOR } from '@/game/palette';
-import { LOGICAL_H, TILE_SIZE } from '@/game/config';
+import { FACTORY_LOOK, LOGICAL_H, TILE_SIZE } from '@/game/config';
+import { paintFactoryLook } from './factoryLooks';
 import { createGrid, fillEllipse, fillPoly, fillRect, plot } from './pixelDraw';
 import type { SpriteData } from './types';
 
@@ -108,11 +111,17 @@ export const TileId = {
   planeBR: 67,
   wheel: 68,
   hut: 69,
+  factoryFloor: 70,
+  factoryWall: 71,
+  factoryWindow: 72,
+  factoryRailW: 73,
+  factoryRailC: 74,
+  factoryRailE: 75,
 } as const;
 
 export type TileId = (typeof TileId)[keyof typeof TileId];
 
-export const TILE_COUNT = 70;
+export const TILE_COUNT = 76;
 
 /** Screen quadrants of a 2×2 parked plane: top-left, top-right, bottom-left, bottom-right. */
 export const PLANE = [TileId.planeTL, TileId.planeTR, TileId.planeBL, TileId.planeBR] as const;
@@ -414,6 +423,7 @@ function paintTiles(tall: Array<boolean[][] | null>): SpriteData[] {
   tiles[TileId.radar] = radar;
 
   paintLandTiles(tiles, tall);
+  paintFactoryTiles(tiles);
   return tiles;
 }
 
@@ -819,6 +829,16 @@ function snagTile(): { pixels: SpriteData; tall: boolean[][] } {
     plot(g, 11, 4, DI);
     plot(g, 8, 3, NV);
   });
+}
+
+function paintFactoryTiles(tiles: SpriteData[]): void {
+  const look = paintFactoryLook(FACTORY_LOOK);
+  tiles[TileId.factoryFloor] = look.floor;
+  tiles[TileId.factoryWall] = look.wall;
+  tiles[TileId.factoryWindow] = look.window;
+  tiles[TileId.factoryRailW] = look.railW;
+  tiles[TileId.factoryRailC] = look.railC;
+  tiles[TileId.factoryRailE] = look.railE;
 }
 
 function paintLandTiles(tiles: SpriteData[], tall: Array<boolean[][] | null>): void {
