@@ -1,6 +1,6 @@
 /**
  * Five factory interiors for 铁堡厂轨. Yoan picks one.
- * The live map uses `FACTORY_LOOK` in config (temporary default A).
+ * The live map uses `FACTORY_LOOK` in config. Yoan locked A.
  * Names: A 铁皮高窗, B 警示桁架, C 夜班灯带, D 弹药库, E 冷却管廊.
  * Rail steel stays on the pixel that lands at screen X 72 / 180 / 288.
  */

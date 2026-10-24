@@ -21,11 +21,11 @@ describe('铁堡外观待选', () => {
     expect(FACTORY_LOOK_NAMES.C).toBe('夜班灯带');
     expect(FACTORY_LOOK_NAMES.D).toBe('弹药库');
     expect(FACTORY_LOOK_NAMES.E).toBe('冷却管廊');
-    expect(TIEBAO_LOOK_NAMES.A).toBe('厢列');
-    expect(TIEBAO_LOOK_NAMES.B).toBe('炮楼头');
-    expect(TIEBAO_LOOK_NAMES.C).toBe('油罐弹舱');
-    expect(TIEBAO_LOOK_NAMES.D).toBe('平板弹架');
-    expect(TIEBAO_LOOK_NAMES.E).toBe('双节堡垒');
+    expect(TIEBAO_LOOK_NAMES.A).toBe('弹舱棚车');
+    expect(TIEBAO_LOOK_NAMES.B).toBe('纵置油罐');
+    expect(TIEBAO_LOOK_NAMES.C).toBe('敞车弹架');
+    expect(TIEBAO_LOOK_NAMES.D).toBe('指挥守车');
+    expect(TIEBAO_LOOK_NAMES.E).toBe('三节联挂');
 
     const floors = FACTORY_LOOK_IDS.map((id) => hashSprite(paintFactoryLook(id).floor));
     const walls = FACTORY_LOOK_IDS.map((id) => hashSprite(paintFactoryLook(id).wall));
@@ -39,6 +39,9 @@ describe('铁堡外观待选', () => {
       const hull = buildTiebaoHull(id, false);
       expect(hull).toHaveLength(TIEBAO_HULL_H);
       expect(hull[0]).toHaveLength(TIEBAO_HULL_W);
+      expect(hull[34]?.[50]).toBeGreaterThanOrEqual(0);
+      expect(hull[102]?.[30]).toBeGreaterThanOrEqual(0);
+      expect(hull[124]?.[40]).toBeGreaterThanOrEqual(0);
       expect(hashSprite(buildTiebaoHull(id, true))).not.toBe(hashSprite(hull));
     }
   });

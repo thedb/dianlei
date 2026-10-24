@@ -570,14 +570,14 @@ export const FACTORY_BOSS_CHUNKS = 2;
 export const FACTORY_BOSS_SEED = 23;
 
 /**
- * Temporary factory interior until Yoan picks. A 铁皮高窗, B 警示桁架,
- * C 夜班灯带, D 弹药库, E 冷却管廊. Stills: `npm run art:tiebao`.
+ * Factory interior. Yoan locked A 铁皮高窗. B–E stay in the painter for the
+ * stills (`npm run art:tiebao`) and are not used by the fight.
  */
 export const FACTORY_LOOK = 'A' as const;
 
 /**
- * Temporary 铁堡 hull until Yoan picks. A 厢列, B 炮楼头, C 油罐弹舱,
- * D 平板弹架, E 双节堡垒. Not a final choice.
+ * Temporary 铁堡 hull until Yoan picks. A 弹舱棚车, B 纵置油罐, C 敞车弹架,
+ * D 指挥守车, E 三节联挂. Overhead freight roofs, nose toward the player.
  */
 export const TIEBAO_LOOK = 'A' as const;
 

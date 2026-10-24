@@ -10,8 +10,8 @@
  *
  * Screen X of a rail pixel is `col * 16 + pixel - MAP_CROP_X` (the map is
  * 368px wide and drawn at x = -4). Those pixels are 72 / 180 / 288.
- * Which interior is on screen comes from `FACTORY_LOOK` (default A until
- * Yoan picks). The other four looks use the same rail columns.
+ * Which interior is on screen comes from `FACTORY_LOOK` (Yoan locked A).
+ * The other four looks use the same rail columns and are not in the fight.
  */
 
 import {
