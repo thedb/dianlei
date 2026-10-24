@@ -5,7 +5,8 @@
  * `BossRuntime` stays the battleship's shape for the stage-1 render digest.
  *
  * Design: docs/电雷_第二关_铁堡Boss设计_v1.md. No laser. No Math.random.
- * A turnout is a curve the cars sample by Y. The hull does not snap between rails.
+ * One turnout curve (`tiebaoSwitchX`) is shared by the background rails and the
+ * rigid cars. Cars bank onto that curve. The long sprite is never sheared.
  */
 
 import type { Rng } from '@/engine/rng';
@@ -14,7 +15,6 @@ import {
   HITBOX_RADIUS,
   LOGICAL_H,
   LOGICAL_W,
-  TIEBAO_BEND_HIT,
   TIEBAO_BROADSIDE_COUNT,
   TIEBAO_BROADSIDE_FIRST,
   TIEBAO_BROADSIDE_FROM,
@@ -46,6 +46,8 @@ import {
   TIEBAO_OVERLOAD_MOVE,
   TIEBAO_OVERLOAD_PERIOD,
   TIEBAO_OVERLOAD_RAIN_WARN,
+  TIEBAO_CAR_MAX_BANK,
+  TIEBAO_CAR_PITCH,
   TIEBAO_CARS,
   TIEBAO_CORE_ROW,
   TIEBAO_END_CARS,
@@ -53,6 +55,7 @@ import {
   TIEBAO_ENTER_TAIL_Y,
   TIEBAO_HULL_H,
   TIEBAO_HULL_W,
+  TIEBAO_LOCO_H,
   TIEBAO_OVERLOAD_WALL_REPEAT,
   TIEBAO_POINT_AT,
   TIEBAO_FROG_AT,
@@ -76,6 +79,7 @@ import {
   TIEBAO_ROOF_CAR_ROW,
   TIEBAO_ROOF_LOCO_ROW,
   TIEBAO_SWITCH_CROSS_SPAN,
+  TIEBAO_SWITCH_LEAD,
   TIEBAO_SWITCH_PERIOD,
   TIEBAO_SWITCH_SPAN,
   TIEBAO_WALL_COUNT,
@@ -202,8 +206,9 @@ export interface TiebaoVisual {
   highlight: number;
   hot: boolean;
   /**
-   * Live turnout. Cars sample `tiebaoSwitchX` at their own Y. Null while parked.
-   * The old "hull stays on the departure rail, then snaps" pose is obsolete.
+   * Live turnout, shared by the background rails and `tiebaoCarPoses`.
+   * Null while parked, including the frame a cancelled move straightens.
+   * The strip-sheared hull and the end-of-move X snap are both obsolete.
    */
   switch: { fromX: number; toX: number; u: number; tailY: number; height: number } | null;
   ramWarn: boolean;
@@ -265,9 +270,10 @@ export function tiebaoSwitchSpan(fromX: number, toX: number): number {
 
 /**
  * The moving bend. `y1` is the heel (still the old rail, larger y) and `y0`
- * is the toe (already the new rail, smaller y). At u=0 the heel sits on the
- * nose, so the whole consist is still on `fromX`. At u=1 the toe sits on the
- * tail, so the whole consist is on `toX`.
+ * is the toe (already the new rail, smaller y). At u=0 the heel sits
+ * `TIEBAO_SWITCH_LEAD` above the nose, so the curve is painted before any car
+ * leaves `fromX`. At u=1 the toe sits on the tail, so the whole consist is on
+ * `toX`. Background rails and cars both use this band.
  */
 export function tiebaoSwitchBand(
   u: number,
@@ -278,7 +284,8 @@ export function tiebaoSwitchBand(
 ): { y0: number; y1: number; span: number } {
   const span = tiebaoSwitchSpan(fromX, toX);
   const noseY = tailY - height;
-  const y1 = noseY + clamp(u, 0, 1) * (height + span);
+  const travel = height + span + TIEBAO_SWITCH_LEAD;
+  const y1 = noseY - TIEBAO_SWITCH_LEAD + clamp(u, 0, 1) * travel;
   return { y0: y1 - span, y1, span };
 }
 
@@ -384,27 +391,83 @@ export interface TiebaoHullSegment {
   h: number;
 }
 
+/** Locomotive, then each boxcar still coupled. Heights sum to the live hull. */
+export function tiebaoPieces(cars: number): Array<{ row: number; h: number }> {
+  const height = tiebaoHullHeight(cars);
+  if (cars <= 0) return [{ row: 0, h: height }];
+  const pieces: Array<{ row: number; h: number }> = [{ row: 0, h: TIEBAO_LOCO_H }];
+  for (let i = 0; i < cars; i++) {
+    const row = TIEBAO_LOCO_H + i * TIEBAO_CAR_PITCH;
+    pieces.push({ row, h: i === cars - 1 ? height - row : TIEBAO_CAR_PITCH });
+  }
+  return pieces;
+}
+
+export interface TiebaoCarPose {
+  /** Live-sprite row of this piece's nose edge. */
+  row: number;
+  h: number;
+  /** Screen center: midpoint of the front and rear rail samples. */
+  x: number;
+  y: number;
+  /** Clockwise radians. 0 on a straight rail, capped at `TIEBAO_CAR_MAX_BANK`. */
+  angle: number;
+}
+
+/** Chord bank. `length` is the piece height. Zero when the two samples share an X. */
+export function tiebaoBankAngle(frontX: number, rearX: number, length: number): number {
+  if (length <= 0) return 0;
+  const cap = TIEBAO_CAR_MAX_BANK * DEG;
+  return clamp(Math.atan2(frontX - rearX, length), -cap, cap);
+}
+
 /**
- * Hit chain. Parked, this is the one hull rect. During a move it is a stack of
- * slices, each centered on `tiebaoSwitchX` at that slice, so a shot on the tail
- * still connects after the nose has entered the new rail. Width stays the hull
- * width. Draw slices are finer (`TIEBAO_BEND_DRAW`) but use the same curve.
+ * One rigid pose per piece. `xAt` is the shared turnout (or a constant rail).
+ * Front and rear are the unrotated screen edges; the body sits on their midpoint.
+ */
+export function tiebaoPiecePoses(
+  cars: number,
+  top: number,
+  xAt: (y: number) => number
+): TiebaoCarPose[] {
+  return tiebaoPieces(cars).map((piece) => {
+    const frontY = top + piece.row;
+    const rearY = frontY + piece.h;
+    const frontX = xAt(frontY);
+    const rearX = xAt(rearY);
+    return {
+      row: piece.row,
+      h: piece.h,
+      x: (frontX + rearX) / 2,
+      y: (frontY + rearY) / 2,
+      angle: tiebaoBankAngle(frontX, rearX, piece.h),
+    };
+  });
+}
+
+/** Live poses. A parked consist is one X and angle 0. A move uses `tiebaoSwitchX`. */
+export function tiebaoCarPoses(boss: BossRuntime): TiebaoCarPose[] {
+  const cars = tiebaoCommittedCars(boss);
+  const top = boss.y - tiebaoHullHeight(cars) / 2;
+  const sw = tiebaoVisual(boss)?.switch;
+  const xAt = (y: number): number =>
+    sw ? tiebaoSwitchX(y, sw.fromX, sw.toX, sw.u, sw.tailY, sw.height) : boss.x;
+  return tiebaoPiecePoses(cars, top, xAt);
+}
+
+/**
+ * One axis-aligned box per rigid car. Parked, the boxes tile the hull.
+ * On a turnout each box bounds that car's capped rotation. Not a stack of
+ * sheared slices.
  */
 export function tiebaoHullSegments(boss: BossRuntime): TiebaoHullSegment[] {
-  const height = tiebaoLiveHull(boss).h;
-  const top = boss.y - height / 2;
-  const sw = tiebaoVisual(boss)?.switch;
-  if (!sw) {
-    return [{ x: boss.x - TIEBAO_HULL_W / 2, y: top, w: TIEBAO_HULL_W, h: height }];
-  }
-  const segments: TiebaoHullSegment[] = [];
-  for (let row = 0; row < height; row += TIEBAO_BEND_HIT) {
-    const h = Math.min(TIEBAO_BEND_HIT, height - row);
-    const y = top + row;
-    const cx = tiebaoSwitchX(y + h / 2, sw.fromX, sw.toX, sw.u, sw.tailY, sw.height);
-    segments.push({ x: cx - TIEBAO_HULL_W / 2, y, w: TIEBAO_HULL_W, h });
-  }
-  return segments;
+  return tiebaoCarPoses(boss).map((pose) => {
+    const c = Math.abs(Math.cos(pose.angle));
+    const s = Math.abs(Math.sin(pose.angle));
+    const w = TIEBAO_HULL_W * c + pose.h * s;
+    const h = TIEBAO_HULL_W * s + pose.h * c;
+    return { x: pose.x - w / 2, y: pose.y - h / 2, w, h };
+  });
 }
 
 function carsOf(state: TiebaoState): number {

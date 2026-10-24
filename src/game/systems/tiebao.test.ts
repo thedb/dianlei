@@ -3,6 +3,7 @@ import { createRng } from '@/engine/rng';
 import {
   FIXED_DT,
   LOGICAL_H,
+  TIEBAO_CAR_MAX_BANK,
   TIEBAO_CORE_HP,
   TIEBAO_CORE_SCORE,
   TIEBAO_ENTER_DURATION,
@@ -14,7 +15,9 @@ import {
   TIEBAO_OVERLOAD_HP,
   TIEBAO_OVERLOAD_MOVE,
   TIEBAO_OVERLOAD_PERIOD,
+  TIEBAO_HULL_W,
   TIEBAO_SWITCH_CROSS_SPAN,
+  TIEBAO_SWITCH_LEAD,
   TIEBAO_SWITCH_SPAN,
   TIEBAO_OVERLOAD_TRANSITION,
   TIEBAO_PARK_Y,
@@ -45,8 +48,13 @@ import {
   TIEBAO_MODE_NAMES,
   TIEBAO_OVERLOAD_MODE_IDS,
   pickOtherRail,
+  tiebaoBankAngle,
+  tiebaoCarPoses,
   tiebaoCommittedCars,
+  tiebaoHullSegments,
   tiebaoLiveHull,
+  tiebaoPiecePoses,
+  tiebaoPieces,
   tiebaoSwitchBand,
   tiebaoSwitchSpan,
   tiebaoSwitchX,
@@ -271,24 +279,39 @@ describe('铁堡 rails', () => {
     expect(bossPart(boss, 'core')!.hp).toBe(TIEBAO_CORE_HP);
   });
 
-  it('rides a turnout from the nose to the tail and does not light a target', () => {
+  it('pre-lays one turnout and banks rigid cars without shearing', () => {
     expect(TIEBAO_SWITCH_PERIOD).toBe(6);
     expect(TIEBAO_OVERLOAD_PERIOD).toBe(6);
+    expect(TIEBAO_MOVE).toBe(1.2);
     expect(TIEBAO_MOVE).toBe(TIEBAO_OVERLOAD_MOVE);
-    expect(TIEBAO_SWITCH_SPAN).toBe(176);
-    expect(TIEBAO_SWITCH_CROSS_SPAN).toBe(352);
+    expect(TIEBAO_SWITCH_SPAN).toBe(240);
+    expect(TIEBAO_SWITCH_CROSS_SPAN).toBe(480);
+    expect(TIEBAO_SWITCH_LEAD).toBe(64);
+    expect(TIEBAO_CAR_MAX_BANK).toBe(25);
     expect(tiebaoSwitchSpan(72, 180)).toBe(TIEBAO_SWITCH_SPAN);
     expect(tiebaoSwitchSpan(72, 288)).toBe(TIEBAO_SWITCH_CROSS_SPAN);
 
     const height = TIEBAO_HULL_H;
     const tail = 328;
     const nose = tail - height;
+    const lead = TIEBAO_SWITCH_LEAD;
     expect(tiebaoSwitchX(nose, 72, 180, 0, tail, height)).toBe(72);
     expect(tiebaoSwitchX(tail, 72, 180, 0, tail, height)).toBe(72);
     expect(tiebaoSwitchX(nose, 72, 180, 1, tail, height)).toBe(180);
     expect(tiebaoSwitchX(tail, 72, 180, 1, tail, height)).toBe(180);
-    expect(tiebaoSwitchX(nose, 72, 180, 0.45, tail, height)).toBe(180);
-    expect(tiebaoSwitchX(tail, 72, 180, 0.45, tail, height)).toBe(72);
+    const laid = tiebaoSwitchBand(0, tail, height, 72, 180);
+    expect(laid.y1).toBeCloseTo(nose - lead, 6);
+    const ahead = (laid.y0 + laid.y1) / 2;
+    expect(Math.abs(tiebaoSwitchX(ahead, 72, 180, 0, tail, height) - 72)).toBeGreaterThan(20);
+
+    const travel = height + TIEBAO_SWITCH_SPAN + lead;
+    const uNose = (lead + TIEBAO_SWITCH_SPAN) / travel;
+    const uTail = (height + lead) / travel;
+    expect(uTail).toBeGreaterThan(uNose);
+    const midMove = (uNose + uTail) / 2;
+    expect(tiebaoSwitchX(nose, 72, 180, midMove, tail, height)).toBe(180);
+    expect(tiebaoSwitchX(tail, 72, 180, midMove, tail, height)).toBe(72);
+    expect(TIEBAO_SWITCH_CROSS_SPAN).toBeGreaterThan(height);
 
     const band = tiebaoSwitchBand(0.5, tail, height, 72, 288);
     let prev = 72;
@@ -313,12 +336,45 @@ describe('铁堡 rails', () => {
       last = x;
     }
     expect(last).toBeCloseTo(288, 4);
+
+    const cap = (TIEBAO_CAR_MAX_BANK * Math.PI) / 180;
+    expect(tiebaoBankAngle(72, 72, 80)).toBe(0);
+    expect(tiebaoBankAngle(72 + 108, 72, 80)).toBeCloseTo(cap, 5);
+    expect(tiebaoBankAngle(72 - 108, 72, 80)).toBeCloseTo(-cap, 5);
+    expect(tiebaoBankAngle(82, 72, 80)).toBeCloseTo(Math.atan2(10, 80), 5);
+
+    expect(tiebaoPieces(9)).toHaveLength(10);
+    expect(tiebaoPieces(2)).toHaveLength(3);
+    expect(tiebaoPieces(0)).toHaveLength(1);
+    expect(tiebaoPieces(9).reduce((sum, piece) => sum + piece.h, 0)).toBe(tiebaoHullHeight(9));
+    expect(tiebaoPieces(2).reduce((sum, piece) => sum + piece.h, 0)).toBe(height);
+
+    const parked = tiebaoPiecePoses(2, nose, () => 180);
+    expect(parked.every((pose) => pose.angle === 0 && pose.x === 180)).toBe(true);
+    const hinged = tiebaoPiecePoses(2, nose, (y) =>
+      tiebaoSwitchX(y, 72, 180, midMove, tail, height)
+    );
+    expect(hinged).toHaveLength(3);
+    expect(hinged.every((pose) => Math.abs(pose.angle) <= cap + 1e-9)).toBe(true);
+    expect(hinged.some((pose) => pose.angle !== 0)).toBe(true);
+    expect(Math.abs(hinged[0]!.x - 180)).toBeLessThan(Math.abs(hinged[2]!.x - 180));
   });
 
-  it('keeps an on-screen consist on the curve and still takes damage there', () => {
+  it('hinges an on-screen consist on the shared curve and still takes damage there', () => {
     const boss = createBoss(TIEBAO);
     const around = world(1);
     park(boss, around);
+    const parked = tiebaoHullSegments(boss);
+    expect(parked).toHaveLength(1 + tiebaoCommittedCars(boss));
+    let edge = boss.y - tiebaoLiveHull(boss).h / 2;
+    for (const seg of parked) {
+      expect(seg.x).toBeCloseTo(boss.x - TIEBAO_HULL_W / 2, 6);
+      expect(seg.w).toBeCloseTo(TIEBAO_HULL_W, 6);
+      expect(seg.y).toBeCloseTo(edge, 6);
+      edge += seg.h;
+    }
+    expect(edge).toBeCloseTo(boss.y + tiebaoLiveHull(boss).h / 2, 6);
+
     setMainHp(boss, (TIEBAO_ROOF_HP * 2 + TIEBAO_CORE_HP) * 0.3);
     updateBoss(boss, FIXED_DT, around);
     expect(tiebaoCommittedCars(boss)).toBe(2);
@@ -329,17 +385,44 @@ describe('铁堡 rails', () => {
       guard++;
     }
     expect(tiebaoView(boss)?.phase).toBe('move');
+    const opening = tiebaoVisual(boss)?.switch;
+    expect(opening).not.toBeNull();
+    if (opening) {
+      const noseY = opening.tailY - opening.height;
+      const band = tiebaoSwitchBand(
+        opening.u,
+        opening.tailY,
+        opening.height,
+        opening.fromX,
+        opening.toX
+      );
+      expect(band.y1).toBeLessThan(noseY);
+      const straight = tiebaoCarPoses(boss);
+      expect(straight).toHaveLength(1 + tiebaoCommittedCars(boss));
+      expect(straight.every((pose) => pose.angle === 0 && pose.x === opening.fromX)).toBe(true);
+    }
 
-    let posed = false;
-    for (let i = 0; i < 90 && !posed; i++) {
+    const cap = (TIEBAO_CAR_MAX_BANK * Math.PI) / 180;
+    let hinged = false;
+    for (let i = 0; i < 90 && !hinged; i++) {
       updateBoss(boss, FIXED_DT, around);
       const sw = tiebaoVisual(boss)?.switch;
       if (!sw) continue;
-      const noseY = sw.tailY - sw.height;
-      const noseX = tiebaoSwitchX(noseY, sw.fromX, sw.toX, sw.u, sw.tailY, sw.height);
+      const poses = tiebaoCarPoses(boss);
+      expect(poses.reduce((sum, pose) => sum + pose.h, 0)).toBe(sw.height);
+      expect(poses.every((pose) => Math.abs(pose.angle) <= cap + 1e-9)).toBe(true);
+      if (!poses.some((pose) => pose.angle !== 0)) continue;
+      hinged = true;
+      const noseX = tiebaoSwitchX(
+        sw.tailY - sw.height,
+        sw.fromX,
+        sw.toX,
+        sw.u,
+        sw.tailY,
+        sw.height
+      );
       const tailX = tiebaoSwitchX(sw.tailY, sw.fromX, sw.toX, sw.u, sw.tailY, sw.height);
-      if (Math.abs(noseX - sw.toX) >= 1 || Math.abs(tailX - sw.fromX) >= 1) continue;
-      posed = true;
+      expect(Math.abs(noseX - sw.toX)).toBeLessThan(Math.abs(tailX - sw.toX));
       for (const id of ['core', 'roofLoco', 'roofCar'] as const) {
         const part = bossPart(boss, id)!;
         expect(part.worldX).toBeCloseTo(
@@ -347,14 +430,15 @@ describe('铁堡 rails', () => {
           4
         );
       }
-      expect(shot(boss, noseX, noseY + 12, 4).consumedBullet).toBe(true);
-      expect(shot(boss, tailX, sw.tailY - 8, 4).consumedBullet).toBe(true);
-      expect(shot(boss, sw.fromX, noseY + 12, 4).consumedBullet).toBe(false);
+      for (const pose of poses) {
+        expect(shot(boss, pose.x, pose.y, 4).consumedBullet).toBe(true);
+      }
+      expect(shot(boss, 0, poses[0]!.y, 4).consumedBullet).toBe(false);
       const quiet = updateBoss(boss, FIXED_DT, around);
       expect(tiebaoView(boss)?.phase).toBe('move');
       expect(quiet.shots).toHaveLength(0);
     }
-    expect(posed).toBe(true);
+    expect(hinged).toBe(true);
   });
 
   it('does not ram while more than four cars are still attached', () => {

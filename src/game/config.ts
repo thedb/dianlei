@@ -814,27 +814,32 @@ export const TIEBAO_WARNING = 1.5;
 
 /**
  * Park-to-park. Output, then the consist rides a turnout. No telegraph and no
- * lit rail. Parked X is a rail center. During the move each car samples the
- * curve at its own Y, and the move ends only once the whole consist is on the
- * new rail. Hard overload uses the same 6s. The old end-of-move X snap is obsolete.
+ * lit rail. Parked X is a rail center. The move stays 1.2s: the turnout is
+ * pre-laid by `TIEBAO_SWITCH_LEAD` (distance, not extra time) and finishes only
+ * once the whole consist is on the new rail. Hard overload uses the same 6s.
+ * The end-of-move X snap and the strip-sheared hull are both obsolete.
  */
 export const TIEBAO_SWITCH_PERIOD = 6;
 export const TIEBAO_MOVE = 1.2;
 /**
  * Vertical length of one turnout (points through frog). Adjacent rails use this.
- * The bend starts above the nose and finishes below the tail, so a long consist
- * spends the 1.2s sweeping this span from nose to tail.
+ * Lengthened from 176 so the chord is gentler under the bank cap.
+ * The heel starts `TIEBAO_SWITCH_LEAD` above the nose and finishes at the tail.
  */
-export const TIEBAO_SWITCH_SPAN = 176;
+export const TIEBAO_SWITCH_SPAN = 240;
 /** L↔R crossover: two turnouts in series. The path passes through the middle rail. */
 export const TIEBAO_SWITCH_CROSS_SPAN = TIEBAO_SWITCH_SPAN * 2;
+/**
+ * Pixels of turnout already laid ahead of the nose at the start of a move.
+ * Cars stay on the old rail until the heel reaches them. Not added to the 1.2s.
+ */
+export const TIEBAO_SWITCH_LEAD = 64;
+/** Max rigid-car bank, degrees. A steeper chord clamps; pixels are never sheared. */
+export const TIEBAO_CAR_MAX_BANK = 25;
 /** Where on one turnout (0 = heel, 1 = toe) the point blades sit. */
 export const TIEBAO_POINT_AT = 0.14;
 /** Where on one turnout the frog sits. */
 export const TIEBAO_FROG_AT = 0.9;
-/** Horizontal strips of the bent hull. Draw is finer than the hit chain. */
-export const TIEBAO_BEND_DRAW = 4;
-export const TIEBAO_BEND_HIT = 16;
 
 /** Hard overload. Same period as the main fight; weapons and smoke still differ. */
 export const TIEBAO_OVERLOAD_PERIOD = 6;

@@ -343,9 +343,10 @@ export function bossPart(boss: BossRuntime, id: string): BossPartRuntime | undef
 }
 
 /**
- * Axis-aligned hull. 铁堡's parked rect is this box. While that consist is bent
- * on a turnout, shots and the player use `tiebaoHullSegments` instead, because
- * one rect at `boss.x` would miss the nose or the tail.
+ * Axis-aligned hull. 铁堡 shots and the player use `tiebaoHullSegments` instead:
+ * one rigid box per car, which tiles this rect while parked and follows the
+ * turnout while the cars are banked. One rect at `boss.x` would miss the nose
+ * or the tail.
  */
 export function bossHullRect(boss: BossRuntime): { x: number; y: number; w: number; h: number } {
   if (boss.def.script === 'tiebao') {
