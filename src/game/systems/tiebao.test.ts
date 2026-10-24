@@ -50,6 +50,7 @@ import {
   pickOtherRail,
   tiebaoBankAngle,
   tiebaoCarPoses,
+  tiebaoClosureX,
   tiebaoCommittedCars,
   tiebaoHullSegments,
   tiebaoLiveHull,
@@ -62,7 +63,7 @@ import {
   tiebaoView,
   tiebaoVisual,
 } from '@/game/systems/tiebao';
-import { tiebaoHullHeight, tiebaoRestCenter } from '@/game/systems/tiebaoShed';
+import { tiebaoHullHeight, tiebaoRestCenter, tiebaoTailY } from '@/game/systems/tiebaoShed';
 
 function world(seed = 1): BossWorld {
   return { playerX: 180, playerY: 520, rng: createRng(seed) };
@@ -358,6 +359,112 @@ describe('铁堡 rails', () => {
     expect(hinged.every((pose) => Math.abs(pose.angle) <= cap + 1e-9)).toBe(true);
     expect(hinged.some((pose) => pose.angle !== 0)).toBe(true);
     expect(Math.abs(hinged[0]!.x - 180)).toBeLessThan(Math.abs(hinged[2]!.x - 180));
+
+    const curve = tiebaoSwitchBand(0.4, tail, height, 72, 180);
+    const curveY = (curve.y0 + curve.y1) / 2;
+    expect(tiebaoClosureX(curve.y1, 72, 180, curve.y0, curve.y1)).toBe(72);
+    expect(tiebaoClosureX(curve.y0, 72, 180, curve.y0, curve.y1)).toBe(180);
+    expect(tiebaoClosureX(curveY, 72, 180, curve.y0, curve.y1)).toBeCloseTo(
+      tiebaoSwitchX(curveY, 72, 180, 0.4, tail, height),
+      6
+    );
+  });
+
+  it('leaves the closure on the map after the move and scrolls it off the bottom', () => {
+    const boss = createBoss(TIEBAO);
+    const around = world(1);
+    park(boss, around);
+    let guard = 0;
+    while (tiebaoView(boss)?.phase !== 'move' && guard < 2000) {
+      updateBoss(boss, FIXED_DT, around);
+      guard++;
+    }
+    const live = tiebaoVisual(boss);
+    const sw = live?.switch;
+    expect(sw).not.toBeNull();
+    expect(live?.turnouts).toHaveLength(1);
+    if (sw && live) {
+      const band = tiebaoSwitchBand(sw.u, sw.tailY, sw.height, sw.fromX, sw.toX);
+      expect(live.turnouts[0]?.y1).toBeCloseTo(band.y1, 4);
+      expect(live.turnouts[0]?.y0).toBeCloseTo(band.y0, 4);
+      expect(live.turnouts[0]?.fromX).toBe(sw.fromX);
+      expect(live.turnouts[0]?.toX).toBe(sw.toX);
+    }
+
+    while (tiebaoView(boss)?.phase === 'move' && guard < 4000) {
+      updateBoss(boss, FIXED_DT, around);
+      guard++;
+    }
+    expect(tiebaoView(boss)?.phase).toBe('output');
+    const parked = tiebaoVisual(boss);
+    expect(parked?.switch).toBeNull();
+    expect(parked?.turnouts).toHaveLength(1);
+    const done = parked?.turnouts[0];
+    expect(done).toBeDefined();
+    if (done) {
+      const end = tiebaoSwitchBand(
+        1,
+        tiebaoTailY(tiebaoCommittedCars(boss)),
+        tiebaoLiveHull(boss).h,
+        done.fromX,
+        done.toX
+      );
+      expect(done.y1).toBeCloseTo(end.y1, 3);
+      expect(done.y0).toBeCloseTo(end.y0, 3);
+      const held = { ...around, scroll: 40 };
+      updateBoss(boss, FIXED_DT, held);
+      const shifted = tiebaoVisual(boss)?.turnouts[0];
+      expect(shifted?.y1).toBeCloseTo(done.y1 + 40, 3);
+      expect(shifted?.y0).toBeCloseTo(done.y0 + 40, 3);
+      expect(tiebaoVisual(boss)?.turnouts).toHaveLength(1);
+
+      let next = 0;
+      while (tiebaoView(boss)?.phase !== 'move' && next < 400) {
+        updateBoss(boss, FIXED_DT, held);
+        next++;
+      }
+      expect(tiebaoView(boss)?.phase).toBe('move');
+      expect(tiebaoVisual(boss)?.turnouts).toHaveLength(2);
+      expect(tiebaoVisual(boss)?.turnouts[0]?.y1).toBeCloseTo(done.y1 + 40, 3);
+
+      updateBoss(boss, FIXED_DT, { ...around, scroll: 40 + LOGICAL_H + 800 });
+      const left = tiebaoVisual(boss)?.turnouts ?? [];
+      expect(left).toHaveLength(1);
+      expect(tiebaoView(boss)?.phase).toBe('move');
+    }
+  });
+
+  it('keeps the laid closure when death cancels a move', () => {
+    const boss = createBoss(TIEBAO);
+    const around = world(2);
+    park(boss, around);
+    const loco = bossPart(boss, 'roofLoco')!;
+    const car = bossPart(boss, 'roofCar')!;
+    shot(boss, loco.worldX, loco.worldY);
+    shot(boss, car.worldX, car.worldY);
+    expect(boss.phase).toBe('core');
+    let guard = 0;
+    while (tiebaoView(boss)?.phase !== 'move' && guard < 2000) {
+      updateBoss(boss, FIXED_DT, around);
+      guard++;
+    }
+    expect(tiebaoView(boss)?.phase).toBe('move');
+    const before = tiebaoVisual(boss)?.turnouts[0];
+    const mode = tiebaoView(boss)?.modeId;
+    expect(before).toBeDefined();
+    const core = bossPart(boss, 'core')!;
+    shot(boss, core.worldX, core.worldY);
+    expect(boss.stage).toBe('death');
+    const after = tiebaoVisual(boss);
+    expect(after?.switch).toBeNull();
+    expect(after?.turnouts).toHaveLength(1);
+    expect(after?.turnouts[0]?.fromX).toBe(before?.fromX);
+    expect(after?.turnouts[0]?.toX).toBe(before?.toX);
+    expect(after?.turnouts[0]?.y1).toBeCloseTo(before?.y1 ?? 0, 3);
+    expect(tiebaoView(boss)?.modeId).toBe(mode);
+    updateBoss(boss, FIXED_DT, { ...around, scroll: 40 });
+    expect(tiebaoVisual(boss)?.turnouts[0]?.y1).toBeCloseTo((before?.y1 ?? 0) + 40, 3);
+    expect(tiebaoVisual(boss)?.turnouts).toHaveLength(1);
   });
 
   it('hinges an on-screen consist on the shared curve and still takes damage there', () => {

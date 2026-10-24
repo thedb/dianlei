@@ -68,7 +68,12 @@ export function applyBossEvents(b: Battle, ev: BossEvents): void {
 export function stepBoss(b: Battle, dt: number): 'result' | null {
   const boss = b.boss;
   if (!boss || boss.phase === 'done') return null;
-  const ev = updateBoss(boss, dt, { playerX: b.player.x, playerY: b.player.y, rng: b.rng });
+  const ev = updateBoss(boss, dt, {
+    playerX: b.player.x,
+    playerY: b.player.y,
+    rng: b.rng,
+    scroll: b.scrollFrame.scroll,
+  });
   applyBossEvents(b, ev);
   if (ev.hurtPlayer && isPlayerVulnerable(b)) killPlayer(b);
   const warnFor = boss.def.fightWarning;

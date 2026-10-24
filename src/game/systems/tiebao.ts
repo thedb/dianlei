@@ -155,12 +155,27 @@ interface AmmoCrate {
   bombIn: number;
 }
 
+/** One laid turnout. Screen y is `worldY1 + scroll`. `live` still tracks the cars. */
+interface LaidTurnout {
+  fromX: number;
+  toX: number;
+  /** Heel screen-y minus the scroll at the last placement. */
+  worldY1: number;
+  span: number;
+  /** The move in progress. Its heel follows `tiebaoSwitchBand` until the move ends. */
+  live: boolean;
+}
+
 interface TiebaoState {
   rail: RailIndex;
   target: RailIndex;
   phase: RailPhase;
   clock: number;
   fromX: number;
+  /** Latest world scroll. Laid turnouts ride this after their move ends. */
+  scroll: number;
+  /** Every switch left on the map, oldest first. Culled once it scrolls off the bottom. */
+  laid: LaidTurnout[];
   list: 'main' | 'overload';
   mode: number;
   weaponClock: number;
@@ -206,11 +221,16 @@ export interface TiebaoVisual {
   highlight: number;
   hot: boolean;
   /**
-   * Live turnout, shared by the background rails and `tiebaoCarPoses`.
-   * Null while parked, including the frame a cancelled move straightens.
-   * The strip-sheared hull and the end-of-move X snap are both obsolete.
+   * Live car path. Null while parked. The painted steel is `turnouts`, which
+   * keeps this curve after the move and scrolls it off the bottom.
    */
   switch: { fromX: number; toX: number; u: number; tailY: number; height: number } | null;
+  /**
+   * Closure rails on the map. Stock rails are not in this list. Each entry is
+   * the shared curve (`tiebaoClosureX` from y0 to y1). Old ones stay until
+   * their top scrolls below the screen.
+   */
+  turnouts: ReadonlyArray<{ fromX: number; toX: number; y0: number; y1: number }>;
   ramWarn: boolean;
   rocketWarn: boolean;
   circles: ReadonlyArray<{
@@ -301,8 +321,25 @@ function turnoutAlong(fromX: number, toX: number, t: number): number {
 }
 
 /**
+ * Screen X on a closure laid from heel `y1` to toe `y0`. Endpoints are the
+ * stock rails. Outside the bend the value is exactly a rail.
+ */
+export function tiebaoClosureX(
+  y: number,
+  fromX: number,
+  toX: number,
+  y0: number,
+  y1: number
+): number {
+  if (y >= y1) return fromX;
+  if (y <= y0) return toX;
+  const span = Math.max(1e-6, y1 - y0);
+  return turnoutAlong(fromX, toX, (y1 - y) / span);
+}
+
+/**
  * Screen X of the rail a car at `y` is on during a move.
- * Smaller y (the nose) leads. Outside the bend the value is exactly a rail.
+ * Smaller y (the nose) leads. The curve is `tiebaoClosureX` inside the live band.
  */
 export function tiebaoSwitchX(
   y: number,
@@ -312,10 +349,8 @@ export function tiebaoSwitchX(
   tailY: number,
   height: number
 ): number {
-  const { y0, y1, span } = tiebaoSwitchBand(u, tailY, height, fromX, toX);
-  if (y >= y1) return fromX;
-  if (y <= y0) return toX;
-  return turnoutAlong(fromX, toX, (y1 - y) / span);
+  const { y0, y1 } = tiebaoSwitchBand(u, tailY, height, fromX, toX);
+  return tiebaoClosureX(y, fromX, toX, y0, y1);
 }
 
 export interface TiebaoTurnoutMark {
@@ -328,16 +363,15 @@ export interface TiebaoTurnoutMark {
   joinX: number;
 }
 
-/** Point blades and frogs along the live bend. L↔R is two turnouts. */
-export function tiebaoTurnoutMarks(
-  u: number,
-  tailY: number,
-  height: number,
+/** Point blades and frogs on one laid closure. L↔R is two turnouts in series. */
+export function tiebaoSpanMarks(
+  y0: number,
+  y1: number,
   fromX: number,
   toX: number
 ): TiebaoTurnoutMark[] {
-  const { y1, span } = tiebaoSwitchBand(u, tailY, height, fromX, toX);
-  const cross = span === TIEBAO_SWITCH_CROSS_SPAN;
+  const span = y1 - y0;
+  const cross = tiebaoSwitchSpan(fromX, toX) === TIEBAO_SWITCH_CROSS_SPAN;
   const halves: Array<readonly [number, number, number, number]> = cross
     ? [
         [fromX, TIEBAO_RAIL_X[1], 0, 0.5],
@@ -361,6 +395,18 @@ export function tiebaoTurnoutMarks(
     });
   }
   return marks;
+}
+
+/** Point blades and frogs along the live bend. L↔R is two turnouts. */
+export function tiebaoTurnoutMarks(
+  u: number,
+  tailY: number,
+  height: number,
+  fromX: number,
+  toX: number
+): TiebaoTurnoutMark[] {
+  const { y0, y1 } = tiebaoSwitchBand(u, tailY, height, fromX, toX);
+  return tiebaoSpanMarks(y0, y1, fromX, toX);
 }
 
 /** Remaining fraction of bar 1. The Hard extra bar reports 0 and does not shed. */
@@ -599,6 +645,8 @@ function createState(): TiebaoState {
     phase: 'output',
     clock: 0,
     fromX: TIEBAO_RAIL_X[1],
+    scroll: 0,
+    laid: [],
     list: 'main',
     mode: 0,
     weaponClock: 0,
@@ -688,6 +736,10 @@ export function tiebaoVisual(boss: BossRuntime): TiebaoVisual | null {
           height: tiebaoHullHeight(carsOf(state)),
         }
       : null,
+    turnouts: state.laid.map((item) => {
+      const y1 = item.worldY1 + state.scroll;
+      return { fromX: item.fromX, toX: item.toX, y1, y0: y1 - item.span };
+    }),
     ramWarn: state.ram === 'warn',
     rocketWarn: state.rocket === 1 && modeIdOf(state) === 'rockets',
     circles: state.circles.map((circle) => ({
@@ -717,10 +769,56 @@ export function tiebaoReadout(boss: BossRuntime): { text: string; hot: boolean }
 }
 
 function beginMove(state: TiebaoState, world: BossWorld | undefined): void {
+  releaseLive(state);
   state.target = pickOtherRail(state.rail, rollOf(world));
   state.fromX = railX(state.rail);
   state.phase = 'move';
   state.clock = 0;
+  state.laid.push({
+    fromX: state.fromX,
+    toX: railX(state.target),
+    worldY1: 0,
+    span: tiebaoSwitchSpan(state.fromX, railX(state.target)),
+    live: true,
+  });
+}
+
+/** Pin the live closure to the same band the cars sample. */
+function anchorLive(state: TiebaoState): void {
+  const live = state.laid.find((item) => item.live);
+  if (!live || state.phase !== 'move') return;
+  const cars = carsOf(state);
+  const band = tiebaoSwitchBand(
+    moveU(state),
+    tiebaoTailY(cars),
+    tiebaoHullHeight(cars),
+    live.fromX,
+    live.toX
+  );
+  live.span = band.span;
+  live.worldY1 = band.y1 - state.scroll;
+}
+
+/** The move ended or was cancelled. The steel stays; it no longer tracks the cars. */
+function releaseLive(state: TiebaoState): void {
+  for (const item of state.laid) item.live = false;
+}
+
+function cullTurnouts(state: TiebaoState): void {
+  const floor = LOGICAL_H + 32;
+  state.laid = state.laid.filter((item) => {
+    if (item.live) return true;
+    return item.worldY1 - item.span + state.scroll < floor;
+  });
+}
+
+/** Absolute scroll. Safe to call every frame, including death, when the fight step is idle. */
+export function tiebaoSyncScroll(boss: BossRuntime, scroll: number | undefined): void {
+  if (scroll === undefined || boss.def.script !== 'tiebao') return;
+  const state = states.get(boss);
+  if (!state) return;
+  state.scroll = scroll;
+  cullTurnouts(state);
 }
 
 function advanceRail(state: TiebaoState, dt: number, world: BossWorld | undefined): boolean {
@@ -738,6 +836,8 @@ function advanceRail(state: TiebaoState, dt: number, world: BossWorld | undefine
   }
   state.clock += dt;
   if (state.clock < clock.move) return false;
+  anchorLive(state);
+  releaseLive(state);
   const over = state.clock - clock.move;
   state.rail = state.target;
   state.phase = 'output';
@@ -794,13 +894,15 @@ function pose(state: TiebaoState, boss: BossRuntime): void {
 }
 
 /**
- * Death and the overload gate cancel a half-finished turnout. The tail settles
- * onto whichever of the two rails it is closer to, so the visible rear does not
- * reverse across the screen. Cars already on the other rail straighten in that
- * frame. The weapon index does not advance.
+ * Death and the overload gate cancel a half-finished move. The tail settles
+ * onto whichever of the two rails it is closer to, and the cars straighten in
+ * that frame. The weapon index does not advance. The closure already laid
+ * stays on the map.
  */
 function settleTail(state: TiebaoState, boss: BossRuntime): void {
   if (state.phase === 'move') {
+    anchorLive(state);
+    releaseLive(state);
     const cars = carsOf(state);
     const tail = tiebaoTailY(cars);
     const x = consistX(state, tail);
@@ -1147,6 +1249,7 @@ function fightSlice(
     const clock = profile(state.list);
     if (state.clock >= clock.output - 1e-9) beginMove(state, world);
   }
+  anchorLive(state);
   if (state.list === 'overload') {
     state.ambient += dt;
     while (state.ambient >= TIEBAO_OVERLOAD_CRATE_EVERY) {
@@ -1183,6 +1286,8 @@ export function stepTiebao(
   ev: BossEvents
 ): void {
   if (boss.stage !== 'fight' && boss.stage !== 'transition') return;
+  ensure(boss);
+  tiebaoSyncScroll(boss, world?.scroll);
   let left = dt;
   for (let guard = 0; guard < 8000 && left > 1e-8; guard++) {
     const slice = Math.min(FIXED_DT, left);

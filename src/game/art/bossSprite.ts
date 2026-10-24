@@ -19,10 +19,9 @@ import type { BossHpBarLayout, BossRuntime } from '@/game/systems/boss';
 import { bossActiveLaser, bossLook } from '@/game/systems/boss';
 import {
   tiebaoCarPoses,
+  tiebaoClosureX,
   tiebaoLiveHull,
-  tiebaoSwitchBand,
-  tiebaoSwitchX,
-  tiebaoTurnoutMarks,
+  tiebaoSpanMarks,
   tiebaoVisual,
   type TiebaoCarPose,
   type TiebaoVisual,
@@ -451,8 +450,6 @@ export function drawBossWorld(
   }
 }
 
-type TiebaoSwitch = NonNullable<TiebaoVisual['switch']>;
-
 /** Straight crop. The tail beam is the bottom of the full sprite, pasted on the live tail. */
 function blitTiebaoStraight(
   ctx: CanvasRenderingContext2D,
@@ -568,7 +565,16 @@ function drawRailPixels(ctx: CanvasRenderingContext2D, x: number, y: number): vo
   ctx.fillRect(xi, y, 1, 1);
 }
 
-/** Heel blades. The stock rail is already on the map; this is the open point. */
+function nearestStock(x: number): number {
+  let best = Infinity;
+  for (const rail of TIEBAO_RAIL_X) best = Math.min(best, Math.abs(x - rail));
+  return best;
+}
+
+/**
+ * Point blade beside the stock. The stock centerline is left alone; the
+ * straight rail is redrawn on top of the whole closure afterwards.
+ */
 function drawSwitchPoints(
   ctx: CanvasRenderingContext2D,
   stockX: number,
@@ -576,73 +582,95 @@ function drawSwitchPoints(
   dir: number
 ): void {
   const xi = Math.round(stockX);
-  const len = 32;
+  const len = 28;
   for (let i = 0; i < len; i++) {
     const py = Math.round(y) - i;
     if (py < 0 || py >= LOGICAL_H) continue;
-    const open = Math.round((i / (len - 1)) * 6) * dir;
+    const open = 5 + Math.round((i / (len - 1)) * 7);
+    const bx = xi + open * dir;
     if (i % 4 === 0) {
       ctx.fillStyle = PALETTE[COLOR.TERRAIN_CONCRETE];
-      const left = Math.min(xi, xi + open) - 3;
-      ctx.fillRect(left, py, Math.abs(open) + 6, 2);
+      ctx.fillRect(Math.min(xi + 4 * dir, bx), py, Math.abs(bx - (xi + 4 * dir)) + 1, 2);
     }
-    ctx.fillStyle = PALETTE[COLOR.GRAY];
-    ctx.fillRect(xi + open, py, 1, 1);
-    ctx.fillStyle = PALETTE[COLOR.BLACK];
-    ctx.fillRect(xi + open - dir, py, 1, 1);
+    drawRailPixels(ctx, bx, py);
   }
-}
-
-/** Crossing at the toe. No warn color: steel, concrete, and the flangeway gap. */
-function drawFrog(ctx: CanvasRenderingContext2D, x: number, y: number, dir: number): void {
-  const xi = Math.round(x);
-  const yi = Math.round(y);
-  ctx.fillStyle = PALETTE[COLOR.DARK_GRAY];
-  ctx.fillRect(xi - 6, yi - 7, 12, 14);
-  ctx.fillStyle = PALETTE[COLOR.TERRAIN_CONCRETE];
-  for (let i = -6; i <= 6; i += 4) ctx.fillRect(xi - 7, yi + i, 14, 2);
-  ctx.fillStyle = PALETTE[COLOR.GRAY];
-  for (let i = -6; i <= 6; i++) {
-    const splay = Math.round(i * 0.45);
-    ctx.fillRect(xi + dir * splay - 1, yi + i, 1, 1);
-    ctx.fillRect(xi - dir * splay + 1, yi + i, 1, 1);
-  }
-  ctx.fillStyle = PALETTE[COLOR.BLACK];
-  ctx.fillRect(xi - 1, yi - 2, 2, 4);
-  ctx.fillStyle = PALETTE[COLOR.PALE_GRAY];
-  ctx.fillRect(xi, yi - 1, 1, 2);
 }
 
 /**
- * Points, closure rail, and frog laid over the three straight map rails.
- * Same `tiebaoSwitchX` the cars bank onto. Ties match factory look A
- * (concrete every 4px, 16px wide). No rail highlight.
+ * Frog wing on the diverging side of the target stock. The stock itself is
+ * not painted here, so the straight rail is not cut.
  */
-function drawTurnout(ctx: CanvasRenderingContext2D, sw: TiebaoSwitch): void {
-  const band = tiebaoSwitchBand(sw.u, sw.tailY, sw.height, sw.fromX, sw.toX);
-  const yStart = Math.max(0, Math.floor(band.y0));
-  const yEnd = Math.min(LOGICAL_H, Math.ceil(band.y1));
+function drawFrog(ctx: CanvasRenderingContext2D, x: number, y: number, dir: number): void {
+  const xi = Math.round(x);
+  const yi = Math.round(y);
+  for (let i = -8; i <= 8; i++) {
+    const py = yi + i;
+    if (py < 0 || py >= LOGICAL_H) continue;
+    const gap = 5 + Math.round(Math.abs(i) * 0.45);
+    const bx = xi + dir * gap;
+    if (Math.abs(i) % 4 === 0) {
+      ctx.fillStyle = PALETTE[COLOR.TERRAIN_CONCRETE];
+      const left = Math.min(xi + dir * 5, bx);
+      ctx.fillRect(left, py, Math.abs(bx - (xi + dir * 5)) + 1, 2);
+    }
+    drawRailPixels(ctx, bx, py);
+  }
+}
+
+/** Straight stock steel, on top of any closure paint in this span. */
+function drawStockSteel(ctx: CanvasRenderingContext2D, y0: number, y1: number): void {
+  const yStart = Math.max(0, Math.floor(y0));
+  const yEnd = Math.min(LOGICAL_H, Math.ceil(y1));
+  const h = yEnd - yStart;
+  if (h <= 0) return;
+  for (const rail of TIEBAO_RAIL_X) {
+    const xi = Math.round(rail);
+    ctx.fillStyle = PALETTE[COLOR.GRAY];
+    ctx.fillRect(xi - 2, yStart, 1, h);
+    ctx.fillRect(xi + 1, yStart, 1, h);
+    ctx.fillStyle = PALETTE[COLOR.BLACK];
+    ctx.fillRect(xi - 1, yStart, 1, h);
+    ctx.fillStyle = PALETTE[COLOR.PALE_GRAY];
+    ctx.fillRect(xi, yStart, 1, h);
+  }
+}
+
+type ClosureSpan = TiebaoVisual['turnouts'][number];
+
+/**
+ * Diverging route only: points, closure steel, frog. Samples are `tiebaoClosureX`,
+ * the same curve the cars ride. Pixels on a stock rail are skipped, and the
+ * three stock rails are redrawn straight through the span. No highlight.
+ */
+function drawClosure(ctx: CanvasRenderingContext2D, span: ClosureSpan): void {
+  const yStart = Math.max(0, Math.floor(span.y0));
+  const yEnd = Math.min(LOGICAL_H, Math.ceil(span.y1));
   for (let y = yStart; y < yEnd; y++) {
-    const x = tiebaoSwitchX(y, sw.fromX, sw.toX, sw.u, sw.tailY, sw.height);
-    const xi = Math.round(x);
-    const tie = (y & 3) < 2;
-    ctx.fillStyle = PALETTE[tie ? COLOR.TERRAIN_CONCRETE : COLOR.DARK_GRAY];
-    ctx.fillRect(xi - 8, y, 16, 1);
+    const x = tiebaoClosureX(y, span.fromX, span.toX, span.y0, span.y1);
+    const clear = nearestStock(x);
+    if (clear < 6) continue;
+    if ((y & 3) < 2 && clear > 14) {
+      ctx.fillStyle = PALETTE[COLOR.TERRAIN_CONCRETE];
+      ctx.fillRect(Math.round(x) - 6, y, 12, 1);
+    }
     drawRailPixels(ctx, x, y);
   }
-  for (const mark of tiebaoTurnoutMarks(sw.u, sw.tailY, sw.height, sw.fromX, sw.toX)) {
+  for (const mark of tiebaoSpanMarks(span.y0, span.y1, span.fromX, span.toX)) {
     if (mark.y < -40 || mark.y > LOGICAL_H + 8) continue;
     const dir = mark.joinX >= mark.stockX ? 1 : -1;
     if (mark.kind === 'points') drawSwitchPoints(ctx, mark.stockX, mark.y, dir);
     else drawFrog(ctx, mark.joinX, mark.y, dir);
   }
+  drawStockSteel(ctx, span.y0, span.y1);
 }
 
 /** Turnout, warning circles, and the rail-break sparks under the train. */
 function drawTiebaoGround(ctx: CanvasRenderingContext2D, boss: BossRuntime, time: number): void {
   const visual = tiebaoVisual(boss);
   ctx.save();
-  if (visual?.switch) drawTurnout(ctx, visual.switch);
+  if (visual) {
+    for (const turnout of visual.turnouts) drawClosure(ctx, turnout);
+  }
   if (visual?.rocketWarn) {
     ctx.fillStyle = PALETTE[COLOR.EXPLOSION_YELLOW];
     for (const x of TIEBAO_RAIL_X) ctx.fillRect(x - 1, 4, 3, 3);

@@ -59,6 +59,7 @@ import {
   tiebaoOnFight,
   tiebaoPlaceEnter,
   tiebaoResolveBomb,
+  tiebaoSyncScroll,
   tiebaoTryShot,
 } from '@/game/systems/tiebao';
 
@@ -156,6 +157,11 @@ export interface BossWorld {
   playerX: number;
   playerY: number;
   rng: Rng;
+  /**
+   * World scroll in pixels. 铁堡's laid turnouts add this so they ride the
+   * factory downward. Omitted means the turnouts stay where they were painted.
+   */
+  scroll?: number;
 }
 
 export interface BossShake {
@@ -488,6 +494,7 @@ export function updateBoss(boss: BossRuntime, dt: number, world?: BossWorld): Bo
   if (boss.stage === 'done') return ev;
   const def = boss.def;
   const scripted = def.script === 'tiebao';
+  if (scripted) tiebaoSyncScroll(boss, world?.scroll);
 
   boss.prevX = boss.x;
   boss.prevY = boss.y;

@@ -818,6 +818,8 @@ export const TIEBAO_WARNING = 1.5;
  * pre-laid by `TIEBAO_SWITCH_LEAD` (distance, not extra time) and finishes only
  * once the whole consist is on the new rail. Hard overload uses the same 6s.
  * The end-of-move X snap and the strip-sheared hull are both obsolete.
+ * Stock rails stay straight. The closure is extra steel and stays on the map
+ * after the move, scrolling off with the factory.
  */
 export const TIEBAO_SWITCH_PERIOD = 6;
 export const TIEBAO_MOVE = 1.2;
