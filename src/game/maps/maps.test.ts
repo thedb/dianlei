@@ -797,6 +797,16 @@ describe('铁堡厂轨', () => {
     for (let r = loop; r < grid.length; r++) {
       for (const rail of FACTORY_RAILS) expect(grid[r]![rail.col]).toBe(rail.tile);
     }
+    expect(grid[8]![0]).not.toBe(TileId.factoryWall);
+    expect(grid[30]![0]).toBe(TileId.factoryWall);
+    expect(grid[30]![FACTORY_RAILS[1].col]).toBe(TileId.factoryRailC);
+    const hall = grid.slice(loop);
+    const dressed = hall.reduce(
+      (n, row) =>
+        n + row.filter((id) => id === TileId.factoryWall || id === TileId.factoryWindow).length,
+      0
+    );
+    expect(dressed).toBeGreaterThan(200);
   });
 
   it('hands off from 陆地B with opaque tiles and no warning clouds', () => {

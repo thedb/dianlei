@@ -13,7 +13,8 @@
  */
 
 import { COLOR } from '@/game/palette';
-import { LOGICAL_H, TILE_SIZE } from '@/game/config';
+import { FACTORY_LOOK, LOGICAL_H, TILE_SIZE } from '@/game/config';
+import { paintFactoryLook } from './factoryLooks';
 import { createGrid, fillEllipse, fillPoly, fillRect, plot } from './pixelDraw';
 import type { SpriteData } from './types';
 
@@ -830,52 +831,14 @@ function snagTile(): { pixels: SpriteData; tall: boolean[][] } {
   });
 }
 
-/** Vertical rail. `stripe` is the pixel column that lands on the lane's screen X. */
-function factoryRailTile(stripe: number): SpriteData {
-  const g = createGrid(TILE_SIZE, TILE_SIZE, CD);
-  for (let y = 0; y < TILE_SIZE; y++) {
-    if (y % 4 === 0) plot(g, stripe - 3, y, AD);
-    if (y % 4 === 0) plot(g, stripe + 3, y, AD);
-  }
-  for (let y = 0; y < TILE_SIZE; y++) {
-    plot(g, stripe - 1, y, CL);
-    plot(g, stripe, y, K);
-    plot(g, stripe + 1, y, AD);
-  }
-  return g;
-}
-
 function paintFactoryTiles(tiles: SpriteData[]): void {
-  const floor = createGrid(TILE_SIZE, TILE_SIZE, CD);
-  for (let y = 0; y < TILE_SIZE; y++) {
-    for (let x = 0; x < TILE_SIZE; x++) {
-      if ((x + y) % 8 === 0) floor[y]![x] = AD;
-      if ((x * 3 + y) % 11 === 0) floor[y]![x] = CC;
-    }
-  }
-  tiles[TileId.factoryFloor] = floor;
-
-  const wall = createGrid(TILE_SIZE, TILE_SIZE, DI);
-  for (let y = 0; y < TILE_SIZE; y++) {
-    plot(wall, 0, y, K);
-    plot(wall, 15, y, AD);
-    if (y % 4 === 0) {
-      for (let x = 1; x < 15; x++) plot(wall, x, y, BR);
-    }
-  }
-  tiles[TileId.factoryWall] = wall;
-
-  const windowTile = createGrid(TILE_SIZE, TILE_SIZE, DI);
-  fillRect(windowTile, 3, 2, 10, 8, COLOR.WATER_DEEP);
-  fillRect(windowTile, 4, 3, 3, 3, COLOR.WATER_SHALLOW);
-  fillRect(windowTile, 9, 3, 3, 2, COLOR.WATER_MEDIUM);
-  fillRect(windowTile, 2, 11, 12, 3, CD);
-  plot(windowTile, 5, 4, CL);
-  tiles[TileId.factoryWindow] = windowTile;
-
-  tiles[TileId.factoryRailW] = factoryRailTile(12);
-  tiles[TileId.factoryRailC] = factoryRailTile(8);
-  tiles[TileId.factoryRailE] = factoryRailTile(4);
+  const look = paintFactoryLook(FACTORY_LOOK);
+  tiles[TileId.factoryFloor] = look.floor;
+  tiles[TileId.factoryWall] = look.wall;
+  tiles[TileId.factoryWindow] = look.window;
+  tiles[TileId.factoryRailW] = look.railW;
+  tiles[TileId.factoryRailC] = look.railC;
+  tiles[TileId.factoryRailE] = look.railE;
 }
 
 function paintLandTiles(tiles: SpriteData[], tall: Array<boolean[][] | null>): void {

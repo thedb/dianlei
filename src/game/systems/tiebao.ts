@@ -44,7 +44,6 @@ import {
   TIEBAO_OVERLOAD_MOVE,
   TIEBAO_OVERLOAD_PERIOD,
   TIEBAO_OVERLOAD_RAIN_WARN,
-  TIEBAO_OVERLOAD_TELEGRAPH,
   TIEBAO_OVERLOAD_WALL_REPEAT,
   TIEBAO_PARK_Y,
   TIEBAO_RAIN_COUNT,
@@ -67,7 +66,7 @@ import {
   TIEBAO_ROOF_CAR,
   TIEBAO_ROOF_LOCO,
   TIEBAO_SWITCH_PERIOD,
-  TIEBAO_TELEGRAPH,
+  TIEBAO_SWITCH_SPAN,
   TIEBAO_WALL_COUNT,
   TIEBAO_WALL_FIRST,
   TIEBAO_WALL_GAP,
@@ -104,7 +103,7 @@ export const TIEBAO_MODE_NAMES = [
 export const TIEBAO_OVERLOAD_MODE_IDS = ['rain', 'wall', 'missiles'] as const;
 
 export type TiebaoModeId = (typeof TIEBAO_MODE_IDS)[number];
-type RailPhase = 'output' | 'telegraph' | 'move';
+type RailPhase = 'output' | 'move';
 type RamPhase = 'idle' | 'warn' | 'dive' | 'return';
 type RailIndex = 0 | 1 | 2;
 
@@ -156,6 +155,8 @@ interface TiebaoState {
   crateSpawned: number;
   crateNext: number;
   ram: RamPhase;
+  /** One dash per output window. Stays set after the retreat so it does not dive again. */
+  ramDone: boolean;
   ramClock: number;
   ambient: number;
   circles: CircleWarn[];
@@ -175,8 +176,11 @@ export interface TiebaoView {
 
 export interface TiebaoVisual {
   current: number;
+  /** Always -1. The switch does not light a rail. */
   highlight: number;
   hot: boolean;
+  /** Turnout the train is riding. Null while parked. */
+  switch: { fromX: number; toX: number; u: number } | null;
   ramWarn: boolean;
   rocketWarn: boolean;
   circles: ReadonlyArray<{
@@ -198,23 +202,44 @@ const BROADSIDE_SHOTS = Math.floor((TIEBAO_BROADSIDE_SWEEP - 1e-6) / TIEBAO_BROA
 
 interface ClockProfile {
   output: number;
-  telegraph: number;
   move: number;
 }
 
 function profile(list: TiebaoState['list']): ClockProfile {
   if (list === 'overload') {
     return {
-      output: TIEBAO_OVERLOAD_PERIOD - TIEBAO_OVERLOAD_TELEGRAPH - TIEBAO_OVERLOAD_MOVE,
-      telegraph: TIEBAO_OVERLOAD_TELEGRAPH,
+      output: TIEBAO_OVERLOAD_PERIOD - TIEBAO_OVERLOAD_MOVE,
       move: TIEBAO_OVERLOAD_MOVE,
     };
   }
   return {
-    output: TIEBAO_SWITCH_PERIOD - TIEBAO_TELEGRAPH - TIEBAO_MOVE,
-    telegraph: TIEBAO_TELEGRAPH,
+    output: TIEBAO_SWITCH_PERIOD - TIEBAO_MOVE,
     move: TIEBAO_MOVE,
   };
+}
+
+function smoothstep(u: number): number {
+  const t = clamp(u, 0, 1);
+  return t * t * (3 - 2 * t);
+}
+
+/** Ease that spends most of the dash in the first moments. */
+function easeOutCubic(u: number): number {
+  const t = clamp(u, 0, 1);
+  return 1 - (1 - t) ** 3;
+}
+
+/**
+ * Screen X of the turnout at `y`. At u=0 the train's park line is still on
+ * `fromX`. At u=1 it has arrived on `toX`. Ahead of the frog (smaller y) the
+ * path is already the new rail; behind it the path is the old rail.
+ */
+export function tiebaoSwitchX(y: number, fromX: number, toX: number, u: number): number {
+  const y0 = TIEBAO_PARK_Y - TIEBAO_SWITCH_SPAN + u * TIEBAO_SWITCH_SPAN;
+  const y1 = y0 + TIEBAO_SWITCH_SPAN;
+  if (y >= y1) return fromX;
+  if (y <= y0) return toX;
+  return lerp(fromX, toX, smoothstep((y1 - y) / TIEBAO_SWITCH_SPAN));
 }
 
 function modeList(list: TiebaoState['list']): readonly TiebaoModeId[] {
@@ -250,11 +275,6 @@ function lerp(a: number, b: number, u: number): number {
   return a + (b - a) * u;
 }
 
-function smoothstep(u: number): number {
-  const t = clamp(u, 0, 1);
-  return t * t * (3 - 2 * t);
-}
-
 function railX(index: number): number {
   return TIEBAO_RAIL_X[index] ?? TIEBAO_RAIL_X[1];
 }
@@ -275,6 +295,7 @@ function resetSchedules(state: TiebaoState): void {
   state.crateSpawned = 0;
   state.crateNext = TIEBAO_CRATE_FIRST;
   state.ram = 'idle';
+  state.ramDone = false;
   state.ramClock = 0;
 }
 
@@ -303,6 +324,7 @@ function createState(): TiebaoState {
     crateSpawned: 0,
     crateNext: 0,
     ram: 'idle',
+    ramDone: false,
     ramClock: 0,
     ambient: 0,
     circles: [],
@@ -357,11 +379,18 @@ export function tiebaoView(boss: BossRuntime): TiebaoView | null {
 export function tiebaoVisual(boss: BossRuntime): TiebaoVisual | null {
   const state = states.get(boss);
   if (!state || boss.def.script !== 'tiebao') return null;
-  const highlight = state.phase === 'output' ? state.rail : state.target;
+  const moving = state.phase === 'move';
   return {
     current: state.rail,
-    highlight,
-    hot: state.phase !== 'output' || state.ram !== 'idle',
+    highlight: -1,
+    hot: moving,
+    switch: moving
+      ? {
+          fromX: state.fromX,
+          toX: railX(state.target),
+          u: state.clock / Math.max(0.05, profile(state.list).move),
+        }
+      : null,
     ramWarn: state.ram === 'warn',
     rocketWarn: state.rocket === 1 && modeIdOf(state) === 'rockets',
     circles: state.circles.map((circle) => ({
@@ -380,25 +409,21 @@ export function tiebaoVisual(boss: BossRuntime): TiebaoVisual | null {
   };
 }
 
-/** Countdown until the next park. Hot during the telegraph and the slide. */
+/** Countdown until the next park. Hot while the turnout is moving. */
 export function tiebaoReadout(boss: BossRuntime): { text: string; hot: boolean } | null {
   if (boss.def.script !== 'tiebao' || boss.stage !== 'fight') return null;
   const state = states.get(boss);
   if (!state) return null;
   const clock = profile(state.list);
-  const remain =
-    state.phase === 'output'
-      ? clock.output - state.clock
-      : state.phase === 'telegraph'
-        ? clock.telegraph - state.clock
-        : clock.move - state.clock;
+  const remain = state.phase === 'output' ? clock.output - state.clock : clock.move - state.clock;
   return { text: `换轨 ${Math.max(0, remain).toFixed(1)}`, hot: state.phase !== 'output' };
 }
 
-function beginTelegraph(state: TiebaoState, world: BossWorld | undefined): void {
-  state.phase = 'telegraph';
-  state.clock = 0;
+function beginMove(state: TiebaoState, world: BossWorld | undefined): void {
   state.target = pickOtherRail(state.rail, rollOf(world));
+  state.fromX = railX(state.rail);
+  state.phase = 'move';
+  state.clock = 0;
 }
 
 function advanceRail(
@@ -412,19 +437,10 @@ function advanceRail(
     state.clock += dt;
     if (state.clock >= clock.output && state.ram === 'idle') {
       const over = state.clock - clock.output;
-      beginTelegraph(state, world);
+      beginMove(state, world);
       state.clock = over;
     } else if (state.clock > clock.output) {
       state.clock = clock.output;
-    }
-    return false;
-  }
-  if (state.phase === 'telegraph') {
-    state.clock += dt;
-    if (state.clock >= clock.telegraph) {
-      state.fromX = railX(state.rail);
-      state.phase = 'move';
-      state.clock = state.clock - clock.telegraph;
     }
     return false;
   }
@@ -448,8 +464,8 @@ function placeX(state: TiebaoState, boss: BossRuntime): void {
     return;
   }
   const clock = profile(state.list);
-  const u = smoothstep(state.clock / Math.max(0.05, clock.move));
-  boss.x = lerp(state.fromX, railX(state.target), u);
+  const u = state.clock / Math.max(0.05, clock.move);
+  boss.x = tiebaoSwitchX(boss.y, state.fromX, railX(state.target), u);
 }
 
 function pushBolt(
@@ -656,10 +672,11 @@ function stepRam(state: TiebaoState, dt: number, boss: BossRuntime): void {
     return;
   }
   if (state.ram === 'idle') {
-    if (state.weaponClock + 1e-9 < TIEBAO_RAM_START) {
+    if (state.ramDone || state.weaponClock + 1e-9 < TIEBAO_RAM_START) {
       boss.y = TIEBAO_PARK_Y;
       return;
     }
+    state.ramDone = true;
     state.ram = 'warn';
     state.ramClock = 0;
   }
@@ -673,7 +690,7 @@ function stepRam(state: TiebaoState, dt: number, boss: BossRuntime): void {
     }
   }
   if (state.ram === 'dive') {
-    const u = smoothstep(state.ramClock / TIEBAO_RAM_DIVE);
+    const u = easeOutCubic(state.ramClock / Math.max(0.05, TIEBAO_RAM_DIVE));
     boss.y = lerp(TIEBAO_PARK_Y, diveY, u);
     if (state.ramClock >= TIEBAO_RAM_DIVE) {
       state.ram = 'return';
@@ -681,7 +698,7 @@ function stepRam(state: TiebaoState, dt: number, boss: BossRuntime): void {
     }
   }
   if (state.ram === 'return') {
-    const u = smoothstep(state.ramClock / TIEBAO_RAM_RETURN);
+    const u = clamp(state.ramClock / Math.max(0.05, TIEBAO_RAM_RETURN), 0, 1);
     boss.y = lerp(diveY, TIEBAO_PARK_Y, u);
     if (state.ramClock >= TIEBAO_RAM_RETURN) {
       state.ram = 'idle';
@@ -762,18 +779,19 @@ function fightSlice(
   const state = ensure(boss);
   if (state.broken) return;
   const arrived = advanceRail(state, dt, world, boss);
-  placeX(state, boss);
   if (state.phase === 'move') {
     boss.y = TIEBAO_PARK_Y;
     state.ram = 'idle';
-  } else {
+  }
+  placeX(state, boss);
+  if (state.phase !== 'move') {
     if (!arrived) state.weaponClock += dt;
     fireWeapons(state, boss, world, ev);
     stepRam(state, dt, boss);
   }
   if (state.phase === 'output' && state.ram === 'idle') {
     const clock = profile(state.list);
-    if (state.clock >= clock.output - 1e-9) beginTelegraph(state, world);
+    if (state.clock >= clock.output - 1e-9) beginMove(state, world);
   }
   if (state.list === 'overload') {
     state.ambient += dt;
@@ -800,7 +818,7 @@ function holdSlice(
   stepCrates(state, dt, world, ev);
 }
 
-/** Substep so a large `dt` still crosses telegraph, bursts, and the ram. */
+/** Substep so a large `dt` still crosses bursts and the ram. */
 export function stepTiebao(
   boss: BossRuntime,
   dt: number,

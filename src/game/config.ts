@@ -570,6 +570,18 @@ export const FACTORY_BOSS_CHUNKS = 2;
 export const FACTORY_BOSS_SEED = 23;
 
 /**
+ * Temporary factory interior until Yoan picks. A 铁皮高窗, B 警示桁架,
+ * C 夜班灯带, D 弹药库, E 冷却管廊. Stills: `npm run art:tiebao`.
+ */
+export const FACTORY_LOOK = 'A' as const;
+
+/**
+ * Temporary 铁堡 hull until Yoan picks. A 厢列, B 炮楼头, C 油罐弹舱,
+ * D 平板弹架, E 双节堡垒. Not a final choice.
+ */
+export const TIEBAO_LOOK = 'A' as const;
+
+/**
  * Stage 2 warning. landB is 5760 px, so this keeps the boss origin on landB's
  * last row (`warning * 40 + 640` stays under 5760). `TIEBAO_ENTER_AT` is five
  * seconds later, which lands about 120 px into the approach — the same beat
@@ -758,15 +770,18 @@ export const TIEBAO_ENTER_AT = 123;
 /** Name-plate WARNING, seconds after the train parks. */
 export const TIEBAO_WARNING = 1.5;
 
-/** Park-to-park. Output + telegraph + move. */
-export const TIEBAO_SWITCH_PERIOD = 10;
-export const TIEBAO_TELEGRAPH = 1.1;
-export const TIEBAO_MOVE = 0.8;
+/**
+ * Park-to-park. Output, then a turnout move. No telegraph and no lit rail.
+ * Hard overload uses the same 6s (it used to be the shorter clock).
+ */
+export const TIEBAO_SWITCH_PERIOD = 6;
+export const TIEBAO_MOVE = 1.2;
+/** Vertical length of the converging rails the train rides while switching. */
+export const TIEBAO_SWITCH_SPAN = 176;
 
-/** Hard overload only. */
+/** Hard overload. Same period as the main fight; weapons and smoke still differ. */
 export const TIEBAO_OVERLOAD_PERIOD = 6;
-export const TIEBAO_OVERLOAD_TELEGRAPH = 0.8;
-export const TIEBAO_OVERLOAD_MOVE = 0.6;
+export const TIEBAO_OVERLOAD_MOVE = 1.2;
 export const TIEBAO_OVERLOAD_HP = 240;
 export const TIEBAO_OVERLOAD_TRANSITION = 1.2;
 
@@ -785,50 +800,54 @@ export const TIEBAO_FAN_INTERVAL = 1.4;
 export const TIEBAO_FAN_FIRST = 0.4;
 export const TIEBAO_FAN_SPREAD = 60;
 
+/** Every attack interval except the fan is the P24 draft times this (+50% rate). */
+export const TIEBAO_RATE_SCALE = 2 / 3;
+
 export const TIEBAO_MISSILE_COUNT = 5;
-export const TIEBAO_MISSILE_GAP = 0.12;
+export const TIEBAO_MISSILE_GAP = 0.12 * TIEBAO_RATE_SCALE;
 export const TIEBAO_MISSILE_HOMING = 0.55;
 export const TIEBAO_MISSILE_SPEED = 88;
-export const TIEBAO_MISSILE_WAVES = [0.3, 4.0] as const;
+export const TIEBAO_MISSILE_WAVES = [0.3 * TIEBAO_RATE_SCALE, 4 * TIEBAO_RATE_SCALE] as const;
 export const TIEBAO_OVERLOAD_MISSILE_COUNT = 6;
 
 export const TIEBAO_RAIN_COUNT = 4;
-export const TIEBAO_RAIN_WARN = 0.8;
+export const TIEBAO_RAIN_WARN = 0.8 * TIEBAO_RATE_SCALE;
 export const TIEBAO_RAIN_RADIUS = 26;
 export const TIEBAO_RAIN_SEPARATION = 48;
-export const TIEBAO_RAIN_FIRST = 0.4;
-export const TIEBAO_RAIN_SECOND = 4.0;
-export const TIEBAO_OVERLOAD_RAIN_WARN = 0.55;
+export const TIEBAO_RAIN_FIRST = 0.4 * TIEBAO_RATE_SCALE;
+export const TIEBAO_RAIN_SECOND = 4.0 * TIEBAO_RATE_SCALE;
+export const TIEBAO_OVERLOAD_RAIN_WARN = 0.55 * TIEBAO_RATE_SCALE;
 
 /** Degrees off straight down. The sweep starts outward and crosses the lane. */
 export const TIEBAO_BROADSIDE_FROM = 40;
 export const TIEBAO_BROADSIDE_TO = 15;
-export const TIEBAO_BROADSIDE_STEP = 0.08;
-export const TIEBAO_BROADSIDE_SWEEP = 1;
-export const TIEBAO_BROADSIDE_GAP = 0.6;
+export const TIEBAO_BROADSIDE_STEP = 0.08 * TIEBAO_RATE_SCALE;
+export const TIEBAO_BROADSIDE_SWEEP = 1 * TIEBAO_RATE_SCALE;
+export const TIEBAO_BROADSIDE_GAP = 0.6 * TIEBAO_RATE_SCALE;
 export const TIEBAO_BROADSIDE_COUNT = 3;
-export const TIEBAO_BROADSIDE_FIRST = 0.35;
+export const TIEBAO_BROADSIDE_FIRST = 0.35 * TIEBAO_RATE_SCALE;
 export const TIEBAO_BROADSIDE_SPEED = 120;
 
 export const TIEBAO_WALL_COUNT = 8;
 export const TIEBAO_WALL_GAP = 18;
 export const TIEBAO_WALL_SPEED = 70;
-export const TIEBAO_WALL_FIRST = 0.4;
-export const TIEBAO_WALL_REPEAT = 1.6;
+export const TIEBAO_WALL_FIRST = 0.4 * TIEBAO_RATE_SCALE;
+export const TIEBAO_WALL_REPEAT = 1.6 * TIEBAO_RATE_SCALE;
 export const TIEBAO_WALL_VOLLEYS = 2;
-export const TIEBAO_OVERLOAD_WALL_REPEAT = 1;
+export const TIEBAO_OVERLOAD_WALL_REPEAT = 1 * TIEBAO_RATE_SCALE;
 
-export const TIEBAO_RAM_START = 1;
-export const TIEBAO_RAM_WARN = 0.5;
-export const TIEBAO_RAM_DIVE = 0.45;
-export const TIEBAO_RAM_RETURN = 0.55;
-/** Hull bottom (screen y) at the end of the dive. */
-export const TIEBAO_RAM_BOTTOM = 300;
+/** Dash starts quickly, reaches the bottom edge, then crawls back to park Y. */
+export const TIEBAO_RAM_START = 0.35;
+export const TIEBAO_RAM_WARN = 0;
+export const TIEBAO_RAM_DIVE = 0.12;
+export const TIEBAO_RAM_RETURN = 1.9;
+/** Hull bottom (screen y) at the end of the dive. The nose meets the bottom edge. */
+export const TIEBAO_RAM_BOTTOM = LOGICAL_H;
 
 export const TIEBAO_ROCKET_SPEED = 64;
 export const TIEBAO_ROCKET_Y = -16;
-export const TIEBAO_ROCKET_WARN = 0.45;
-export const TIEBAO_ROCKET_START = 0.8;
+export const TIEBAO_ROCKET_WARN = 0.45 * TIEBAO_RATE_SCALE;
+export const TIEBAO_ROCKET_START = 0.8 * TIEBAO_RATE_SCALE;
 export const TIEBAO_ROCKET_RADIUS = 6;
 
 export const TIEBAO_CRATE_HP = 6;
@@ -837,11 +856,11 @@ export const TIEBAO_CRATE_SCORE = 300;
 export const TIEBAO_CRATE_LAND_Y = 480;
 export const TIEBAO_CRATE_BLAST = 22;
 export const TIEBAO_CRATE_SIZE = 12;
-export const TIEBAO_CRATE_FIRST = 0.5;
-export const TIEBAO_CRATE_GAP = 1.2;
+export const TIEBAO_CRATE_FIRST = 0.5 * TIEBAO_RATE_SCALE;
+export const TIEBAO_CRATE_GAP = 1.2 * TIEBAO_RATE_SCALE;
 export const TIEBAO_CRATE_PER_WINDOW = 2;
 export const TIEBAO_CRATE_FLIGHT = 1.15;
-export const TIEBAO_OVERLOAD_CRATE_EVERY = 2.2;
+export const TIEBAO_OVERLOAD_CRATE_EVERY = 2.2 * TIEBAO_RATE_SCALE;
 
 export const TIEBAO_DEATH_EXPLOSIONS = 8;
 export const TIEBAO_DEATH_DURATION = 2.8;

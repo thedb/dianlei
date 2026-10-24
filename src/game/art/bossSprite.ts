@@ -9,14 +9,16 @@ import {
   BOSS_HULL_W,
   BOSS_TURRET_SIZE,
   LOGICAL_H,
-  TIEBAO_HULL_H,
-  TIEBAO_HULL_W,
+  TIEBAO_LOOK,
+  TIEBAO_PARK_Y,
   TIEBAO_RAIL_X,
+  TIEBAO_SWITCH_SPAN,
 } from '@/game/config';
 import { PALETTE, COLOR } from '@/game/palette';
 import type { BossHpBarLayout, BossRuntime } from '@/game/systems/boss';
 import { bossActiveLaser, bossLook } from '@/game/systems/boss';
-import { tiebaoVisual } from '@/game/systems/tiebao';
+import { tiebaoSwitchX, tiebaoVisual } from '@/game/systems/tiebao';
+import { buildTiebaoHull } from './tiebaoLooks';
 import { laserSweepRadians } from '@/game/systems/danmaku';
 import type { SpriteData, SpriteFrame } from './types';
 import { createGrid, fillEllipse, fillPoly, fillRect, outline, plot } from './pixelDraw';
@@ -316,62 +318,6 @@ export interface BossAssets {
 }
 
 /** Boss art registry, keyed by `BossDef.art`. A new boss adds one builder here. */
-function buildTiebaoHull(open: boolean): SpriteData {
-  const w = TIEBAO_HULL_W;
-  const h = TIEBAO_HULL_H;
-  const g = createGrid(w, h, -1);
-  const EY = COLOR.EXPLOSION_YELLOW;
-  const EO = COLOR.EXPLOSION_ORANGE;
-  fillRect(g, 18, 6, 44, 148, MG);
-  fillRect(g, 22, 10, 36, 140, G);
-  for (let y = 14; y < 146; y += 8) {
-    const stripe = Math.floor(y / 8) % 2 === 0 ? EY : K;
-    fillRect(g, 14, y, 6, 4, stripe);
-    fillRect(g, 60, y, 6, 4, stripe);
-  }
-  fillRect(g, 24, 12, 32, 54, COLOR.GROUND_DARK_OLIVE);
-  fillRect(g, 28, 18, 24, 42, COLOR.GROUND_OLIVE);
-  for (let i = 0; i < 3; i++) {
-    fillRect(g, 30, 22 + i * 12, 8, 6, EO);
-    fillRect(g, 42, 22 + i * 12, 8, 6, COLOR.GROUND_TAN);
-  }
-  fillRect(g, 34, 66, 12, 10, DG);
-  fillRect(g, 20, 78, 40, 56, MG);
-  fillRect(g, 26, 86, 28, 34, LG);
-  fillRect(g, 30, 92, 8, 6, COLOR.WATER_SHALLOW);
-  fillRect(g, 42, 92, 8, 6, COLOR.WATER_MEDIUM);
-  fillRect(g, 36, 108, 8, 6, S);
-  if (open) {
-    fillRect(g, 32, 122, 16, 12, EO);
-    fillRect(g, 35, 125, 10, 6, EY);
-  } else {
-    fillRect(g, 34, 124, 12, 8, DG);
-    plot(g, 40, 127, EO);
-  }
-  fillPoly(
-    g,
-    [
-      [28, 136],
-      [52, 136],
-      [48, 154],
-      [32, 154],
-    ],
-    DG
-  );
-  fillRect(g, 36, 146, 8, 4, EH);
-  plot(g, 34, 142, W);
-  plot(g, 46, 142, W);
-  plot(g, 40, 148, EY);
-  for (const y of [28, 48, 96, 116]) {
-    fillRect(g, 12, y, 4, 8, K);
-    fillRect(g, 64, y, 4, 8, K);
-    plot(g, 13, y + 2, G);
-    plot(g, 65, y + 2, G);
-  }
-  outline(g, K);
-  return g;
-}
-
 function buildTiebaoAa(broken: boolean): SpriteData {
   const g = createGrid(16, 16, -1);
   const EY = COLOR.EXPLOSION_YELLOW;
@@ -400,8 +346,8 @@ export const BOSS_ART: Readonly<Record<string, () => BossAssets>> = {
     parts: { turret: renderSprite(buildBossTurret()) },
   }),
   tiebao: () => ({
-    hull: renderSprite(buildTiebaoHull(false)),
-    hullOpen: renderSprite(buildTiebaoHull(true)),
+    hull: renderSprite(buildTiebaoHull(TIEBAO_LOOK, false)),
+    hullOpen: renderSprite(buildTiebaoHull(TIEBAO_LOOK, true)),
     parts: {
       aa: renderSprite(buildTiebaoAa(false)),
       aaBroken: renderSprite(buildTiebaoAa(true)),
@@ -493,29 +439,43 @@ export function drawBossWorld(
   }
 }
 
-/** Rails, warning circles, and the rail-break sparks under the train. */
+/** The converging point-rail the train rides. Map tiles keep the three straight rails. */
+function drawTurnout(ctx: CanvasRenderingContext2D, fromX: number, toX: number, u: number): void {
+  const y0 = Math.max(0, Math.floor(TIEBAO_PARK_Y - TIEBAO_SWITCH_SPAN + u * TIEBAO_SWITCH_SPAN));
+  const y1 = Math.min(LOGICAL_H, Math.ceil(y0 + TIEBAO_SWITCH_SPAN));
+  ctx.fillStyle = PALETTE[COLOR.TERRAIN_CONCRETE];
+  for (let y = y0; y < y1; y += 8) {
+    const x = Math.round(tiebaoSwitchX(y, fromX, toX, u));
+    ctx.fillRect(x - 8, y, 16, 2);
+  }
+  for (let y = y0; y < y1; y++) {
+    const x = Math.round(tiebaoSwitchX(y, fromX, toX, u));
+    ctx.fillStyle = PALETTE[COLOR.BLACK];
+    ctx.fillRect(x - 2, y, 1, 1);
+    ctx.fillRect(x + 2, y, 1, 1);
+    ctx.fillStyle = PALETTE[COLOR.PALE_GRAY];
+    ctx.fillRect(x - 1, y, 2, 1);
+  }
+}
+
+/** Turnout, warning circles, and the rail-break sparks under the train. */
 function drawTiebaoGround(ctx: CanvasRenderingContext2D, boss: BossRuntime, time: number): void {
   const visual = tiebaoVisual(boss);
   ctx.save();
-  for (let i = 0; i < TIEBAO_RAIL_X.length; i++) {
-    const x = TIEBAO_RAIL_X[i] ?? 0;
-    const hot = visual !== null && (visual.highlight === i || visual.rocketWarn);
-    const ram = visual?.ramWarn === true && visual.current === i;
-    ctx.strokeStyle = PALETTE[hot || ram ? COLOR.EXPLOSION_YELLOW : COLOR.MEDIUM_GRAY];
-    ctx.globalAlpha = hot || ram ? 0.9 : 0.45;
-    ctx.lineWidth = hot || ram ? 2 : 1;
-    ctx.setLineDash(visual?.broken ? [4, 6] : [2, 6]);
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, LOGICAL_H);
-    ctx.stroke();
-    if (visual?.broken && Math.floor(time * 12 + i) % 2 === 0) {
-      ctx.globalAlpha = 0.8;
-      ctx.fillStyle = PALETTE[COLOR.EXPLOSION_ORANGE];
-      ctx.fillRect(x - 1, 180 + ((time * 40 + i * 50) % 280), 3, 3);
+  if (visual?.switch) drawTurnout(ctx, visual.switch.fromX, visual.switch.toX, visual.switch.u);
+  if (visual?.rocketWarn) {
+    ctx.fillStyle = PALETTE[COLOR.EXPLOSION_YELLOW];
+    for (const x of TIEBAO_RAIL_X) ctx.fillRect(x - 1, 4, 3, 3);
+  }
+  if (visual?.broken) {
+    ctx.fillStyle = PALETTE[COLOR.EXPLOSION_ORANGE];
+    for (let i = 0; i < TIEBAO_RAIL_X.length; i++) {
+      const x = TIEBAO_RAIL_X[i] ?? 0;
+      if (Math.floor(time * 12 + i) % 2 === 0) {
+        ctx.fillRect(x - 1, 180 + ((time * 40 + i * 50) % 280), 3, 3);
+      }
     }
   }
-  ctx.setLineDash([]);
   if (visual) {
     for (const circle of visual.circles) {
       ctx.globalAlpha = 0.35 + 0.45 * circle.u;
