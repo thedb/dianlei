@@ -1,16 +1,26 @@
 /**
- * Five overhead armored-ammo hulls for 铁堡. Yoan picks one.
- * The fight uses `TIEBAO_LOOK` (temporary default A). Factory A is already locked.
+ * Locked 铁堡 hull: dark-steel locomotive plus two armored boxcars.
+ * The player chases from behind, so the nose points up-screen.
+ * Top of the sprite is the pilot. Bottom is the last car's buffer.
  *
- * Names: A 弹舱棚车, B 纵置油罐, C 敞车弹架, D 指挥守车, E 三节联挂.
- * Drawn from overhead freight references (roof plates, couplers, bogies,
- * tank hatches, a corrugated box, a caboose cupola). Not a side view.
- * The nose points down the screen, toward the player: the core hatch stays
- * near local (40, 128) and the roof guns stay near (50, 34) and (30, 102).
- * All are 80×160 palette pixels. Same hitbox.
+ * Five variations share that consist, the coupler gaps, and the hit
+ * anchors. They differ in nose plating, mount shape, and roof panels.
+ * Temporary default is A. Factory A is already locked.
+ *
+ * Anchors are hull-center offsets (`TIEBAO_CORE` / `TIEBAO_ROOF_*`),
+ * +y toward the player. On this 80×160 sprite that is:
+ *   core      (40, 18)   nose
+ *   roofLoco  (40, 42)   locomotive roof
+ *   roofCar   (40, 130)  rear boxcar
  */
 
-import { TIEBAO_HULL_H, TIEBAO_HULL_W } from '@/game/config';
+import {
+  TIEBAO_CORE,
+  TIEBAO_HULL_H,
+  TIEBAO_HULL_W,
+  TIEBAO_ROOF_CAR,
+  TIEBAO_ROOF_LOCO,
+} from '@/game/config';
 import { COLOR } from '@/game/palette';
 import { createGrid, fillEllipse, fillPoly, fillRect, outline, plot } from './pixelDraw';
 import type { SpriteData } from './types';
@@ -19,11 +29,11 @@ export const TIEBAO_LOOK_IDS = ['A', 'B', 'C', 'D', 'E'] as const;
 export type TiebaoLookId = (typeof TIEBAO_LOOK_IDS)[number];
 
 export const TIEBAO_LOOK_NAMES: Readonly<Record<TiebaoLookId, string>> = {
-  A: '弹舱棚车',
-  B: '纵置油罐',
-  C: '敞车弹架',
-  D: '指挥守车',
-  E: '三节联挂',
+  A: '尖头三节',
+  B: '钝鼻铆甲',
+  C: '侧裙弹舱',
+  D: '脊炮车顶',
+  E: '厚钩尾梁',
 };
 
 const K = COLOR.BLACK;
@@ -34,21 +44,29 @@ const G = COLOR.GRAY;
 const LG = COLOR.LIGHT_GRAY;
 const PG = COLOR.PALE_GRAY;
 const W = COLOR.WHITE;
-const OL = COLOR.GROUND_DARK_OLIVE;
-const OV = COLOR.GROUND_OLIVE;
-const OM = COLOR.GROUND_MED_OLIVE;
-const TAN = COLOR.GROUND_TAN;
+const RD = COLOR.ENEMY_BRIGHT_RED;
 const BR = COLOR.TERRAIN_DARK_BROWN;
 const WD = COLOR.TERRAIN_BROWN;
-const CON = COLOR.TERRAIN_CONCRETE;
+const TAN = COLOR.GROUND_TAN;
+const OL = COLOR.GROUND_OLIVE;
 const EY = COLOR.EXPLOSION_YELLOW;
 const EO = COLOR.EXPLOSION_ORANGE;
 const OY = COLOR.EXPLOSION_ORANGE_YELLOW;
 
-/** Rear roof gun. Matches `TIEBAO_ROOF_CAR` on an 80×160 hull. */
-const GUN_REAR = { x: 50, y: 34 } as const;
-/** Forward roof gun. Matches `TIEBAO_ROOF_LOCO`. */
-const GUN_FORE = { x: 30, y: 102 } as const;
+const CX = Math.floor(TIEBAO_HULL_W / 2);
+const CY = Math.floor(TIEBAO_HULL_H / 2);
+
+function at(offset: { readonly x: number; readonly y: number }): { x: number; y: number } {
+  return { x: CX + offset.x, y: CY + offset.y };
+}
+
+const CORE_AT = at(TIEBAO_CORE);
+const LOCO_GUN = at(TIEBAO_ROOF_LOCO);
+const CAR_GUN = at(TIEBAO_ROOF_CAR);
+
+type Nose = 'wedge' | 'blunt' | 'spike' | 'chamfer' | 'step';
+type Mount = 'round' | 'square' | 'twin';
+type Plate = 'round' | 'square' | 'slit';
 
 function hline(g: SpriteData, x: number, y: number, w: number, color: number): void {
   for (let i = 0; i < w; i++) plot(g, x + i, y, color);
@@ -58,297 +76,372 @@ function vline(g: SpriteData, x: number, y: number, h: number, color: number): v
   for (let i = 0; i < h; i++) plot(g, x, y + i, color);
 }
 
-/** Side walls plus an inset roof, so the car reads as a volume from above. */
-function carBody(
-  g: SpriteData,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  wall: number,
-  roof: number
-): void {
-  fillRect(g, x, y, w, h, wall);
-  fillRect(g, x + 4, y + 4, w - 8, h - 8, roof);
-  hline(g, x + 4, y + 4, w - 8, LG);
-  vline(g, x + 4, y + 4, h - 8, LG);
-  hline(g, x + 4, y + h - 5, w - 8, S);
-  vline(g, x + w - 5, y + 4, h - 8, S);
-  plot(g, x + 2, y + 2, PG);
-  plot(g, x + w - 3, y + 2, PG);
-  plot(g, x + 2, y + h - 3, DG);
-  plot(g, x + w - 3, y + h - 3, DG);
+/** Inset roof. Light from the upper left, so the nose edge stays bright. */
+function roof(g: SpriteData, x: number, y: number, w: number, h: number, cap: number): void {
+  fillRect(g, x, y, w, h, DG);
+  fillRect(g, x + 3, y + 3, w - 6, h - 6, cap);
+  hline(g, x + 3, y + 3, w - 6, LG);
+  vline(g, x + 3, y + 3, h - 6, LG);
+  hline(g, x + 3, y + h - 4, w - 6, S);
+  vline(g, x + w - 4, y + 3, h - 6, S);
+  plot(g, x + 1, y + 1, PG);
+  plot(g, x + w - 2, y + 1, PG);
+  plot(g, x + 1, y + h - 2, G);
+  plot(g, x + w - 2, y + h - 2, G);
 }
 
-/** Wheel pairs sticking out past the sill. Drawn after the body. */
 function bogie(g: SpriteData, y: number, left: number, right: number): void {
-  fillRect(g, left + 2, y - 1, 6, 3, S);
-  fillRect(g, right - 8, y - 1, 6, 3, S);
-  for (const x of [left - 5, right + 1]) {
-    fillRect(g, x, y - 5, 4, 3, K);
+  fillRect(g, left, y - 2, 8, 4, S);
+  fillRect(g, right - 8, y - 2, 8, 4, S);
+  for (const x of [left - 6, right + 2]) {
+    fillRect(g, x, y - 6, 4, 3, K);
     fillRect(g, x, y + 3, 4, 3, K);
-    plot(g, x + 1, y - 4, MG);
-    plot(g, x + 1, y + 4, MG);
+    plot(g, x + 1, y - 5, G);
+    plot(g, x + 1, y + 4, LG);
   }
 }
 
-/** Knuckle between two cars. `y` is the top of a short gap. */
-function coupler(g: SpriteData, y: number): void {
-  fillRect(g, 37, y, 6, 2, S);
-  fillRect(g, 34, y + 2, 12, 5, DG);
-  fillRect(g, 37, y + 3, 6, 3, MG);
-  plot(g, 35, y + 4, PG);
-  plot(g, 44, y + 4, PG);
-  vline(g, 33, y + 3, 3, S);
-  vline(g, 46, y + 3, 3, S);
-  fillRect(g, 37, y + 7, 6, 2, S);
+/** Knuckle in a gap. `y` is the top of the housing. */
+function coupler(g: SpriteData, y: number, heavy: boolean): void {
+  const w = heavy ? 16 : 12;
+  const x = CX - Math.floor(w / 2);
+  fillRect(g, CX - 3, y, 6, 2, S);
+  fillRect(g, x, y + 2, w, heavy ? 7 : 5, DG);
+  fillRect(g, CX - 3, y + 3, 6, 3, MG);
+  hline(g, x, y + 2, w, LG);
+  plot(g, x + 1, y + 4, PG);
+  plot(g, x + w - 2, y + 4, PG);
+  fillRect(g, CX - 3, y + (heavy ? 9 : 7), 6, 2, S);
 }
 
-/** Blunt armored pilot at the bottom of the sprite. Nose toward the player. */
-function pilot(g: SpriteData, y: number): void {
-  fillPoly(
-    g,
-    [
-      [14, y],
-      [66, y],
-      [58, y + 14],
-      [22, y + 14],
-    ],
-    DG
-  );
-  fillPoly(
-    g,
-    [
-      [20, y + 2],
-      [60, y + 2],
-      [54, y + 11],
-      [26, y + 11],
-    ],
-    MG
-  );
-  hline(g, 22, y + 2, 36, LG);
-  fillRect(g, 22, y + 5, 5, 3, EY);
-  fillRect(g, 53, y + 5, 5, 3, EY);
-  plot(g, 23, y + 6, W);
-  plot(g, 54, y + 6, W);
-  fillRect(g, 36, y + 8, 8, 4, K);
-  fillRect(g, 38, y + 9, 4, 2, DG);
-}
-
-function ring(g: SpriteData, cx: number, cy: number): void {
-  fillEllipse(g, cx, cy, 8, 7, S);
-  fillEllipse(g, cx, cy, 6, 5, DG);
-  fillEllipse(g, cx, cy, 3, 2, MG);
-  plot(g, cx - 6, cy - 4, PG);
-  plot(g, cx + 6, cy - 4, PG);
-  plot(g, cx - 6, cy + 4, DG);
-  plot(g, cx + 6, cy + 4, DG);
-}
-
-function guns(g: SpriteData): void {
-  ring(g, GUN_REAR.x, GUN_REAR.y);
-  ring(g, GUN_FORE.x, GUN_FORE.y);
-}
-
-/** Core hatch. Closed plate versus the open orange bay. Sits on the nose. */
-function hatch(g: SpriteData, open: boolean): void {
-  fillRect(g, 29, 116, 22, 18, S);
-  fillRect(g, 31, 118, 18, 14, DG);
-  if (open) {
-    fillRect(g, 34, 121, 12, 8, EO);
-    fillRect(g, 36, 123, 8, 4, EY);
-    plot(g, 40, 125, W);
+function noseOf(g: SpriteData, nose: Nose): void {
+  if (nose === 'wedge') {
+    fillPoly(
+      g,
+      [
+        [CX, 2],
+        [18, 20],
+        [62, 20],
+      ],
+      DG
+    );
+    fillPoly(
+      g,
+      [
+        [CX, 5],
+        [24, 18],
+        [56, 18],
+      ],
+      MG
+    );
+    hline(g, CX - 1, 4, 2, LG);
+  } else if (nose === 'blunt') {
+    fillRect(g, 24, 4, 32, 4, DG);
+    fillPoly(
+      g,
+      [
+        [24, 4],
+        [56, 4],
+        [64, 16],
+        [16, 16],
+      ],
+      DG
+    );
+    fillRect(g, 26, 6, 28, 8, MG);
+    hline(g, 26, 6, 28, LG);
+    fillRect(g, 30, 8, 4, 3, EY);
+    fillRect(g, 46, 8, 4, 3, EY);
+    plot(g, 31, 9, W);
+    plot(g, 47, 9, W);
+  } else if (nose === 'spike') {
+    fillPoly(
+      g,
+      [
+        [CX, 1],
+        [30, 18],
+        [50, 18],
+      ],
+      DG
+    );
+    fillPoly(
+      g,
+      [
+        [CX, 4],
+        [34, 16],
+        [46, 16],
+      ],
+      MG
+    );
+    hline(g, CX, 3, 1, W);
+  } else if (nose === 'chamfer') {
+    fillPoly(
+      g,
+      [
+        [22, 8],
+        [58, 8],
+        [66, 18],
+        [14, 18],
+      ],
+      DG
+    );
+    fillRect(g, 24, 10, 32, 6, MG);
+    hline(g, 24, 10, 32, LG);
+    fillRect(g, 36, 1, 8, 3, G);
+    fillRect(g, 38, 1, 4, 12, DG);
+    plot(g, 39, 2, EY);
+    plot(g, 40, 2, W);
   } else {
-    fillRect(g, 34, 121, 12, 8, MG);
-    hline(g, 34, 121, 12, LG);
-    fillRect(g, 38, 123, 4, 4, S);
-    plot(g, 40, 124, EO);
+    fillRect(g, 30, 3, 20, 6, DG);
+    fillRect(g, 32, 5, 16, 3, MG);
+    hline(g, 32, 5, 16, LG);
+    fillRect(g, 22, 9, 36, 6, DG);
+    fillRect(g, 24, 11, 32, 3, MG);
+    fillRect(g, 16, 15, 48, 4, DG);
   }
-  plot(g, 31, 118, PG);
-  plot(g, 47, 118, PG);
-  plot(g, 31, 130, PG);
-  plot(g, 47, 130, PG);
 }
 
-function finish(g: SpriteData, open: boolean): SpriteData {
-  guns(g);
-  hatch(g, open);
+function loco(g: SpriteData, nose: Nose): void {
+  noseOf(g, nose);
+  roof(g, 16, 18, 48, 34, MG);
+  hline(g, 22, 32, 36, S);
+  fillRect(g, 20, 24, 2, 2, RD);
+  fillRect(g, 58, 24, 2, 2, RD);
+}
+
+function boxcar(g: SpriteData, y: number, h: number): void {
+  roof(g, 10, y, 60, h, G);
+}
+
+/** Side pods. Short tubes reach the missile origins without bridging the gap. */
+function pods(g: SpriteData): void {
+  fillRect(g, 4, 36, 14, 12, DG);
+  fillRect(g, 62, 36, 14, 12, DG);
+  fillRect(g, 6, 38, 10, 8, S);
+  fillRect(g, 64, 38, 10, 8, S);
+  fillRect(g, 7, 40, 3, 4, K);
+  fillRect(g, 12, 40, 3, 4, K);
+  fillRect(g, 65, 40, 3, 4, K);
+  fillRect(g, 70, 40, 3, 4, K);
+  fillRect(g, 10, 46, 6, 12, S);
+  fillRect(g, 64, 46, 6, 12, S);
+  vline(g, 12, 48, 8, DG);
+  vline(g, 66, 48, 8, DG);
+}
+
+function broadside(g: SpriteData): void {
+  fillRect(g, 1, 84, 12, 6, DG);
+  fillRect(g, 67, 84, 12, 6, DG);
+  fillRect(g, 2, 86, 8, 2, K);
+  fillRect(g, 70, 86, 8, 2, K);
+  plot(g, 3, 85, LG);
+  plot(g, 76, 85, LG);
+}
+
+/** Rear beam. Yellow lamps sit where the ram telegraph flashes. */
+function buffer(g: SpriteData, tall: boolean): void {
+  const y = tall ? 146 : 150;
+  const h = tall ? 12 : 8;
+  fillRect(g, 12, y, 56, h, DG);
+  fillRect(g, 16, y + 2, 48, h - 4, MG);
+  hline(g, 16, y + 2, 48, LG);
+  fillRect(g, 24, 150, 8, 3, EY);
+  fillRect(g, 48, 150, 8, 3, EY);
+  plot(g, 26, 151, W);
+  plot(g, 50, 151, W);
+  fillRect(g, 36, y + h - 4, 8, 3, K);
+}
+
+function trucks(g: SpriteData): void {
+  bogie(g, 28, 16, 64);
+  bogie(g, 46, 16, 64);
+  bogie(g, 72, 10, 70);
+  bogie(g, 96, 10, 70);
+  bogie(g, 124, 10, 70);
+  bogie(g, 142, 10, 70);
+}
+
+function consist(g: SpriteData, nose: Nose, heavy: boolean, tallBuffer: boolean): void {
+  loco(g, nose);
+  if (nose === 'spike') {
+    fillRect(g, 6, 24, 12, 24, DG);
+    fillRect(g, 62, 24, 12, 24, DG);
+    fillRect(g, 8, 26, 8, 20, S);
+    fillRect(g, 64, 26, 8, 20, S);
+  }
+  pods(g);
+  coupler(g, 54, heavy);
+  boxcar(g, 64, 40);
+  broadside(g);
+  coupler(g, 106, heavy);
+  boxcar(g, 116, 34);
+  buffer(g, tallBuffer);
+  trucks(g);
+}
+
+function mount(g: SpriteData, x: number, y: number, kind: Mount): void {
+  if (kind === 'square') {
+    fillRect(g, x - 7, y - 6, 14, 12, S);
+    fillRect(g, x - 5, y - 4, 10, 8, DG);
+    fillRect(g, x - 2, y - 2, 4, 4, MG);
+    plot(g, x - 5, y - 4, PG);
+    plot(g, x, y, G);
+    return;
+  }
+  if (kind === 'twin') {
+    fillRect(g, x - 8, y - 5, 16, 10, S);
+    fillRect(g, x - 6, y - 3, 5, 6, DG);
+    fillRect(g, x + 1, y - 3, 5, 6, DG);
+    plot(g, x - 4, y - 2, LG);
+    plot(g, x + 3, y - 2, LG);
+    plot(g, x, y, MG);
+    return;
+  }
+  fillEllipse(g, x, y, 7, 6, S);
+  fillEllipse(g, x, y, 5, 4, DG);
+  fillEllipse(g, x, y, 2, 2, MG);
+  plot(g, x - 4, y - 3, PG);
+  plot(g, x, y, G);
+}
+
+function corePlate(g: SpriteData, open: boolean, plate: Plate): void {
+  const x = CORE_AT.x;
+  const y = CORE_AT.y;
+  fillRect(g, x - 8, y - 7, 16, 14, S);
+  fillRect(g, x - 6, y - 5, 12, 10, DG);
+  if (open) {
+    fillRect(g, x - 4, y - 3, 8, 6, EO);
+    fillRect(g, x - 2, y - 1, 4, 3, EY);
+    plot(g, x, y, W);
+  } else if (plate === 'square') {
+    fillRect(g, x - 4, y - 4, 8, 8, MG);
+    hline(g, x - 4, y - 4, 8, LG);
+    plot(g, x, y, EO);
+  } else if (plate === 'slit') {
+    fillRect(g, x - 5, y - 1, 10, 3, MG);
+    hline(g, x - 5, y - 1, 10, LG);
+    plot(g, x, y, EO);
+  } else {
+    fillEllipse(g, x, y, 4, 3, MG);
+    plot(g, x - 2, y - 1, LG);
+    plot(g, x, y, EO);
+  }
+  plot(g, x - 6, y - 5, PG);
+  plot(g, x + 5, y - 5, PG);
+  plot(g, x - 6, y + 4, G);
+  plot(g, x + 5, y + 4, G);
+}
+
+function finish(g: SpriteData, open: boolean, kind: Mount, plate: Plate): SpriteData {
+  mount(g, LOCO_GUN.x, LOCO_GUN.y, kind);
+  mount(g, CAR_GUN.x, CAR_GUN.y, kind);
+  corePlate(g, open, plate);
   outline(g, K);
   return g;
 }
 
-/** A: ammo boxcar. Long roof hatches and a panel grid, then an armored loco. */
+/** A: wedge nose, round mounts, middle vent, rear cargo bay. Concept massing. */
 function lookA(open: boolean): SpriteData {
   const g = createGrid(TIEBAO_HULL_W, TIEBAO_HULL_H, -1);
-  carBody(g, 16, 4, 48, 58, OL, OV);
-  fillRect(g, 22, 12, 14, 40, OL);
-  fillRect(g, 44, 12, 14, 40, OL);
-  for (let i = 0; i < 3; i++) {
-    const y = 16 + i * 12;
-    fillRect(g, 24, y, 10, 8, TAN);
-    fillRect(g, 46, y, 10, 8, EO);
-    hline(g, 24, y, 10, OY);
-    plot(g, 28, y + 3, EY);
-    plot(g, 50, y + 3, EY);
-  }
-  vline(g, 39, 10, 44, PG);
-  vline(g, 40, 10, 44, S);
-  bogie(g, 16, 16, 64);
-  bogie(g, 50, 16, 64);
-  coupler(g, 63);
-  carBody(g, 12, 74, 56, 68, DG, G);
-  for (let row = 0; row < 3; row++) {
-    for (let col = 0; col < 3; col++) {
-      const x = 20 + col * 14;
-      const y = 82 + row * 16;
-      fillRect(g, x, y, 10, 10, MG);
-      hline(g, x, y, 10, LG);
-      plot(g, x + 1, y + 1, PG);
-      plot(g, x + 8, y + 8, S);
-    }
-  }
-  bogie(g, 86, 12, 68);
-  bogie(g, 128, 12, 68);
-  pilot(g, 142);
-  return finish(g, open);
+  consist(g, 'wedge', false, false);
+  fillEllipse(g, 40, 74, 8, 7, S);
+  fillEllipse(g, 40, 74, 5, 4, DG);
+  fillEllipse(g, 40, 74, 2, 2, K);
+  plot(g, 40, 74, LG);
+  fillRect(g, 22, 88, 36, 10, S);
+  for (let x = 24; x < 56; x += 4) vline(g, x, 89, 8, DG);
+  hline(g, 22, 88, 36, LG);
+  fillRect(g, 16, 122, 14, 20, S);
+  fillRect(g, 50, 122, 14, 20, S);
+  fillRect(g, 18, 124, 10, 8, WD);
+  fillRect(g, 18, 134, 10, 6, BR);
+  hline(g, 18, 124, 10, TAN);
+  fillEllipse(g, 55, 128, 4, 5, MG);
+  fillEllipse(g, 61, 128, 4, 5, G);
+  plot(g, 55, 126, LG);
+  plot(g, 61, 126, LG);
+  fillRect(g, 54, 136, 3, 4, OL);
+  fillRect(g, 60, 136, 3, 4, OL);
+  return finish(g, open, 'round', 'round');
 }
 
-/** B: two tank barrels, center stripe, round hatches, short armored cab. */
+/** B: flat armored face, rivet rows, ribbed middle roof, louvered rear. */
 function lookB(open: boolean): SpriteData {
   const g = createGrid(TIEBAO_HULL_W, TIEBAO_HULL_H, -1);
-  const tank = (cy: number, ry: number): void => {
-    fillEllipse(g, 40, cy, 18, ry, S);
-    fillEllipse(g, 40, cy, 15, ry - 3, LG);
-    fillEllipse(g, 40, cy, 12, ry - 6, PG);
-    fillRect(g, 37, cy - ry + 6, 6, ry * 2 - 12, EY);
-    fillRect(g, 39, cy - ry + 6, 2, ry * 2 - 12, W);
-    for (const dy of [-Math.floor(ry / 2), Math.floor(ry / 2)]) {
-      fillEllipse(g, 40, cy + dy, 4, 4, S);
-      fillEllipse(g, 40, cy + dy, 2, 2, DG);
-      plot(g, 40, cy + dy, EO);
-    }
-    vline(g, 26, cy - ry + 8, ry * 2 - 16, DG);
-  };
-  tank(30, 24);
-  bogie(g, 14, 24, 56);
-  bogie(g, 46, 24, 56);
-  coupler(g, 56);
-  tank(84, 20);
-  bogie(g, 70, 24, 56);
-  bogie(g, 98, 24, 56);
-  fillRect(g, 42, 26, 16, 14, MG);
-  fillRect(g, 20, 94, 16, 14, MG);
-  coupler(g, 106);
-  carBody(g, 14, 116, 52, 26, DG, G);
-  pilot(g, 142);
-  return finish(g, open);
+  consist(g, 'blunt', false, false);
+  for (let y = 22; y < 48; y += 6) {
+    plot(g, 18, y, PG);
+    plot(g, 61, y, PG);
+  }
+  for (let y = 68; y < 100; y += 4) hline(g, 16, y, 48, y % 8 === 0 ? S : DG);
+  for (let x = 16; x < 66; x += 8) {
+    plot(g, x, 66, PG);
+    plot(g, x, 100, PG);
+    plot(g, x, 118, PG);
+    plot(g, x, 146, PG);
+  }
+  for (let y = 122; y < 146; y += 3) hline(g, 18, y, 44, S);
+  fillRect(g, 18, 120, 44, 2, LG);
+  return finish(g, open, 'square', 'square');
 }
 
-/** C: open flatcars. Deck and sills show; shells sit in racks, not under a roof. */
+/** C: spike, side skirts, twin ammo doors, a small cupola beside the rear gun. */
 function lookC(open: boolean): SpriteData {
   const g = createGrid(TIEBAO_HULL_W, TIEBAO_HULL_H, -1);
-  const flat = (y: number, h: number): void => {
-    fillRect(g, 10, y, 8, h, DG);
-    fillRect(g, 62, y, 8, h, DG);
-    fillRect(g, 12, y, 4, h, MG);
-    fillRect(g, 64, y, 4, h, LG);
-    fillRect(g, 18, y, 44, h, WD);
-    hline(g, 18, y, 44, BR);
-    hline(g, 18, y + h - 1, 44, S);
-  };
-  flat(4, 60);
-  for (let row = 0; row < 4; row++) {
-    for (let col = 0; col < 3; col++) {
-      const x = 22 + col * 12;
-      const y = 10 + row * 12;
-      fillRect(g, x, y, 8, 8, EO);
-      fillRect(g, x + 1, y, 6, 2, EY);
-      fillRect(g, x + 2, y + 3, 4, 3, OY);
-      plot(g, x + 3, y + 6, TAN);
-    }
-  }
-  bogie(g, 14, 10, 70);
-  bogie(g, 52, 10, 70);
-  coupler(g, 65);
-  flat(76, 46);
-  for (let i = 0; i < 2; i++) {
-    fillRect(g, 38, 82 + i * 16, 20, 10, OV);
-    fillRect(g, 40, 84 + i * 16, 16, 6, OM);
-    hline(g, 40, 84 + i * 16, 16, TAN);
-  }
-  bogie(g, 86, 10, 70);
-  bogie(g, 112, 10, 70);
-  fillRect(g, 42, 26, 18, 14, CON);
-  fillRect(g, 18, 92, 16, 14, CON);
-  fillRect(g, 12, 114, 56, 28, DG);
-  fillRect(g, 16, 118, 48, 20, G);
-  hline(g, 16, 118, 48, LG);
-  pilot(g, 142);
-  return finish(g, open);
+  consist(g, 'spike', false, false);
+  fillRect(g, 18, 70, 18, 26, S);
+  fillRect(g, 44, 70, 18, 26, S);
+  fillRect(g, 20, 72, 14, 22, TAN);
+  fillRect(g, 46, 72, 14, 22, OL);
+  hline(g, 20, 72, 14, OY);
+  hline(g, 46, 72, 14, LG);
+  vline(g, 26, 74, 18, WD);
+  vline(g, 52, 74, 18, DG);
+  fillRect(g, 54, 120, 12, 10, MG);
+  fillRect(g, 56, 122, 8, 6, LG);
+  plot(g, 58, 124, S);
+  plot(g, 61, 124, S);
+  return finish(g, open, 'round', 'round');
 }
 
-/** D: one armored caboose. Inset roof, center cupola, heavy trucks, plow. */
+/** D: chamfered nose with an up-barrel, center spine, rear tubes flanking the gun. */
 function lookD(open: boolean): SpriteData {
   const g = createGrid(TIEBAO_HULL_W, TIEBAO_HULL_H, -1);
-  carBody(g, 8, 4, 64, 136, DG, MG);
-  hline(g, 16, 40, 48, S);
-  hline(g, 16, 78, 48, S);
-  hline(g, 16, 110, 48, S);
-  vline(g, 40, 12, 110, S);
-  for (let i = 0; i < 4; i++) {
-    plot(g, 18, 16 + i * 28, PG);
-    plot(g, 60, 16 + i * 28, PG);
-  }
-  fillRect(g, 26, 48, 28, 22, G);
-  fillRect(g, 28, 50, 24, 18, LG);
-  hline(g, 28, 50, 24, PG);
-  vline(g, 28, 50, 18, PG);
-  fillRect(g, 36, 55, 8, 8, DG);
-  fillRect(g, 38, 57, 4, 4, S);
-  plot(g, 29, 51, W);
-  plot(g, 50, 51, W);
-  plot(g, 29, 66, DG);
-  plot(g, 50, 66, DG);
-  vline(g, 22, 14, 112, PG);
-  vline(g, 23, 14, 112, S);
-  bogie(g, 18, 8, 72);
-  bogie(g, 124, 8, 72);
-  fillRect(g, 8, 140, 64, 4, S);
-  pilot(g, 144);
-  return finish(g, open);
+  consist(g, 'chamfer', false, false);
+  vline(g, 39, 20, 28, S);
+  vline(g, 40, 20, 28, LG);
+  vline(g, 41, 20, 28, S);
+  fillRect(g, 18, 68, 44, 28, S);
+  fillRect(g, 20, 70, 40, 24, MG);
+  for (let y = 74; y < 92; y += 6) hline(g, 22, y, 36, S);
+  fillEllipse(g, 22, 126, 5, 6, S);
+  fillEllipse(g, 58, 126, 5, 6, S);
+  fillEllipse(g, 22, 126, 3, 4, DG);
+  fillEllipse(g, 58, 126, 3, 4, DG);
+  plot(g, 22, 123, EY);
+  plot(g, 58, 123, EY);
+  fillRect(g, 20, 132, 4, 10, DG);
+  fillRect(g, 56, 132, 4, 10, DG);
+  return finish(g, open, 'twin', 'square');
 }
 
-/** E: three different cars — ribbed box, tank, armored loco — with knuckles. */
+/** E: stepped nose, heavy knuckles, four hatches, tall buffer beam. */
 function lookE(open: boolean): SpriteData {
   const g = createGrid(TIEBAO_HULL_W, TIEBAO_HULL_H, -1);
-  carBody(g, 14, 2, 52, 46, DG, G);
-  for (let y = 8; y < 42; y += 4) {
-    hline(g, 20, y, 40, y % 8 === 0 ? PG : S);
+  consist(g, 'step', true, true);
+  for (let row = 0; row < 2; row++) {
+    for (let col = 0; col < 2; col++) {
+      const x = 22 + col * 20;
+      const y = 70 + row * 14;
+      fillRect(g, x, y, 14, 10, S);
+      fillRect(g, x + 2, y + 2, 10, 6, MG);
+      hline(g, x + 2, y + 2, 10, LG);
+      plot(g, x + 6, y + 4, EO);
+    }
   }
-  bogie(g, 12, 14, 66);
-  bogie(g, 38, 14, 66);
-  coupler(g, 49);
-  fillEllipse(g, 40, 70, 15, 14, S);
-  fillEllipse(g, 40, 70, 12, 11, LG);
-  fillEllipse(g, 40, 70, 9, 8, PG);
-  fillRect(g, 37, 58, 6, 24, EY);
-  fillRect(g, 39, 58, 2, 24, W);
-  fillEllipse(g, 40, 70, 4, 4, S);
-  fillEllipse(g, 40, 70, 2, 2, DG);
-  plot(g, 40, 70, EO);
-  bogie(g, 60, 26, 54);
-  bogie(g, 80, 26, 54);
-  coupler(g, 84);
-  carBody(g, 10, 92, 60, 50, DG, G);
-  for (let col = 0; col < 3; col++) {
-    fillRect(g, 18 + col * 16, 110, 12, 16, MG);
-    hline(g, 18 + col * 16, 112, 12, LG);
-    plot(g, 20 + col * 16, 114, PG);
-  }
-  bogie(g, 114, 10, 70);
-  bogie(g, 132, 10, 70);
-  pilot(g, 142);
-  return finish(g, open);
+  vline(g, 20, 120, 24, PG);
+  vline(g, 21, 120, 24, S);
+  for (let x = 18; x < 64; x += 6) plot(g, x, 148, PG);
+  return finish(g, open, 'twin', 'slit');
 }
 
 const BUILDERS: Readonly<Record<TiebaoLookId, (open: boolean) => SpriteData>> = {

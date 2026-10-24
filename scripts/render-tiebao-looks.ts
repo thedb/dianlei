@@ -8,7 +8,9 @@ import { deflateSync } from 'zlib';
 import { mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { createRng } from '@/engine/rng';
+import { TIEBAO_HULL_H, TIEBAO_HULL_W, TIEBAO_ROOF_CAR, TIEBAO_ROOF_LOCO } from '@/game/config';
 import { PALETTE } from '@/game/palette';
+import { buildTiebaoAa } from '@/game/art/bossSprite';
 import { TileId, getTilePixels } from '@/game/art/tiles';
 import {
   FACTORY_LOOK_IDS,
@@ -154,11 +156,24 @@ function renderGrid(grid: TileGrid, tiles: SpriteData[], zoom: number, letter: s
 
 function renderHull(look: TiebaoLookId, zoom: number): Buffer {
   const hull = buildTiebaoHull(look, false);
-  const width = 80 * zoom + 16;
-  const height = 160 * zoom + 16;
+  const width = TIEBAO_HULL_W * zoom + 16;
+  const height = TIEBAO_HULL_H * zoom + 16;
   const rgb = new Uint8Array(width * height * 3);
   for (let i = 0; i < width * height; i++) rgb.set(BG, i * 3);
   blitSprite(rgb, width, hull, 8, 8, zoom);
+  const gun = buildTiebaoAa(false);
+  const cx = Math.floor(TIEBAO_HULL_W / 2);
+  const cy = Math.floor(TIEBAO_HULL_H / 2);
+  for (const offset of [TIEBAO_ROOF_LOCO, TIEBAO_ROOF_CAR]) {
+    blitSprite(
+      rgb,
+      width,
+      gun,
+      8 + (cx + offset.x - 8) * zoom,
+      8 + (cy + offset.y - 8) * zoom,
+      zoom
+    );
+  }
   badge(rgb, width, look);
   return encodePng(width, height, rgb);
 }

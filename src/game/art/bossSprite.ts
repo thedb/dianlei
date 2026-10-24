@@ -9,9 +9,12 @@ import {
   BOSS_HULL_W,
   BOSS_TURRET_SIZE,
   LOGICAL_H,
+  TIEBAO_CORE,
   TIEBAO_LOOK,
   TIEBAO_PARK_Y,
   TIEBAO_RAIL_X,
+  TIEBAO_ROOF_CAR,
+  TIEBAO_ROOF_LOCO,
   TIEBAO_SWITCH_SPAN,
 } from '@/game/config';
 import { PALETTE, COLOR } from '@/game/palette';
@@ -318,22 +321,23 @@ export interface BossAssets {
 }
 
 /** Boss art registry, keyed by `BossDef.art`. A new boss adds one builder here. */
-function buildTiebaoAa(broken: boolean): SpriteData {
+/** Roof gun. Barrel points down-screen, back at the player chasing the train. */
+export function buildTiebaoAa(broken: boolean): SpriteData {
   const g = createGrid(16, 16, -1);
   const EY = COLOR.EXPLOSION_YELLOW;
-  fillRect(g, 2, 9, 12, 5, MG);
-  fillRect(g, 4, 7, 8, 3, G);
-  fillRect(g, 2, 12, 4, 2, EY);
-  fillRect(g, 10, 12, 4, 2, K);
+  fillRect(g, 2, 2, 12, 5, MG);
+  fillRect(g, 4, 6, 8, 3, G);
+  fillRect(g, 2, 3, 4, 2, EY);
+  fillRect(g, 10, 3, 4, 2, K);
   if (!broken) {
-    fillRect(g, 7, 2, 2, 8, DG);
-    fillRect(g, 5, 1, 6, 2, K);
-    plot(g, 8, 2, EH);
+    fillRect(g, 7, 7, 2, 7, DG);
+    fillRect(g, 5, 13, 6, 2, K);
+    plot(g, 8, 14, EH);
   } else {
-    fillRect(g, 4, 5, 8, 3, K);
-    plot(g, 3, 4, COLOR.EXPLOSION_ORANGE);
-    plot(g, 12, 4, EY);
-    plot(g, 8, 6, W);
+    fillRect(g, 4, 8, 8, 3, K);
+    plot(g, 3, 11, COLOR.EXPLOSION_ORANGE);
+    plot(g, 12, 11, EY);
+    plot(g, 8, 9, W);
   }
   outline(g, K);
   return g;
@@ -511,12 +515,14 @@ function drawTiebaoAir(
     ctx.fillRect(crate.x - 6, crate.y - 1, 12, 2);
   }
   if (smoke || visual.smoke) {
+    const origins = [TIEBAO_CORE, TIEBAO_ROOF_LOCO, TIEBAO_ROOF_CAR];
     ctx.fillStyle = PALETTE[COLOR.LIGHT_GRAY];
-    for (let i = 0; i < 4; i++) {
-      const rise = (time * 18 + i * 11) % 28;
-      ctx.globalAlpha = 0.35 * (1 - rise / 28);
+    for (let i = 0; i < origins.length; i++) {
+      const origin = origins[i]!;
+      const rise = (time * 18 + i * 9) % 22;
+      ctx.globalAlpha = 0.35 * (1 - rise / 22);
       ctx.beginPath();
-      ctx.arc(boss.x - 8 + i * 6, boss.y + 36 - rise, 3 + (i % 2), 0, Math.PI * 2);
+      ctx.arc(boss.x + origin.x, boss.y + origin.y - 8 - rise, 3, 0, Math.PI * 2);
       ctx.fill();
     }
   }

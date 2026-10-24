@@ -576,8 +576,9 @@ export const FACTORY_BOSS_SEED = 23;
 export const FACTORY_LOOK = 'A' as const;
 
 /**
- * Temporary 铁堡 hull until Yoan picks. A 弹舱棚车, B 纵置油罐, C 敞车弹架,
- * D 指挥守车, E 三节联挂. Overhead freight roofs, nose toward the player.
+ * Temporary 铁堡 hull until Yoan picks a variation of the locked consist.
+ * Nose up-screen, one locomotive and two boxcars.
+ * A 尖头三节, B 钝鼻铆甲, C 侧裙弹舱, D 脊炮车顶, E 厚钩尾梁.
  */
 export const TIEBAO_LOOK = 'A' as const;
 
@@ -762,7 +763,7 @@ export const TIEBAO_RAIL_X = [72, 180, 288] as const;
 export const TIEBAO_PARK_Y = 128;
 export const TIEBAO_HULL_W = 80;
 export const TIEBAO_HULL_H = 160;
-/** Center Y above the screen so the nose enters from the top. */
+/** Center starts above the screen. The consist slides down to parkY with the nose pointing up. */
 export const TIEBAO_ENTER_Y = -96;
 export const TIEBAO_ENTER_DURATION = 2;
 /** Fight starts this many seconds after the stage clock's zero. See STAGE2_WARNING_AT. */
@@ -791,10 +792,13 @@ export const TIEBAO_CORE_HP = 560;
 export const TIEBAO_CORE_SCORE = 30000;
 export const TIEBAO_ROOF_RADIUS = 14;
 export const TIEBAO_CORE_RADIUS = 18;
-/** Relative to the hull center, +y toward the player. */
-export const TIEBAO_ROOF_CAR = { x: 10, y: -46 } as const;
-export const TIEBAO_ROOF_LOCO = { x: -10, y: 22 } as const;
-export const TIEBAO_CORE = { x: 0, y: 50 } as const;
+/**
+ * Relative to the hull center, +y toward the player (behind the train).
+ * Nose and core are up-screen: core (40, 18), loco gun (40, 42), rear gun (40, 130).
+ */
+export const TIEBAO_ROOF_CAR = { x: 0, y: 50 } as const;
+export const TIEBAO_ROOF_LOCO = { x: 0, y: -38 } as const;
+export const TIEBAO_CORE = { x: 0, y: -62 } as const;
 
 export const TIEBAO_FAN_INTERVAL = 1.4;
 export const TIEBAO_FAN_FIRST = 0.4;
