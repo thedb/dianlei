@@ -6,8 +6,10 @@
  * Ids 0–32 are the original stage-1 tiles (runway, hangar, dock, bunker, …).
  * Ids 33–58 are the 陆地A set. Ids 59–63 are the P13 ruin set (scorch, crater,
  * trench, wreck, snag). Ids 64–69 are the P14 props: a 2×2 parked plane,
- * a water wheel, and a thatched hut. Planes, wheels, and huts are map
- * decoration only.
+ * a water wheel, and a thatched hut. Ids 70–75 are the 铁堡厂轨 floor:
+ * concrete, wall, a high window, and three rail tiles whose stripe sits on
+ * screen X 72 / 180 / 288 after the 4px crop. Planes, wheels, and huts are
+ * map decoration only.
  */
 
 import { COLOR } from '@/game/palette';
@@ -108,11 +110,17 @@ export const TileId = {
   planeBR: 67,
   wheel: 68,
   hut: 69,
+  factoryFloor: 70,
+  factoryWall: 71,
+  factoryWindow: 72,
+  factoryRailW: 73,
+  factoryRailC: 74,
+  factoryRailE: 75,
 } as const;
 
 export type TileId = (typeof TileId)[keyof typeof TileId];
 
-export const TILE_COUNT = 70;
+export const TILE_COUNT = 76;
 
 /** Screen quadrants of a 2×2 parked plane: top-left, top-right, bottom-left, bottom-right. */
 export const PLANE = [TileId.planeTL, TileId.planeTR, TileId.planeBL, TileId.planeBR] as const;
@@ -414,6 +422,7 @@ function paintTiles(tall: Array<boolean[][] | null>): SpriteData[] {
   tiles[TileId.radar] = radar;
 
   paintLandTiles(tiles, tall);
+  paintFactoryTiles(tiles);
   return tiles;
 }
 
@@ -819,6 +828,54 @@ function snagTile(): { pixels: SpriteData; tall: boolean[][] } {
     plot(g, 11, 4, DI);
     plot(g, 8, 3, NV);
   });
+}
+
+/** Vertical rail. `stripe` is the pixel column that lands on the lane's screen X. */
+function factoryRailTile(stripe: number): SpriteData {
+  const g = createGrid(TILE_SIZE, TILE_SIZE, CD);
+  for (let y = 0; y < TILE_SIZE; y++) {
+    if (y % 4 === 0) plot(g, stripe - 3, y, AD);
+    if (y % 4 === 0) plot(g, stripe + 3, y, AD);
+  }
+  for (let y = 0; y < TILE_SIZE; y++) {
+    plot(g, stripe - 1, y, CL);
+    plot(g, stripe, y, K);
+    plot(g, stripe + 1, y, AD);
+  }
+  return g;
+}
+
+function paintFactoryTiles(tiles: SpriteData[]): void {
+  const floor = createGrid(TILE_SIZE, TILE_SIZE, CD);
+  for (let y = 0; y < TILE_SIZE; y++) {
+    for (let x = 0; x < TILE_SIZE; x++) {
+      if ((x + y) % 8 === 0) floor[y]![x] = AD;
+      if ((x * 3 + y) % 11 === 0) floor[y]![x] = CC;
+    }
+  }
+  tiles[TileId.factoryFloor] = floor;
+
+  const wall = createGrid(TILE_SIZE, TILE_SIZE, DI);
+  for (let y = 0; y < TILE_SIZE; y++) {
+    plot(wall, 0, y, K);
+    plot(wall, 15, y, AD);
+    if (y % 4 === 0) {
+      for (let x = 1; x < 15; x++) plot(wall, x, y, BR);
+    }
+  }
+  tiles[TileId.factoryWall] = wall;
+
+  const windowTile = createGrid(TILE_SIZE, TILE_SIZE, DI);
+  fillRect(windowTile, 3, 2, 10, 8, COLOR.WATER_DEEP);
+  fillRect(windowTile, 4, 3, 3, 3, COLOR.WATER_SHALLOW);
+  fillRect(windowTile, 9, 3, 3, 2, COLOR.WATER_MEDIUM);
+  fillRect(windowTile, 2, 11, 12, 3, CD);
+  plot(windowTile, 5, 4, CL);
+  tiles[TileId.factoryWindow] = windowTile;
+
+  tiles[TileId.factoryRailW] = factoryRailTile(12);
+  tiles[TileId.factoryRailC] = factoryRailTile(8);
+  tiles[TileId.factoryRailE] = factoryRailTile(4);
 }
 
 function paintLandTiles(tiles: SpriteData[], tall: Array<boolean[][] | null>): void {

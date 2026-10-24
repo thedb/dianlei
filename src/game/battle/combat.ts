@@ -47,6 +47,8 @@ import {
   bossHitsPlayer,
   bossLaserHits,
   bossMissileTargets,
+  markBossBombProps,
+  resolveBossBombProps,
   resolveBossBullet,
 } from '@/game/systems/boss';
 import { bulletHitsWeaponTarget, WEAPON_TEST_TARGET } from '@/game/scenes/weaponTest';
@@ -139,7 +141,10 @@ export function activateBomb(b: Battle): void {
     if (!building.wrecked) markBombTarget(building, player.x, player.y);
   });
 
-  if (b.boss) applyBossEvents(b, applyBossBomb(b.boss));
+  if (b.boss) {
+    markBossBombProps(b.boss, player.x, player.y);
+    applyBossEvents(b, applyBossBomb(b.boss));
+  }
   b.sfx('bomb');
 }
 
@@ -156,6 +161,7 @@ export function updateBombHits(b: Battle, dt: number): void {
   b.buildings.forEach((building) => {
     if (bombArrives(building, dt) && bombHitBuilding(building)) destroyBuilding(b, building);
   });
+  if (b.boss) applyBossEvents(b, resolveBossBombProps(b.boss, dt));
 }
 
 /** On-screen live things a homing missile may chase. */

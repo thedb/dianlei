@@ -63,7 +63,8 @@ export function spawnEnemyBullet(
   vx: number,
   vy: number,
   type: EnemyBulletType = 'small',
-  homing = 0
+  homing = 0,
+  hitRadius?: number
 ): void {
   bullet.x = x;
   bullet.y = y;
@@ -72,7 +73,7 @@ export function spawnEnemyBullet(
   bullet.vx = vx;
   bullet.vy = vy;
   bullet.type = type;
-  bullet.hitRadius = type === 'large' ? EB_HIT_RADIUS_LARGE : EB_HIT_RADIUS_SMALL;
+  bullet.hitRadius = hitRadius ?? (type === 'large' ? EB_HIT_RADIUS_LARGE : EB_HIT_RADIUS_SMALL);
   bullet.homing = homing;
 }
 
@@ -126,7 +127,8 @@ export interface BulletSpawner {
     vx: number,
     vy: number,
     type: EnemyBulletType,
-    homing?: number
+    homing?: number,
+    hitRadius?: number
   ): void;
   getBulletCount(): number;
 }

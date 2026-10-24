@@ -24,11 +24,13 @@ export type BossChallengeStageId = string;
 
 export type BossChallengeRank = 'normal' | 'hard';
 
+const STAGE_BOSS_SUB: Readonly<Record<string, string>> = { '2': '铁堡' };
+
 export const BOSS_STAGE_ROWS: ReadonlyArray<ChoiceRow<BossChallengeStageId>> = [
   ...BOSS_CHALLENGE_STAGES.map((stage) => ({
     action: stage.id,
     title: stage.label,
-    sub: '',
+    sub: STAGE_BOSS_SUB[stage.id] ?? '',
   })),
   { action: 'back', title: '返回', sub: '' },
 ];
@@ -40,7 +42,8 @@ export const BOSS_DIFFICULTY_ROWS: ReadonlyArray<ChoiceRow<BossChallengeRank>> =
 ];
 
 export const BOSS_STAGE_1_BUTTON = choiceButton(0);
-export const BOSS_STAGE_BACK_BUTTON = choiceButton(1);
+export const BOSS_STAGE_2_BUTTON = choiceButton(1);
+export const BOSS_STAGE_BACK_BUTTON = choiceButton(BOSS_STAGE_ROWS.length - 1);
 export const BOSS_DIFF_NORMAL_BUTTON = choiceButton(0);
 export const BOSS_DIFF_HARD_BUTTON = choiceButton(1);
 export const BOSS_DIFF_BACK_BUTTON = choiceButton(2);

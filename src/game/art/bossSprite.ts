@@ -4,10 +4,19 @@
  * Engine flame, core glow, laser, and hit flash are drawn in code.
  */
 
-import { BOSS_HULL_H, BOSS_HULL_W, BOSS_TURRET_SIZE, LOGICAL_H } from '@/game/config';
+import {
+  BOSS_HULL_H,
+  BOSS_HULL_W,
+  BOSS_TURRET_SIZE,
+  LOGICAL_H,
+  TIEBAO_HULL_H,
+  TIEBAO_HULL_W,
+  TIEBAO_RAIL_X,
+} from '@/game/config';
 import { PALETTE, COLOR } from '@/game/palette';
 import type { BossHpBarLayout, BossRuntime } from '@/game/systems/boss';
 import { bossActiveLaser, bossLook } from '@/game/systems/boss';
+import { tiebaoVisual } from '@/game/systems/tiebao';
 import { laserSweepRadians } from '@/game/systems/danmaku';
 import type { SpriteData, SpriteFrame } from './types';
 import { createGrid, fillEllipse, fillPoly, fillRect, outline, plot } from './pixelDraw';
@@ -307,11 +316,96 @@ export interface BossAssets {
 }
 
 /** Boss art registry, keyed by `BossDef.art`. A new boss adds one builder here. */
+function buildTiebaoHull(open: boolean): SpriteData {
+  const w = TIEBAO_HULL_W;
+  const h = TIEBAO_HULL_H;
+  const g = createGrid(w, h, -1);
+  const EY = COLOR.EXPLOSION_YELLOW;
+  const EO = COLOR.EXPLOSION_ORANGE;
+  fillRect(g, 18, 6, 44, 148, MG);
+  fillRect(g, 22, 10, 36, 140, G);
+  for (let y = 14; y < 146; y += 8) {
+    const stripe = Math.floor(y / 8) % 2 === 0 ? EY : K;
+    fillRect(g, 14, y, 6, 4, stripe);
+    fillRect(g, 60, y, 6, 4, stripe);
+  }
+  fillRect(g, 24, 12, 32, 54, COLOR.GROUND_DARK_OLIVE);
+  fillRect(g, 28, 18, 24, 42, COLOR.GROUND_OLIVE);
+  for (let i = 0; i < 3; i++) {
+    fillRect(g, 30, 22 + i * 12, 8, 6, EO);
+    fillRect(g, 42, 22 + i * 12, 8, 6, COLOR.GROUND_TAN);
+  }
+  fillRect(g, 34, 66, 12, 10, DG);
+  fillRect(g, 20, 78, 40, 56, MG);
+  fillRect(g, 26, 86, 28, 34, LG);
+  fillRect(g, 30, 92, 8, 6, COLOR.WATER_SHALLOW);
+  fillRect(g, 42, 92, 8, 6, COLOR.WATER_MEDIUM);
+  fillRect(g, 36, 108, 8, 6, S);
+  if (open) {
+    fillRect(g, 32, 122, 16, 12, EO);
+    fillRect(g, 35, 125, 10, 6, EY);
+  } else {
+    fillRect(g, 34, 124, 12, 8, DG);
+    plot(g, 40, 127, EO);
+  }
+  fillPoly(
+    g,
+    [
+      [28, 136],
+      [52, 136],
+      [48, 154],
+      [32, 154],
+    ],
+    DG
+  );
+  fillRect(g, 36, 146, 8, 4, EH);
+  plot(g, 34, 142, W);
+  plot(g, 46, 142, W);
+  plot(g, 40, 148, EY);
+  for (const y of [28, 48, 96, 116]) {
+    fillRect(g, 12, y, 4, 8, K);
+    fillRect(g, 64, y, 4, 8, K);
+    plot(g, 13, y + 2, G);
+    plot(g, 65, y + 2, G);
+  }
+  outline(g, K);
+  return g;
+}
+
+function buildTiebaoAa(broken: boolean): SpriteData {
+  const g = createGrid(16, 16, -1);
+  const EY = COLOR.EXPLOSION_YELLOW;
+  fillRect(g, 2, 9, 12, 5, MG);
+  fillRect(g, 4, 7, 8, 3, G);
+  fillRect(g, 2, 12, 4, 2, EY);
+  fillRect(g, 10, 12, 4, 2, K);
+  if (!broken) {
+    fillRect(g, 7, 2, 2, 8, DG);
+    fillRect(g, 5, 1, 6, 2, K);
+    plot(g, 8, 2, EH);
+  } else {
+    fillRect(g, 4, 5, 8, 3, K);
+    plot(g, 3, 4, COLOR.EXPLOSION_ORANGE);
+    plot(g, 12, 4, EY);
+    plot(g, 8, 6, W);
+  }
+  outline(g, K);
+  return g;
+}
+
 export const BOSS_ART: Readonly<Record<string, () => BossAssets>> = {
   orbital: () => ({
     hull: renderSprite(buildBossHull(false)),
     hullOpen: renderSprite(buildBossHull(true)),
     parts: { turret: renderSprite(buildBossTurret()) },
+  }),
+  tiebao: () => ({
+    hull: renderSprite(buildTiebaoHull(false)),
+    hullOpen: renderSprite(buildTiebaoHull(true)),
+    parts: {
+      aa: renderSprite(buildTiebaoAa(false)),
+      aaBroken: renderSprite(buildTiebaoAa(true)),
+    },
   }),
 };
 
@@ -329,6 +423,7 @@ export interface BossDraw {
 const GLOW_COLOR = {
   magenta: COLOR.BULLET_MAGENTA,
   yellow: COLOR.EXPLOSION_YELLOW,
+  orange: COLOR.EXPLOSION_ORANGE,
 } as const;
 
 /** Hull, part sprites, engine flame, and the phase glow. The laser is drawn separately. */
@@ -345,14 +440,23 @@ export function drawBossWorld(
 
   const open = look.hull === 'open';
   const hull = open ? assets.hullOpen : assets.hull;
+  const tiebao = boss.def.art === 'tiebao';
   const top = boss.y - boss.def.hull.h / 2;
-  drawEnemyFlame(ctx, boss.x - 16, top + 6, time);
-  drawEnemyFlame(ctx, boss.x + 16, top + 6, time);
+  if (tiebao) drawTiebaoGround(ctx, boss, time);
+  else {
+    drawEnemyFlame(ctx, boss.x - 16, top + 6, time);
+    drawEnemyFlame(ctx, boss.x + 16, top + 6, time);
+  }
   draw.drawImage(hull.canvas, boss.x - hull.anchorX, boss.y - hull.anchorY);
 
   for (const part of boss.parts) {
     if (!part.sprite) continue;
     if (!part.alive && !part.falling) {
+      const broken = assets.parts[`${part.sprite}Broken`];
+      if (broken) {
+        draw.drawImage(broken.canvas, part.worldX - broken.anchorX, part.worldY - broken.anchorY);
+        continue;
+      }
       if (open) drawSocketSparks(ctx, part.worldX, part.worldY, time);
       continue;
     }
@@ -360,6 +464,8 @@ export function drawBossWorld(
     if (!frame) continue;
     draw.drawImage(frame.canvas, part.worldX - frame.anchorX, part.worldY - frame.anchorY);
   }
+
+  if (tiebao) drawTiebaoAir(ctx, boss, time, look.smoke);
 
   if (boss.hitFlash > 0) {
     ctx.save();
@@ -385,6 +491,82 @@ export function drawBossWorld(
     ctx.fill();
     ctx.restore();
   }
+}
+
+/** Rails, warning circles, and the rail-break sparks under the train. */
+function drawTiebaoGround(ctx: CanvasRenderingContext2D, boss: BossRuntime, time: number): void {
+  const visual = tiebaoVisual(boss);
+  ctx.save();
+  for (let i = 0; i < TIEBAO_RAIL_X.length; i++) {
+    const x = TIEBAO_RAIL_X[i] ?? 0;
+    const hot = visual !== null && (visual.highlight === i || visual.rocketWarn);
+    const ram = visual?.ramWarn === true && visual.current === i;
+    ctx.strokeStyle = PALETTE[hot || ram ? COLOR.EXPLOSION_YELLOW : COLOR.MEDIUM_GRAY];
+    ctx.globalAlpha = hot || ram ? 0.9 : 0.45;
+    ctx.lineWidth = hot || ram ? 2 : 1;
+    ctx.setLineDash(visual?.broken ? [4, 6] : [2, 6]);
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, LOGICAL_H);
+    ctx.stroke();
+    if (visual?.broken && Math.floor(time * 12 + i) % 2 === 0) {
+      ctx.globalAlpha = 0.8;
+      ctx.fillStyle = PALETTE[COLOR.EXPLOSION_ORANGE];
+      ctx.fillRect(x - 1, 180 + ((time * 40 + i * 50) % 280), 3, 3);
+    }
+  }
+  ctx.setLineDash([]);
+  if (visual) {
+    for (const circle of visual.circles) {
+      ctx.globalAlpha = 0.35 + 0.45 * circle.u;
+      ctx.strokeStyle = PALETTE[COLOR.EXPLOSION_ORANGE];
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(circle.x, circle.y, circle.radius * (0.35 + 0.65 * circle.u), 0, Math.PI * 2);
+      ctx.stroke();
+      const shellY = circle.fromY + (circle.y - circle.fromY) * circle.u;
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = PALETTE[COLOR.EXPLOSION_YELLOW];
+      ctx.fillRect(circle.x - 1, shellY - 2, 3, 4);
+    }
+  }
+  ctx.restore();
+}
+
+/** Falling crates and overload smoke. Drawn over the hull. */
+function drawTiebaoAir(
+  ctx: CanvasRenderingContext2D,
+  boss: BossRuntime,
+  time: number,
+  smoke: boolean
+): void {
+  const visual = tiebaoVisual(boss);
+  if (!visual) return;
+  ctx.save();
+  for (const crate of visual.crates) {
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = PALETTE[COLOR.GROUND_OLIVE];
+    ctx.fillRect(crate.x - 6, crate.y - 5, 12, 10);
+    ctx.fillStyle = PALETTE[Math.floor(time * 8) % 2 === 0 ? COLOR.EXPLOSION_YELLOW : COLOR.BLACK];
+    ctx.fillRect(crate.x - 6, crate.y - 1, 12, 2);
+  }
+  if (smoke || visual.smoke) {
+    ctx.fillStyle = PALETTE[COLOR.LIGHT_GRAY];
+    for (let i = 0; i < 4; i++) {
+      const rise = (time * 18 + i * 11) % 28;
+      ctx.globalAlpha = 0.35 * (1 - rise / 28);
+      ctx.beginPath();
+      ctx.arc(boss.x - 8 + i * 6, boss.y + 36 - rise, 3 + (i % 2), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  if (visual.ramWarn && Math.floor(time * 16) % 2 === 0) {
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = PALETTE[COLOR.EXPLOSION_YELLOW];
+    ctx.fillRect(boss.x - 16, boss.y + boss.def.hull.h / 2 - 10, 8, 3);
+    ctx.fillRect(boss.x + 8, boss.y + boss.def.hull.h / 2 - 10, 8, 3);
+  }
+  ctx.restore();
 }
 
 /** Code-drawn sparks on a destroyed turret socket. Not baked into the hull. */

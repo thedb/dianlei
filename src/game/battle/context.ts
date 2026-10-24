@@ -190,10 +190,10 @@ export function createBattle(scene: SceneContext): Battle {
     homingTargets: [],
     enemyGrid: new SpatialGrid<Enemy>(64),
     spawner: {
-      spawnBullet(x, y, vx, vy, type, homing = 0) {
+      spawnBullet(x, y, vx, vy, type, homing = 0, hitRadius?: number) {
         if (enemyBullets.getActiveCount() < ENEMY_BULLET_CAP) {
           const k = runProfile(battle).bulletSpeedScale;
-          spawnEnemyBullet(enemyBullets.acquire(), x, y, vx * k, vy * k, type, homing);
+          spawnEnemyBullet(enemyBullets.acquire(), x, y, vx * k, vy * k, type, homing, hitRadius);
         }
       },
       getBulletCount() {

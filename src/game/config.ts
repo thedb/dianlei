@@ -562,6 +562,22 @@ export const LAND_BOSS_CHUNKS = 2;
 export const LAND_BOSS_SEED = 41;
 
 /**
+ * 铁堡厂轨 (`factoryBoss`): one factory approach, then a triple-rail floor that
+ * loops. Stage 2's boss map. Same length as 百战要塞. No cloud sheet — the
+ * loop is indoors.
+ */
+export const FACTORY_BOSS_CHUNKS = 2;
+export const FACTORY_BOSS_SEED = 23;
+
+/**
+ * Stage 2 warning. landB is 5760 px, so this keeps the boss origin on landB's
+ * last row (`warning * 40 + 640` stays under 5760). `TIEBAO_ENTER_AT` is five
+ * seconds later, which lands about 120 px into the approach — the same beat
+ * as stage 1's `enterAt`.
+ */
+export const STAGE2_WARNING_AT = 118;
+
+/**
  * Cloud shadows over maps that set `cloudShadows` (陆地A / 陆地B / 河流A / 百战要塞).
  * Alpha stays low so one silhouette reads without muddying the ground.
  * Scroll is relative to the tiles. `2` moves shadows twice as fast as the
@@ -721,6 +737,114 @@ export const BOSS_HP_BAR_FILL_START = 3;
 /** Initial speed and gravity of a destroyed turret, pixels/second. */
 export const BOSS_TURRET_FALL_SPEED = 30;
 export const BOSS_TURRET_FALL_GRAVITY = 220;
+
+// ============================================================================
+// Stage 2 boss 铁堡 (docs/电雷_第二关_铁堡Boss设计_v1.md §10)
+// Speeds below are flight speeds after ENEMY_BULLET_SPEED_SCALE. The boss
+// clock does not use fireRateScale. Prefix is TIEBAO_ so stage 1's BOSS_*
+// numbers stay the battleship's.
+// ============================================================================
+
+/** Fixed screen lanes. Center matches LOGICAL_W / 2 and BOSS_ANCHOR_X. */
+export const TIEBAO_RAIL_X = [72, 180, 288] as const;
+export const TIEBAO_PARK_Y = 128;
+export const TIEBAO_HULL_W = 80;
+export const TIEBAO_HULL_H = 160;
+/** Center Y above the screen so the nose enters from the top. */
+export const TIEBAO_ENTER_Y = -96;
+export const TIEBAO_ENTER_DURATION = 2;
+/** Fight starts this many seconds after the stage clock's zero. See STAGE2_WARNING_AT. */
+export const TIEBAO_ENTER_AT = 123;
+/** Name-plate WARNING, seconds after the train parks. */
+export const TIEBAO_WARNING = 1.5;
+
+/** Park-to-park. Output + telegraph + move. */
+export const TIEBAO_SWITCH_PERIOD = 10;
+export const TIEBAO_TELEGRAPH = 1.1;
+export const TIEBAO_MOVE = 0.8;
+
+/** Hard overload only. */
+export const TIEBAO_OVERLOAD_PERIOD = 6;
+export const TIEBAO_OVERLOAD_TELEGRAPH = 0.8;
+export const TIEBAO_OVERLOAD_MOVE = 0.6;
+export const TIEBAO_OVERLOAD_HP = 240;
+export const TIEBAO_OVERLOAD_TRANSITION = 1.2;
+
+export const TIEBAO_ROOF_HP = 140;
+export const TIEBAO_ROOF_SCORE = 5000;
+export const TIEBAO_CORE_HP = 560;
+export const TIEBAO_CORE_SCORE = 30000;
+export const TIEBAO_ROOF_RADIUS = 14;
+export const TIEBAO_CORE_RADIUS = 18;
+/** Relative to the hull center, +y toward the player. */
+export const TIEBAO_ROOF_CAR = { x: 10, y: -46 } as const;
+export const TIEBAO_ROOF_LOCO = { x: -10, y: 22 } as const;
+export const TIEBAO_CORE = { x: 0, y: 50 } as const;
+
+export const TIEBAO_FAN_INTERVAL = 1.4;
+export const TIEBAO_FAN_FIRST = 0.4;
+export const TIEBAO_FAN_SPREAD = 60;
+
+export const TIEBAO_MISSILE_COUNT = 5;
+export const TIEBAO_MISSILE_GAP = 0.12;
+export const TIEBAO_MISSILE_HOMING = 0.55;
+export const TIEBAO_MISSILE_SPEED = 88;
+export const TIEBAO_MISSILE_WAVES = [0.3, 4.0] as const;
+export const TIEBAO_OVERLOAD_MISSILE_COUNT = 6;
+
+export const TIEBAO_RAIN_COUNT = 4;
+export const TIEBAO_RAIN_WARN = 0.8;
+export const TIEBAO_RAIN_RADIUS = 26;
+export const TIEBAO_RAIN_SEPARATION = 48;
+export const TIEBAO_RAIN_FIRST = 0.4;
+export const TIEBAO_RAIN_SECOND = 4.0;
+export const TIEBAO_OVERLOAD_RAIN_WARN = 0.55;
+
+/** Degrees off straight down. The sweep starts outward and crosses the lane. */
+export const TIEBAO_BROADSIDE_FROM = 40;
+export const TIEBAO_BROADSIDE_TO = 15;
+export const TIEBAO_BROADSIDE_STEP = 0.08;
+export const TIEBAO_BROADSIDE_SWEEP = 1;
+export const TIEBAO_BROADSIDE_GAP = 0.6;
+export const TIEBAO_BROADSIDE_COUNT = 3;
+export const TIEBAO_BROADSIDE_FIRST = 0.35;
+export const TIEBAO_BROADSIDE_SPEED = 120;
+
+export const TIEBAO_WALL_COUNT = 8;
+export const TIEBAO_WALL_GAP = 18;
+export const TIEBAO_WALL_SPEED = 70;
+export const TIEBAO_WALL_FIRST = 0.4;
+export const TIEBAO_WALL_REPEAT = 1.6;
+export const TIEBAO_WALL_VOLLEYS = 2;
+export const TIEBAO_OVERLOAD_WALL_REPEAT = 1;
+
+export const TIEBAO_RAM_START = 1;
+export const TIEBAO_RAM_WARN = 0.5;
+export const TIEBAO_RAM_DIVE = 0.45;
+export const TIEBAO_RAM_RETURN = 0.55;
+/** Hull bottom (screen y) at the end of the dive. */
+export const TIEBAO_RAM_BOTTOM = 300;
+
+export const TIEBAO_ROCKET_SPEED = 64;
+export const TIEBAO_ROCKET_Y = -16;
+export const TIEBAO_ROCKET_WARN = 0.45;
+export const TIEBAO_ROCKET_START = 0.8;
+export const TIEBAO_ROCKET_RADIUS = 6;
+
+export const TIEBAO_CRATE_HP = 6;
+export const TIEBAO_CRATE_SCORE = 300;
+/** Screen y of the crate's bottom edge when it blasts. */
+export const TIEBAO_CRATE_LAND_Y = 480;
+export const TIEBAO_CRATE_BLAST = 22;
+export const TIEBAO_CRATE_SIZE = 12;
+export const TIEBAO_CRATE_FIRST = 0.5;
+export const TIEBAO_CRATE_GAP = 1.2;
+export const TIEBAO_CRATE_PER_WINDOW = 2;
+export const TIEBAO_CRATE_FLIGHT = 1.15;
+export const TIEBAO_OVERLOAD_CRATE_EVERY = 2.2;
+
+export const TIEBAO_DEATH_EXPLOSIONS = 8;
+export const TIEBAO_DEATH_DURATION = 2.8;
 
 /** Opening cards, seconds from stage start (0:00–0:05). */
 export const INTRO_STAGE_UNTIL = 1.6;

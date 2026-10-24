@@ -209,7 +209,9 @@ export interface BossPhaseDef {
   look: {
     hull: 'closed' | 'open';
     /** Code-drawn pulse on a part while the phase (or its transition) runs. */
-    glow?: { part: string; color: 'magenta' | 'yellow' };
+    glow?: { part: string; color: 'magenta' | 'yellow' | 'orange' };
+    /** Code-drawn smoke. No hitbox. */
+    smoke?: boolean;
   };
   /** `extra` phases get their own slot on the HP bar (Hard phase 3). */
   bar: 'main' | 'extra';
@@ -237,6 +239,23 @@ export interface BossDef {
     /** Blast offsets from the hull center, cycled. */
     offsets: readonly (readonly [number, number])[];
   };
+  /**
+   * Scripted motion on top of the phase table. `tiebao` rides fixed rails and
+   * runs its own weapon cycle. Omit it and the boss keeps the sine drift.
+   */
+  script?: 'tiebao';
+  /** Two-line name plate. Omitted bosses draw none. */
+  title?: string;
+  subtitle?: string;
+  /**
+   * Seconds the WARNING banner stays up after the fight starts. When set, the
+   * pre-enter banner is not drawn. Omit for the stage-1 window.
+   */
+  fightWarning?: number;
+  /** The slide from `enterY` to `parkY` can take damage. */
+  vulnerableEnter?: boolean;
+  /** Any hull hit damages the nearest living target, including above the part centers. */
+  hullTransfers?: boolean;
 }
 
 export type BuildingType = 'pillbox' | 'fuel_depot' | 'radar_station' | 'sea_gun';

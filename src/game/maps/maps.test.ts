@@ -7,11 +7,21 @@ import {
   MAP_CHUNK_ROWS,
   MAP_TILES_X,
   RIVER_A_CHUNKS,
+  STAGE2_WARNING_AT,
+  TIEBAO_ENTER_AT,
+  TIEBAO_RAIL_X,
   TILE_SIZE,
 } from '@/game/config';
+import { backgroundFade, scrollDistance } from '@/game/systems/background';
 import { TILE_COUNT, TileId } from '@/game/art/tiles';
 import { getStage } from '@/game/levels/registry';
 import { AIRFIELD_SPINE, LAND_B_LIBRARY, LAND_B_SPEC } from './landB';
+import {
+  FACTORY_BOSS_LIBRARY,
+  FACTORY_BOSS_SPEC,
+  FACTORY_RAILS,
+  factoryRailScreenX,
+} from './factoryBoss';
 import { APPROACH_HANDOFF_ROWS, LAND_BOSS_LIBRARY, LAND_BOSS_SPEC } from './landBoss';
 import { LAND_A_LIBRARY, LAND_A_SPEC } from './landA';
 import { RIVER_A_LIBRARY, RIVER_A_SPEC, RIVER_EDGE_COLS } from './riverA';
@@ -54,6 +64,7 @@ describe('map registry', () => {
       ['landB', '陆地B', 'tiles'],
       ['riverA', '河流A', 'tiles'],
       ['landBoss', '百战要塞', 'tiles'],
+      ['factoryBoss', '铁堡厂轨', 'tiles'],
       ['spaceA', '宇宙A', 'starfield'],
     ]);
   });
@@ -685,6 +696,7 @@ describe('tracks', () => {
       { target: 'map:landB', label: '陆地B' },
       { target: 'map:riverA', label: '河流A' },
       { target: 'map:landBoss', label: '百战要塞' },
+      { target: 'map:factoryBoss', label: '铁堡厂轨' },
       { target: 'map:spaceA', label: '宇宙A' },
     ]);
     const bossPreview = buildMapTrack('landBoss');
@@ -743,6 +755,62 @@ describe('百战要塞', () => {
     expect(countTile(grid, TileId.crater, loop, grid.length)).toBeGreaterThan(0);
     expect(countTile(grid, TileId.bunker, loop, grid.length)).toBeGreaterThan(0);
     expect(grid[loop + 20]![0]).toBe(TileId.fortWall);
+  });
+});
+
+describe('铁堡厂轨', () => {
+  const grid = getMapGrid('factoryBoss');
+  const loop = MAP_CHUNK_ROWS;
+
+  it('is the approach chunk then the factory floor', () => {
+    expect(FACTORY_BOSS_LIBRARY.map((c) => c.id)).toEqual(['approach', 'floor']);
+    expect(planChunks(FACTORY_BOSS_SPEC).map((p) => p.chunk)).toEqual(['approach', 'floor']);
+    expect(planChunks(FACTORY_BOSS_SPEC).some((p) => p.flip)).toBe(false);
+    expect(grid).toHaveLength(loop * 2);
+    expect(getTileMap('factoryBoss').loopFrom).toBe(loop);
+    expect(getTileMap('factoryBoss').cloudShadows).toBeFalsy();
+    expect(composeChunks(FACTORY_BOSS_SPEC)).toEqual(grid);
+  });
+
+  it('puts the three rails on screen X 72 / 180 / 288', () => {
+    expect(FACTORY_RAILS.map((rail) => rail.x)).toEqual([...TIEBAO_RAIL_X]);
+    for (const rail of FACTORY_RAILS) {
+      expect(factoryRailScreenX(rail.col, rail.pixel)).toBe(rail.x);
+    }
+  });
+
+  it('stitches onto 陆地B and keeps the rails aligned across the loop seam', () => {
+    const land = getMapGrid('landB');
+    const top = land[land.length - 1]!;
+    expect(rowConnectors(top).road).toEqual([...AIRFIELD_SPINE]);
+    expect(rowConnectors(top).water).toEqual([]);
+    expect(rowConnectors(grid[0]!).road).toEqual([...AIRFIELD_SPINE]);
+    expect(rowConnectors(grid[0]!).water).toEqual([]);
+    for (const row of grid) {
+      for (const id of row) expect(tileTerrain(id)).not.toBe('water');
+    }
+    const edge = grid[loop - 1]!;
+    expect(grid[loop]).toEqual(edge);
+    expect(grid[grid.length - 1]).toEqual(edge);
+    expect(edge[0]).toBe(TileId.factoryWall);
+    for (const rail of FACTORY_RAILS) expect(edge[rail.col]).toBe(rail.tile);
+    for (let r = loop; r < grid.length; r++) {
+      for (const rail of FACTORY_RAILS) expect(grid[r]![rail.col]).toBe(rail.tile);
+    }
+  });
+
+  it('hands off from 陆地B with opaque tiles and no warning clouds', () => {
+    const stage = getStage('2');
+    const track = buildStageTrack(stage);
+    expect(track.handoff).toBe('tiles');
+    expect(track.layers.map((layer) => layer.map.id)).toEqual(['landB', 'factoryBoss']);
+    const origin = LAND_B_CHUNKS * MAP_CHUNK_ROWS * TILE_SIZE;
+    expect(track.layers[1]!.origin).toBe(origin);
+    const scroll = scrollDistance(TIEBAO_ENTER_AT, STAGE2_WARNING_AT, 'tiles');
+    expect(scroll - origin).toBeCloseTo(120, 0);
+    const fade = backgroundFade(STAGE2_WARNING_AT + 1, track);
+    expect(fade.clouds).toBe(0);
+    expect(fade.stars).toBe(0);
   });
 });
 
