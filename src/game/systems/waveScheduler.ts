@@ -3,10 +3,19 @@
  * Spawns enemies according to a stage's wave table (default: the registry's default stage).
  */
 
-import type { Wave, EnemyType, Move, Fire, SpawnGroup, StageData } from '@/game/levels/types';
+import type { Difficulty } from '@/game/difficulty';
+import type {
+  Wave,
+  EnemyType,
+  Move,
+  Fire,
+  SpawnGroup,
+  StageData,
+  RiskCrateSpawn,
+} from '@/game/levels/types';
 import { getStage } from '@/game/levels/registry';
 import { mvpSkipsGroup } from '@/game/levels/stageStats';
-import { LOGICAL_H, LOGICAL_W } from '@/game/config';
+import { LOGICAL_H, LOGICAL_W, RISK_CRATE_HOLD, RISK_CRATE_STOP_Y } from '@/game/config';
 import { ENEMY_DEFS } from '@/game/entities/enemyDefs';
 import { withFireStagger } from '@/game/systems/danmaku';
 
@@ -14,6 +23,21 @@ export interface WaveSchedulerConfig {
   mvpOnly: boolean;
   /** Omit for the default stage. */
   stage?: StageData;
+  /**
+   * Arms that difficulty's risk crates on this clock. Omit to schedule none,
+   * so tests of the 148-ship table stay on the wave list alone.
+   */
+  difficulty?: Difficulty;
+}
+
+/** Crates this difficulty actually fields, in time order. */
+export function riskCratesFor(
+  crates: readonly RiskCrateSpawn[],
+  difficulty: Difficulty
+): RiskCrateSpawn[] {
+  return crates
+    .filter((crate) => crate.difficulties.includes(difficulty))
+    .sort((a, b) => a.t - b.t);
 }
 
 export interface SpawnRequest {
@@ -33,13 +57,17 @@ interface PendingSpawn {
   groupIndex: number;
   spawnIndex: number;
   time: number;
+  /** False for risk crates: they are not part of the wave kill-rate denominator. */
+  countInWave: boolean;
   request: SpawnRequest;
 }
 
 export class WaveScheduler {
   private waves: Wave[];
   private readonly mvpOnly: boolean;
+  private readonly riskCrates: RiskCrateSpawn[];
   private currentWaveIndex: number = 0;
+  private nextRisk: number = 0;
   private pendingSpawns: PendingSpawn[] = [];
   private waveTimer: number = 0;
   private spawnedCount: number = 0;
@@ -55,11 +83,15 @@ export class WaveScheduler {
     } else {
       this.waves = stage.waves;
     }
+    this.riskCrates = config.difficulty
+      ? riskCratesFor(stage.riskCrates ?? [], config.difficulty)
+      : [];
   }
 
   /** Reset scheduler to beginning */
   reset(): void {
     this.currentWaveIndex = 0;
+    this.nextRisk = 0;
     this.pendingSpawns = [];
     this.waveTimer = 0;
     this.spawnedCount = 0;
@@ -88,10 +120,10 @@ export class WaveScheduler {
       }
       this.currentWaveIndex++;
     }
+    this.armDueRiskCrates();
 
     this.pendingSpawns = this.pendingSpawns.filter((spawn) => spawn.time > this.waveTimer);
-    this.stageComplete =
-      this.currentWaveIndex >= this.waves.length && this.pendingSpawns.length === 0;
+    this.stageComplete = this.wavesAreDone();
   }
 
   /** Set current player power level (for conditional waves) */
@@ -145,13 +177,14 @@ export class WaveScheduler {
         break;
       }
     }
+    this.armDueRiskCrates();
 
     // THEN process pending spawns (including newly scheduled ones)
     const stillPending: PendingSpawn[] = [];
     for (const spawn of this.pendingSpawns) {
       if (this.waveTimer >= spawn.time) {
         requests.push(spawn.request);
-        this.spawnedCount++;
+        if (spawn.countInWave) this.spawnedCount++;
       } else {
         stillPending.push(spawn);
       }
@@ -159,9 +192,7 @@ export class WaveScheduler {
     this.pendingSpawns = stillPending;
 
     // Check if stage is complete
-    if (this.currentWaveIndex >= this.waves.length && this.pendingSpawns.length === 0) {
-      this.stageComplete = true;
-    }
+    if (this.wavesAreDone()) this.stageComplete = true;
 
     return requests;
   }
@@ -196,6 +227,7 @@ export class WaveScheduler {
           groupIndex: gi,
           spawnIndex: i,
           time: spawnTime,
+          countInWave: true,
           request: {
             type: group.enemy,
             x: pos.x,
@@ -209,6 +241,42 @@ export class WaveScheduler {
           },
         });
       }
+    }
+  }
+
+  private wavesAreDone(): boolean {
+    return (
+      this.currentWaveIndex >= this.waves.length &&
+      this.nextRisk >= this.riskCrates.length &&
+      this.pendingSpawns.length === 0
+    );
+  }
+
+  /** Queue risk crates whose clock has arrived. Seek then drops the ones already due. */
+  private armDueRiskCrates(): void {
+    while (this.nextRisk < this.riskCrates.length) {
+      const crate = this.riskCrates[this.nextRisk]!;
+      if (this.waveTimer + 1e-9 < crate.t) break;
+      this.pendingSpawns.push({
+        waveId: 'risk',
+        groupIndex: 0,
+        spawnIndex: this.nextRisk,
+        time: crate.t,
+        countInWave: false,
+        request: {
+          type: 'risk_crate',
+          x: crate.x,
+          // Same off-screen entry as other air units (wave table: y = −20).
+          y: -20,
+          move: { kind: 'hover', stopY: RISK_CRATE_STOP_Y, hold: RISK_CRATE_HOLD },
+          fire: { kind: 'none' },
+          canFire: false,
+          drop: null,
+          hp: undefined,
+          score: undefined,
+        },
+      });
+      this.nextRisk++;
     }
   }
 

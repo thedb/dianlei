@@ -25,6 +25,7 @@ import {
 import { buildingClass, enemyClass } from '@/game/entities/objectClass';
 import {
   chooseBuildingDrop,
+  chooseKillDrop,
   previewDefaultBuildingDrop,
   type DropRule,
 } from '@/game/systems/dropRules';
@@ -72,14 +73,16 @@ export function nextBuildingDrop(b: Battle): string {
 /** Score, explosion, drop and release for an enemy whose HP just reached 0. */
 export function killEnemy(b: Battle, enemy: Enemy): void {
   b.state.score += enemy.score;
+  const def = ENEMY_DEFS[enemy.type];
   const kind = explosionKindForSize(enemyClass(enemy.type).size);
   spawnExplosion(b.fx, enemy.x, enemy.y, kind);
-  for (const [dx, dy, delay] of ENEMY_DEFS[enemy.type].deathBursts ?? []) {
+  for (const [dx, dy, delay] of def.deathBursts ?? []) {
     spawnExplosion(b.fx, enemy.x + dx, enemy.y + dy, kind, delay);
   }
-  b.waves?.recordKill();
+  if (def.countsInKillRate !== false) b.waves?.recordKill();
   b.sfx('enemyExplode');
-  if (enemy.drop) spawnItem(b.items.acquire(), enemy.drop, enemy.x, enemy.y, b.rng);
+  const drop = def.killDrop ? chooseKillDrop(def.killDrop, b.state.mate, b.rng) : enemy.drop;
+  if (drop) spawnItem(b.items.acquire(), drop, enemy.x, enemy.y, b.rng);
   b.enemies.release(enemy);
 }
 

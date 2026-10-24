@@ -50,6 +50,7 @@ This document defines the coding conventions and constraints for all AI agents w
 | Tank | 24×24 |
 | Turret | 32×32 |
 | Missile car | 24×32 |
+| Risk crate | 32×16 (cyan shield ring is code-drawn while the shield is up) |
 | Pillbox | 32×32 |
 | Fuel depot | 48×32 |
 | Radar station | 32×32 |
@@ -92,7 +93,7 @@ This document defines the coding conventions and constraints for all AI agents w
 
 ### Size Classes
 - Every shootable object declares a size class (`small` / `medium` / `large`) and a category (`air` / `ground` / `building` / `boss`) in `src/game/entities/objectClass.ts`. Nothing else may hard-code per-type size checks
-- small: small, drone, interceptor, tank, missile_car, every building. medium: medium, bomber, turret2, future mini-bosses. large: the Boss
+- small: small, drone, interceptor, tank, missile_car, risk_crate, every building. medium: medium, bomber, turret2, future mini-bosses. large: the Boss
 
 ### Bomb
 - Hits only objects on screen at the moment of the bomb. Off-screen enemies and buildings are untouched
@@ -108,6 +109,7 @@ This document defines the coding conventions and constraints for all AI agents w
 - Death: main −1 (min Lv1), sub −1 (may become none), mate −1 (min 0)
 - Items are table-driven (`ITEM_DEFS` in `entities/item.ts`, `ITEM_PIXELS` in `art/itemSprite.ts`)
 - Buildings always drop exactly one item. A placement `drop` locks a letter, or `{ exclusive, item }` joins a group. Battle enter rolls the stage RNG once per group (members in placement order, groups in sorted key order, index `floor(rng * count)`). Stage 1 `s1-sea-mate` is B07 then B08, so exactly one of them drops M. B01 and B05 drop T. B06 drops M. Everyone else uses `BUILDING_DROP_RULES`: `BUILDING_DROP_P_SHARE` (50%) P and the rest B while main power is below `POWER_MAX`, otherwise only B (that path does not draw). Locks beat a stage or difficulty rule list. Wave-table P / B carriers do not change. There is no chance to drop nothing
+- Risk crates (P22, `risk_crate`) are shielded floaters on the stage clock, not building locks and not part of the 148-ship kill rate. Shield 12 then body 6 (`scaleHp` still applies). No shots. Destroying one drops one existing M/P/T item via `chooseRiskCrateDrop`: M when mate is 0 (no roll); otherwise M 50% / P 25% / T 25%. Never B. Stage 1: Easy one at t=50 x=180; Medium t=50 x=48 and t=100 x=312; Hard adds t=75 x=220
 - The title demo uses the same weapon code paths. No demo-specific weapon logic
 - Main vulcan permanent defaults (stage, boss practice, attract, and weapon-test P速 / P伤 on enter and reset): `FIRE_RATE` = 5 volleys/s, `PLAYER_BULLET_DAMAGE` = 2. All three levels share that rate; a higher level adds bullets. Full-hit DPS stays 10 / 20 / 30
 - T homing is pinned and must not be derived from the main weapon: `HOMING_FIRE_RATE` = 1.5 volleys/s, `HOMING_DAMAGE` = 2.5. Weapon-test T速 / T伤 open at those same numbers. Do not reintroduce `HOMING_FIRE_RATE_SCALE` or `HOMING_DAMAGE_FACTOR`
@@ -139,11 +141,11 @@ This document defines the coding conventions and constraints for all AI agents w
 - Gameplay randomness comes from `SceneContext.rng` (`engine/rng.ts`, seeded `createRng`). Never call `Math.random` in gameplay code; the replay tests make it throw
 
 ### Data-Driven Content (P11)
-- **Enemies**: one row per type in `ENEMY_DEFS` (`entities/enemyDefs.ts`): HP, score, footprint, hit radius, size class, category, `deathBursts`, `barrel`, `spin`, `snapAim`, `avoidsWater`. No per-type branches in battle code
+- **Enemies**: one row per type in `ENEMY_DEFS` (`entities/enemyDefs.ts`): HP, score, footprint, hit radius, size class, category, `deathBursts`, `barrel`, `spin`, `snapAim`, `avoidsWater`, optional `shield`, `killDrop`, `countsInKillRate`. No per-type branches in battle code
 - **Bullet patterns**: `systems/danmaku.ts`. Named kinds are rows in `FIRE_PRESETS`; one-off shapes use `{ kind: 'pattern', pattern: PatternSpec }`. Gun clocks (`pullShots`) and the sweeping laser (`stepLaserSweep`) are shared by enemies and bosses
 - **Bosses**: a `BossDef` (`levels/bosses/*.ts`) lists parts and a phase table (targets, optional `segmentHp`, `transition`, `gate`, attacks, enrage, look, HP-bar slot). `systems/boss.ts` is the generic runner; the segmented HP bar comes from the table (`bar: 'extra'` phases are the yellow slot). Hull art is keyed by `BossDef.art` in `BOSS_ART` (`art/bossSprite.ts`)
 - **Difficulty**: `DIFFICULTY_PROFILES` (`difficulty.ts`): `hpScale`, `bulletSpeedScale`, `fireRateScale`, `bossGates`, optional `buildingDrops`. Boss phases with a `gate` run only when the profile opens it (Hard opens `hard` = phase 3)
-- **Drops**: `BUILDING_DROP_RULES` in `systems/dropRules.ts` (first matching rule wins). Placement locks and exclusive groups are resolved there (`resolvePlacementDrops`, `chooseBuildingDrop`). A stage or a difficulty profile may replace the rule list; locks still win
+- **Drops**: `BUILDING_DROP_RULES` in `systems/dropRules.ts` (first matching rule wins). Placement locks and exclusive groups are resolved there (`resolvePlacementDrops`, `chooseBuildingDrop`). A stage or a difficulty profile may replace the rule list; locks still win. Risk-crate kills call `chooseRiskCrateDrop` (mate 0 → M; else M/P/T 50/25/25; never B)
 - **Building guns**: `BuildingSpec.fire` (`entities/building.ts`); barrel look and pivot in `BUILDING_BARRELS` (`art/buildingSprite.ts`)
 
 ### Recipes

@@ -13,7 +13,7 @@ import {
 } from '@/game/config';
 import { scaleHp } from '@/game/difficulty';
 import { terrainBlocksTank } from '@/game/maps/track';
-import { ENEMY_STATS, spawnEnemy, updateEnemy } from '@/game/entities/enemy';
+import { spawnEnemy, scaledEnemyVitals, updateEnemy } from '@/game/entities/enemy';
 import { updateEnemyBullet } from '@/game/entities/enemyBullet';
 import { updateItem } from '@/game/entities/item';
 import { pickHomingTarget, updateHomingMissile } from '@/game/entities/homingMissile';
@@ -82,6 +82,7 @@ export function stepSpawns(b: Battle, dt: number, pastWarning: boolean): void {
     const spawns = b.waves.update(dt);
     if (!pastWarning) {
       for (const spawn of spawns) {
+        const vitals = scaledEnemyVitals(spawn.type, difficulty, spawn.hp);
         spawnEnemy(
           b.enemies.acquire(),
           spawn.type,
@@ -90,8 +91,9 @@ export function stepSpawns(b: Battle, dt: number, pastWarning: boolean): void {
           spawn.move,
           spawn.canFire ? spawn.fire : { kind: 'none' },
           spawn.drop,
-          scaleHp(spawn.hp ?? ENEMY_STATS[spawn.type].hp, difficulty),
-          spawn.score
+          vitals.hp,
+          spawn.score,
+          vitals.shield
         );
       }
     }

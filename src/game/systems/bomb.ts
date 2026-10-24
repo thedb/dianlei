@@ -91,9 +91,17 @@ export function bombArrives(target: BombTarget, dt: number): boolean {
   return true;
 }
 
-/** Apply the size-class bomb damage to an enemy. True when it dies. */
+/**
+ * Apply the size-class bomb damage to an enemy. True when it dies.
+ * Shield counts as HP here, so a small shielded target still dies outright
+ * and a medium's 50% is of shield max + body max. Unshielded enemies pass
+ * the same numbers as before.
+ */
 export function bombHitEnemy(enemy: Enemy): boolean {
-  return damageEnemy(enemy, bombDamage(enemyClass(enemy.type).size, enemy.hp, enemy.maxHp));
+  return damageEnemy(
+    enemy,
+    bombDamage(enemyClass(enemy.type).size, enemy.shield + enemy.hp, enemy.maxShield + enemy.maxHp)
+  );
 }
 
 /** Apply the size-class bomb damage to a building. True when it is wrecked. */

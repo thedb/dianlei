@@ -8,19 +8,33 @@
  */
 
 import {
+  RISK_CRATE_HP,
+  RISK_CRATE_SHIELD,
   SCORE_BOMBER,
   SCORE_DRONE,
   SCORE_DUAL_TURRET,
   SCORE_INTERCEPTOR,
   SCORE_MEDIUM_FIGHTER,
   SCORE_MISSILE_CAR,
+  SCORE_RISK_CRATE,
   SCORE_SMALL_FIGHTER,
   SCORE_TANK,
 } from '@/game/config';
 import type { SizeClass } from './objectClass';
 
 export type EnemyType =
-  'small' | 'medium' | 'interceptor' | 'bomber' | 'drone' | 'tank' | 'turret2' | 'missile_car';
+  | 'small'
+  | 'medium'
+  | 'interceptor'
+  | 'bomber'
+  | 'drone'
+  | 'tank'
+  | 'turret2'
+  | 'missile_car'
+  | 'risk_crate';
+
+/** Resolved at the kill, from live player state. Wave `drops` are the fixed P/B path. */
+export type KillDropKind = 'risk_crate';
 
 /** Extra kill blast: offset from the wreck and delay in seconds. */
 export type DeathBurst = readonly [dx: number, dy: number, delay: number];
@@ -45,6 +59,15 @@ export interface EnemyDef {
   snapAim?: boolean;
   /** River, shallow water, and intact buildings block this unit's ground drive. */
   avoidsWater?: boolean;
+  /** Spent before `hp`. Omit or 0 for no shield. Difficulty scales it with body HP. */
+  shield?: number;
+  /** Drop chosen when the unit dies. Omit to use the wave's fixed P/B carrier slot. */
+  killDrop?: KillDropKind;
+  /**
+   * When false, the kill still scores and drops but is left out of the wave
+   * kill-rate fraction (same idea as buildings). Default true.
+   */
+  countsInKillRate?: boolean;
 }
 
 export const ENEMY_DEFS: Readonly<Record<EnemyType, EnemyDef>> = {
@@ -130,6 +153,18 @@ export const ENEMY_DEFS: Readonly<Record<EnemyType, EnemyDef>> = {
     hitRadius: 12,
     size: 'small',
     category: 'ground',
+  },
+  risk_crate: {
+    hp: RISK_CRATE_HP,
+    shield: RISK_CRATE_SHIELD,
+    score: SCORE_RISK_CRATE,
+    width: 32,
+    height: 16,
+    hitRadius: 14,
+    size: 'small',
+    category: 'air',
+    killDrop: 'risk_crate',
+    countsInKillRate: false,
   },
 };
 

@@ -15,6 +15,7 @@ const TYPES: EnemyType[] = [
   'tank',
   'turret2',
   'missile_car',
+  'risk_crate',
 ];
 
 describe('enemy sprites', () => {
@@ -119,6 +120,40 @@ describe('enemy sprites', () => {
       expect(countIn(drawn.pixels, olives)).toBeGreaterThan(countIn(drawn.pixels, reds));
       expect(drawn.nozzles).toHaveLength(0);
     }
+  });
+
+  it('draws the risk crate as a flat saucer: magenta top, yellow-black ring, cyan lamps, gray belly', () => {
+    const art = buildEnemyArt('risk_crate');
+    expect(art.pixels).toHaveLength(16);
+    expect(art.pixels[0]).toHaveLength(32);
+    expect(art.nozzles).toHaveLength(0);
+    expect(symmetric(art.pixels)).toBe(true);
+
+    const magenta = new Set<number>([COLOR.BULLET_MAGENTA, COLOR.BULLET_PINK, COLOR.BULLET_DARK]);
+    const grays = new Set<number>([
+      COLOR.DARK_GRAY,
+      COLOR.MEDIUM_GRAY,
+      COLOR.GRAY,
+      COLOR.LIGHT_GRAY,
+      COLOR.PALE_GRAY,
+    ]);
+    let topMagenta = 0;
+    let bellyGray = 0;
+    for (let y = 0; y <= 5; y++) {
+      for (const cell of art.pixels[y]!) if (magenta.has(cell)) topMagenta++;
+    }
+    for (let y = 10; y <= 15; y++) {
+      for (const cell of art.pixels[y]!) if (grays.has(cell)) bellyGray++;
+    }
+    expect(topMagenta).toBeGreaterThan(8);
+    expect(bellyGray).toBeGreaterThan(8);
+
+    const ring = [...art.pixels[7]!, ...art.pixels[8]!];
+    expect(ring.filter((c) => c === COLOR.EXPLOSION_YELLOW).length).toBeGreaterThan(4);
+    expect(ring.filter((c) => c === COLOR.BLACK).length).toBeGreaterThan(4);
+    expect(
+      ring.filter((c) => c === COLOR.PLAYER_CYAN || c === COLOR.PLAYER_MED_CYAN).length
+    ).toBeGreaterThanOrEqual(4);
   });
 });
 

@@ -147,9 +147,9 @@ describe('bomb against real enemies and buildings', () => {
   }
 
   it('kills on-screen small enemies, halves on-screen mediums, ignores off-screen ones', () => {
-    const smallOn = (['small', 'drone', 'interceptor', 'tank', 'missile_car'] as const).map(
-      (type, i) => enemy(type, 40 + i * 60, 200)
-    );
+    const smallOn = (
+      ['small', 'drone', 'interceptor', 'tank', 'missile_car', 'risk_crate'] as const
+    ).map((type, i) => enemy(type, 40 + i * 60, 200));
     const mediumOn = (['medium', 'bomber', 'turret2'] as const).map((type, i) =>
       enemy(type, 60 + i * 100, 360)
     );

@@ -9,6 +9,8 @@
  * P20a recaptured stage, attract, boss-practice, and pause draws: the stage
  * HUD shows the M icon, and different building drops change what is on screen.
  * The weapon-test draw digest did not move.
+ * P22 recaptured stage and attract draws: the risk crate and its shield ring
+ * are on screen. Boss practice, weapon test, and the 12s pause did not move.
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -224,11 +226,17 @@ function stageRun(
 }
 
 const EXPECTED: Record<string, RenderResult> = {
-  'stage easy': { outcome: 'result', frames: 11734, renders: 512, calls: 83074, hash: 3374521315 },
-  'stage hard': { outcome: 'result', frames: 13221, renders: 576, calls: 96771, hash: 1991871279 },
-  'stage demo': { outcome: 'gameover', frames: 5106, renders: 223, calls: 31771, hash: 4243311574 },
+  'stage easy': { outcome: 'result', frames: 11341, renders: 495, calls: 84982, hash: 4083327259 },
+  'stage hard': {
+    outcome: 'gameover',
+    frames: 13569,
+    renders: 591,
+    calls: 98239,
+    hash: 3707910952,
+  },
+  'stage demo': { outcome: 'gameover', frames: 5575, renders: 244, calls: 35067, hash: 766989114 },
   'boss hard': { outcome: 'result', frames: 5453, renders: 239, calls: 36255, hash: 3992588818 },
-  attract: { outcome: 'timeout', frames: 5400, renders: 318, calls: 24791, hash: 3199217799 },
+  attract: { outcome: 'timeout', frames: 5400, renders: 318, calls: 24899, hash: 727918577 },
   weaponTest: { outcome: 'timeout', frames: 600, renders: 55, calls: 26053, hash: 1189635685 },
   pause: { outcome: 'timeout', frames: 720, renders: 56, calls: 6021, hash: 2351038240 },
 };
