@@ -1,17 +1,18 @@
 /**
- * Locked 铁堡 hull: dark-steel locomotive plus two armored boxcars.
+ * Locked 铁堡 hull: a slender dark-steel locomotive plus two long boxcars.
  * The player chases from behind, so the nose points up-screen.
  * Top of the sprite is the pilot. Bottom is the last car's buffer.
  *
- * Five variations share that consist, the coupler gaps, and the hit
- * anchors. They differ in nose plating, mount shape, and roof panels.
- * Temporary default is A. Factory A is already locked.
+ * Body width stays near 36px inside the 80px hitbox so the cars read as
+ * 细长 rather than stubby. Both boxcars are about twice as long as they
+ * are wide. Five variations share the consist, the coupler gaps, and the
+ * hit anchors. Temporary default is A. Factory A is already locked.
  *
  * Anchors are hull-center offsets (`TIEBAO_CORE` / `TIEBAO_ROOF_*`),
- * +y toward the player. On this 80×160 sprite that is:
+ * +y toward the player. On this 80×232 sprite that is:
  *   core      (40, 18)   nose
- *   roofLoco  (40, 42)   locomotive roof
- *   roofCar   (40, 130)  rear boxcar
+ *   roofLoco  (40, 48)   locomotive roof
+ *   roofCar   (40, 190)  rear boxcar
  */
 
 import {
@@ -56,6 +57,14 @@ const OY = COLOR.EXPLOSION_ORANGE_YELLOW;
 const CX = Math.floor(TIEBAO_HULL_W / 2);
 const CY = Math.floor(TIEBAO_HULL_H / 2);
 
+/** Thin loco body. 32×50 under a tapered nose. */
+const LOCO = { x: 24, y: 14, w: 32, h: 50 } as const;
+/** Two long boxcars, 36×72. About 2:1. */
+const CAR1 = { x: 22, y: 74, w: 36, h: 72 } as const;
+const CAR2 = { x: 22, y: 156, w: 36, h: 72 } as const;
+const COUPLE_1 = 65;
+const COUPLE_2 = 147;
+
 function at(offset: { readonly x: number; readonly y: number }): { x: number; y: number } {
   return { x: CX + offset.x, y: CY + offset.y };
 }
@@ -76,7 +85,7 @@ function vline(g: SpriteData, x: number, y: number, h: number, color: number): v
   for (let i = 0; i < h; i++) plot(g, x, y + i, color);
 }
 
-/** Inset roof. Light from the upper left, so the nose edge stays bright. */
+/** Inset roof. A long center seam keeps a stretched car from reading as a slab. */
 function roof(g: SpriteData, x: number, y: number, w: number, h: number, cap: number): void {
   fillRect(g, x, y, w, h, DG);
   fillRect(g, x + 3, y + 3, w - 6, h - 6, cap);
@@ -84,6 +93,8 @@ function roof(g: SpriteData, x: number, y: number, w: number, h: number, cap: nu
   vline(g, x + 3, y + 3, h - 6, LG);
   hline(g, x + 3, y + h - 4, w - 6, S);
   vline(g, x + w - 4, y + 3, h - 6, S);
+  vline(g, x + Math.floor(w / 2), y + 6, h - 12, S);
+  for (let yy = y + 18; yy < y + h - 8; yy += 18) hline(g, x + 6, yy, w - 12, S);
   plot(g, x + 1, y + 1, PG);
   plot(g, x + w - 2, y + 1, PG);
   plot(g, x + 1, y + h - 2, G);
@@ -91,27 +102,27 @@ function roof(g: SpriteData, x: number, y: number, w: number, h: number, cap: nu
 }
 
 function bogie(g: SpriteData, y: number, left: number, right: number): void {
-  fillRect(g, left, y - 2, 8, 4, S);
-  fillRect(g, right - 8, y - 2, 8, 4, S);
-  for (const x of [left - 6, right + 2]) {
-    fillRect(g, x, y - 6, 4, 3, K);
-    fillRect(g, x, y + 3, 4, 3, K);
-    plot(g, x + 1, y - 5, G);
-    plot(g, x + 1, y + 4, LG);
+  fillRect(g, left, y - 2, 6, 4, S);
+  fillRect(g, right - 6, y - 2, 6, 4, S);
+  for (const x of [left - 5, right + 1]) {
+    fillRect(g, x, y - 5, 4, 3, K);
+    fillRect(g, x, y + 2, 4, 3, K);
+    plot(g, x + 1, y - 4, G);
+    plot(g, x + 1, y + 3, LG);
   }
 }
 
 /** Knuckle in a gap. `y` is the top of the housing. */
 function coupler(g: SpriteData, y: number, heavy: boolean): void {
-  const w = heavy ? 16 : 12;
+  const w = heavy ? 14 : 10;
   const x = CX - Math.floor(w / 2);
-  fillRect(g, CX - 3, y, 6, 2, S);
-  fillRect(g, x, y + 2, w, heavy ? 7 : 5, DG);
-  fillRect(g, CX - 3, y + 3, 6, 3, MG);
+  fillRect(g, CX - 2, y, 4, 2, S);
+  fillRect(g, x, y + 2, w, heavy ? 6 : 5, DG);
+  fillRect(g, CX - 2, y + 3, 4, 3, MG);
   hline(g, x, y + 2, w, LG);
   plot(g, x + 1, y + 4, PG);
   plot(g, x + w - 2, y + 4, PG);
-  fillRect(g, CX - 3, y + (heavy ? 9 : 7), 6, 2, S);
+  fillRect(g, CX - 2, y + (heavy ? 8 : 7), 4, 2, S);
 }
 
 function noseOf(g: SpriteData, nose: Nose): void {
@@ -120,8 +131,8 @@ function noseOf(g: SpriteData, nose: Nose): void {
       g,
       [
         [CX, 2],
-        [18, 20],
-        [62, 20],
+        [26, 16],
+        [54, 16],
       ],
       DG
     );
@@ -129,37 +140,37 @@ function noseOf(g: SpriteData, nose: Nose): void {
       g,
       [
         [CX, 5],
-        [24, 18],
-        [56, 18],
+        [30, 15],
+        [50, 15],
       ],
       MG
     );
     hline(g, CX - 1, 4, 2, LG);
   } else if (nose === 'blunt') {
-    fillRect(g, 24, 4, 32, 4, DG);
+    fillRect(g, 28, 4, 24, 4, DG);
     fillPoly(
       g,
       [
-        [24, 4],
-        [56, 4],
-        [64, 16],
-        [16, 16],
+        [28, 4],
+        [52, 4],
+        [56, 14],
+        [24, 14],
       ],
       DG
     );
-    fillRect(g, 26, 6, 28, 8, MG);
-    hline(g, 26, 6, 28, LG);
-    fillRect(g, 30, 8, 4, 3, EY);
-    fillRect(g, 46, 8, 4, 3, EY);
-    plot(g, 31, 9, W);
-    plot(g, 47, 9, W);
+    fillRect(g, 30, 6, 20, 6, MG);
+    hline(g, 30, 6, 20, LG);
+    fillRect(g, 32, 7, 3, 2, EY);
+    fillRect(g, 45, 7, 3, 2, EY);
+    plot(g, 33, 8, W);
+    plot(g, 46, 8, W);
   } else if (nose === 'spike') {
     fillPoly(
       g,
       [
         [CX, 1],
-        [30, 18],
-        [50, 18],
+        [32, 16],
+        [48, 16],
       ],
       DG
     );
@@ -167,8 +178,8 @@ function noseOf(g: SpriteData, nose: Nose): void {
       g,
       [
         [CX, 4],
-        [34, 16],
-        [46, 16],
+        [35, 14],
+        [45, 14],
       ],
       MG
     );
@@ -177,103 +188,101 @@ function noseOf(g: SpriteData, nose: Nose): void {
     fillPoly(
       g,
       [
-        [22, 8],
-        [58, 8],
-        [66, 18],
-        [14, 18],
+        [28, 6],
+        [52, 6],
+        [56, 16],
+        [24, 16],
       ],
       DG
     );
-    fillRect(g, 24, 10, 32, 6, MG);
-    hline(g, 24, 10, 32, LG);
-    fillRect(g, 36, 1, 8, 3, G);
-    fillRect(g, 38, 1, 4, 12, DG);
+    fillRect(g, 30, 8, 20, 6, MG);
+    hline(g, 30, 8, 20, LG);
+    fillRect(g, 37, 1, 6, 3, G);
+    fillRect(g, 38, 1, 4, 10, DG);
     plot(g, 39, 2, EY);
     plot(g, 40, 2, W);
   } else {
-    fillRect(g, 30, 3, 20, 6, DG);
-    fillRect(g, 32, 5, 16, 3, MG);
-    hline(g, 32, 5, 16, LG);
-    fillRect(g, 22, 9, 36, 6, DG);
-    fillRect(g, 24, 11, 32, 3, MG);
-    fillRect(g, 16, 15, 48, 4, DG);
+    fillRect(g, 32, 3, 16, 5, DG);
+    fillRect(g, 34, 4, 12, 3, MG);
+    hline(g, 34, 4, 12, LG);
+    fillRect(g, 28, 8, 24, 5, DG);
+    fillRect(g, 30, 9, 20, 3, MG);
+    fillRect(g, 24, 13, 32, 4, DG);
   }
 }
 
 function loco(g: SpriteData, nose: Nose): void {
   noseOf(g, nose);
-  roof(g, 16, 18, 48, 34, MG);
-  hline(g, 22, 32, 36, S);
-  fillRect(g, 20, 24, 2, 2, RD);
-  fillRect(g, 58, 24, 2, 2, RD);
+  roof(g, LOCO.x, LOCO.y, LOCO.w, LOCO.h, MG);
+  fillRect(g, 28, 22, 2, 2, RD);
+  fillRect(g, 50, 22, 2, 2, RD);
 }
 
 function boxcar(g: SpriteData, y: number, h: number): void {
-  roof(g, 10, y, 60, h, G);
+  roof(g, CAR1.x, y, CAR1.w, h, G);
 }
 
-/** Side pods. Short tubes reach the missile origins without bridging the gap. */
+/** Missile pods on the middle car. Tubes reach the shot origins without joining the cars. */
 function pods(g: SpriteData): void {
-  fillRect(g, 4, 36, 14, 12, DG);
-  fillRect(g, 62, 36, 14, 12, DG);
-  fillRect(g, 6, 38, 10, 8, S);
-  fillRect(g, 64, 38, 10, 8, S);
-  fillRect(g, 7, 40, 3, 4, K);
-  fillRect(g, 12, 40, 3, 4, K);
-  fillRect(g, 65, 40, 3, 4, K);
-  fillRect(g, 70, 40, 3, 4, K);
-  fillRect(g, 10, 46, 6, 12, S);
-  fillRect(g, 64, 46, 6, 12, S);
-  vline(g, 12, 48, 8, DG);
-  vline(g, 66, 48, 8, DG);
+  const y = CY - 30;
+  fillRect(g, 8, y, 14, 14, DG);
+  fillRect(g, 58, y, 14, 14, DG);
+  fillRect(g, 10, y + 2, 10, 8, S);
+  fillRect(g, 60, y + 2, 10, 8, S);
+  fillRect(g, 11, y + 4, 3, 4, K);
+  fillRect(g, 16, y + 4, 3, 4, K);
+  fillRect(g, 61, y + 4, 3, 4, K);
+  fillRect(g, 66, y + 4, 3, 4, K);
 }
 
 function broadside(g: SpriteData): void {
-  fillRect(g, 1, 84, 12, 6, DG);
-  fillRect(g, 67, 84, 12, 6, DG);
-  fillRect(g, 2, 86, 8, 2, K);
-  fillRect(g, 70, 86, 8, 2, K);
-  plot(g, 3, 85, LG);
-  plot(g, 76, 85, LG);
+  const y = CY + 6;
+  fillRect(g, 2, y, 20, 5, DG);
+  fillRect(g, 58, y, 20, 5, DG);
+  fillRect(g, 3, y + 2, 10, 2, K);
+  fillRect(g, 67, y + 2, 10, 2, K);
+  plot(g, 4, y + 1, LG);
+  plot(g, 74, y + 1, LG);
 }
 
 /** Rear beam. Yellow lamps sit where the ram telegraph flashes. */
 function buffer(g: SpriteData, tall: boolean): void {
-  const y = tall ? 146 : 150;
-  const h = tall ? 12 : 8;
-  fillRect(g, 12, y, 56, h, DG);
-  fillRect(g, 16, y + 2, 48, h - 4, MG);
-  hline(g, 16, y + 2, 48, LG);
-  fillRect(g, 24, 150, 8, 3, EY);
-  fillRect(g, 48, 150, 8, 3, EY);
-  plot(g, 26, 151, W);
-  plot(g, 50, 151, W);
-  fillRect(g, 36, y + h - 4, 8, 3, K);
+  const y = tall ? TIEBAO_HULL_H - 20 : TIEBAO_HULL_H - 14;
+  const h = TIEBAO_HULL_H - 4 - y;
+  fillRect(g, CAR2.x, y, CAR2.w, h, DG);
+  fillRect(g, CAR2.x + 3, y + 2, CAR2.w - 6, Math.max(2, h - 4), MG);
+  hline(g, CAR2.x + 3, y + 2, CAR2.w - 6, LG);
+  const lampY = TIEBAO_HULL_H - 10;
+  fillRect(g, 24, lampY, 8, 3, EY);
+  fillRect(g, 48, lampY, 8, 3, EY);
+  plot(g, 26, lampY + 1, W);
+  plot(g, 50, lampY + 1, W);
+  fillRect(g, CX - 3, y + h - 3, 6, 2, K);
 }
 
 function trucks(g: SpriteData): void {
-  bogie(g, 28, 16, 64);
-  bogie(g, 46, 16, 64);
-  bogie(g, 72, 10, 70);
-  bogie(g, 96, 10, 70);
-  bogie(g, 124, 10, 70);
-  bogie(g, 142, 10, 70);
+  bogie(g, 28, LOCO.x, LOCO.x + LOCO.w);
+  bogie(g, 52, LOCO.x, LOCO.x + LOCO.w);
+  bogie(g, CAR1.y + 12, CAR1.x, CAR1.x + CAR1.w);
+  bogie(g, CAR1.y + CAR1.h - 16, CAR1.x, CAR1.x + CAR1.w);
+  bogie(g, CAR2.y + 12, CAR2.x, CAR2.x + CAR2.w);
+  bogie(g, CAR2.y + CAR2.h - 18, CAR2.x, CAR2.x + CAR2.w);
 }
 
 function consist(g: SpriteData, nose: Nose, heavy: boolean, tallBuffer: boolean): void {
   loco(g, nose);
   if (nose === 'spike') {
-    fillRect(g, 6, 24, 12, 24, DG);
-    fillRect(g, 62, 24, 12, 24, DG);
-    fillRect(g, 8, 26, 8, 20, S);
-    fillRect(g, 64, 26, 8, 20, S);
+    fillRect(g, 18, 24, 8, 22, DG);
+    fillRect(g, 54, 24, 8, 22, DG);
+    fillRect(g, 20, 26, 5, 18, S);
+    fillRect(g, 55, 26, 5, 18, S);
   }
+  coupler(g, COUPLE_1, heavy);
+  boxcar(g, CAR1.y, CAR1.h);
   pods(g);
-  coupler(g, 54, heavy);
-  boxcar(g, 64, 40);
   broadside(g);
-  coupler(g, 106, heavy);
-  boxcar(g, 116, 34);
+  coupler(g, COUPLE_2, heavy);
+  boxcar(g, CAR2.y, CAR2.h);
   buffer(g, tallBuffer);
   trucks(g);
 }
@@ -339,108 +348,105 @@ function finish(g: SpriteData, open: boolean, kind: Mount, plate: Plate): Sprite
   return g;
 }
 
-/** A: wedge nose, round mounts, middle vent, rear cargo bay. Concept massing. */
+/** A: wedge nose, round mounts, long vented roof, rear cargo hatch. */
 function lookA(open: boolean): SpriteData {
   const g = createGrid(TIEBAO_HULL_W, TIEBAO_HULL_H, -1);
   consist(g, 'wedge', false, false);
-  fillEllipse(g, 40, 74, 8, 7, S);
-  fillEllipse(g, 40, 74, 5, 4, DG);
-  fillEllipse(g, 40, 74, 2, 2, K);
-  plot(g, 40, 74, LG);
-  fillRect(g, 22, 88, 36, 10, S);
-  for (let x = 24; x < 56; x += 4) vline(g, x, 89, 8, DG);
-  hline(g, 22, 88, 36, LG);
-  fillRect(g, 16, 122, 14, 20, S);
-  fillRect(g, 50, 122, 14, 20, S);
-  fillRect(g, 18, 124, 10, 8, WD);
-  fillRect(g, 18, 134, 10, 6, BR);
-  hline(g, 18, 124, 10, TAN);
-  fillEllipse(g, 55, 128, 4, 5, MG);
-  fillEllipse(g, 61, 128, 4, 5, G);
-  plot(g, 55, 126, LG);
-  plot(g, 61, 126, LG);
-  fillRect(g, 54, 136, 3, 4, OL);
-  fillRect(g, 60, 136, 3, 4, OL);
+  fillEllipse(g, CX, CAR1.y + 14, 7, 6, S);
+  fillEllipse(g, CX, CAR1.y + 14, 4, 3, DG);
+  fillEllipse(g, CX, CAR1.y + 14, 2, 2, K);
+  plot(g, CX, CAR1.y + 14, LG);
+  fillRect(g, 28, CAR1.y + 32, 24, 22, S);
+  for (let x = 30; x < 50; x += 4) vline(g, x, CAR1.y + 34, 18, DG);
+  hline(g, 28, CAR1.y + 32, 24, LG);
+  fillRect(g, 26, CAR2.y + 8, 8, 14, MG);
+  fillRect(g, 46, CAR2.y + 8, 8, 14, MG);
+  plot(g, 29, CAR2.y + 10, EY);
+  plot(g, 49, CAR2.y + 10, EY);
+  fillRect(g, 26, CAR2.y + 40, 12, 22, S);
+  fillRect(g, 42, CAR2.y + 40, 12, 22, S);
+  fillRect(g, 28, CAR2.y + 42, 8, 8, WD);
+  fillRect(g, 28, CAR2.y + 52, 8, 8, BR);
+  hline(g, 28, CAR2.y + 42, 8, TAN);
+  fillEllipse(g, 46, CAR2.y + 48, 3, 4, MG);
+  fillEllipse(g, 51, CAR2.y + 48, 3, 4, G);
+  plot(g, 46, CAR2.y + 46, LG);
+  plot(g, 51, CAR2.y + 46, LG);
   return finish(g, open, 'round', 'round');
 }
 
-/** B: flat armored face, rivet rows, ribbed middle roof, louvered rear. */
+/** B: flat face, rivets, long ribbed roof, louvered rear half. */
 function lookB(open: boolean): SpriteData {
   const g = createGrid(TIEBAO_HULL_W, TIEBAO_HULL_H, -1);
   consist(g, 'blunt', false, false);
-  for (let y = 22; y < 48; y += 6) {
-    plot(g, 18, y, PG);
-    plot(g, 61, y, PG);
+  for (let y = 20; y < 58; y += 8) {
+    plot(g, 26, y, PG);
+    plot(g, 53, y, PG);
   }
-  for (let y = 68; y < 100; y += 4) hline(g, 16, y, 48, y % 8 === 0 ? S : DG);
-  for (let x = 16; x < 66; x += 8) {
-    plot(g, x, 66, PG);
-    plot(g, x, 100, PG);
-    plot(g, x, 118, PG);
-    plot(g, x, 146, PG);
+  for (let y = CAR1.y + 8; y < CAR1.y + CAR1.h - 8; y += 8) {
+    hline(g, 28, y, 24, y % 16 === 0 ? S : DG);
   }
-  for (let y = 122; y < 146; y += 3) hline(g, 18, y, 44, S);
-  fillRect(g, 18, 120, 44, 2, LG);
+  for (let y = CAR2.y + 28; y < CAR2.y + CAR2.h - 10; y += 4) {
+    hline(g, 28, y, 24, S);
+  }
+  hline(g, 28, CAR2.y + 26, 24, LG);
   return finish(g, open, 'square', 'square');
 }
 
-/** C: spike, side skirts, twin ammo doors, a small cupola beside the rear gun. */
+/** C: spike and short skirts, tall ammo doors on the long middle car. */
 function lookC(open: boolean): SpriteData {
   const g = createGrid(TIEBAO_HULL_W, TIEBAO_HULL_H, -1);
   consist(g, 'spike', false, false);
-  fillRect(g, 18, 70, 18, 26, S);
-  fillRect(g, 44, 70, 18, 26, S);
-  fillRect(g, 20, 72, 14, 22, TAN);
-  fillRect(g, 46, 72, 14, 22, OL);
-  hline(g, 20, 72, 14, OY);
-  hline(g, 46, 72, 14, LG);
-  vline(g, 26, 74, 18, WD);
-  vline(g, 52, 74, 18, DG);
-  fillRect(g, 54, 120, 12, 10, MG);
-  fillRect(g, 56, 122, 8, 6, LG);
-  plot(g, 58, 124, S);
-  plot(g, 61, 124, S);
+  fillRect(g, 26, CAR1.y + 10, 12, 48, S);
+  fillRect(g, 42, CAR1.y + 10, 12, 48, S);
+  fillRect(g, 28, CAR1.y + 12, 8, 44, TAN);
+  fillRect(g, 44, CAR1.y + 12, 8, 44, OL);
+  hline(g, 28, CAR1.y + 12, 8, OY);
+  hline(g, 44, CAR1.y + 12, 8, LG);
+  vline(g, 31, CAR1.y + 16, 36, WD);
+  vline(g, 47, CAR1.y + 16, 36, DG);
+  fillRect(g, 48, CAR2.y + 16, 8, 12, MG);
+  fillRect(g, 50, CAR2.y + 18, 4, 8, LG);
+  plot(g, 51, CAR2.y + 20, S);
+  plot(g, 53, CAR2.y + 20, S);
   return finish(g, open, 'round', 'round');
 }
 
-/** D: chamfered nose with an up-barrel, center spine, rear tubes flanking the gun. */
+/** D: chamfer and up-barrel, spine, tubes flanking the rear gun. */
 function lookD(open: boolean): SpriteData {
   const g = createGrid(TIEBAO_HULL_W, TIEBAO_HULL_H, -1);
   consist(g, 'chamfer', false, false);
-  vline(g, 39, 20, 28, S);
-  vline(g, 40, 20, 28, LG);
-  vline(g, 41, 20, 28, S);
-  fillRect(g, 18, 68, 44, 28, S);
-  fillRect(g, 20, 70, 40, 24, MG);
-  for (let y = 74; y < 92; y += 6) hline(g, 22, y, 36, S);
-  fillEllipse(g, 22, 126, 5, 6, S);
-  fillEllipse(g, 58, 126, 5, 6, S);
-  fillEllipse(g, 22, 126, 3, 4, DG);
-  fillEllipse(g, 58, 126, 3, 4, DG);
-  plot(g, 22, 123, EY);
-  plot(g, 58, 123, EY);
-  fillRect(g, 20, 132, 4, 10, DG);
-  fillRect(g, 56, 132, 4, 10, DG);
+  vline(g, 39, 22, 28, S);
+  vline(g, 40, 22, 28, LG);
+  vline(g, 41, 22, 28, S);
+  fillRect(g, 28, CAR1.y + 18, 24, 36, S);
+  fillRect(g, 30, CAR1.y + 20, 20, 32, MG);
+  for (let y = CAR1.y + 26; y < CAR1.y + 48; y += 8) hline(g, 32, y, 16, S);
+  fillEllipse(g, 28, CAR_GUN.y - 8, 4, 5, S);
+  fillEllipse(g, 52, CAR_GUN.y - 8, 4, 5, S);
+  fillEllipse(g, 28, CAR_GUN.y - 8, 2, 3, DG);
+  fillEllipse(g, 52, CAR_GUN.y - 8, 2, 3, DG);
+  plot(g, 28, CAR_GUN.y - 10, EY);
+  plot(g, 52, CAR_GUN.y - 10, EY);
   return finish(g, open, 'twin', 'square');
 }
 
-/** E: stepped nose, heavy knuckles, four hatches, tall buffer beam. */
+/** E: stepped nose, heavy knuckles, a column of hatches, tall buffer. */
 function lookE(open: boolean): SpriteData {
   const g = createGrid(TIEBAO_HULL_W, TIEBAO_HULL_H, -1);
   consist(g, 'step', true, true);
-  for (let row = 0; row < 2; row++) {
+  for (let row = 0; row < 3; row++) {
     for (let col = 0; col < 2; col++) {
-      const x = 22 + col * 20;
-      const y = 70 + row * 14;
-      fillRect(g, x, y, 14, 10, S);
-      fillRect(g, x + 2, y + 2, 10, 6, MG);
-      hline(g, x + 2, y + 2, 10, LG);
-      plot(g, x + 6, y + 4, EO);
+      const x = 27 + col * 14;
+      const y = CAR1.y + 8 + row * 18;
+      fillRect(g, x, y, 12, 12, S);
+      fillRect(g, x + 2, y + 2, 8, 8, MG);
+      hline(g, x + 2, y + 2, 8, LG);
+      plot(g, x + 5, y + 5, EO);
     }
   }
-  vline(g, 20, 120, 24, PG);
-  vline(g, 21, 120, 24, S);
-  for (let x = 18; x < 64; x += 6) plot(g, x, 148, PG);
+  vline(g, 28, CAR2.y + 8, 48, PG);
+  vline(g, 29, CAR2.y + 8, 48, S);
   return finish(g, open, 'twin', 'slit');
 }
 

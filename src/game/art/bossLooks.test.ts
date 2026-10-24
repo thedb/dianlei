@@ -52,11 +52,26 @@ describe('铁堡外观待选', () => {
         expect(hull[cy + offset.y]?.[cx + offset.x]).toBeGreaterThanOrEqual(0);
       }
       expect(hull[4]?.[cx]).toBeGreaterThanOrEqual(0);
-      expect(hull[152]?.[cx]).toBeGreaterThanOrEqual(0);
-      expect(hull[58]?.[4]).toBe(-1);
-      expect(hull[58]?.[cx]).toBeGreaterThanOrEqual(0);
-      expect(hull[110]?.[4]).toBe(-1);
-      expect(hull[110]?.[cx]).toBeGreaterThanOrEqual(0);
+      expect(hull[222]?.[cx]).toBeGreaterThanOrEqual(0);
+      expect(hull[68]?.[4]).toBe(-1);
+      expect(hull[68]?.[cx]).toBeGreaterThanOrEqual(0);
+      expect(hull[150]?.[4]).toBe(-1);
+      expect(hull[150]?.[cx]).toBeGreaterThanOrEqual(0);
+      let carWidth = 0;
+      const mid = hull[110];
+      if (mid) {
+        let left = TIEBAO_HULL_W;
+        let right = -1;
+        for (let x = 0; x < TIEBAO_HULL_W; x++) {
+          if ((mid[x] ?? -1) < 0) continue;
+          left = Math.min(left, x);
+          right = Math.max(right, x);
+        }
+        carWidth = right - left + 1;
+      }
+      expect(carWidth).toBeGreaterThan(20);
+      expect(carWidth).toBeLessThanOrEqual(48);
+      for (let y = 74; y < 146; y++) expect(hull[y]?.[cx]).toBeGreaterThanOrEqual(0);
       expect(hashSprite(buildTiebaoHull(id, true))).not.toBe(hashSprite(hull));
     }
   });

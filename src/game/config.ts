@@ -760,11 +760,16 @@ export const BOSS_TURRET_FALL_GRAVITY = 220;
 
 /** Fixed screen lanes. Center matches LOGICAL_W / 2 and BOSS_ANCHOR_X. */
 export const TIEBAO_RAIL_X = [72, 180, 288] as const;
-export const TIEBAO_PARK_Y = 128;
+/**
+ * Hull center. The 232px sprite's top stays at screen y = 48, the same place
+ * the old 160px nose sat, so the extra length is the cars hanging downward.
+ */
+export const TIEBAO_PARK_Y = 164;
 export const TIEBAO_HULL_W = 80;
-export const TIEBAO_HULL_H = 160;
-/** Center starts above the screen. The consist slides down to parkY with the nose pointing up. */
-export const TIEBAO_ENTER_Y = -96;
+/** Slender consist: thin body, two long boxcars. Width stays 80. */
+export const TIEBAO_HULL_H = 232;
+/** Tail starts just above the screen. The consist slides down to parkY, nose up. */
+export const TIEBAO_ENTER_Y = -128;
 export const TIEBAO_ENTER_DURATION = 2;
 /** Fight starts this many seconds after the stage clock's zero. See STAGE2_WARNING_AT. */
 export const TIEBAO_ENTER_AT = 123;
@@ -794,11 +799,11 @@ export const TIEBAO_ROOF_RADIUS = 14;
 export const TIEBAO_CORE_RADIUS = 18;
 /**
  * Relative to the hull center, +y toward the player (behind the train).
- * Nose and core are up-screen: core (40, 18), loco gun (40, 42), rear gun (40, 130).
+ * On the 80×232 sprite: core (40, 18) nose, loco gun (40, 48), rear gun (40, 190).
  */
-export const TIEBAO_ROOF_CAR = { x: 0, y: 50 } as const;
-export const TIEBAO_ROOF_LOCO = { x: 0, y: -38 } as const;
-export const TIEBAO_CORE = { x: 0, y: -62 } as const;
+export const TIEBAO_ROOF_CAR = { x: 0, y: 74 } as const;
+export const TIEBAO_ROOF_LOCO = { x: 0, y: -68 } as const;
+export const TIEBAO_CORE = { x: 0, y: -98 } as const;
 
 export const TIEBAO_FAN_INTERVAL = 1.4;
 export const TIEBAO_FAN_FIRST = 0.4;
