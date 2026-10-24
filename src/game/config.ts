@@ -794,6 +794,19 @@ export const TIEBAO_END_PARK_Y = TIEBAO_END_NOSE_Y + TIEBAO_HULL_H / 2;
 export const TIEBAO_ENCOUNTER_TAIL_Y = 160;
 /** Tail drop per shed car. 7 × 24 brings the end-form nose to TIEBAO_END_NOSE_Y. */
 export const TIEBAO_SHED_ADVANCE = 24;
+/**
+ * After the rear car explodes, the remaining cars stay put this long.
+ * They do not slide up into the gap during the hold.
+ */
+export const TIEBAO_SHED_DELAY = 0.9;
+/** Drop into the locked rest pose, seconds per car lost in that batch. */
+export const TIEBAO_SHED_SLIDE = 0.4;
+/**
+ * Player exhaust boost while the shed hold is running. Same 0–1 scale as the
+ * victory flame (`length * (1 + boost * VICTORY_FLAME_BOOST)`). 0.35 is about
+ * 60% longer than cruise. It drops back to 0 when the drop animation starts.
+ */
+export const TIEBAO_CHASE_FLAME = 0.35;
 /** Hull center at the encounter (9 cars, tail at TIEBAO_ENCOUNTER_TAIL_Y). */
 export const TIEBAO_PARK_Y = TIEBAO_ENCOUNTER_TAIL_Y - TIEBAO_FULL_H / 2;
 /** Tail just above the screen at the start of the slide-in. */
@@ -813,16 +826,20 @@ export const TIEBAO_ENTER_AT = 123;
 export const TIEBAO_WARNING = 1.5;
 
 /**
- * Park-to-park. Output, then the consist rides a turnout. No telegraph and no
- * lit rail. Parked X is a rail center. The move stays 1.2s: the turnout is
- * pre-laid by `TIEBAO_SWITCH_LEAD` (distance, not extra time) and finishes only
- * once the whole consist is on the new rail. Hard overload uses the same 6s.
- * The end-of-move X snap and the strip-sheared hull are both obsolete.
+ * Park-to-park base. Output is `PERIOD - MOVE` (4.8s) and stays that long so
+ * the weapon window does not shrink. The live move is longer: adjacent rails
+ * take `MOVE + MOVE_EXTRA`, and a left↔right compound turnout takes twice
+ * that adjacent time. Hard overload uses the same output and the same move
+ * rule. The turnout is still pre-laid by `TIEBAO_SWITCH_LEAD` (distance, not
+ * extra time) and finishes only once the whole consist is on the new rail.
  * Stock rails stay straight. The closure is extra steel and stays on the map
  * after the move, scrolling off with the factory.
  */
 export const TIEBAO_SWITCH_PERIOD = 6;
+/** Original move. Adjacent duration is this plus `TIEBAO_MOVE_EXTRA`. */
 export const TIEBAO_MOVE = 1.2;
+/** Added to every switch on top of `TIEBAO_MOVE`. Not applied a second time to L↔R. */
+export const TIEBAO_MOVE_EXTRA = 0.7;
 /**
  * Vertical length of one turnout (points through frog). Adjacent rails use this.
  * Lengthened from 176 so the chord is gentler under the bank cap.
@@ -843,7 +860,11 @@ export const TIEBAO_POINT_AT = 0.14;
 /** Where on one turnout the frog sits. */
 export const TIEBAO_FROG_AT = 0.9;
 
-/** Hard overload. Same period as the main fight; weapons and smoke still differ. */
+/**
+ * Hard overload. Same output window and the same move rule as the main fight
+ * (`TIEBAO_MOVE` plus `TIEBAO_MOVE_EXTRA`, doubled for a left↔right cross).
+ * Weapons and smoke still differ.
+ */
 export const TIEBAO_OVERLOAD_PERIOD = 6;
 export const TIEBAO_OVERLOAD_MOVE = 1.2;
 export const TIEBAO_OVERLOAD_HP = 240;

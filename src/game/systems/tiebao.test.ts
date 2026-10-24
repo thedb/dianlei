@@ -3,7 +3,10 @@ import { createRng } from '@/engine/rng';
 import {
   FIXED_DT,
   LOGICAL_H,
+  TIEBAO_CAR_H,
   TIEBAO_CAR_MAX_BANK,
+  TIEBAO_CAR_PITCH,
+  TIEBAO_CHASE_FLAME,
   TIEBAO_CORE_HP,
   TIEBAO_CORE_SCORE,
   TIEBAO_ENTER_DURATION,
@@ -12,10 +15,14 @@ import {
   TIEBAO_HULL_H,
   TIEBAO_MISSILE_GAP,
   TIEBAO_MOVE,
+  TIEBAO_MOVE_EXTRA,
   TIEBAO_OVERLOAD_HP,
   TIEBAO_OVERLOAD_MOVE,
   TIEBAO_OVERLOAD_PERIOD,
   TIEBAO_HULL_W,
+  TIEBAO_SHED_ADVANCE,
+  TIEBAO_SHED_DELAY,
+  TIEBAO_SHED_SLIDE,
   TIEBAO_SWITCH_CROSS_SPAN,
   TIEBAO_SWITCH_LEAD,
   TIEBAO_SWITCH_SPAN,
@@ -50,10 +57,12 @@ import {
   pickOtherRail,
   tiebaoBankAngle,
   tiebaoCarPoses,
+  tiebaoChaseBoost,
   tiebaoClosureX,
   tiebaoCommittedCars,
   tiebaoHullSegments,
   tiebaoLiveHull,
+  tiebaoMoveTime,
   tiebaoPiecePoses,
   tiebaoPieces,
   tiebaoSwitchBand,
@@ -71,6 +80,11 @@ function world(seed = 1): BossWorld {
 
 function park(boss: BossRuntime, around: BossWorld = world()): void {
   updateBoss(boss, TIEBAO_ENTER_DURATION, around);
+}
+
+function step(boss: BossRuntime, around: BossWorld, seconds: number): void {
+  const frames = Math.ceil(seconds / FIXED_DT);
+  for (let i = 0; i < frames; i++) updateBoss(boss, FIXED_DT, around);
 }
 
 function shot(boss: BossRuntime, x: number, y: number, damage = 10000) {
@@ -242,7 +256,7 @@ describe('铁堡 rails', () => {
           expect(view.rail).not.toBe(previousRail);
           previousRail = view.rail;
           expect(steps).toBeGreaterThan(5 * 60);
-          expect(steps).toBeLessThan(7 * 60);
+          expect(steps).toBeLessThan(10 * 60);
           break;
         }
       }
@@ -284,7 +298,11 @@ describe('铁堡 rails', () => {
     expect(TIEBAO_SWITCH_PERIOD).toBe(6);
     expect(TIEBAO_OVERLOAD_PERIOD).toBe(6);
     expect(TIEBAO_MOVE).toBe(1.2);
+    expect(TIEBAO_MOVE_EXTRA).toBe(0.7);
     expect(TIEBAO_MOVE).toBe(TIEBAO_OVERLOAD_MOVE);
+    expect(tiebaoMoveTime(180, 72)).toBeCloseTo(TIEBAO_MOVE + TIEBAO_MOVE_EXTRA, 6);
+    expect(tiebaoMoveTime(72, 288)).toBeCloseTo(2 * tiebaoMoveTime(72, 180), 6);
+    expect(tiebaoMoveTime(288, 72)).toBeCloseTo(2 * (TIEBAO_MOVE + TIEBAO_MOVE_EXTRA), 6);
     expect(TIEBAO_SWITCH_SPAN).toBe(240);
     expect(TIEBAO_SWITCH_CROSS_SPAN).toBe(480);
     expect(TIEBAO_SWITCH_LEAD).toBe(64);
@@ -368,6 +386,28 @@ describe('铁堡 rails', () => {
       tiebaoSwitchX(curveY, 72, 180, 0.4, tail, height),
       6
     );
+  });
+
+  it('spends the longer move on the closure and still finishes on the new rail', () => {
+    const boss = createBoss(TIEBAO);
+    const around = world(1);
+    park(boss, around);
+    let guard = 0;
+    while (tiebaoView(boss)?.phase !== 'move' && guard < 2000) {
+      updateBoss(boss, FIXED_DT, around);
+      guard++;
+    }
+    const sw = tiebaoVisual(boss)?.switch;
+    expect(sw).not.toBeNull();
+    const expected = sw ? Math.round(tiebaoMoveTime(sw.fromX, sw.toX) / FIXED_DT) : 0;
+    let frames = 0;
+    while (tiebaoView(boss)?.phase === 'move' && frames < 2000) {
+      updateBoss(boss, FIXED_DT, around);
+      frames++;
+    }
+    expect(tiebaoView(boss)?.phase).toBe('output');
+    expect(Math.abs(frames - expected)).toBeLessThanOrEqual(2);
+    expect(TIEBAO_RAIL_X).toContain(boss.x);
   });
 
   it('leaves the closure on the map after the move and scrolls it off the bottom', () => {
@@ -483,8 +523,9 @@ describe('铁堡 rails', () => {
     expect(edge).toBeCloseTo(boss.y + tiebaoLiveHull(boss).h / 2, 6);
 
     setMainHp(boss, (TIEBAO_ROOF_HP * 2 + TIEBAO_CORE_HP) * 0.3);
-    updateBoss(boss, FIXED_DT, around);
+    step(boss, around, TIEBAO_SHED_DELAY + TIEBAO_SHED_SLIDE * 7 + FIXED_DT);
     expect(tiebaoCommittedCars(boss)).toBe(2);
+    expect(boss.y).toBeCloseTo(tiebaoRestCenter(2), 2);
 
     let guard = 0;
     while (tiebaoView(boss)?.phase !== 'move' && guard < 2000) {
@@ -612,13 +653,41 @@ describe('铁堡 rails', () => {
     expect(boss.y).toBe(tiebaoRestCenter(9));
     setMainHp(boss, 756);
     const ev = updateBoss(boss, FIXED_DT, around);
+    const holdY = tiebaoRestCenter(9) - tiebaoHullHeight(9) / 2 + tiebaoHullHeight(8) / 2;
     expect(tiebaoCommittedCars(boss)).toBe(8);
     expect(tiebaoLiveHull(boss).h).toBe(760);
-    expect(boss.y).toBe(tiebaoRestCenter(8));
+    expect(boss.y).toBeCloseTo(holdY, 2);
+    expect(tiebaoChaseBoost(boss)).toBe(TIEBAO_CHASE_FLAME);
     expect(boss.phase).toBe('main');
     expect(TIEBAO_RAIL_X).toContain(boss.x);
     expect(ev.explosions).toHaveLength(3);
     expect(ev.explosions.filter((burst) => burst.size === 'medium')).toHaveLength(1);
+    const drop = tiebaoRestCenter(8) - holdY;
+    expect(drop).toBeGreaterThan(TIEBAO_CAR_H);
+    expect(drop).toBeCloseTo(TIEBAO_CAR_PITCH + TIEBAO_SHED_ADVANCE, 6);
+
+    step(boss, around, TIEBAO_SHED_DELAY - FIXED_DT * 2);
+    expect(tiebaoCommittedCars(boss)).toBe(8);
+    expect(boss.y).toBeCloseTo(holdY, 2);
+    expect(tiebaoChaseBoost(boss)).toBe(TIEBAO_CHASE_FLAME);
+
+    let guard = 0;
+    while (tiebaoChaseBoost(boss) > 0 && guard < 30) {
+      updateBoss(boss, FIXED_DT, around);
+      guard++;
+    }
+    expect(tiebaoChaseBoost(boss)).toBe(0);
+    expect(tiebaoCommittedCars(boss)).toBe(8);
+    expect(boss.y).toBeCloseTo(holdY, 2);
+
+    step(boss, around, TIEBAO_SHED_SLIDE * 0.5);
+    expect(boss.y).toBeGreaterThan(holdY + 1);
+    expect(boss.y).toBeLessThan(tiebaoRestCenter(8) - 1);
+
+    step(boss, around, TIEBAO_SHED_SLIDE);
+    expect(boss.y).toBeCloseTo(tiebaoRestCenter(8), 2);
+    expect(tiebaoCommittedCars(boss)).toBe(8);
+    expect(tiebaoChaseBoost(boss)).toBe(0);
   });
 
   it('sheds every crossed threshold in one step and holds loco+2 below 30%', () => {
@@ -627,12 +696,29 @@ describe('铁堡 rails', () => {
     park(boss, around);
     setMainHp(boss, 252);
     const ev = updateBoss(boss, FIXED_DT, around);
+    const holdY = tiebaoRestCenter(9) - tiebaoHullHeight(9) / 2 + TIEBAO_HULL_H / 2;
     expect(tiebaoCommittedCars(boss)).toBe(2);
     expect(tiebaoLiveHull(boss).h).toBe(TIEBAO_HULL_H);
-    expect(boss.y).toBe(tiebaoRestCenter(2));
+    expect(boss.y).toBeCloseTo(holdY, 2);
+    expect(tiebaoChaseBoost(boss)).toBe(TIEBAO_CHASE_FLAME);
     expect(boss.phase).toBe('main');
     expect(ev.explosions).toHaveLength(21);
     expect(ev.explosions.filter((burst) => burst.size === 'medium')).toHaveLength(7);
+    step(boss, around, TIEBAO_SHED_DELAY - FIXED_DT * 2);
+    expect(tiebaoCommittedCars(boss)).toBe(2);
+    expect(boss.y).toBeCloseTo(holdY, 2);
+    expect(tiebaoChaseBoost(boss)).toBe(TIEBAO_CHASE_FLAME);
+    let guard = 0;
+    while (tiebaoChaseBoost(boss) > 0 && guard < 30) {
+      updateBoss(boss, FIXED_DT, around);
+      guard++;
+    }
+    expect(tiebaoChaseBoost(boss)).toBe(0);
+    expect(boss.y).toBeCloseTo(holdY, 2);
+    step(boss, around, TIEBAO_SHED_SLIDE * 7);
+    expect(boss.y).toBeCloseTo(tiebaoRestCenter(2), 2);
+    expect(tiebaoCommittedCars(boss)).toBe(2);
+    expect(tiebaoChaseBoost(boss)).toBe(0);
 
     setMainHp(boss, 84);
     const later = updateBoss(boss, FIXED_DT, around);
@@ -713,18 +799,18 @@ describe('铁堡 phases', () => {
 
     const started = tiebaoView(boss)!.modeId;
     let steps = 0;
-    for (; steps < 500; steps++) {
+    for (; steps < 700; steps++) {
       updateBoss(boss, FIXED_DT, around);
       const view = tiebaoView(boss)!;
       if (view.phase === 'output' && view.modeId !== started && steps > 30) {
         expect(view.modeId).toBe('wall');
         expect(view.list).toBe('overload');
         expect(steps).toBeGreaterThan(4 * 60);
-        expect(steps).toBeLessThan(8 * 60);
+        expect(steps).toBeLessThan(10 * 60);
         break;
       }
     }
-    expect(steps).toBeLessThan(500);
+    expect(steps).toBeLessThan(700);
 
     const dying = coreShot(boss);
     expect(dying.score).toBe(TIEBAO_CORE_SCORE);

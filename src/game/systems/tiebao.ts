@@ -40,7 +40,9 @@ import {
   TIEBAO_MISSILE_HOMING,
   TIEBAO_MISSILE_SPEED,
   TIEBAO_MISSILE_WAVES,
+  TIEBAO_CHASE_FLAME,
   TIEBAO_MOVE,
+  TIEBAO_MOVE_EXTRA,
   TIEBAO_OVERLOAD_CRATE_EVERY,
   TIEBAO_OVERLOAD_MISSILE_COUNT,
   TIEBAO_OVERLOAD_MOVE,
@@ -53,7 +55,6 @@ import {
   TIEBAO_END_CARS,
   TIEBAO_END_PARK_Y,
   TIEBAO_ENTER_TAIL_Y,
-  TIEBAO_HULL_H,
   TIEBAO_HULL_W,
   TIEBAO_LOCO_H,
   TIEBAO_OVERLOAD_WALL_REPEAT,
@@ -78,6 +79,8 @@ import {
   TIEBAO_ROCKET_Y,
   TIEBAO_ROOF_CAR_ROW,
   TIEBAO_ROOF_LOCO_ROW,
+  TIEBAO_SHED_DELAY,
+  TIEBAO_SHED_SLIDE,
   TIEBAO_SWITCH_CROSS_SPAN,
   TIEBAO_SWITCH_LEAD,
   TIEBAO_SWITCH_PERIOD,
@@ -197,8 +200,19 @@ interface TiebaoState {
   /** One dash per output window. Stays set after the retreat so it does not dive again. */
   ramDone: boolean;
   ramClock: number;
-  /** Rear cars already exploded. Grows only. Hard's second bar does not add more. */
+  /** Rear cars already drawn as gone. Lags `shedGoal` through the hold and the drop. */
   sheds: number;
+  /** HP-derived sheds to reach. Explosions fire when this grows. The picture waits. */
+  shedGoal: number;
+  /** Sheds whose bursts have already been emitted. */
+  shedBurst: number;
+  /** `delay` holds the old consist. `slide` drops the remaining cars into the new rest pose. */
+  shedPhase: 'idle' | 'delay' | 'slide';
+  shedClock: number;
+  shedFromY: number;
+  shedToY: number;
+  /** Seconds the current drop takes. One `TIEBAO_SHED_SLIDE` per car in the batch. */
+  shedSlide: number;
   ambient: number;
   circles: CircleWarn[];
   crates: AmmoCrate[];
@@ -250,22 +264,25 @@ const states = new WeakMap<BossRuntime, TiebaoState>();
 const DEG = Math.PI / 180;
 const BROADSIDE_SHOTS = Math.floor((TIEBAO_BROADSIDE_SWEEP - 1e-6) / TIEBAO_BROADSIDE_STEP) + 1;
 
-interface ClockProfile {
-  output: number;
-  move: number;
+/** Weapon window between parks. The live move is longer and is not taken out of this. */
+function outputSeconds(list: TiebaoState['list']): number {
+  if (list === 'overload') return TIEBAO_OVERLOAD_PERIOD - TIEBAO_OVERLOAD_MOVE;
+  return TIEBAO_SWITCH_PERIOD - TIEBAO_MOVE;
 }
 
-function profile(list: TiebaoState['list']): ClockProfile {
-  if (list === 'overload') {
-    return {
-      output: TIEBAO_OVERLOAD_PERIOD - TIEBAO_OVERLOAD_MOVE,
-      move: TIEBAO_OVERLOAD_MOVE,
-    };
-  }
-  return {
-    output: TIEBAO_SWITCH_PERIOD - TIEBAO_MOVE,
-    move: TIEBAO_MOVE,
-  };
+/**
+ * Seconds the consist spends on this turnout. Adjacent rails are the base
+ * move plus `TIEBAO_MOVE_EXTRA`. A left↔right cross is twice that adjacent
+ * time, not another extra on top.
+ */
+export function tiebaoMoveTime(fromX: number, toX: number): number {
+  const adjacent = TIEBAO_MOVE + TIEBAO_MOVE_EXTRA;
+  return tiebaoSwitchSpan(fromX, toX) === TIEBAO_SWITCH_CROSS_SPAN ? adjacent * 2 : adjacent;
+}
+
+function moveSeconds(state: TiebaoState): number {
+  if (state.phase !== 'move') return TIEBAO_MOVE + TIEBAO_MOVE_EXTRA;
+  return tiebaoMoveTime(state.fromX, railX(state.target));
 }
 
 function smoothstep(u: number): number {
@@ -546,8 +563,10 @@ function muzzleY(boss: BossRuntime, cars: number): number {
   return top + tiebaoCarCenterRow(Math.max(0, cars - 1));
 }
 
-function emitSheds(state: TiebaoState, ev: BossEvents, fromSheds: number, toSheds: number): void {
-  for (let shed = fromSheds; shed < toSheds; shed++) {
+function burstSheds(state: TiebaoState, ev: BossEvents, toSheds: number): void {
+  const from = state.shedBurst;
+  if (toSheds <= from) return;
+  for (let shed = from; shed < toSheds; shed++) {
     const cars = TIEBAO_CARS - shed;
     const top = tiebaoTailY(cars) - tiebaoHullHeight(cars);
     const y = top + tiebaoCarCenterRow(cars - 1);
@@ -556,14 +575,97 @@ function emitSheds(state: TiebaoState, ev: BossEvents, fromSheds: number, toShed
     ev.explosions.push({ x: x - 10, y: y + 8, delay: 0, size: 'small' });
     ev.explosions.push({ x: x + 8, y: y - 6, delay: 0, size: 'small' });
   }
-  state.sheds = toSheds;
+  state.shedBurst = toSheds;
 }
 
-function commitSheds(boss: BossRuntime, state: TiebaoState, ev: BossEvents | null): void {
-  const sheds = tiebaoShedCountFromRatio(tiebaoMainRatio(boss));
-  if (ev && sheds > state.sheds) emitSheds(state, ev, state.sheds, sheds);
-  else state.sheds = Math.max(state.sheds, sheds);
+/** Fight sheds play the hold and the drop. Death, enter, and the extra bar snap. */
+function shedAnimated(boss: BossRuntime): boolean {
+  if (boss.stage !== 'fight') return false;
+  const phase = boss.phases[boss.phaseIndex];
+  return phase?.bar !== 'extra';
+}
+
+function snapShed(boss: BossRuntime, state: TiebaoState, sheds: number): void {
+  state.sheds = Math.max(state.sheds, sheds);
+  state.shedGoal = state.sheds;
+  state.shedBurst = Math.max(state.shedBurst, state.sheds);
+  state.shedPhase = 'idle';
+  state.shedClock = 0;
   applyAnchors(boss, tiebaoHullHeight(carsOf(state)));
+}
+
+/**
+ * Cut the exploded cars out and leave the ones in front where they are.
+ * The nose stays put, so nothing slides up into the gap. The later drop
+ * carries this center down to the locked rest pose.
+ */
+function beginHold(state: TiebaoState, boss: BossRuntime): void {
+  const fromCars = carsOf(state);
+  const toCars = TIEBAO_CARS - state.shedGoal;
+  const dropped = Math.max(1, fromCars - toCars);
+  const nose = boss.y - tiebaoHullHeight(fromCars) / 2;
+  const holdY = nose + tiebaoHullHeight(toCars) / 2;
+  state.sheds = state.shedGoal;
+  applyAnchors(boss, tiebaoHullHeight(toCars));
+  state.shedFromY = holdY;
+  state.shedToY = tiebaoRestCenter(toCars);
+  state.shedSlide = TIEBAO_SHED_SLIDE * dropped;
+  boss.y = holdY;
+}
+
+function finishSlide(state: TiebaoState, boss: BossRuntime): void {
+  boss.y = state.shedToY;
+  state.shedPhase = 'idle';
+  state.shedClock = 0;
+  if (state.shedGoal > state.sheds && state.ram === 'idle') {
+    beginHold(state, boss);
+    state.shedPhase = 'delay';
+    state.shedClock = 0;
+  }
+}
+
+/**
+ * HP thresholds still decide how many cars leave. The picture waits
+ * `TIEBAO_SHED_DELAY`, then the remaining cars drop to the locked rest pose.
+ */
+function stepShed(boss: BossRuntime, state: TiebaoState, dt: number, ev: BossEvents | null): void {
+  const goal = tiebaoShedCountFromRatio(tiebaoMainRatio(boss));
+  if (!shedAnimated(boss)) {
+    if (ev && goal > state.shedBurst) burstSheds(state, ev, goal);
+    if (goal > state.sheds || state.shedPhase !== 'idle') snapShed(boss, state, goal);
+    return;
+  }
+  if (goal > state.shedGoal) {
+    if (ev) burstSheds(state, ev, goal);
+    state.shedGoal = goal;
+    if (state.shedPhase === 'delay') beginHold(state, boss);
+  }
+  if (state.shedPhase === 'idle' && state.shedGoal > state.sheds && state.ram === 'idle') {
+    beginHold(state, boss);
+    state.shedPhase = 'delay';
+    state.shedClock = 0;
+  }
+  if (state.shedPhase === 'delay') {
+    state.shedClock += dt;
+    if (state.shedClock + 1e-9 >= TIEBAO_SHED_DELAY && state.ram === 'idle') {
+      state.shedPhase = 'slide';
+      state.shedClock = 0;
+      state.shedFromY = boss.y;
+    }
+    return;
+  }
+  if (state.shedPhase !== 'slide') return;
+  state.shedClock += dt;
+  const u = smoothstep(clamp(state.shedClock / Math.max(0.05, state.shedSlide), 0, 1));
+  boss.y = lerp(state.shedFromY, state.shedToY, u);
+  if (state.shedClock + 1e-9 >= state.shedSlide) finishSlide(state, boss);
+}
+
+/** 0 while parked. `TIEBAO_CHASE_FLAME` for the shed hold, then back to 0. */
+export function tiebaoChaseBoost(boss: BossRuntime): number {
+  const state = states.get(boss);
+  if (!state || boss.def.script !== 'tiebao' || state.shedPhase !== 'delay') return 0;
+  return TIEBAO_CHASE_FLAME;
 }
 
 /**
@@ -574,6 +676,10 @@ export function tiebaoPlaceEnter(boss: BossRuntime, u: number): void {
   const state = ensure(boss);
   const sheds = tiebaoShedCountFromRatio(tiebaoMainRatio(boss));
   state.sheds = sheds;
+  state.shedGoal = sheds;
+  state.shedBurst = sheds;
+  state.shedPhase = 'idle';
+  state.shedClock = 0;
   const cars = carsOf(state);
   const height = tiebaoHullHeight(cars);
   applyAnchors(boss, height);
@@ -668,6 +774,13 @@ function createState(): TiebaoState {
     ramDone: false,
     ramClock: 0,
     sheds: 0,
+    shedGoal: 0,
+    shedBurst: 0,
+    shedPhase: 'idle',
+    shedClock: 0,
+    shedFromY: 0,
+    shedToY: 0,
+    shedSlide: 0,
     ambient: 0,
     circles: [],
     crates: [],
@@ -700,6 +813,7 @@ export function tiebaoOnFight(boss: BossRuntime): void {
     resetSchedules(state);
     boss.x = railX(state.rail);
     zeroOffsets(boss);
+    snapShed(boss, state, TIEBAO_CARS - TIEBAO_END_CARS);
     boss.y = TIEBAO_END_PARK_Y;
   }
 }
@@ -763,8 +877,10 @@ export function tiebaoReadout(boss: BossRuntime): { text: string; hot: boolean }
   if (boss.def.script !== 'tiebao' || boss.stage !== 'fight') return null;
   const state = states.get(boss);
   if (!state) return null;
-  const clock = profile(state.list);
-  const remain = state.phase === 'output' ? clock.output - state.clock : clock.move - state.clock;
+  const remain =
+    state.phase === 'output'
+      ? outputSeconds(state.list) - state.clock
+      : moveSeconds(state) - state.clock;
   return { text: `换轨 ${Math.max(0, remain).toFixed(1)}`, hot: state.phase !== 'output' };
 }
 
@@ -822,23 +938,23 @@ export function tiebaoSyncScroll(boss: BossRuntime, scroll: number | undefined):
 }
 
 function advanceRail(state: TiebaoState, dt: number, world: BossWorld | undefined): boolean {
-  const clock = profile(state.list);
+  const output = outputSeconds(state.list);
   if (state.phase === 'output') {
     state.clock += dt;
-    if (state.clock >= clock.output && state.ram === 'idle') {
-      const over = state.clock - clock.output;
+    if (state.clock >= output && state.ram === 'idle') {
+      const over = state.clock - output;
       beginMove(state, world);
       state.clock = over;
-    } else if (state.clock > clock.output) {
-      state.clock = clock.output;
+    } else if (state.clock > output) {
+      state.clock = output;
     }
     return false;
   }
   state.clock += dt;
-  if (state.clock < clock.move) return false;
+  if (state.clock < moveSeconds(state)) return false;
   anchorLive(state);
   releaseLive(state);
-  const over = state.clock - clock.move;
+  const over = state.clock - moveSeconds(state);
   state.rail = state.target;
   state.phase = 'output';
   state.clock = over;
@@ -850,7 +966,7 @@ function advanceRail(state: TiebaoState, dt: number, world: BossWorld | undefine
 }
 
 function moveU(state: TiebaoState): number {
-  return clamp(state.clock / Math.max(0.05, profile(state.list).move), 0, 1);
+  return clamp(state.clock / Math.max(0.05, moveSeconds(state)), 0, 1);
 }
 
 function consistX(state: TiebaoState, y: number): number {
@@ -1119,6 +1235,7 @@ function fireCrates(state: TiebaoState, boss: BossRuntime, world: BossWorld | un
 }
 
 function stepRam(state: TiebaoState, dt: number, boss: BossRuntime): void {
+  if (state.shedPhase !== 'idle') return;
   const home = tiebaoRestCenter(carsOf(state));
   // Disarmed until loco+4 (main HP ≤ 50%). A full consist would fill the screen.
   if (modeIdOf(state) !== 'ram' || !tiebaoRamArmed(carsOf(state))) {
@@ -1233,10 +1350,10 @@ function fightSlice(
 ): void {
   const state = ensure(boss);
   if (state.broken) return;
-  commitSheds(boss, state, ev);
+  stepShed(boss, state, dt, ev);
   const arrived = advanceRail(state, dt, world);
   if (state.phase === 'move') {
-    boss.y = tiebaoRestCenter(carsOf(state));
+    if (state.shedPhase === 'idle') boss.y = tiebaoRestCenter(carsOf(state));
     state.ram = 'idle';
   }
   pose(state, boss);
@@ -1246,8 +1363,7 @@ function fightSlice(
     stepRam(state, dt, boss);
   }
   if (state.phase === 'output' && state.ram === 'idle') {
-    const clock = profile(state.list);
-    if (state.clock >= clock.output - 1e-9) beginMove(state, world);
+    if (state.clock >= outputSeconds(state.list) - 1e-9) beginMove(state, world);
   }
   anchorLive(state);
   if (state.list === 'overload') {
@@ -1270,7 +1386,7 @@ function holdSlice(
   const state = ensure(boss);
   state.ram = 'idle';
   if (state.phase === 'move') settleTail(state, boss);
-  commitSheds(boss, state, ev);
+  stepShed(boss, state, dt, ev);
   boss.x = railX(state.rail);
   zeroOffsets(boss);
   boss.y = tiebaoRestCenter(carsOf(state));
@@ -1301,9 +1417,8 @@ export function tiebaoOnDeath(boss: BossRuntime, ev: BossEvents): void {
   const state = ensure(boss);
   settleTail(state, boss);
   const endSheds = TIEBAO_CARS - TIEBAO_END_CARS;
-  if (state.sheds < endSheds) emitSheds(state, ev, state.sheds, endSheds);
-  state.sheds = endSheds;
-  applyAnchors(boss, TIEBAO_HULL_H);
+  if (state.shedBurst < endSheds) burstSheds(state, ev, endSheds);
+  snapShed(boss, state, endSheds);
   boss.y = TIEBAO_END_PARK_Y;
   state.broken = true;
   state.circles = [];

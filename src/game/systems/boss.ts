@@ -59,6 +59,7 @@ import {
   tiebaoOnFight,
   tiebaoPlaceEnter,
   tiebaoResolveBomb,
+  tiebaoChaseBoost,
   tiebaoSyncScroll,
   tiebaoTryShot,
 } from '@/game/systems/tiebao';
@@ -184,6 +185,11 @@ export interface BossEvents {
   /** STAGE CLEAR hold finished; show the result screen. */
   enterResult: boolean;
   consumedBullet: boolean;
+  /**
+   * Player exhaust boost, 0–1, while 铁堡 holds a shed. Shot events omit it
+   * so they do not clear a boost `updateBoss` already published.
+   */
+  chaseBoost?: number;
 }
 
 export interface BulletBox {
@@ -562,6 +568,7 @@ export function updateBoss(boss: BossRuntime, dt: number, world?: BossWorld): Bo
     syncParts(boss);
   }
   if (attackDt > 0 && boss.stage === 'fight') tickAttacks(boss, attackDt, ev);
+  if (scripted) ev.chaseBoost = tiebaoChaseBoost(boss);
   return ev;
 }
 
