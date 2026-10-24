@@ -1,14 +1,21 @@
 /**
- * Still previews of the five factory halls and five 铁堡 hulls.
+ * Still previews of the five factory halls and the 铁堡 consist.
  * Usage: npm run art:tiebao
- * Default A is what the fight uses until Yoan picks. This script does not choose.
+ * The fight uses look A. End-form stills crop the loco and the first two cars.
+ * `tiebao-A-long.png` is the full nine-car consist the battle bakes.
  */
 
 import { deflateSync } from 'zlib';
 import { mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { createRng } from '@/engine/rng';
-import { TIEBAO_HULL_H, TIEBAO_HULL_W, TIEBAO_ROOF_CAR, TIEBAO_ROOF_LOCO } from '@/game/config';
+import {
+  TIEBAO_BUFFER,
+  TIEBAO_HULL_H,
+  TIEBAO_HULL_W,
+  TIEBAO_ROOF_CAR_ROW,
+  TIEBAO_ROOF_LOCO_ROW,
+} from '@/game/config';
 import { PALETTE } from '@/game/palette';
 import { buildTiebaoAa } from '@/game/art/bossSprite';
 import { TileId, getTilePixels } from '@/game/art/tiles';
@@ -154,28 +161,41 @@ function renderGrid(grid: TileGrid, tiles: SpriteData[], zoom: number, letter: s
   return encodePng(width, height, rgb);
 }
 
-function renderHull(look: TiebaoLookId, zoom: number): Buffer {
-  const hull = buildTiebaoHull(look, false);
-  const width = TIEBAO_HULL_W * zoom + 16;
-  const height = TIEBAO_HULL_H * zoom + 16;
-  const rgb = new Uint8Array(width * height * 3);
-  for (let i = 0; i < width * height; i++) rgb.set(BG, i * 3);
-  blitSprite(rgb, width, hull, 8, 8, zoom);
+/** Top of the full consist, with the tail beam stamped on, matching the live crop. */
+function cropEndForm(full: SpriteData): SpriteData {
+  const stamp = Math.min(TIEBAO_BUFFER, TIEBAO_HULL_H);
+  const body = TIEBAO_HULL_H - stamp;
+  const out: SpriteData = [];
+  for (let y = 0; y < body; y++) out.push([...(full[y] ?? [])]);
+  for (let i = 0; i < stamp; i++) out.push([...(full[full.length - stamp + i] ?? [])]);
+  return out;
+}
+
+function paintGuns(rgb: Uint8Array, width: number, zoom: number, ox: number, oy: number): void {
   const gun = buildTiebaoAa(false);
   const cx = Math.floor(TIEBAO_HULL_W / 2);
-  const cy = Math.floor(TIEBAO_HULL_H / 2);
-  for (const offset of [TIEBAO_ROOF_LOCO, TIEBAO_ROOF_CAR]) {
-    blitSprite(
-      rgb,
-      width,
-      gun,
-      8 + (cx + offset.x - 8) * zoom,
-      8 + (cy + offset.y - 8) * zoom,
-      zoom
-    );
+  for (const row of [TIEBAO_ROOF_LOCO_ROW, TIEBAO_ROOF_CAR_ROW]) {
+    blitSprite(rgb, width, gun, ox + (cx - 8) * zoom, oy + (row - 8) * zoom, zoom);
   }
-  badge(rgb, width, look);
+}
+
+function renderSheet(sprite: SpriteData, zoom: number, letter: string, guns: boolean): Buffer {
+  const width = TIEBAO_HULL_W * zoom + 16;
+  const height = sprite.length * zoom + 16;
+  const rgb = new Uint8Array(width * height * 3);
+  for (let i = 0; i < width * height; i++) rgb.set(BG, i * 3);
+  blitSprite(rgb, width, sprite, 8, 8, zoom);
+  if (guns) paintGuns(rgb, width, zoom, 8, 8);
+  badge(rgb, width, letter);
   return encodePng(width, height, rgb);
+}
+
+function renderHull(look: TiebaoLookId, zoom: number): Buffer {
+  return renderSheet(cropEndForm(buildTiebaoHull(look, false)), zoom, look, true);
+}
+
+function renderLong(look: TiebaoLookId, zoom: number): Buffer {
+  return renderSheet(buildTiebaoHull(look, false), zoom, look, true);
 }
 
 function main(): void {
@@ -206,6 +226,8 @@ function main(): void {
     writeFileSync(join(outDir, `tiebao-${id}.png`), renderHull(id, 4));
     console.log(`tiebao ${id} ${TIEBAO_LOOK_NAMES[id]}`);
   }
+  writeFileSync(join(outDir, 'tiebao-A-long.png'), renderLong('A', 2));
+  console.log('tiebao A long consist');
   console.log(`wrote looks to ${outDir}`);
 }
 

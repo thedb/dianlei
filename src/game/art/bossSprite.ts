@@ -9,18 +9,16 @@ import {
   BOSS_HULL_W,
   BOSS_TURRET_SIZE,
   LOGICAL_H,
-  TIEBAO_CORE,
+  TIEBAO_BUFFER,
+  TIEBAO_HULL_W,
   TIEBAO_LOOK,
-  TIEBAO_PARK_Y,
   TIEBAO_RAIL_X,
-  TIEBAO_ROOF_CAR,
-  TIEBAO_ROOF_LOCO,
   TIEBAO_SWITCH_SPAN,
 } from '@/game/config';
 import { PALETTE, COLOR } from '@/game/palette';
 import type { BossHpBarLayout, BossRuntime } from '@/game/systems/boss';
 import { bossActiveLaser, bossLook } from '@/game/systems/boss';
-import { tiebaoSwitchX, tiebaoVisual } from '@/game/systems/tiebao';
+import { tiebaoLiveHull, tiebaoSwitchX, tiebaoVisual } from '@/game/systems/tiebao';
 import { buildTiebaoHull } from './tiebaoLooks';
 import { laserSweepRadians } from '@/game/systems/danmaku';
 import type { SpriteData, SpriteFrame } from './types';
@@ -391,13 +389,14 @@ export function drawBossWorld(
   const open = look.hull === 'open';
   const hull = open ? assets.hullOpen : assets.hull;
   const tiebao = boss.def.art === 'tiebao';
-  const top = boss.y - boss.def.hull.h / 2;
+  const top = boss.y - (tiebao ? tiebaoLiveHull(boss).h : boss.def.hull.h) / 2;
   if (tiebao) drawTiebaoGround(ctx, boss, time);
   else {
     drawEnemyFlame(ctx, boss.x - 16, top + 6, time);
     drawEnemyFlame(ctx, boss.x + 16, top + 6, time);
   }
-  draw.drawImage(hull.canvas, boss.x - hull.anchorX, boss.y - hull.anchorY);
+  if (tiebao) drawTiebaoHull(ctx, hull, boss);
+  else draw.drawImage(hull.canvas, boss.x - hull.anchorX, boss.y - hull.anchorY);
 
   for (const part of boss.parts) {
     if (!part.sprite) continue;
@@ -421,7 +420,8 @@ export function drawBossWorld(
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     ctx.globalAlpha = 0.45;
-    draw.drawImage(hull.canvas, boss.x - hull.anchorX, boss.y - hull.anchorY);
+    if (tiebao) drawTiebaoHull(ctx, hull, boss);
+    else draw.drawImage(hull.canvas, boss.x - hull.anchorX, boss.y - hull.anchorY);
     ctx.restore();
   }
 
@@ -443,17 +443,56 @@ export function drawBossWorld(
   }
 }
 
-/** The converging point-rail the train rides. Map tiles keep the three straight rails. */
-function drawTurnout(ctx: CanvasRenderingContext2D, fromX: number, toX: number, u: number): void {
-  const y0 = Math.max(0, Math.floor(TIEBAO_PARK_Y - TIEBAO_SWITCH_SPAN + u * TIEBAO_SWITCH_SPAN));
+/**
+ * Crop the full consist to the cars still attached and paste the tail beam
+ * onto the bottom. Shed cars, and the mounts painted on them, leave with the crop.
+ */
+function drawTiebaoHull(
+  ctx: CanvasRenderingContext2D,
+  frame: SpriteFrame,
+  boss: BossRuntime
+): void {
+  const height = tiebaoLiveHull(boss).h;
+  const left = Math.floor(boss.x - TIEBAO_HULL_W / 2);
+  const top = Math.floor(boss.y - height / 2);
+  const stamp = Math.min(TIEBAO_BUFFER, height);
+  const body = height - stamp;
+  if (body > 0) {
+    ctx.drawImage(frame.canvas, 0, 0, TIEBAO_HULL_W, body, left, top, TIEBAO_HULL_W, body);
+  }
+  ctx.drawImage(
+    frame.canvas,
+    0,
+    frame.height - stamp,
+    TIEBAO_HULL_W,
+    stamp,
+    left,
+    top + body,
+    TIEBAO_HULL_W,
+    stamp
+  );
+}
+
+/**
+ * Background frog. The train body stays on a rail center; this is paint only.
+ * Map tiles keep the three straight rails.
+ */
+function drawTurnout(
+  ctx: CanvasRenderingContext2D,
+  fromX: number,
+  toX: number,
+  u: number,
+  tailY: number
+): void {
+  const y0 = Math.max(0, Math.floor(tailY - TIEBAO_SWITCH_SPAN + u * TIEBAO_SWITCH_SPAN));
   const y1 = Math.min(LOGICAL_H, Math.ceil(y0 + TIEBAO_SWITCH_SPAN));
   ctx.fillStyle = PALETTE[COLOR.TERRAIN_CONCRETE];
   for (let y = y0; y < y1; y += 8) {
-    const x = Math.round(tiebaoSwitchX(y, fromX, toX, u));
+    const x = Math.round(tiebaoSwitchX(y, fromX, toX, u, tailY));
     ctx.fillRect(x - 8, y, 16, 2);
   }
   for (let y = y0; y < y1; y++) {
-    const x = Math.round(tiebaoSwitchX(y, fromX, toX, u));
+    const x = Math.round(tiebaoSwitchX(y, fromX, toX, u, tailY));
     ctx.fillStyle = PALETTE[COLOR.BLACK];
     ctx.fillRect(x - 2, y, 1, 1);
     ctx.fillRect(x + 2, y, 1, 1);
@@ -466,7 +505,9 @@ function drawTurnout(ctx: CanvasRenderingContext2D, fromX: number, toX: number, 
 function drawTiebaoGround(ctx: CanvasRenderingContext2D, boss: BossRuntime, time: number): void {
   const visual = tiebaoVisual(boss);
   ctx.save();
-  if (visual?.switch) drawTurnout(ctx, visual.switch.fromX, visual.switch.toX, visual.switch.u);
+  if (visual?.switch) {
+    drawTurnout(ctx, visual.switch.fromX, visual.switch.toX, visual.switch.u, visual.switch.tailY);
+  }
   if (visual?.rocketWarn) {
     ctx.fillStyle = PALETTE[COLOR.EXPLOSION_YELLOW];
     for (const x of TIEBAO_RAIL_X) ctx.fillRect(x - 1, 4, 3, 3);
@@ -515,23 +556,21 @@ function drawTiebaoAir(
     ctx.fillRect(crate.x - 6, crate.y - 1, 12, 2);
   }
   if (smoke || visual.smoke) {
-    const origins = [TIEBAO_CORE, TIEBAO_ROOF_LOCO, TIEBAO_ROOF_CAR];
     ctx.fillStyle = PALETTE[COLOR.LIGHT_GRAY];
-    for (let i = 0; i < origins.length; i++) {
-      const origin = origins[i]!;
+    boss.parts.forEach((part, i) => {
       const rise = (time * 18 + i * 9) % 22;
       ctx.globalAlpha = 0.35 * (1 - rise / 22);
       ctx.beginPath();
-      ctx.arc(boss.x + origin.x, boss.y + origin.y - 8 - rise, 3, 0, Math.PI * 2);
+      ctx.arc(part.worldX, part.worldY - 8 - rise, 3, 0, Math.PI * 2);
       ctx.fill();
-    }
+    });
   }
-  if (visual.ramWarn && Math.floor(time * 16) % 2 === 0) {
-    ctx.globalAlpha = 0.85;
-    ctx.fillStyle = PALETTE[COLOR.EXPLOSION_YELLOW];
-    ctx.fillRect(boss.x - 16, boss.y + boss.def.hull.h / 2 - 10, 8, 3);
-    ctx.fillRect(boss.x + 8, boss.y + boss.def.hull.h / 2 - 10, 8, 3);
-  }
+  const lampY = boss.y + tiebaoLiveHull(boss).h / 2 - 10;
+  const flashing = visual.ramWarn && Math.floor(time * 16) % 2 === 0;
+  ctx.globalAlpha = flashing ? 0.95 : 0.55;
+  ctx.fillStyle = PALETTE[COLOR.EXPLOSION_YELLOW];
+  ctx.fillRect(boss.x - 16, lampY, 8, 3);
+  ctx.fillRect(boss.x + 8, lampY, 8, 3);
   ctx.restore();
 }
 

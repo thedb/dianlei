@@ -1,13 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import {
-  TIEBAO_CORE,
+  TIEBAO_CAR_GAP,
+  TIEBAO_CAR_H,
+  TIEBAO_CAR_PITCH,
+  TIEBAO_CORE_ROW,
+  TIEBAO_FULL_H,
   TIEBAO_HULL_H,
   TIEBAO_HULL_W,
-  TIEBAO_ROOF_CAR,
-  TIEBAO_ROOF_LOCO,
+  TIEBAO_LOCO_H,
+  TIEBAO_ROOF_CAR_ROW,
+  TIEBAO_ROOF_LOCO_ROW,
 } from '@/game/config';
 import { FACTORY_LOOK_IDS, FACTORY_LOOK_NAMES, paintFactoryLook } from '@/game/art/factoryLooks';
 import { TIEBAO_LOOK_IDS, TIEBAO_LOOK_NAMES, buildTiebaoHull } from '@/game/art/tiebaoLooks';
+import { tiebaoCarBodyY } from '@/game/systems/tiebaoShed';
 import type { SpriteData } from '@/game/art/types';
 
 function hashSprite(grid: SpriteData): number {
@@ -18,8 +24,8 @@ function hashSprite(grid: SpriteData): number {
   return n >>> 0;
 }
 
-describe('铁堡外观待选', () => {
-  it('keeps five named factory looks and five named hulls, defaulting to A', () => {
+describe('铁堡外观', () => {
+  it('keeps five named factory looks and five slender consists, defaulting to A', () => {
     expect(FACTORY_LOOK_IDS).toEqual(['A', 'B', 'C', 'D', 'E']);
     expect(TIEBAO_LOOK_IDS).toEqual(['A', 'B', 'C', 'D', 'E']);
     expect(FACTORY_LOOK_NAMES.A).toBe('铁皮高窗');
@@ -42,28 +48,33 @@ describe('铁堡外观待选', () => {
     expect(new Set(windows).size).toBe(5);
     expect(new Set(hulls).size).toBe(5);
     const cx = Math.floor(TIEBAO_HULL_W / 2);
-    const cy = Math.floor(TIEBAO_HULL_H / 2);
-    const anchors = [TIEBAO_CORE, TIEBAO_ROOF_LOCO, TIEBAO_ROOF_CAR];
+    const anchors = [TIEBAO_CORE_ROW, TIEBAO_ROOF_LOCO_ROW, TIEBAO_ROOF_CAR_ROW];
+    const gap = TIEBAO_LOCO_H + 4;
+    const gap2 = TIEBAO_LOCO_H + TIEBAO_CAR_PITCH + 4;
+    const mid = tiebaoCarBodyY(3) + Math.floor(TIEBAO_CAR_H / 2);
+    const lead = tiebaoCarBodyY(0);
     for (const id of TIEBAO_LOOK_IDS) {
       const hull = buildTiebaoHull(id, false);
-      expect(hull).toHaveLength(TIEBAO_HULL_H);
+      expect(hull).toHaveLength(TIEBAO_FULL_H);
       expect(hull[0]).toHaveLength(TIEBAO_HULL_W);
-      for (const offset of anchors) {
-        expect(hull[cy + offset.y]?.[cx + offset.x]).toBeGreaterThanOrEqual(0);
+      expect(TIEBAO_HULL_H).toBeLessThan(TIEBAO_FULL_H);
+      for (const row of anchors) {
+        expect(hull[row]?.[cx]).toBeGreaterThanOrEqual(0);
       }
       expect(hull[4]?.[cx]).toBeGreaterThanOrEqual(0);
-      expect(hull[222]?.[cx]).toBeGreaterThanOrEqual(0);
-      expect(hull[68]?.[4]).toBe(-1);
-      expect(hull[68]?.[cx]).toBeGreaterThanOrEqual(0);
-      expect(hull[150]?.[4]).toBe(-1);
-      expect(hull[150]?.[cx]).toBeGreaterThanOrEqual(0);
+      expect(hull[TIEBAO_LOCO_H - 6]?.[cx]).toBeGreaterThanOrEqual(0);
+      expect(hull[TIEBAO_FULL_H - 8]?.[cx]).toBeGreaterThanOrEqual(0);
+      expect(hull[gap]?.[4]).toBe(-1);
+      expect(hull[gap]?.[cx]).toBeGreaterThanOrEqual(0);
+      expect(hull[gap2]?.[4]).toBe(-1);
+      expect(hull[gap2]?.[cx]).toBeGreaterThanOrEqual(0);
       let carWidth = 0;
-      const mid = hull[110];
-      if (mid) {
+      const sample = hull[mid];
+      if (sample) {
         let left = TIEBAO_HULL_W;
         let right = -1;
         for (let x = 0; x < TIEBAO_HULL_W; x++) {
-          if ((mid[x] ?? -1) < 0) continue;
+          if ((sample[x] ?? -1) < 0) continue;
           left = Math.min(left, x);
           right = Math.max(right, x);
         }
@@ -71,7 +82,10 @@ describe('铁堡外观待选', () => {
       }
       expect(carWidth).toBeGreaterThan(20);
       expect(carWidth).toBeLessThanOrEqual(48);
-      for (let y = 74; y < 146; y++) expect(hull[y]?.[cx]).toBeGreaterThanOrEqual(0);
+      for (let y = lead; y < lead + TIEBAO_CAR_H; y++) {
+        expect(hull[y]?.[cx]).toBeGreaterThanOrEqual(0);
+      }
+      expect(TIEBAO_LOCO_H).toBeGreaterThan(TIEBAO_CAR_H + TIEBAO_CAR_GAP);
       expect(hashSprite(buildTiebaoHull(id, true))).not.toBe(hashSprite(hull));
     }
   });

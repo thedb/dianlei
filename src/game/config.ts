@@ -576,9 +576,9 @@ export const FACTORY_BOSS_SEED = 23;
 export const FACTORY_LOOK = 'A' as const;
 
 /**
- * Temporary 铁堡 hull until Yoan picks a variation of the locked consist.
- * Nose up-screen, one locomotive and two boxcars.
- * A 尖头三节, B 钝鼻铆甲, C 侧裙弹舱, D 脊炮车顶, E 厚钩尾梁.
+ * Locked end form: A 尖头三节. Nose up-screen. The fight sheds from
+ * loco + 9 cars down to this locomotive and two boxcars.
+ * B 钝鼻铆甲, C 侧裙弹舱, D 脊炮车顶, E 厚钩尾梁 share the chassis.
  */
 export const TIEBAO_LOOK = 'A' as const;
 
@@ -760,16 +760,52 @@ export const BOSS_TURRET_FALL_GRAVITY = 220;
 
 /** Fixed screen lanes. Center matches LOGICAL_W / 2 and BOSS_ANCHOR_X. */
 export const TIEBAO_RAIL_X = [72, 180, 288] as const;
+/** Locomotive plus the cars that can be shed. The end form keeps two cars. */
+export const TIEBAO_CARS = 9;
+export const TIEBAO_END_CARS = 2;
 /**
- * Hull center. The 232px sprite's top stays at screen y = 48, the same place
- * the old 160px nose sat, so the extra length is the cars hanging downward.
+ * Nose through the cab, before the first coupler gap. Was 74px when the
+ * first car started at y=74. The extra depth is the cab behind the wedge.
  */
-export const TIEBAO_PARK_Y = 164;
+export const TIEBAO_LOCO_H = 116;
+/** One slender boxcar body. About 2:1 inside the 80px width. */
+export const TIEBAO_CAR_H = 72;
+export const TIEBAO_CAR_GAP = 8;
+export const TIEBAO_CAR_PITCH = TIEBAO_CAR_GAP + TIEBAO_CAR_H;
+/** Rows under the last car body (buffer margin). */
+export const TIEBAO_TAIL = 4;
 export const TIEBAO_HULL_W = 80;
-/** Slender consist: thin body, two long boxcars. Width stays 80. */
-export const TIEBAO_HULL_H = 232;
-/** Tail starts just above the screen. The consist slides down to parkY, nose up. */
-export const TIEBAO_ENTER_Y = -128;
+/** End form, loco + 2 cars. Live hitbox height follows the cars still attached. */
+export const TIEBAO_HULL_H = TIEBAO_LOCO_H + TIEBAO_END_CARS * TIEBAO_CAR_PITCH + TIEBAO_TAIL;
+/** Loco + 9 cars. Most of this sits above the screen at the encounter. */
+export const TIEBAO_FULL_H = TIEBAO_LOCO_H + TIEBAO_CARS * TIEBAO_CAR_PITCH + TIEBAO_TAIL;
+/**
+ * Remaining main-HP fractions that each drop exactly one rear car.
+ * ≤30% is the last shed: loco + 2 stay. The second (Hard) bar does not shed.
+ */
+export const TIEBAO_SHED_AT = [0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3] as const;
+/** End-form nose screen y. The tail has stepped down until the loco sits here. */
+export const TIEBAO_END_NOSE_Y = 48;
+export const TIEBAO_END_PARK_Y = TIEBAO_END_NOSE_Y + TIEBAO_HULL_H / 2;
+/**
+ * Buffer screen y at 100% HP. Rear 2.5 cars meet the screen: the top half-car
+ * of that window is at y = -40, so about two cars are actually on screen.
+ */
+export const TIEBAO_ENCOUNTER_TAIL_Y = 160;
+/** Tail drop per shed car. 7 × 24 brings the end-form nose to TIEBAO_END_NOSE_Y. */
+export const TIEBAO_SHED_ADVANCE = 24;
+/** Hull center at the encounter (9 cars, tail at TIEBAO_ENCOUNTER_TAIL_Y). */
+export const TIEBAO_PARK_Y = TIEBAO_ENCOUNTER_TAIL_Y - TIEBAO_FULL_H / 2;
+/** Tail just above the screen at the start of the slide-in. */
+export const TIEBAO_ENTER_TAIL_Y = -12;
+export const TIEBAO_ENTER_Y = TIEBAO_ENTER_TAIL_Y - TIEBAO_FULL_H / 2;
+/**
+ * Ram stays off until this many cars remain (loco + 4). That is the ≤50% shed.
+ * A 9-car hull is 840px and would fill the screen on the dive.
+ */
+export const TIEBAO_RAM_MAX_CARS = 4;
+/** Bottom rows of the full sprite pasted onto the live tail (beam + lamps). */
+export const TIEBAO_BUFFER = 20;
 export const TIEBAO_ENTER_DURATION = 2;
 /** Fight starts this many seconds after the stage clock's zero. See STAGE2_WARNING_AT. */
 export const TIEBAO_ENTER_AT = 123;
@@ -777,12 +813,13 @@ export const TIEBAO_ENTER_AT = 123;
 export const TIEBAO_WARNING = 1.5;
 
 /**
- * Park-to-park. Output, then a turnout move. No telegraph and no lit rail.
- * Hard overload uses the same 6s (it used to be the shorter clock).
+ * Park-to-park. Output, then a background turnout. No telegraph and no lit rail.
+ * The hull X stays on a rail center and snaps when the move completes.
+ * Hard overload uses the same 6s.
  */
 export const TIEBAO_SWITCH_PERIOD = 6;
 export const TIEBAO_MOVE = 1.2;
-/** Vertical length of the converging rails the train rides while switching. */
+/** Vertical length of the background frog. The train body does not follow it. */
 export const TIEBAO_SWITCH_SPAN = 176;
 
 /** Hard overload. Same period as the main fight; weapons and smoke still differ. */
@@ -798,12 +835,19 @@ export const TIEBAO_CORE_SCORE = 30000;
 export const TIEBAO_ROOF_RADIUS = 14;
 export const TIEBAO_CORE_RADIUS = 18;
 /**
- * Relative to the hull center, +y toward the player (behind the train).
- * On the 80×232 sprite: core (40, 18) nose, loco gun (40, 48), rear gun (40, 190).
+ * Pixel rows from the nose (sprite top), not from the live hull center.
+ * The center moves as cars shed, so runtime offsets are `row - height / 2`.
+ * Core on the nose, loco gun on the cab, rear gun on the second boxcar
+ * (the rear car of the end form). +y in the center offsets points at the player.
  */
-export const TIEBAO_ROOF_CAR = { x: 0, y: 74 } as const;
-export const TIEBAO_ROOF_LOCO = { x: 0, y: -68 } as const;
-export const TIEBAO_CORE = { x: 0, y: -98 } as const;
+export const TIEBAO_CORE_ROW = 18;
+export const TIEBAO_ROOF_LOCO_ROW = 64;
+export const TIEBAO_ROOF_CAR_ROW =
+  TIEBAO_LOCO_H + TIEBAO_CAR_PITCH + TIEBAO_CAR_GAP + TIEBAO_CAR_H / 2;
+const TIEBAO_END_CY = TIEBAO_HULL_H / 2;
+export const TIEBAO_ROOF_CAR = { x: 0, y: TIEBAO_ROOF_CAR_ROW - TIEBAO_END_CY } as const;
+export const TIEBAO_ROOF_LOCO = { x: 0, y: TIEBAO_ROOF_LOCO_ROW - TIEBAO_END_CY } as const;
+export const TIEBAO_CORE = { x: 0, y: TIEBAO_CORE_ROW - TIEBAO_END_CY } as const;
 
 export const TIEBAO_FAN_INTERVAL = 1.4;
 export const TIEBAO_FAN_FIRST = 0.4;
@@ -845,12 +889,12 @@ export const TIEBAO_WALL_REPEAT = 1.6 * TIEBAO_RATE_SCALE;
 export const TIEBAO_WALL_VOLLEYS = 2;
 export const TIEBAO_OVERLOAD_WALL_REPEAT = 1 * TIEBAO_RATE_SCALE;
 
-/** Dash starts quickly, reaches the bottom edge, then crawls back to park Y. */
+/** Dash starts quickly, reaches the bottom edge, then crawls back to the current rest center. */
 export const TIEBAO_RAM_START = 0.35;
 export const TIEBAO_RAM_WARN = 0;
 export const TIEBAO_RAM_DIVE = 0.12;
 export const TIEBAO_RAM_RETURN = 1.9;
-/** Hull bottom (screen y) at the end of the dive. The nose meets the bottom edge. */
+/** Screen y the hull bottom reaches at the end of the dive. */
 export const TIEBAO_RAM_BOTTOM = LOGICAL_H;
 
 export const TIEBAO_ROCKET_SPEED = 64;

@@ -46,6 +46,7 @@ export const TIEBAO: BossDef = {
   enterY: TIEBAO_ENTER_Y,
   parkY: TIEBAO_PARK_Y,
   drift: { amp: 0, period: 10 },
+  /** End-form size. The live rect follows the cars still attached. */
   hull: { w: TIEBAO_HULL_W, h: TIEBAO_HULL_H },
   parts: [
     {
@@ -103,14 +104,14 @@ export const TIEBAO: BossDef = {
     duration: TIEBAO_DEATH_DURATION,
     explosions: TIEBAO_DEATH_EXPLOSIONS,
     offsets: [
-      [0, -98],
-      [0, -68],
-      [-8, -36],
-      [6, -8],
-      [0, 16],
-      [-8, 40],
-      [0, 74],
-      [6, 104],
+      [0, -122],
+      [0, -76],
+      [-8, -40],
+      [6, 0],
+      [0, 30],
+      [-8, 60],
+      [0, 100],
+      [6, 128],
     ],
   },
 };

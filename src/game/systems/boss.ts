@@ -52,9 +52,11 @@ import {
 } from '@/game/systems/danmaku';
 import {
   stepTiebao,
+  tiebaoLiveHull,
   tiebaoMarkBomb,
   tiebaoOnDeath,
   tiebaoOnFight,
+  tiebaoPlaceEnter,
   tiebaoResolveBomb,
   tiebaoTryShot,
 } from '@/game/systems/tiebao';
@@ -340,6 +342,10 @@ export function bossPart(boss: BossRuntime, id: string): BossPartRuntime | undef
 }
 
 export function bossHullRect(boss: BossRuntime): { x: number; y: number; w: number; h: number } {
+  if (boss.def.script === 'tiebao') {
+    const hull = tiebaoLiveHull(boss);
+    return { x: boss.x - hull.w / 2, y: boss.y - hull.h / 2, w: hull.w, h: hull.h };
+  }
   const { w, h } = boss.def.hull;
   return { x: boss.x - w / 2, y: boss.y - h / 2, w, h };
 }
@@ -486,13 +492,15 @@ export function updateBoss(boss: BossRuntime, dt: number, world?: BossWorld): Bo
     const duration = Math.max(0.0001, def.enterDuration);
     const u = Math.min(1, boss.phaseTime / duration);
     boss.x = def.anchorX;
-    boss.y = def.enterY + (def.parkY - def.enterY) * u;
+    if (scripted) tiebaoPlaceEnter(boss, u);
+    else boss.y = def.enterY + (def.parkY - def.enterY) * u;
     if (boss.phaseTime >= duration) {
       const leftover = boss.phaseTime - duration;
+      if (scripted) tiebaoPlaceEnter(boss, 1);
+      else boss.y = def.parkY;
       startFight(boss);
       boss.phaseTime = leftover;
       boss.driftTime = leftover;
-      boss.y = def.parkY;
       attackDt = leftover;
       scriptDt = leftover;
     }
