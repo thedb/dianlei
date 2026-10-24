@@ -22,7 +22,9 @@ import {
   TIEBAO_RAM_RETURN,
   TIEBAO_RAM_START,
   TIEBAO_RATE_SCALE,
+  TIEBAO_ROOF_CAR,
   TIEBAO_ROOF_HP,
+  TIEBAO_ROOF_LOCO,
   TIEBAO_ROOF_SCORE,
   TIEBAO_SWITCH_PERIOD,
 } from '@/game/config';
@@ -236,14 +238,23 @@ describe('铁堡 rails', () => {
     expect(boss.phase).toBe('main');
   });
 
-  it('transfers a hull hit above the part centers', () => {
+  it('transfers a nose hit to the locomotive gun and a tail hit to the rear gun', () => {
     const boss = createBoss(TIEBAO);
     park(boss);
-    const y = TIEBAO_PARK_Y - 68;
-    const before = bossPart(boss, 'roofCar')!.hp;
-    const hit = shot(boss, 180, y, 9);
-    expect(hit.consumedBullet).toBe(true);
-    expect(bossPart(boss, 'roofCar')!.hp).toBe(before - 9);
+    const loco = bossPart(boss, 'roofLoco')!;
+    const car = bossPart(boss, 'roofCar')!;
+    const noseY = TIEBAO_PARK_Y + TIEBAO_ROOF_LOCO.y - 20;
+    const nose = shot(boss, 180, noseY, 9);
+    expect(nose.consumedBullet).toBe(true);
+    expect(loco.hp).toBe(TIEBAO_ROOF_HP - 9);
+    expect(car.hp).toBe(TIEBAO_ROOF_HP);
+    expect(bossPart(boss, 'core')!.hp).toBe(TIEBAO_CORE_HP);
+
+    const tailY = TIEBAO_PARK_Y + TIEBAO_ROOF_CAR.y + 22;
+    const tail = shot(boss, 180, tailY, 9);
+    expect(tail.consumedBullet).toBe(true);
+    expect(car.hp).toBe(TIEBAO_ROOF_HP - 9);
+    expect(loco.hp).toBe(TIEBAO_ROOF_HP - 9);
     expect(bossPart(boss, 'core')!.hp).toBe(TIEBAO_CORE_HP);
   });
 
