@@ -5,6 +5,7 @@
  * `BossRuntime` stays the battleship's shape for the stage-1 render digest.
  *
  * Design: docs/电雷_第二关_铁堡Boss设计_v1.md. No laser. No Math.random.
+ * A turnout is a curve the cars sample by Y. The hull does not snap between rails.
  */
 
 import type { Rng } from '@/engine/rng';
@@ -13,6 +14,7 @@ import {
   HITBOX_RADIUS,
   LOGICAL_H,
   LOGICAL_W,
+  TIEBAO_BEND_HIT,
   TIEBAO_BROADSIDE_COUNT,
   TIEBAO_BROADSIDE_FIRST,
   TIEBAO_BROADSIDE_FROM,
@@ -52,6 +54,8 @@ import {
   TIEBAO_HULL_H,
   TIEBAO_HULL_W,
   TIEBAO_OVERLOAD_WALL_REPEAT,
+  TIEBAO_POINT_AT,
+  TIEBAO_FROG_AT,
   TIEBAO_RAIN_COUNT,
   TIEBAO_RAIN_FIRST,
   TIEBAO_RAIN_RADIUS,
@@ -71,6 +75,7 @@ import {
   TIEBAO_ROCKET_Y,
   TIEBAO_ROOF_CAR_ROW,
   TIEBAO_ROOF_LOCO_ROW,
+  TIEBAO_SWITCH_CROSS_SPAN,
   TIEBAO_SWITCH_PERIOD,
   TIEBAO_SWITCH_SPAN,
   TIEBAO_WALL_COUNT,
@@ -197,10 +202,10 @@ export interface TiebaoVisual {
   highlight: number;
   hot: boolean;
   /**
-   * Background frog only. The hull X stays on `current` until the move
-   * completes, then snaps to the target rail. Null while parked.
+   * Live turnout. Cars sample `tiebaoSwitchX` at their own Y. Null while parked.
+   * The old "hull stays on the departure rail, then snaps" pose is obsolete.
    */
-  switch: { fromX: number; toX: number; u: number; tailY: number } | null;
+  switch: { fromX: number; toX: number; u: number; tailY: number; height: number } | null;
   ramWarn: boolean;
   rocketWarn: boolean;
   circles: ReadonlyArray<{
@@ -249,23 +254,106 @@ function easeOutCubic(u: number): number {
   return 1 - (1 - t) ** 3;
 }
 
+function railPitch(): number {
+  return TIEBAO_RAIL_X[1] - TIEBAO_RAIL_X[0];
+}
+
+/** Adjacent rails use one turnout. L↔R uses the longer compound span. */
+export function tiebaoSwitchSpan(fromX: number, toX: number): number {
+  return Math.abs(toX - fromX) > railPitch() + 1 ? TIEBAO_SWITCH_CROSS_SPAN : TIEBAO_SWITCH_SPAN;
+}
+
 /**
- * Screen X of the background frog at `y`. The hull does not follow this.
- * At u=0 the tail line is still on `fromX`. At u=1 that line is on `toX`.
- * Ahead of the frog (smaller y) the painted rail is already the new one.
+ * The moving bend. `y1` is the heel (still the old rail, larger y) and `y0`
+ * is the toe (already the new rail, smaller y). At u=0 the heel sits on the
+ * nose, so the whole consist is still on `fromX`. At u=1 the toe sits on the
+ * tail, so the whole consist is on `toX`.
+ */
+export function tiebaoSwitchBand(
+  u: number,
+  tailY: number,
+  height: number,
+  fromX: number,
+  toX: number
+): { y0: number; y1: number; span: number } {
+  const span = tiebaoSwitchSpan(fromX, toX);
+  const noseY = tailY - height;
+  const y1 = noseY + clamp(u, 0, 1) * (height + span);
+  return { y0: y1 - span, y1, span };
+}
+
+/** One smoothstep, or two through the middle rail when the rails are not neighbors. */
+function turnoutAlong(fromX: number, toX: number, t: number): number {
+  const u = clamp(t, 0, 1);
+  if (tiebaoSwitchSpan(fromX, toX) === TIEBAO_SWITCH_CROSS_SPAN) {
+    const mid = TIEBAO_RAIL_X[1];
+    if (u < 0.5) return lerp(fromX, mid, smoothstep(u * 2));
+    return lerp(mid, toX, smoothstep((u - 0.5) * 2));
+  }
+  return lerp(fromX, toX, smoothstep(u));
+}
+
+/**
+ * Screen X of the rail a car at `y` is on during a move.
+ * Smaller y (the nose) leads. Outside the bend the value is exactly a rail.
  */
 export function tiebaoSwitchX(
   y: number,
   fromX: number,
   toX: number,
   u: number,
-  tailY: number
+  tailY: number,
+  height: number
 ): number {
-  const y0 = tailY - TIEBAO_SWITCH_SPAN + u * TIEBAO_SWITCH_SPAN;
-  const y1 = y0 + TIEBAO_SWITCH_SPAN;
+  const { y0, y1, span } = tiebaoSwitchBand(u, tailY, height, fromX, toX);
   if (y >= y1) return fromX;
   if (y <= y0) return toX;
-  return lerp(fromX, toX, smoothstep((y1 - y) / TIEBAO_SWITCH_SPAN));
+  return turnoutAlong(fromX, toX, (y1 - y) / span);
+}
+
+export interface TiebaoTurnoutMark {
+  kind: 'points' | 'frog';
+  /** Screen y of the hardware. */
+  y: number;
+  /** Rail this half of the turnout leaves. */
+  stockX: number;
+  /** Rail this half joins. */
+  joinX: number;
+}
+
+/** Point blades and frogs along the live bend. L↔R is two turnouts. */
+export function tiebaoTurnoutMarks(
+  u: number,
+  tailY: number,
+  height: number,
+  fromX: number,
+  toX: number
+): TiebaoTurnoutMark[] {
+  const { y1, span } = tiebaoSwitchBand(u, tailY, height, fromX, toX);
+  const cross = span === TIEBAO_SWITCH_CROSS_SPAN;
+  const halves: Array<readonly [number, number, number, number]> = cross
+    ? [
+        [fromX, TIEBAO_RAIL_X[1], 0, 0.5],
+        [TIEBAO_RAIL_X[1], toX, 0.5, 1],
+      ]
+    : [[fromX, toX, 0, 1]];
+  const marks: TiebaoTurnoutMark[] = [];
+  for (const [stockX, joinX, t0, t1] of halves) {
+    const spanT = t1 - t0;
+    marks.push({
+      kind: 'points',
+      y: y1 - (t0 + spanT * TIEBAO_POINT_AT) * span,
+      stockX,
+      joinX,
+    });
+    marks.push({
+      kind: 'frog',
+      y: y1 - (t0 + spanT * TIEBAO_FROG_AT) * span,
+      stockX,
+      joinX,
+    });
+  }
+  return marks;
 }
 
 /** Remaining fraction of bar 1. The Hard extra bar reports 0 and does not shed. */
@@ -287,6 +375,36 @@ export function tiebaoCommittedCars(boss: BossRuntime): number {
 
 export function tiebaoLiveHull(boss: BossRuntime): { w: number; h: number } {
   return { w: TIEBAO_HULL_W, h: tiebaoHullHeight(tiebaoCommittedCars(boss)) };
+}
+
+export interface TiebaoHullSegment {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * Hit chain. Parked, this is the one hull rect. During a move it is a stack of
+ * slices, each centered on `tiebaoSwitchX` at that slice, so a shot on the tail
+ * still connects after the nose has entered the new rail. Width stays the hull
+ * width. Draw slices are finer (`TIEBAO_BEND_DRAW`) but use the same curve.
+ */
+export function tiebaoHullSegments(boss: BossRuntime): TiebaoHullSegment[] {
+  const height = tiebaoLiveHull(boss).h;
+  const top = boss.y - height / 2;
+  const sw = tiebaoVisual(boss)?.switch;
+  if (!sw) {
+    return [{ x: boss.x - TIEBAO_HULL_W / 2, y: top, w: TIEBAO_HULL_W, h: height }];
+  }
+  const segments: TiebaoHullSegment[] = [];
+  for (let row = 0; row < height; row += TIEBAO_BEND_HIT) {
+    const h = Math.min(TIEBAO_BEND_HIT, height - row);
+    const y = top + row;
+    const cx = tiebaoSwitchX(y + h / 2, sw.fromX, sw.toX, sw.u, sw.tailY, sw.height);
+    segments.push({ x: cx - TIEBAO_HULL_W / 2, y, w: TIEBAO_HULL_W, h });
+  }
+  return segments;
 }
 
 function carsOf(state: TiebaoState): number {
@@ -319,27 +437,22 @@ function muzzleY(boss: BossRuntime, cars: number): number {
   return top + tiebaoCarCenterRow(Math.max(0, cars - 1));
 }
 
-function emitSheds(
-  boss: BossRuntime,
-  state: TiebaoState,
-  ev: BossEvents,
-  fromSheds: number,
-  toSheds: number
-): void {
+function emitSheds(state: TiebaoState, ev: BossEvents, fromSheds: number, toSheds: number): void {
   for (let shed = fromSheds; shed < toSheds; shed++) {
     const cars = TIEBAO_CARS - shed;
     const top = tiebaoTailY(cars) - tiebaoHullHeight(cars);
     const y = top + tiebaoCarCenterRow(cars - 1);
-    ev.explosions.push({ x: boss.x, y, delay: 0, size: 'medium' });
-    ev.explosions.push({ x: boss.x - 10, y: y + 8, delay: 0, size: 'small' });
-    ev.explosions.push({ x: boss.x + 8, y: y - 6, delay: 0, size: 'small' });
+    const x = consistX(state, y);
+    ev.explosions.push({ x, y, delay: 0, size: 'medium' });
+    ev.explosions.push({ x: x - 10, y: y + 8, delay: 0, size: 'small' });
+    ev.explosions.push({ x: x + 8, y: y - 6, delay: 0, size: 'small' });
   }
   state.sheds = toSheds;
 }
 
 function commitSheds(boss: BossRuntime, state: TiebaoState, ev: BossEvents | null): void {
   const sheds = tiebaoShedCountFromRatio(tiebaoMainRatio(boss));
-  if (ev && sheds > state.sheds) emitSheds(boss, state, ev, state.sheds, sheds);
+  if (ev && sheds > state.sheds) emitSheds(state, ev, state.sheds, sheds);
   else state.sheds = Math.max(state.sheds, sheds);
   applyAnchors(boss, tiebaoHullHeight(carsOf(state)));
 }
@@ -475,6 +588,7 @@ export function tiebaoOnFight(boss: BossRuntime): void {
     state.target = state.rail;
     resetSchedules(state);
     boss.x = railX(state.rail);
+    zeroOffsets(boss);
     boss.y = TIEBAO_END_PARK_Y;
   }
 }
@@ -506,8 +620,9 @@ export function tiebaoVisual(boss: BossRuntime): TiebaoVisual | null {
       ? {
           fromX: state.fromX,
           toX: railX(state.target),
-          u: state.clock / Math.max(0.05, profile(state.list).move),
+          u: moveU(state),
           tailY: tiebaoTailY(carsOf(state)),
+          height: tiebaoHullHeight(carsOf(state)),
         }
       : null,
     ramWarn: state.ram === 'warn',
@@ -545,12 +660,7 @@ function beginMove(state: TiebaoState, world: BossWorld | undefined): void {
   state.clock = 0;
 }
 
-function advanceRail(
-  state: TiebaoState,
-  dt: number,
-  world: BossWorld | undefined,
-  boss: BossRuntime
-): boolean {
+function advanceRail(state: TiebaoState, dt: number, world: BossWorld | undefined): boolean {
   const clock = profile(state.list);
   if (state.phase === 'output') {
     state.clock += dt;
@@ -573,16 +683,73 @@ function advanceRail(
   state.mode = (state.mode + 1) % list.length;
   state.weaponClock = over;
   resetSchedules(state);
-  boss.x = railX(state.rail);
   return true;
 }
 
+function moveU(state: TiebaoState): number {
+  return clamp(state.clock / Math.max(0.05, profile(state.list).move), 0, 1);
+}
+
+function consistX(state: TiebaoState, y: number): number {
+  if (state.phase !== 'move') return railX(state.rail);
+  const cars = carsOf(state);
+  return tiebaoSwitchX(
+    y,
+    state.fromX,
+    railX(state.target),
+    moveU(state),
+    tiebaoTailY(cars),
+    tiebaoHullHeight(cars)
+  );
+}
+
+function zeroOffsets(boss: BossRuntime): void {
+  for (const part of boss.parts) {
+    if (part.falling) continue;
+    part.offsetX = 0;
+    part.worldX = boss.x;
+  }
+}
+
 /**
- * Hull X is always a rail center. During the move it stays on the rail it is
- * leaving. `advanceRail` snaps it onto the target when the frog animation ends.
+ * Parked: one rail center. Moving: the hull center and every part sit on the
+ * turnout at their own Y. `syncParts` copies `offsetX` into `worldX`.
  */
-function placeX(state: TiebaoState, boss: BossRuntime): void {
+function pose(state: TiebaoState, boss: BossRuntime): void {
+  if (state.phase !== 'move') {
+    boss.x = railX(state.rail);
+    zeroOffsets(boss);
+    return;
+  }
+  boss.x = consistX(state, boss.y);
+  for (const part of boss.parts) {
+    if (part.falling) continue;
+    const y = boss.y + part.offsetY;
+    part.offsetX = consistX(state, y) - boss.x;
+    part.worldX = boss.x + part.offsetX;
+  }
+}
+
+/**
+ * Death and the overload gate cancel a half-finished turnout. The tail settles
+ * onto whichever of the two rails it is closer to, so the visible rear does not
+ * reverse across the screen. Cars already on the other rail straighten in that
+ * frame. The weapon index does not advance.
+ */
+function settleTail(state: TiebaoState, boss: BossRuntime): void {
+  if (state.phase === 'move') {
+    const cars = carsOf(state);
+    const tail = tiebaoTailY(cars);
+    const x = consistX(state, tail);
+    const to = railX(state.target);
+    if (Math.abs(x - to) < Math.abs(x - state.fromX)) state.rail = state.target;
+  }
+  state.target = state.rail;
+  state.fromX = railX(state.rail);
+  state.phase = 'output';
+  state.clock = 0;
   boss.x = railX(state.rail);
+  zeroOffsets(boss);
 }
 
 function pushBolt(
@@ -902,12 +1069,12 @@ function fightSlice(
   const state = ensure(boss);
   if (state.broken) return;
   commitSheds(boss, state, ev);
-  const arrived = advanceRail(state, dt, world, boss);
+  const arrived = advanceRail(state, dt, world);
   if (state.phase === 'move') {
     boss.y = tiebaoRestCenter(carsOf(state));
     state.ram = 'idle';
   }
-  placeX(state, boss);
+  pose(state, boss);
   if (state.phase !== 'move') {
     if (!arrived) state.weaponClock += dt;
     fireWeapons(state, boss, world, ev);
@@ -936,8 +1103,10 @@ function holdSlice(
 ): void {
   const state = ensure(boss);
   state.ram = 'idle';
+  if (state.phase === 'move') settleTail(state, boss);
   commitSheds(boss, state, ev);
   boss.x = railX(state.rail);
+  zeroOffsets(boss);
   boss.y = tiebaoRestCenter(carsOf(state));
   stepCircles(state, dt, world, ev);
   stepCrates(state, dt, world, ev);
@@ -962,8 +1131,9 @@ export function stepTiebao(
 
 export function tiebaoOnDeath(boss: BossRuntime, ev: BossEvents): void {
   const state = ensure(boss);
+  settleTail(state, boss);
   const endSheds = TIEBAO_CARS - TIEBAO_END_CARS;
-  if (state.sheds < endSheds) emitSheds(boss, state, ev, state.sheds, endSheds);
+  if (state.sheds < endSheds) emitSheds(state, ev, state.sheds, endSheds);
   state.sheds = endSheds;
   applyAnchors(boss, TIEBAO_HULL_H);
   boss.y = TIEBAO_END_PARK_Y;

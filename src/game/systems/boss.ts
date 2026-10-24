@@ -52,6 +52,7 @@ import {
 } from '@/game/systems/danmaku';
 import {
   stepTiebao,
+  tiebaoHullSegments,
   tiebaoLiveHull,
   tiebaoMarkBomb,
   tiebaoOnDeath,
@@ -341,6 +342,11 @@ export function bossPart(boss: BossRuntime, id: string): BossPartRuntime | undef
   return boss.parts.find((part) => part.id === id);
 }
 
+/**
+ * Axis-aligned hull. 铁堡's parked rect is this box. While that consist is bent
+ * on a turnout, shots and the player use `tiebaoHullSegments` instead, because
+ * one rect at `boss.x` would miss the nose or the tail.
+ */
 export function bossHullRect(boss: BossRuntime): { x: number; y: number; w: number; h: number } {
   if (boss.def.script === 'tiebao') {
     const hull = tiebaoLiveHull(boss);
@@ -613,10 +619,9 @@ export function resolveBossBullet(
   );
   if (direct) return connect(direct);
 
-  const hull = bossHullRect(boss);
   const left = bullet.x - bullet.w / 2;
   const top = bullet.y - bullet.h / 2;
-  if (!rectsOverlap(left, top, bullet.w, bullet.h, hull.x, hull.y, hull.w, hull.h)) return ev;
+  if (!hullOverlapsBullet(boss, left, top, bullet.w, bullet.h)) return ev;
 
   if (boss.def.hullTransfers) {
     const any = nearestPart(hittable, bullet, () => true);
@@ -629,6 +634,7 @@ export function resolveBossBullet(
   // weak-point face. A shot into that face damages the nearest living part
   // immediately, including off-center and 15° streams. Armor above the
   // part centers still stops a bullet without hurting anything.
+  const hull = bossHullRect(boss);
   const faceBottom = hull.y + hull.h;
   const facing = nearestPart(hittable, bullet, (part) => {
     const bulletTop = bullet.y - bullet.h / 2;
@@ -641,10 +647,32 @@ export function resolveBossBullet(
   return ev;
 }
 
+function hullOverlapsBullet(
+  boss: BossRuntime,
+  left: number,
+  top: number,
+  w: number,
+  h: number
+): boolean {
+  if (boss.def.script === 'tiebao') {
+    return tiebaoHullSegments(boss).some((seg) =>
+      rectsOverlap(left, top, w, h, seg.x, seg.y, seg.w, seg.h)
+    );
+  }
+  const hull = bossHullRect(boss);
+  return rectsOverlap(left, top, w, h, hull.x, hull.y, hull.w, hull.h);
+}
+
 export function bossHitsPlayer(boss: BossRuntime, px: number, py: number): boolean {
   if (!bossBlocksShots(boss)) return false;
-  const hull = bossHullRect(boss);
-  if (circleRect(px, py, HITBOX_RADIUS, hull.x, hull.y, hull.w, hull.h)) return true;
+  if (boss.def.script === 'tiebao') {
+    for (const seg of tiebaoHullSegments(boss)) {
+      if (circleRect(px, py, HITBOX_RADIUS, seg.x, seg.y, seg.w, seg.h)) return true;
+    }
+  } else {
+    const hull = bossHullRect(boss);
+    if (circleRect(px, py, HITBOX_RADIUS, hull.x, hull.y, hull.w, hull.h)) return true;
+  }
   for (const part of boss.parts) {
     if (!part.alive || part.falling) continue;
     const dx = px - part.worldX;

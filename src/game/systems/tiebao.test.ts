@@ -6,7 +6,6 @@ import {
   TIEBAO_CORE_HP,
   TIEBAO_CORE_SCORE,
   TIEBAO_ENTER_DURATION,
-  TIEBAO_ENCOUNTER_TAIL_Y,
   TIEBAO_FAN_FIRST,
   TIEBAO_FAN_INTERVAL,
   TIEBAO_HULL_H,
@@ -15,6 +14,8 @@ import {
   TIEBAO_OVERLOAD_HP,
   TIEBAO_OVERLOAD_MOVE,
   TIEBAO_OVERLOAD_PERIOD,
+  TIEBAO_SWITCH_CROSS_SPAN,
+  TIEBAO_SWITCH_SPAN,
   TIEBAO_OVERLOAD_TRANSITION,
   TIEBAO_PARK_Y,
   TIEBAO_RAIL_X,
@@ -46,7 +47,10 @@ import {
   pickOtherRail,
   tiebaoCommittedCars,
   tiebaoLiveHull,
+  tiebaoSwitchBand,
+  tiebaoSwitchSpan,
   tiebaoSwitchX,
+  tiebaoTurnoutMarks,
   tiebaoView,
   tiebaoVisual,
 } from '@/game/systems/tiebao';
@@ -186,28 +190,38 @@ describe('铁堡 rails', () => {
     const seen: string[] = [];
     let previousRail = 1;
     let checkedMove = false;
+    let prevX = boss.x;
+    const stepBoss = () => {
+      const ev = updateBoss(boss, FIXED_DT, around);
+      expect(Math.abs(boss.x - prevX)).toBeLessThan(24);
+      prevX = boss.x;
+      return ev;
+    };
     for (let n = 0; n < 8; n++) {
       const started = tiebaoView(boss)!.modeId;
       let steps = 0;
       for (; steps < 800; steps++) {
-        updateBoss(boss, FIXED_DT, around);
+        stepBoss();
         const view = tiebaoView(boss)!;
         expect(view.phase === 'output' || view.phase === 'move').toBe(true);
-        expect(TIEBAO_RAIL_X).toContain(boss.x);
+        if (view.phase === 'output') expect(TIEBAO_RAIL_X).toContain(boss.x);
         if (!checkedMove && view.phase === 'move') {
-          for (let extra = 0; extra < 12; extra++) updateBoss(boss, FIXED_DT, around);
+          let quietShots = 0;
+          for (let extra = 0; extra < 12; extra++) {
+            quietShots += stepBoss().shots.length;
+          }
           steps += 12;
           checkedMove = true;
+          expect(quietShots).toBe(0);
           expect(boss.invulnerable).toBe(false);
           expect(boss.stage).toBe('fight');
           const slid = tiebaoView(boss)!;
           expect(slid.phase).toBe('move');
-          expect(boss.x).toBe(TIEBAO_RAIL_X[slid.rail]);
           const visual = tiebaoVisual(boss);
           expect(visual?.highlight).toBe(-1);
           expect(visual?.switch).not.toBeNull();
-          expect(visual?.switch?.fromX).toBe(boss.x);
-          expect(visual?.switch?.toX).not.toBe(boss.x);
+          expect(visual?.switch?.fromX).toBe(TIEBAO_RAIL_X[slid.rail]);
+          expect(visual?.switch?.toX).not.toBe(visual?.switch?.fromX);
           const loco = bossPart(boss, 'roofLoco')!;
           const hp = loco.hp;
           const hit = shot(boss, loco.worldX, loco.worldY, 5);
@@ -257,20 +271,90 @@ describe('铁堡 rails', () => {
     expect(bossPart(boss, 'core')!.hp).toBe(TIEBAO_CORE_HP);
   });
 
-  it('rides a turnout onto the other rail and does not light a target', () => {
+  it('rides a turnout from the nose to the tail and does not light a target', () => {
     expect(TIEBAO_SWITCH_PERIOD).toBe(6);
     expect(TIEBAO_OVERLOAD_PERIOD).toBe(6);
     expect(TIEBAO_MOVE).toBe(TIEBAO_OVERLOAD_MOVE);
-    const tail = TIEBAO_ENCOUNTER_TAIL_Y;
-    expect(tiebaoSwitchX(tail, 72, 288, 0, tail)).toBe(72);
-    expect(tiebaoSwitchX(tail, 72, 288, 1, tail)).toBe(288);
-    const mid = tiebaoSwitchX(tail, 72, 288, 0.5, tail);
-    expect(mid).toBeGreaterThan(72);
-    expect(mid).toBeLessThan(288);
-    const ahead = tiebaoSwitchX(tail - 200, 72, 288, 0.5, tail);
-    const behind = tiebaoSwitchX(tail + 200, 72, 288, 0.5, tail);
-    expect(ahead).toBe(288);
-    expect(behind).toBe(72);
+    expect(TIEBAO_SWITCH_SPAN).toBe(176);
+    expect(TIEBAO_SWITCH_CROSS_SPAN).toBe(352);
+    expect(tiebaoSwitchSpan(72, 180)).toBe(TIEBAO_SWITCH_SPAN);
+    expect(tiebaoSwitchSpan(72, 288)).toBe(TIEBAO_SWITCH_CROSS_SPAN);
+
+    const height = TIEBAO_HULL_H;
+    const tail = 328;
+    const nose = tail - height;
+    expect(tiebaoSwitchX(nose, 72, 180, 0, tail, height)).toBe(72);
+    expect(tiebaoSwitchX(tail, 72, 180, 0, tail, height)).toBe(72);
+    expect(tiebaoSwitchX(nose, 72, 180, 1, tail, height)).toBe(180);
+    expect(tiebaoSwitchX(tail, 72, 180, 1, tail, height)).toBe(180);
+    expect(tiebaoSwitchX(nose, 72, 180, 0.45, tail, height)).toBe(180);
+    expect(tiebaoSwitchX(tail, 72, 180, 0.45, tail, height)).toBe(72);
+
+    const band = tiebaoSwitchBand(0.5, tail, height, 72, 288);
+    let prev = 72;
+    for (let i = 0; i <= 20; i++) {
+      const y = band.y1 - (i / 20) * band.span;
+      const x = tiebaoSwitchX(y, 72, 288, 0.5, tail, height);
+      expect(x).toBeGreaterThanOrEqual(prev - 1e-6);
+      prev = x;
+    }
+    expect(prev).toBeCloseTo(288, 4);
+    const midY = (band.y0 + band.y1) / 2;
+    expect(tiebaoSwitchX(midY, 72, 288, 0.5, tail, height)).toBeCloseTo(180, 4);
+    const marks = tiebaoTurnoutMarks(0.5, tail, height, 72, 288);
+    expect(marks.filter((mark) => mark.kind === 'frog')).toHaveLength(2);
+    expect(marks.filter((mark) => mark.kind === 'points')).toHaveLength(2);
+    expect(marks.some((mark) => mark.kind === 'frog' && mark.joinX === 180)).toBe(true);
+
+    let last = tiebaoSwitchX(tail, 180, 288, 0, tail, height);
+    for (let frame = 1; frame <= 72; frame++) {
+      const x = tiebaoSwitchX(tail, 180, 288, frame / 72, tail, height);
+      expect(Math.abs(x - last)).toBeLessThan(24);
+      last = x;
+    }
+    expect(last).toBeCloseTo(288, 4);
+  });
+
+  it('keeps an on-screen consist on the curve and still takes damage there', () => {
+    const boss = createBoss(TIEBAO);
+    const around = world(1);
+    park(boss, around);
+    setMainHp(boss, (TIEBAO_ROOF_HP * 2 + TIEBAO_CORE_HP) * 0.3);
+    updateBoss(boss, FIXED_DT, around);
+    expect(tiebaoCommittedCars(boss)).toBe(2);
+
+    let guard = 0;
+    while (tiebaoView(boss)?.phase !== 'move' && guard < 2000) {
+      updateBoss(boss, FIXED_DT, around);
+      guard++;
+    }
+    expect(tiebaoView(boss)?.phase).toBe('move');
+
+    let posed = false;
+    for (let i = 0; i < 90 && !posed; i++) {
+      updateBoss(boss, FIXED_DT, around);
+      const sw = tiebaoVisual(boss)?.switch;
+      if (!sw) continue;
+      const noseY = sw.tailY - sw.height;
+      const noseX = tiebaoSwitchX(noseY, sw.fromX, sw.toX, sw.u, sw.tailY, sw.height);
+      const tailX = tiebaoSwitchX(sw.tailY, sw.fromX, sw.toX, sw.u, sw.tailY, sw.height);
+      if (Math.abs(noseX - sw.toX) >= 1 || Math.abs(tailX - sw.fromX) >= 1) continue;
+      posed = true;
+      for (const id of ['core', 'roofLoco', 'roofCar'] as const) {
+        const part = bossPart(boss, id)!;
+        expect(part.worldX).toBeCloseTo(
+          tiebaoSwitchX(part.worldY, sw.fromX, sw.toX, sw.u, sw.tailY, sw.height),
+          4
+        );
+      }
+      expect(shot(boss, noseX, noseY + 12, 4).consumedBullet).toBe(true);
+      expect(shot(boss, tailX, sw.tailY - 8, 4).consumedBullet).toBe(true);
+      expect(shot(boss, sw.fromX, noseY + 12, 4).consumedBullet).toBe(false);
+      const quiet = updateBoss(boss, FIXED_DT, around);
+      expect(tiebaoView(boss)?.phase).toBe('move');
+      expect(quiet.shots).toHaveLength(0);
+    }
+    expect(posed).toBe(true);
   });
 
   it('does not ram while more than four cars are still attached', () => {
