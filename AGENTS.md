@@ -5,7 +5,7 @@ This document defines the coding conventions and constraints for all AI agents w
 ## Source of Truth
 
 - **Design Document**: `docs/电雷_设计文档_v1.1.md` — all game rules, constants, and mechanics
-- **Wave Table**: `docs/电雷_第一关波次表_v1.md` — stage 1 enemy waves and timing
+- **Wave Tables**: `docs/电雷_第一关波次表_v1.md` (stage 1, implemented) and `docs/电雷_第二关波次表_v1.md` (stage 2 run: waves, drops, rear-diagonal entry). Stage 2 v1 is signed off (0 new models, `rear_diag` about 28°, warning stays at 118s). Implement it in a later PR; do not fill `stage2.ts` from the docs-only PR. Boss behavior stays in `docs/电雷_第二关_铁堡Boss设计_v1.md`
 - When design docs and code conflict, **docs are authoritative**
 - Update docs when rules change (not just code comments)
 
@@ -118,6 +118,7 @@ This document defines the coding conventions and constraints for all AI agents w
 - Wave data in `src/game/levels/` using TypeScript types
 - Patterns driven by data, not hard-coded `if` statements
 - MVP waves marked in wave table should be playable first
+- Stage 2's run stays on 陆地B (`landB`), not 河流A. `STAGE2_WARNING_AT` (118) and `TIEBAO_ENTER_AT` (123) stay locked. The signed-off run (waves, buildings, risk-crate times, 0 new enemy models, `rear_diag` at about 28°) is `docs/电雷_第二关波次表_v1.md`. `stage2.ts` stays empty until the implementation PR
 
 ### Maps (P12)
 - Maps are assets, decoupled from stages. Every map is registered in `src/game/maps/registry.ts` (`TileMapDef` with rows / `build()` / `cloudShadows` / optional `loopFrom`, or `StarfieldMapDef`). Nothing else may list maps or build map grids; use `getMap` / `getMapGrid`
