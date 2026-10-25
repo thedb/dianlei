@@ -1,13 +1,17 @@
 /**
  * Stage clear and game over (design §7).
  * Clear adds kill-rate and no-death bonuses. Both screens can retry or go home.
+ * A normal clear that still has a later stage shows a black card instead, then
+ * starts that stage. 挑战 Boss and the last stage keep this screen.
  */
 
 import type { Scene, SceneContext, SceneId } from './types';
 import type { Renderer } from '@/engine/renderer';
 import type { InputState } from '@/engine/input';
-import { LOGICAL_W } from '@/game/config';
+import { LOGICAL_H, LOGICAL_W, STAGE_CARD_TIME } from '@/game/config';
 import { commitHighScore } from '@/game/highScore';
+import { getStage } from '@/game/levels/registry';
+import { stageHeading } from '@/game/ui/stageSelect';
 import {
   formatStageTime,
   stageClearBonus,
@@ -45,12 +49,17 @@ export function createDebriefScene(ctx: SceneContext, outcome: 'clear' | 'gameov
   let shownScore = 0;
   let best = 0;
   let isNew = false;
+  /** Black handoff into the next stage. Ignores input until the hold ends. */
+  let showingCard = false;
+  let cardTime = 0;
 
   return {
     id,
 
     enter(): void {
       selected = 0;
+      cardTime = 0;
+      showingCard = outcome === 'clear' && ctx.campaignNext !== undefined;
       ctx.input.setControlsEnabled(false);
       report = ctx.run.report;
       if (report && report.outcome === 'clear') {
@@ -63,13 +72,23 @@ export function createDebriefScene(ctx: SceneContext, outcome: 'clear' | 'gameov
       const saved = commitHighScore(ctx.storage, shownScore);
       best = saved.best;
       isNew = saved.isNew;
+      if (showingCard && ctx.carriedRun) ctx.carriedRun.score = shownScore;
     },
 
     exit(): void {
       ctx.input.setControlsEnabled(true);
     },
 
-    update(_dt: number, input: InputState): SceneId | null {
+    update(dt: number, input: InputState): SceneId | null {
+      if (showingCard) {
+        cardTime += dt;
+        if (cardTime < STAGE_CARD_TIME || !ctx.campaignNext) return null;
+        ctx.runStage = ctx.campaignNext;
+        delete ctx.campaignNext;
+        ctx.battleEntry = 'stage';
+        delete ctx.challengeStage;
+        return 'battle';
+      }
       if (input.menuUp) selected = 0;
       if (input.menuDown) selected = 1;
       const tapped = tappedIndex(buttons(), input.taps);
@@ -80,6 +99,14 @@ export function createDebriefScene(ctx: SceneContext, outcome: 'clear' | 'gameov
     },
 
     render(renderer: Renderer): void {
+      if (showingCard && ctx.campaignNext) {
+        renderer.clear('#000');
+        const stage = getStage(ctx.campaignNext);
+        const c = renderer.getContext();
+        drawText(c, stageHeading(stage), LOGICAL_W / 2, LOGICAL_H / 2 - 28, 32, '#fff', 'center');
+        drawText(c, stage.name, LOGICAL_W / 2, LOGICAL_H / 2 + 12, 18, UI_COLORS.accent, 'center');
+        return;
+      }
       renderer.clear('#070b14');
       const c = renderer.getContext();
       const title = outcome === 'clear' ? '过关结算' : 'GAME OVER';

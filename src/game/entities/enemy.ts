@@ -22,6 +22,8 @@ import {
   SLOW_PUSH_DRIFT,
   ORBIT_APPROACH_SPEED,
   ORBIT_EXIT_SPEED,
+  REAR_DIAG_FIRE_X_MAX,
+  REAR_DIAG_FIRE_X_MIN,
   SIDE_ARC_RADIUS,
   V_DIVE_EXIT_DEG,
   TURRET_TURN_RATE,
@@ -202,6 +204,19 @@ export function spawnEnemy(
   enemy.bombHitIn = -1;
 }
 
+/** `straight` heading for a rear diagonal: 0 is down, 180 is straight up. */
+export function rearDiagHeading(move: Extract<Move, { kind: 'rear_diag' }>): number {
+  return move.side === 'left' ? 180 - move.bearing : 180 + move.bearing;
+}
+
+/**
+ * Canvas rotation that aims a nose-down sprite along a `straight` heading.
+ * Zero keeps the nose pointing down. Negative headings turn it toward up.
+ */
+export function headingSpriteRotation(headingDeg: number): number {
+  return (-headingDeg * Math.PI) / 180;
+}
+
 function wrapPi(rad: number): number {
   let d = rad;
   while (d > Math.PI) d -= Math.PI * 2;
@@ -364,6 +379,13 @@ function updateEnemyMovement(
       break;
     }
 
+    case 'rear_diag': {
+      const angleRad = (rearDiagHeading(move) * Math.PI) / 180;
+      enemy.x += Math.sin(angleRad) * move.speed * dt;
+      enemy.y += Math.cos(angleRad) * move.speed * dt;
+      break;
+    }
+
     case 'side_arc': {
       const radius = SIDE_ARC_RADIUS;
       const arcLen = (Math.PI / 2) * radius;
@@ -498,6 +520,15 @@ export function shouldEnemyFire(
   }
 
   if (enemy.y < 8) {
+    return { shouldFire: false, fireData: enemy.fire };
+  }
+
+  // Born under the lower edge. The clock starts once x is on the field,
+  // same as the y < 8 gate: time spent off-screen does not count.
+  if (
+    enemy.move.kind === 'rear_diag' &&
+    (enemy.x < REAR_DIAG_FIRE_X_MIN || enemy.x > REAR_DIAG_FIRE_X_MAX)
+  ) {
     return { shouldFire: false, fireData: enemy.fire };
   }
 

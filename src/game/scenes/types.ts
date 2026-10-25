@@ -9,8 +9,21 @@ import type { Difficulty } from '@/game/difficulty';
 import type { RunReport } from '@/game/systems/score';
 import type { Rng } from '@/engine/rng';
 import type { PlayMode } from '@/game/battle/playMode';
+import type { EquippedWeapon } from '@/game/systems/playerWeapons';
 
 export type SceneId = 'boot' | 'title' | 'battle' | 'result' | 'gameover';
+
+/** Score and loadout kept when a cleared stage continues into the next one. */
+export interface CarriedRun {
+  score: number;
+  lives: number;
+  bombs: number;
+  deaths: number;
+  main: EquippedWeapon;
+  sub: EquippedWeapon | null;
+  mate: number;
+  nextExtendScore: number;
+}
 
 /** Full stage, or a boss-practice entry that skips the mid-stage waves. */
 export type BattleEntry = 'stage' | 'boss';
@@ -49,10 +62,27 @@ export interface SceneContext {
   difficulty?: Difficulty;
   /**
    * Stage boss id from the challenge picker (`'1'` today). Formal starts and
-   * weapon test leave it unset. Battle loads that stage from the registry.
-   * Not persisted.
+   * weapon test leave it unset. Battle loads that stage from the registry
+   * only when `battleEntry` is `'boss'`. Not persisted.
    */
   challengeStage?: string;
+  /**
+   * Stage id for a normal run (`battleEntry: 'stage'`). Omitted means stage 1.
+   * The debug stage list and the clear handoff write it. 挑战 Boss does not.
+   * Not persisted. Retry keeps it.
+   */
+  runStage?: string;
+  /**
+   * Set when a normal clear has another stage. The result scene shows the
+   * black card, then writes `runStage` and enters battle. Absent on a final
+   * clear and on 挑战 Boss.
+   */
+  campaignNext?: string;
+  /**
+   * Loadout and score carried into the next stage. Battle enter applies it
+   * once, after the fresh-ship reset, then deletes it.
+   */
+  carriedRun?: CarriedRun;
   /**
    * 地图预览 target from the debug panel (`maps/preview.ts`): `map:<id>`.
    * The list is one row per map. Only `playMode: 'mapPreview'` reads it.

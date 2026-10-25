@@ -29,6 +29,7 @@ describe('stage1 waves', () => {
 
   it('stops spawning before the warning', () => {
     expect(stage1.warningAt).toBe(150);
+    expect(stage1.name).toBe('边境突袭');
     const last = stage1.waves[stage1.waves.length - 1]!;
     expect(last.id).toBe('W27');
     expect(last.t).toBeLessThan(stage1.warningAt);

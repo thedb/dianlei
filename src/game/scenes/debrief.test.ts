@@ -67,4 +67,40 @@ describe('debrief', () => {
     scene.update(DT, makeInput({ menuDown: true }));
     expect(scene.update(DT, makeInput({ menuConfirm: true }))).toBe('title');
   });
+
+  it('holds a black card for 3s, then starts stage 2 with the clear total', () => {
+    const ctx = context();
+    ctx.campaignNext = '2';
+    ctx.carriedRun = {
+      score: 1000,
+      lives: 2,
+      bombs: 4,
+      deaths: 0,
+      main: { id: 'vulcan', level: 3 },
+      sub: null,
+      mate: 1,
+      nextExtendScore: 100000,
+    };
+    ctx.run.report = {
+      outcome: 'clear',
+      baseScore: 1000,
+      kills: 10,
+      spawned: 10,
+      deaths: 0,
+      time: 200,
+    };
+    const scene = createDebriefScene(ctx, 'clear');
+    scene.enter();
+    expect(readHighScore(ctx.storage)).toBe(61000);
+    expect(ctx.carriedRun?.score).toBe(61000);
+    expect(scene.update(2.99, makeInput({ menuConfirm: true }))).toBeNull();
+    expect(ctx.runStage).toBeUndefined();
+    expect(scene.update(0.02, makeInput())).toBe('battle');
+    expect(ctx.battleEntry).toBe('stage');
+    expect(ctx.runStage).toBe('2');
+    expect(ctx.campaignNext).toBeUndefined();
+    expect(ctx.challengeStage).toBeUndefined();
+    expect(ctx.carriedRun?.lives).toBe(2);
+    expect(ctx.carriedRun?.main.level).toBe(3);
+  });
 });

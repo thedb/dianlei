@@ -33,6 +33,7 @@ import {
   checkExtend,
   collectItem,
   readButtons,
+  applyCarriedRun,
   resetPlayer,
   spawnNewShip,
   steerPlayer,
@@ -96,7 +97,9 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       // Sprites are immutable. Reuse the bake when the title demo restarts.
       if (!b.assets) b.assets = createGameAssets();
 
-      const stage = getStage(sceneCtx.battleEntry === 'boss' ? sceneCtx.challengeStage : undefined);
+      const stage = getStage(
+        sceneCtx.battleEntry === 'boss' ? sceneCtx.challengeStage : sceneCtx.runStage
+      );
       b.stage = stage;
       // First stage-RNG draw of the run: which exclusive building drops M.
       b.fixedDrops = resolvePlacementDrops(stage.buildings, b.rng);
@@ -109,6 +112,12 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       b.scroller = new Scroller(b.track);
 
       resetPlayer(b);
+      // A stage-clear handoff keeps score and the loadout. The ship still
+      // flies in from below, and the new stage clock stays at 0.
+      if (sceneCtx.battleEntry === 'stage' && sceneCtx.carriedRun) {
+        applyCarriedRun(state, sceneCtx.carriedRun);
+        delete sceneCtx.carriedRun;
+      }
       releaseAllPools(b);
       b.buildingScheduler.reset();
       clearFx(b.fx);

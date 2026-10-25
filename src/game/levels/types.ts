@@ -15,6 +15,7 @@ export type MoveKind =
   | 'cross'
   | 'hover'
   | 'side_arc'
+  | 'rear_diag'
   | 'orbit'
   | 'slow_push'
   | 'ground';
@@ -32,6 +33,12 @@ export type Move =
   | { kind: 'cross'; from: 'topLeft' | 'topRight'; speed: number }
   | { kind: 'hover'; stopY: number; hold: number }
   | { kind: 'side_arc'; side: 'left' | 'right'; y0: number; speed: number }
+  /**
+   * Straight climb from outside the lower left or right edge, inward and up.
+   * `bearing` is degrees off straight up, toward the screen. Same angle
+   * convention as `straight`: left flies at `180 - bearing`, right at `180 + bearing`.
+   */
+  | { kind: 'rear_diag'; side: 'left' | 'right'; y0: number; bearing: number; speed: number }
   | { kind: 'orbit'; anchor: { x: number; y: number }; r: number; period: number; hold: number }
   | { kind: 'slow_push'; stopY: number; hold: number }
   | { kind: 'ground'; vx?: number; entry?: GroundEntry };
@@ -65,6 +72,9 @@ export interface SpawnDrop {
   item: 'P' | 'B';
 }
 
+/** A run difficulty. Same three ids as `difficulty.ts`, kept here to avoid a cycle. */
+export type WaveDifficulty = 'easy' | 'medium' | 'hard';
+
 export interface SpawnGroup {
   enemy: EnemyType;
   count: number;
@@ -73,7 +83,7 @@ export interface SpawnGroup {
   interval?: number;
   move: Move;
   fire: Fire;
-  fireOnly?: number[];
+  fireOnly?: readonly number[];
   hp?: number;
   score?: number;
   drops?: SpawnDrop[];
@@ -81,10 +91,34 @@ export interface SpawnGroup {
   delay?: number;
   /** Added to each ship's first-shot delay, multiplied by its index in the group. */
   fireStagger?: number;
+  /** Omit to spawn on every difficulty. */
+  difficulties?: readonly WaveDifficulty[];
+  /**
+   * Fire used when this difficulty differs from `fire`. An omitted difficulty
+   * keeps `fire` — hard does not inherit medium's override.
+   */
+  fireByDifficulty?: { medium?: Fire; hard?: Fire };
+  /**
+   * Ship count when this difficulty differs from `count`. Extra ships reuse
+   * `xs` and `interval`. An omitted difficulty keeps `count`.
+   */
+  countByDifficulty?: { medium?: number; hard?: number };
+  /**
+   * Which ship indices fire when that set differs from `fireOnly`.
+   * An omitted difficulty keeps `fireOnly` (every ship, when that is omitted too).
+   */
+  fireOnlyByDifficulty?: {
+    easy?: readonly number[];
+    medium?: readonly number[];
+    hard?: readonly number[];
+  };
 }
 
-/** Wave-table section a wave belongs to (wave table §1.1). A label only; scenery comes from `StageData.maps`. */
-export type StageSection = 'ground' | 'coast' | 'base';
+/**
+ * Wave-table section a wave belongs to. A label only; scenery comes from `StageData.maps`.
+ * Stage 1 uses `ground` / `coast` / `base`. Stage 2 uses `outskirts` / `runway` / `woods`.
+ */
+export type StageSection = 'ground' | 'coast' | 'base' | 'outskirts' | 'runway' | 'woods';
 
 /** One map in a stage's pre-boss run. */
 export interface StageMapEntry {
@@ -125,6 +159,8 @@ export interface Wave {
   mvp: boolean | 'partial';
   condition?: 'powerBelowMax';
   groups: SpawnGroup[];
+  /** Omit to spawn on every difficulty. */
+  difficulties?: readonly WaveDifficulty[];
 }
 
 export interface BossPartDef {
@@ -288,7 +324,7 @@ export interface BuildingPlacement {
 export interface RiskCrateSpawn {
   t: number;
   x: number;
-  difficulties: readonly ('easy' | 'medium' | 'hard')[];
+  difficulties: readonly WaveDifficulty[];
 }
 
 export interface StageData {
@@ -296,6 +332,8 @@ export interface StageData {
   id: string;
   /** Shown in the STAGE intro banner and the pause menu. */
   label: string;
+  /** Story name, drawn on the stage card and the debug stage list. */
+  name: string;
   stage: number;
   scrollSpeed: number;
   warningAt: number;

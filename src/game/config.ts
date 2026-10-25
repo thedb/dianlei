@@ -402,6 +402,19 @@ export const ORBIT_EXIT_SPEED = 90;
 /** Side-entry arc radius before the dive */
 export const SIDE_ARC_RADIUS = 140;
 
+/**
+ * Rear diagonal entry (stage 2 wave table §3.3).
+ * Born just outside the left or right edge and below the player's park,
+ * then a straight climb inward. Shots wait until x is on the field, so a
+ * ship that starts under the screen edge does not fire off-screen.
+ * Spawn x stays inside the cull box (−120..480, −120..700).
+ */
+export const REAR_DIAG_SPAWN_X_LEFT = -16;
+export const REAR_DIAG_SPAWN_X_RIGHT = LOGICAL_W + 16;
+/** Inclusive x window. Outside it, `rear_diag` does not advance its fire clock. */
+export const REAR_DIAG_FIRE_X_MIN = 24;
+export const REAR_DIAG_FIRE_X_MAX = LOGICAL_W - 24;
+
 /** V-dive wings leave on this diagonal (degrees) */
 export const V_DIVE_EXIT_DEG = 45;
 
@@ -988,6 +1001,13 @@ export const TIEBAO_OVERLOAD_CRATE_EVERY = 2.2 * TIEBAO_RATE_SCALE;
 
 export const TIEBAO_DEATH_EXPLOSIONS = 8;
 export const TIEBAO_DEATH_DURATION = 2.8;
+
+/**
+ * Black card between a cleared stage and the next one, seconds.
+ * A normal stage clear (not 挑战 Boss) holds this long, then starts the
+ * next stage at t = 0. The last stage still opens the result screen.
+ */
+export const STAGE_CARD_TIME = 3;
 
 /** Opening cards, seconds from stage start (0:00–0:05). */
 export const INTRO_STAGE_UNTIL = 1.6;

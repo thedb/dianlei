@@ -3,7 +3,9 @@
  *
  * Each difficulty is a profile with several knobs. Today only `hpScale` and
  * `bossGates` differ; bullet speed, fire rate, and drop rules are wired slots
- * that every profile leaves at the authored values.
+ * that every profile leaves at the authored values. Stage 2's extra ships and
+ * hotter patterns live on the wave table (`countByDifficulty`, `fireByDifficulty`),
+ * not on `fireRateScale` or `bulletSpeedScale`.
  *
  * The HP scale is one multiply, applied to enemies, buildings, and boss parts.
  * It is not rounded, so a 3 HP fighter becomes 3.45 on Medium.

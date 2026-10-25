@@ -17,7 +17,7 @@ import {
 } from './widgets';
 
 export type DebugPanelAction =
-  'close' | 'boss' | 'weaponTest' | 'mapPreview' | 'toggleDebug' | null;
+  'close' | 'stage' | 'boss' | 'weaponTest' | 'mapPreview' | 'toggleDebug' | null;
 
 const BUTTON_W = 220;
 const BUTTON_H = 44;
@@ -33,14 +33,16 @@ export function debugPanelButton(index: number): Rect {
   };
 }
 
-export const DEBUG_BOSS_BUTTON = debugPanelButton(0);
-export const DEBUG_MODE_BUTTON = debugPanelButton(1);
-export const DEBUG_WEAPON_BUTTON = debugPanelButton(2);
-export const DEBUG_MAP_BUTTON = debugPanelButton(3);
-export const DEBUG_CLOSE_BUTTON = debugPanelButton(4);
+export const DEBUG_STAGE_BUTTON = debugPanelButton(0);
+export const DEBUG_BOSS_BUTTON = debugPanelButton(1);
+export const DEBUG_MODE_BUTTON = debugPanelButton(2);
+export const DEBUG_WEAPON_BUTTON = debugPanelButton(3);
+export const DEBUG_MAP_BUTTON = debugPanelButton(4);
+export const DEBUG_CLOSE_BUTTON = debugPanelButton(5);
 
-const PANEL: Rect = { x: 40, y: 168, w: LOGICAL_W - 80, h: 336 };
+const PANEL: Rect = { x: 40, y: 148, w: LOGICAL_W - 80, h: 400 };
 const BUTTONS = [
+  DEBUG_STAGE_BUTTON,
   DEBUG_BOSS_BUTTON,
   DEBUG_MODE_BUTTON,
   DEBUG_WEAPON_BUTTON,
@@ -49,10 +51,11 @@ const BUTTONS = [
 ] as const;
 
 function actionFor(index: number): DebugPanelAction {
-  if (index === 0) return 'boss';
-  if (index === 1) return 'toggleDebug';
-  if (index === 2) return 'weaponTest';
-  if (index === 3) return 'mapPreview';
+  if (index === 0) return 'stage';
+  if (index === 1) return 'boss';
+  if (index === 2) return 'toggleDebug';
+  if (index === 3) return 'weaponTest';
+  if (index === 4) return 'mapPreview';
   return 'close';
 }
 
@@ -91,6 +94,7 @@ export function createDebugPanel(): DebugPanel {
       drawPanel(ctx, PANEL);
       drawText(ctx, '调试', LOGICAL_W / 2, PANEL.y + 28, 20, UI_COLORS.accent, 'center');
       const labels = [
+        '关卡选择',
         '挑战 Boss',
         `调试模式 ${debugOn ? '开' : '关'}`,
         '武器测试',
