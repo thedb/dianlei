@@ -39,10 +39,10 @@ const COUNTS = {
     bomber: 3,
     drone: 6,
     tank: 16,
-    factory_aa: 10,
+    factory_aa: 6,
     missile_car: 2,
-    total: 128,
-    score: 40000,
+    total: 124,
+    score: 35200,
   },
   medium: {
     small: 107,
@@ -51,10 +51,10 @@ const COUNTS = {
     bomber: 3,
     drone: 8,
     tank: 18,
-    factory_aa: 11,
+    factory_aa: 7,
     missile_car: 2,
-    total: 168,
-    score: 45900,
+    total: 164,
+    score: 41100,
   },
   hard: {
     small: 128,
@@ -63,10 +63,10 @@ const COUNTS = {
     bomber: 3,
     drone: 8,
     tank: 22,
-    factory_aa: 11,
+    factory_aa: 7,
     missile_car: 3,
-    total: 196,
-    score: 49500,
+    total: 192,
+    score: 44700,
   },
 } as const;
 
@@ -402,9 +402,9 @@ describe('stage 2 waves', () => {
     expect(once(hard).filter((spawn) => spawn.fire.kind === 'aimed1')).toHaveLength(1);
 
     const aa = (spawns: SpawnRequest[]) => spawns.filter((spawn) => spawn.type === 'factory_aa');
-    expect(aa(easy)).toHaveLength(10);
-    expect(aa(medium)).toHaveLength(11);
-    expect(aa(hard)).toHaveLength(11);
+    expect(aa(easy)).toHaveLength(6);
+    expect(aa(medium)).toHaveLength(7);
+    expect(aa(hard)).toHaveLength(7);
     expect(easy.some((spawn) => spawn.type === 'turret2')).toBe(false);
     expect(
       aa(easy).every((spawn) => spawn.fire.kind === 'pattern' && spawn.fire.interval === 1.65)
@@ -427,17 +427,14 @@ describe('stage 2 waves', () => {
 
     const waveById = (id: string) => stage.waves.find((wave) => wave.id === id)!;
     const openGuns = waveById('W30').groups.filter((group) => group.enemy === 'factory_aa');
-    expect(waveById('W30').t).toBe(4);
+    expect(waveById('W30').t).toBe(0);
     expect(openGuns.map((group) => [group.xs[0], group.y])).toEqual([
-      [44, 56],
-      [96, 132],
-      [58, 220],
-      [124, 292],
-      [236, 44],
-      [312, 108],
-      [268, 188],
-      [332, 268],
+      [44, -24],
+      [332, -32],
+      [124, -40],
+      [236, -48],
     ]);
+    expect(openGuns.every((group) => (group.y ?? 0) <= -16)).toBe(true);
     expect(openGuns.every((group) => (group.xs[0] ?? 0) <= 130 || (group.xs[0] ?? 0) >= 230)).toBe(
       true
     );
@@ -452,6 +449,11 @@ describe('stage 2 waves', () => {
       tankCount('W30', 'medium'),
       tankCount('W30', 'hard'),
     ]).toEqual([2, 3, 4]);
+    expect(
+      waveById('W30')
+        .groups.filter((group) => group.enemy === 'tank')
+        .every((group) => group.delay === 1.2)
+    ).toBe(true);
     expect(waveById('W31').t).toBe(61);
     expect([
       tankCount('W31', 'easy'),
@@ -512,7 +514,7 @@ describe('stage 2 risk crates', () => {
     scheduler.setPowerLevel(3);
     const requests: SpawnRequest[] = [];
     for (let i = 0; i < 130; i++) requests.push(...scheduler.update(1));
-    expect(scheduler.getDebugInfo().spawned).toBe(128);
+    expect(scheduler.getDebugInfo().spawned).toBe(124);
     const crates = requests.filter((spawn) => spawn.type === 'risk_crate');
     expect(crates).toHaveLength(1);
     expect(crates[0]).toMatchObject({

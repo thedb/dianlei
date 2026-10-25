@@ -280,7 +280,7 @@ export interface BossDef {
   hull: { w: number; h: number };
   parts: BossPartDef[];
   phases: BossPhaseDef[];
-  /** Score per enemy bullet converted when a phase breaks. */
+  /** Unused. Phase changes and death do not convert or clear enemy bullets. */
   bulletsToScore: number;
   death: {
     duration: number;

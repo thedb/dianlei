@@ -109,7 +109,7 @@ function toPhase2(): BossRuntime {
   const right = bossPart(boss, 'turretR')!;
   resolveBossBullet(boss, { x: left.worldX, y: left.worldY, w: 4, h: 12 }, left.hp);
   const ev = resolveBossBullet(boss, { x: right.worldX, y: right.worldY, w: 4, h: 12 }, right.hp);
-  expect(ev.convertBullets).toBe(true);
+  expect(ev.convertBullets).toBe(false);
   updateBoss(boss, TRANSITION);
   return boss;
 }
@@ -295,7 +295,7 @@ describe('boss phases', () => {
       { x: right.worldX, y: right.worldY, w: 4, h: 12 },
       right.hp
     );
-    expect(transition.convertBullets).toBe(true);
+    expect(transition.convertBullets).toBe(false);
     expect(transition.score).toBe(5000);
     expect(boss.phase).toBe('transition');
     expect(boss.invulnerable).toBe(true);
@@ -407,7 +407,7 @@ describe('boss phases', () => {
     const core = bossPart(boss, 'core')!;
     const death = resolveBossBullet(boss, { x: core.worldX, y: core.worldY, w: 4, h: 12 }, core.hp);
     expect(death.score).toBe(30000);
-    expect(death.clearBullets).toBe(true);
+    expect(death.clearBullets).toBe(false);
     expect(death.shake?.intensity).toBeGreaterThan(0);
     expect(boss.phase).toBe('death');
 
@@ -531,7 +531,7 @@ describe('boss difficulty phases', () => {
 
     const broke = killCore(boss);
     expect(broke.score).toBe(0);
-    expect(broke.convertBullets).toBe(true);
+    expect(broke.convertBullets).toBe(false);
     expect(boss.phase).toBe('transition3');
     expect(boss.invulnerable).toBe(true);
     expect(bossPart(boss, 'core')!.hp).toBeCloseTo(240 * 1.3);

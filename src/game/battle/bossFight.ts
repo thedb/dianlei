@@ -1,6 +1,6 @@
 /**
  * Stage boss glue: arms the difficulty-scaled `BossDef`, applies the runner's
- * events (score, shots, bullet clears, explosions, shake) to the battle, and
+ * events (score, shots, explosions, shake) to the battle, and
  * runs the victory fly-off that hands over to the result screen.
  */
 
@@ -16,7 +16,7 @@ import {
 } from '@/game/systems/boss';
 import { nextStageId } from '@/game/levels/registry';
 import { stepVictoryExit, victoryExitBlocksInput } from '@/game/systems/victoryExit';
-import { clearEnemyBullets, publishRun, runDifficulty, runProfile, type Battle } from './context';
+import { publishRun, runDifficulty, runProfile, type Battle } from './context';
 import { spawnExplosion, triggerShake } from './fx';
 import { isPlayerVulnerable, killPlayer, neutralizePlayerPose, snapshotRun } from './player';
 
@@ -34,9 +34,8 @@ export function spawnBoss(b: Battle): BossRuntime {
 
 export function applyBossEvents(b: Battle, ev: BossEvents): void {
   if (ev.score) b.state.score += ev.score;
-  if (ev.convertBullets) {
-    b.state.score += clearEnemyBullets(b) * b.stage.boss.bulletsToScore;
-  }
+  // Sheds, phase changes, rail moves, and death must not touch the pool.
+  // The B bomb is the only gameplay clear (`activateBomb`).
   for (const shot of ev.shots) {
     executeFirePattern(shot.fire, shot.x, shot.y, b.player.x, b.player.y, b.spawner, {
       rotation: shot.rotation,
@@ -57,7 +56,6 @@ export function applyBossEvents(b: Battle, ev: BossEvents): void {
       b.spawner.spawnBullet(bolt.x, bolt.y, bolt.vx, bolt.vy, bolt.type, bolt.homing);
     }
   }
-  if (ev.clearBullets) b.enemyBullets.releaseAll();
   for (const boom of ev.explosions) {
     spawnExplosion(b.fx, boom.x, boom.y, boom.size, boom.delay, boom.frameTime);
   }

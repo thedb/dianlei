@@ -4,7 +4,7 @@
  * v1's "0 new models" lock is revoked. This table adds `factory_aa`,
  * `step_slide`, and `dive_once`, and keeps `rear_diag` as the signature.
  * Easy is the base count and fire. Medium and hard add ships or swap patterns
- * on the same clock (128 / 168 / 196, plus the W21 relief ship when main power
+ * on the same clock (124 / 164 / 192, plus the W21 relief ship when main power
  * is below max). `STAGE2_WARNING_AT` stays 118. 铁堡 still enters at 123.
  *
  * Clear-wave rewards and the timed supply ship are not implemented (§5.3).
@@ -404,26 +404,22 @@ export const stage2: StageData = {
   ],
 
   waves: [
-    // Outskirts from 0:04. Guns are already on screen; the center road stays open.
+    // Guns spawn just above the screen at t=0 and scroll in. Center road stays open.
     {
       id: 'W30',
-      t: 4,
+      t: 0,
       section: 'outskirts',
       mvp: true,
       groups: [
-        // Shoulders of the airfield spine, not a mirror, none on x 150–210.
-        aaPlaced(44, 56, 0.4),
-        aaPlaced(96, 132, 0.72),
-        aaPlaced(58, 220, 1.0),
-        aaPlaced(124, 292, 1.28),
-        aaPlaced(236, 44, 0.52),
-        aaPlaced(312, 108, 0.84),
-        aaPlaced(268, 188, 1.12),
-        aaPlaced(332, 268, 1.36),
-        tank('left', 48, 200, aimed(2.4), TANK_OPEN),
-        tank('right', 312, 280, aimed(2.4), TANK_OPEN),
-        tank('left', 72, 140, aimed(2.4), TANK_OPEN, MEDIUM_HARD),
-        tank('right', 288, 360, aimed(2.4), TANK_OPEN, HARD),
+        // Four shoulders, not a mirror, none on x 150–210. Centers are above y=0.
+        aaPlaced(44, -24, 0.45),
+        aaPlaced(332, -32, 0.75),
+        aaPlaced(124, -40, 1.05),
+        aaPlaced(236, -48, 1.3),
+        { ...tank('left', 48, 200, aimed(2.4), TANK_OPEN), delay: 1.2 },
+        { ...tank('right', 312, 280, aimed(2.4), TANK_OPEN), delay: 1.2 },
+        { ...tank('left', 72, 140, aimed(2.4), TANK_OPEN, MEDIUM_HARD), delay: 1.2 },
+        { ...tank('right', 288, 360, aimed(2.4), TANK_OPEN, HARD), delay: 1.2 },
       ],
     },
     {
