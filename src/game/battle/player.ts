@@ -191,7 +191,7 @@ export function killPlayer(b: Battle): void {
   neutralizePlayerPose(player);
   player.velocityY = 0;
 
-  // Breathing room for the next ship
+  // Breathing room for the next ship. Boss sheds and phase changes do not do this.
   clearEnemyBullets(b);
 
   // The ship sprite stops drawing this frame; only the explosion remains

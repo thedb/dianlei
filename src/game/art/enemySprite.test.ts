@@ -14,6 +14,7 @@ const TYPES: EnemyType[] = [
   'drone',
   'tank',
   'turret2',
+  'factory_aa',
   'missile_car',
   'risk_crate',
 ];
@@ -66,7 +67,7 @@ describe('enemy sprites', () => {
 
   it('keeps a readable silhouette, red rim, and rear nozzles', () => {
     const air: EnemyType[] = ['small', 'medium', 'interceptor', 'bomber'];
-    const ground: EnemyType[] = ['tank', 'turret2', 'missile_car'];
+    const ground: EnemyType[] = ['tank', 'turret2', 'factory_aa', 'missile_car'];
     const reds = new Set([
       COLOR.ENEMY_BLACK,
       COLOR.ENEMY_DARK_RED,
@@ -154,6 +155,26 @@ describe('enemy sprites', () => {
     expect(
       ring.filter((c) => c === COLOR.PLAYER_CYAN || c === COLOR.PLAYER_MED_CYAN).length
     ).toBeGreaterThanOrEqual(4);
+  });
+
+  it('draws factory AA as a concrete pad with a hazard lip, distinct from the dual turret', () => {
+    const aa = buildEnemyArt('factory_aa');
+    const turret = buildEnemyArt('turret2');
+    expect(aa.pixels).toHaveLength(32);
+    expect(aa.pixels[0]).toHaveLength(32);
+    expect(aa.nozzles).toHaveLength(0);
+    expect(symmetric(aa.pixels)).toBe(true);
+    let yellow = 0;
+    let differ = 0;
+    for (let y = 0; y < 32; y++) {
+      for (let x = 0; x < 32; x++) {
+        if (aa.pixels[y]![x] === COLOR.EXPLOSION_YELLOW) yellow++;
+        if (aa.pixels[y]![x] !== turret.pixels[y]![x]) differ++;
+      }
+    }
+    expect(yellow).toBeGreaterThan(8);
+    expect(differ).toBeGreaterThan(40);
+    expect(rimCount(aa.pixels, COLOR.ENEMY_RED)).toBeGreaterThan(12);
   });
 });
 

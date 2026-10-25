@@ -8,11 +8,13 @@
  */
 
 import {
+  FACTORY_AA_HP,
   RISK_CRATE_HP,
   RISK_CRATE_SHIELD,
   SCORE_BOMBER,
   SCORE_DRONE,
   SCORE_DUAL_TURRET,
+  SCORE_FACTORY_AA,
   SCORE_INTERCEPTOR,
   SCORE_MEDIUM_FIGHTER,
   SCORE_MISSILE_CAR,
@@ -30,6 +32,7 @@ export type EnemyType =
   | 'drone'
   | 'tank'
   | 'turret2'
+  | 'factory_aa'
   | 'missile_car'
   | 'risk_crate';
 
@@ -144,6 +147,18 @@ export const ENEMY_DEFS: Readonly<Record<EnemyType, EnemyDef>> = {
     category: 'ground',
     deathBursts: [[8, -4, 0.05]],
     barrel: 'twin',
+  },
+  /** Stage-2 factory flak. One code-drawn barrel, a short parallel burst. */
+  factory_aa: {
+    hp: FACTORY_AA_HP,
+    score: SCORE_FACTORY_AA,
+    width: 32,
+    height: 32,
+    hitRadius: 14,
+    size: 'medium',
+    category: 'ground',
+    deathBursts: [[8, -4, 0.05]],
+    barrel: 'single',
   },
   missile_car: {
     hp: 12,

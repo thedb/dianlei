@@ -39,9 +39,9 @@ import {
 import { matePixels, matePlacements } from '@/game/systems/mate';
 import { ENEMY_DEFS } from '@/game/entities/enemyDefs';
 import {
+  enemyTravelHeading,
   headingSpriteRotation,
   isGroundEnemy,
-  rearDiagHeading,
   type Enemy,
 } from '@/game/entities/enemy';
 import { isItemFlashing } from '@/game/entities/item';
@@ -70,12 +70,13 @@ function drawEnemy(
   const sheet = assets.enemies.byType[enemy.type];
   const frame = enemy.hitFlashTimer > 0 ? sheet.hitFlash : sheet.idle;
 
-  // Nose-down art rotated onto the climb. Flames stay on the tail.
+  // Nose-down art rotated onto the travel heading. Flames stay on the tail.
   // Stage 1 never takes this branch, so its draw order stays the one below.
-  if (enemy.move.kind === 'rear_diag') {
+  const travel = enemyTravelHeading(enemy);
+  if (travel !== null) {
     ctx.save();
     ctx.translate(ex, ey);
-    ctx.rotate(headingSpriteRotation(rearDiagHeading(enemy.move)));
+    ctx.rotate(headingSpriteRotation(travel));
     for (const nozzle of sheet.nozzles) {
       drawEnemyFlame(ctx, nozzle.x, nozzle.y, time);
     }

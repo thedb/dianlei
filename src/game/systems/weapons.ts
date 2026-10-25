@@ -1,14 +1,15 @@
 /**
  * Turns an enemy's Fire config into bullets through the shared pattern library.
- * Burst patterns (aimed3burst) repeat AIMED_BURST_GAP apart; rings turn by `rotStep`;
- * barrel patterns (fixed2) follow the shooter's aim angle.
+ * Burst patterns (aimed3burst, factory-AA parallel) repeat AIMED_BURST_GAP apart;
+ * rings turn by `rotStep`; barrel patterns follow the shooter's aim angle.
+ * A burst volley also waits out `enemyFireClockHeld`, so it cannot finish off-field.
  * side_arc ships with a single aimed1 and no interval fire once, at the arc apex.
  */
 
 import type { Enemy } from '@/game/entities/enemy';
-import { shouldEnemyFire } from '@/game/entities/enemy';
+import { enemyFireClockHeld, shouldEnemyFire } from '@/game/entities/enemy';
 import { executeFirePattern, type BulletSpawner } from '@/game/entities/enemyBullet';
-import { fireBurst, fireRotStep, fireUsesBarrel } from '@/game/systems/danmaku';
+import { fireBurst, firePattern, fireRotStep, fireUsesBarrel } from '@/game/systems/danmaku';
 import { AIMED_BURST_GAP, AIMED_MIN_DIST } from '@/game/config';
 
 function farEnough(enemy: Enemy, playerX: number, playerY: number): boolean {
@@ -45,8 +46,13 @@ export function updateEnemyWeapons(
     if (enemy.burstTimer >= AIMED_BURST_GAP) {
       enemy.burstTimer -= AIMED_BURST_GAP;
       enemy.burstLeft--;
-      if (enemy.y >= 8 && farEnough(enemy, playerX, playerY)) {
-        executeFirePattern(enemy.fire, enemy.x, enemy.y, playerX, playerY, spawner);
+      const spec = firePattern(enemy.fire);
+      const tooClose = spec.minDist === true && !farEnough(enemy, playerX, playerY);
+      if (!enemyFireClockHeld(enemy) && !tooClose) {
+        const aimAngle = fireUsesBarrel(enemy.fire) ? enemy.aimAngle : undefined;
+        executeFirePattern(enemy.fire, enemy.x, enemy.y, playerX, playerY, spawner, {
+          ...(aimAngle === undefined ? {} : { aimAngle }),
+        });
       }
     }
     return;

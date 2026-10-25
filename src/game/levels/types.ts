@@ -16,6 +16,8 @@ export type MoveKind =
   | 'hover'
   | 'side_arc'
   | 'rear_diag'
+  | 'step_slide'
+  | 'dive_once'
   | 'orbit'
   | 'slow_push'
   | 'ground';
@@ -39,6 +41,17 @@ export type Move =
    * convention as `straight`: left flies at `180 - bearing`, right at `180 + bearing`.
    */
   | { kind: 'rear_diag'; side: 'left' | 'right'; y0: number; bearing: number; speed: number }
+  /**
+   * Staircase: `steps` pairs of a downward leg (`drop`) and a sideways leg
+   * (`run`, positive = right), then straight down off the bottom.
+   * 1 step reads down → side → down. The nose follows the current leg.
+   */
+  | { kind: 'step_slide'; speed: number; drop: number; run: number; steps: 1 | 2 }
+  /**
+   * One straight dive. `angle` matches `straight`: 0 is down, positive drifts
+   * right. No stop, no peel, no climb.
+   */
+  | { kind: 'dive_once'; speed: number; angle: number }
   | { kind: 'orbit'; anchor: { x: number; y: number }; r: number; period: number; hold: number }
   | { kind: 'slow_push'; stopY: number; hold: number }
   | { kind: 'ground'; vx?: number; entry?: GroundEntry };
@@ -267,7 +280,7 @@ export interface BossDef {
   hull: { w: number; h: number };
   parts: BossPartDef[];
   phases: BossPhaseDef[];
-  /** Score per enemy bullet converted when a phase breaks. */
+  /** Unused. Phase changes and death do not convert or clear enemy bullets. */
   bulletsToScore: number;
   death: {
     duration: number;

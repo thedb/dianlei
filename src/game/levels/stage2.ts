@@ -1,17 +1,20 @@
 /**
- * Stage 2 mid-stage from docs/电雷_第二关波次表_v1.md.
+ * Stage 2 mid-stage from docs/电雷_第二关波次表_v2.md.
  *
+ * v1's "0 new models" lock is revoked. This table adds `factory_aa`,
+ * `step_slide`, and `dive_once`, and keeps `rear_diag` as the signature.
  * Easy is the base count and fire. Medium and hard add ships or swap patterns
- * on the same clock (122 / 159 / 186, plus the W21 relief ship when main power
+ * on the same clock (124 / 164 / 192, plus the W21 relief ship when main power
  * is below max). `STAGE2_WARNING_AT` stays 118. 铁堡 still enters at 123.
  *
  * Clear-wave rewards and the timed supply ship are not implemented (§5.3).
  * W21 is the `powerBelowMax` relief carrier, the same rule as stage 1 W27.
- * It is not that supply ship.
+ * It is not that supply ship. No W-path, X-cross formation, or boomerang.
  */
 
 import {
   BG_SCROLL_SPEED,
+  FIXED2_SEPARATION,
   REAR_DIAG_SPAWN_X_LEFT,
   REAR_DIAG_SPAWN_X_RIGHT,
   STAGE2_WARNING_AT,
@@ -183,6 +186,21 @@ const TANK_WOODS: SpawnGroup['fireByDifficulty'] = {
   hard: aimed(1.7),
 };
 
+const TANK_OPEN: SpawnGroup['fireByDifficulty'] = {
+  medium: aimed(2.1),
+  hard: aimed(1.8),
+};
+
+const TANK_MID: SpawnGroup['fireByDifficulty'] = {
+  medium: aimed(2.0),
+  hard: aimed(1.7),
+};
+
+const TANK_LATE: SpawnGroup['fireByDifficulty'] = {
+  medium: aimed(1.8),
+  hard: aimed(1.6),
+};
+
 /** Easy and medium fire one aimed shot at the arc apex. Hard replaces it. */
 const ARC_APEX: Fire = { kind: 'aimed1', maxShots: 1 };
 
@@ -239,20 +257,136 @@ const W20_BY: NonNullable<SpawnGroup['fireByDifficulty']> = {
 
 function columnSine(
   x: number,
+  count: number,
+  countBy: SpawnGroup['countByDifficulty'],
   interval: number,
   move: Extract<SpawnGroup['move'], { kind: 'sine' }>,
   fireOnly?: readonly number[]
 ): SpawnGroup {
   const group: SpawnGroup = {
     enemy: 'small',
-    count: 7,
-    countByDifficulty: { medium: 8, hard: 9 },
+    count,
     xs: [x],
     interval,
     move,
     fire: { kind: 'none' },
   };
+  if (countBy) group.countByDifficulty = countBy;
   if (fireOnly) group.fireOnly = fireOnly;
+  return group;
+}
+
+/**
+ * Parallel pair along the barrel, three volleys `AIMED_BURST_GAP` (0.12s) apart.
+ * `interval` is the wait before the next trio, not a machine-gun stream.
+ */
+function aaBurst(interval: number, firstDelay = 0.55): Fire {
+  return {
+    kind: 'pattern',
+    pattern: {
+      shape: 'parallel',
+      count: 2,
+      gap: FIXED2_SEPARATION,
+      aim: 'barrel',
+      bullet: 'small',
+      burst: 3,
+    },
+    interval,
+    firstDelay,
+  };
+}
+
+/** One on-screen factory gun. Each difficulty writes its own interval. */
+function aaPlaced(x: number, y: number, firstDelay: number): SpawnGroup {
+  return {
+    enemy: 'factory_aa',
+    count: 1,
+    xs: [x],
+    y,
+    move: { kind: 'ground' },
+    fire: aaBurst(1.65, firstDelay),
+    fireByDifficulty: {
+      medium: aaBurst(1.4, firstDelay),
+      hard: aaBurst(1.15, firstDelay),
+    },
+  };
+}
+
+/** One 4-bullet fan. `maxShots` 1, so the ship does not keep spraying. */
+function quadOnce(spread: number, firstDelay: number): Fire {
+  return {
+    kind: 'pattern',
+    pattern: {
+      shape: 'fan',
+      count: 4,
+      aim: 'player',
+      bullet: 'small',
+      minDist: true,
+      spreadDeg: spread,
+    },
+    spread,
+    maxShots: 1,
+    firstDelay,
+  };
+}
+
+const AA_EASY = aaBurst(1.65);
+const AA_MEDIUM = aaBurst(1.4);
+const AA_HARD = aaBurst(1.15);
+
+function stepLane(opts: {
+  x: number;
+  run: number;
+  count: number;
+  countBy?: SpawnGroup['countByDifficulty'];
+  speed: number;
+  drop: number;
+  steps: 1 | 2;
+  interval: number;
+  fire?: Fire;
+  fireBy?: SpawnGroup['fireByDifficulty'];
+  fireOnly?: readonly number[];
+  difficulties?: readonly WaveDifficulty[];
+}): SpawnGroup {
+  const group: SpawnGroup = {
+    enemy: 'small',
+    count: opts.count,
+    xs: [opts.x],
+    interval: opts.interval,
+    move: {
+      kind: 'step_slide',
+      speed: opts.speed,
+      drop: opts.drop,
+      run: opts.run,
+      steps: opts.steps,
+    },
+    fire: opts.fire ?? { kind: 'none' },
+  };
+  if (opts.countBy) group.countByDifficulty = opts.countBy;
+  if (opts.fireBy) group.fireByDifficulty = opts.fireBy;
+  if (opts.fireOnly) group.fireOnly = opts.fireOnly;
+  if (opts.difficulties) group.difficulties = opts.difficulties;
+  return group;
+}
+
+function diveShip(opts: {
+  x: number;
+  angle: number;
+  delay: number;
+  speed: number;
+  fireBy?: SpawnGroup['fireByDifficulty'];
+  difficulties?: readonly WaveDifficulty[];
+}): SpawnGroup {
+  const group: SpawnGroup = {
+    enemy: 'small',
+    count: 1,
+    xs: [opts.x],
+    delay: opts.delay,
+    move: { kind: 'dive_once', speed: opts.speed, angle: opts.angle },
+    fire: { kind: 'none' },
+  };
+  if (opts.fireBy) group.fireByDifficulty = opts.fireBy;
+  if (opts.difficulties) group.difficulties = opts.difficulties;
   return group;
 }
 
@@ -270,24 +404,22 @@ export const stage2: StageData = {
   ],
 
   waves: [
-    // Outskirts 0:06–0:44. One breather at 0:45 before the runway.
+    // Guns spawn just above the screen at t=0 and scroll in. Center road stays open.
     {
-      id: 'W01',
-      t: 6,
+      id: 'W30',
+      t: 0,
       section: 'outskirts',
       mvp: true,
       groups: [
-        {
-          enemy: 'small',
-          count: 8,
-          countByDifficulty: { medium: 9, hard: 10 },
-          xs: [180],
-          interval: 0.26,
-          move: { kind: 'straight', speed: 170 },
-          fire: { kind: 'none' },
-          fireOnly: [1, 3, 5, 7],
-          fireByDifficulty: { hard: aimedOnce() },
-        },
+        // Four shoulders, not a mirror, none on x 150–210. Centers are above y=0.
+        aaPlaced(44, -24, 0.45),
+        aaPlaced(332, -32, 0.75),
+        aaPlaced(124, -40, 1.05),
+        aaPlaced(236, -48, 1.3),
+        { ...tank('left', 48, 200, aimed(2.4), TANK_OPEN), delay: 1.2 },
+        { ...tank('right', 312, 280, aimed(2.4), TANK_OPEN), delay: 1.2 },
+        { ...tank('left', 72, 140, aimed(2.4), TANK_OPEN, MEDIUM_HARD), delay: 1.2 },
+        { ...tank('right', 288, 360, aimed(2.4), TANK_OPEN, HARD), delay: 1.2 },
       ],
     },
     {
@@ -295,10 +427,15 @@ export const stage2: StageData = {
       t: 11,
       section: 'outskirts',
       mvp: true,
-      groups: [72, 288].map((x) => ({
-        ...columnSine(x, 0.24, { kind: 'sine', vy: 150, amp: 48, period: 1.6 }),
+      groups: [100, 260].map((x) => ({
+        ...columnSine(x, 4, { medium: 5, hard: 5 }, 0.24, {
+          kind: 'sine',
+          vy: 140,
+          amp: 32,
+          period: 1.8,
+        }),
         fireByDifficulty: { medium: aimedOnce(), hard: burstOnce() },
-        fireOnlyByDifficulty: { medium: [1, 3], hard: [1, 3, 5] },
+        fireOnlyByDifficulty: { medium: [1, 3], hard: [1, 3] },
       })),
     },
     {
@@ -309,13 +446,15 @@ export const stage2: StageData = {
       groups: [
         {
           enemy: 'medium',
-          count: 1,
-          xs: [180],
-          move: { kind: 'hover', stopY: 140, hold: 3.5 },
-          fire: fan('fan3', 36, 1.3, 0.7),
+          count: 2,
+          xs: [104, 256],
+          interval: 1.4,
+          fireStagger: 0.5,
+          move: { kind: 'hover', stopY: 125, hold: 5 },
+          fire: quadOnce(52, 0.9),
           fireByDifficulty: {
-            medium: fan('fan3', 40, 1.15, 0.7),
-            hard: fan('fan5', 36, 1.05, 0.7),
+            medium: quadOnce(40, 0.75),
+            hard: quadOnce(28, 0.6),
           },
           drops: [{ index: 0, item: 'P' }],
         },
@@ -334,25 +473,43 @@ export const stage2: StageData = {
     },
     {
       id: 'W05',
-      t: 26,
+      t: 22,
       section: 'outskirts',
       mvp: true,
       groups: [
         {
           enemy: 'small',
-          count: 8,
-          countByDifficulty: { medium: 10, hard: 12 },
-          xs: [72, 108, 144, 180, 216, 252, 288, 324, 48, 312, 36, 348],
+          count: 6,
+          countByDifficulty: { medium: 8, hard: 8 },
+          xs: [72, 108, 144, 180, 216, 252, 288, 324],
           interval: 0.22,
-          move: { kind: 'v_dive', speed: 155, stopY: 200 },
+          move: { kind: 'v_dive', speed: 170, stopY: 200 },
           fire: { kind: 'aimed1', maxShots: 1, atY: 200 },
           fireByDifficulty: { hard: { kind: 'aimed3burst', maxShots: 1, atY: 200 } },
         },
       ],
     },
     {
+      id: 'W23',
+      t: 28,
+      section: 'outskirts',
+      mvp: true,
+      groups: [
+        stepLane({
+          x: 180,
+          run: 48,
+          count: 4,
+          countBy: { medium: 5, hard: 6 },
+          speed: 130,
+          drop: 72,
+          steps: 1,
+          interval: 0.4,
+        }),
+      ],
+    },
+    {
       id: 'W06',
-      t: 31,
+      t: 34,
       section: 'outskirts',
       mvp: true,
       groups: outskirtsArcs(),
@@ -364,22 +521,22 @@ export const stage2: StageData = {
       mvp: false,
       groups: [
         {
-          enemy: 'turret2',
+          enemy: 'factory_aa',
           count: 1,
           xs: [180],
           difficulties: EASY,
           move: { kind: 'ground' },
-          fire: { kind: 'fixed2', interval: 1.8 },
+          fire: AA_EASY,
         },
         {
-          enemy: 'turret2',
+          enemy: 'factory_aa',
           count: 2,
-          xs: [72, 288],
+          xs: [96, 264],
           difficulties: MEDIUM_HARD,
-          fireStagger: 0.4,
+          fireStagger: 0.45,
           move: { kind: 'ground' },
-          fire: { kind: 'fixed2', interval: 1.5 },
-          fireByDifficulty: { hard: { kind: 'fixed2', interval: 1.3 } },
+          fire: AA_MEDIUM,
+          fireByDifficulty: { hard: AA_HARD },
         },
         tank('bottomLeft', 72, undefined, aimed(2.2), TANK_EARLY),
         tank('bottomRight', 288, undefined, aimed(2.2), TANK_EARLY),
@@ -387,7 +544,7 @@ export const stage2: StageData = {
     },
     {
       id: 'W08',
-      t: 41,
+      t: 43,
       section: 'outskirts',
       mvp: true,
       groups: [
@@ -443,7 +600,7 @@ export const stage2: StageData = {
       ],
     },
 
-    // Runway 0:48–1:36. W22 sits at 1:28, between W16 and W17, hard only.
+    // Runway 0:48–1:36. W22 sits at 1:30, between W16 and W17, hard only.
     {
       id: 'W09',
       t: 48,
@@ -472,15 +629,15 @@ export const stage2: StageData = {
       mvp: true,
       groups: (['topLeft', 'topRight'] as const).map((from) => ({
         enemy: 'small' as const,
-        count: 8,
-        countByDifficulty: { medium: 9, hard: 10 },
+        count: 6,
+        countByDifficulty: { medium: 7, hard: 7 },
         xs: [from === 'topLeft' ? -12 : 372],
         y: 40,
         interval: 0.22,
         move: { kind: 'cross' as const, from, speed: 185 },
         fire: { kind: 'none' as const },
         fireByDifficulty: { medium: aimedOnce(), hard: burstOnce() },
-        fireOnlyByDifficulty: { medium: [2, 5], hard: [1, 3, 5, 7, 9] },
+        fireOnlyByDifficulty: { medium: [2, 5], hard: [1, 3, 5] },
       })),
     },
     {
@@ -491,6 +648,18 @@ export const stage2: StageData = {
       groups: [70, 150, 310, 230].map((x, i) =>
         drone(x, i * 0.35, 32, 4.5, W11_FIRE, W11_BY, i === 3 ? MEDIUM_HARD : undefined)
       ),
+    },
+    {
+      id: 'W31',
+      t: 61,
+      section: 'runway',
+      mvp: false,
+      groups: [
+        tank('left', 64, 160, aimed(2.2), TANK_MID),
+        tank('right', 300, 250, aimed(2.2), TANK_MID),
+        tank('left', 88, 320, aimed(2.2), TANK_MID, MEDIUM_HARD),
+        tank('right', 276, 90, aimed(2.2), TANK_MID, HARD),
+      ],
     },
     {
       id: 'W12',
@@ -510,13 +679,77 @@ export const stage2: StageData = {
           },
           drops: [{ index: 0, item: 'B' }],
         },
-        escort(100, 10, 190, 3, { medium: 4, hard: 4 }, undefined, { hard: aimedOnce() }),
-        escort(260, -10, 190, 3, { medium: 4, hard: 4 }, undefined, { hard: aimedOnce() }),
+        escort(100, 10, 190, 2, { medium: 3, hard: 3 }, undefined, { hard: aimedOnce() }),
+        escort(260, -10, 190, 2, { medium: 3, hard: 3 }, undefined, { hard: aimedOnce() }),
+      ],
+    },
+    {
+      id: 'W25',
+      t: 68,
+      section: 'runway',
+      mvp: true,
+      groups: [
+        stepLane({
+          x: 88,
+          run: 64,
+          count: 3,
+          countBy: { medium: 4, hard: 4 },
+          speed: 160,
+          drop: 56,
+          steps: 2,
+          interval: 0.2,
+          fireBy: { medium: aimedOnce(0.12), hard: burstOnce(0.12) },
+          fireOnly: [1, 3],
+        }),
+        stepLane({
+          x: 272,
+          run: -64,
+          count: 3,
+          countBy: { medium: 4, hard: 4 },
+          speed: 160,
+          drop: 56,
+          steps: 2,
+          interval: 0.2,
+          fireBy: { medium: aimedOnce(0.12), hard: burstOnce(0.12) },
+          fireOnly: [1, 3],
+        }),
+      ],
+    },
+    {
+      id: 'W14',
+      t: 74,
+      section: 'runway',
+      mvp: false,
+      groups: [
+        {
+          enemy: 'missile_car',
+          count: 2,
+          countByDifficulty: { hard: 3 },
+          xs: [60, 300, 180],
+          fireStagger: 0.8,
+          move: { kind: 'ground' },
+          fire: { kind: 'missile', interval: 2.6 },
+          fireByDifficulty: {
+            medium: { kind: 'missile', interval: 2.4 },
+            hard: { kind: 'missile', interval: 2.2 },
+          },
+        },
+        {
+          enemy: 'factory_aa',
+          count: 1,
+          xs: [180],
+          move: { kind: 'ground' },
+          fire: AA_EASY,
+          fireByDifficulty: { medium: AA_MEDIUM, hard: AA_HARD },
+        },
+        // Stay off the shoulder ditches (map columns 7 and 15). x ≥ 240.
+        tank('right', 288, 220, aimed(2.2)),
+        tank('bottomRight', 300, undefined, aimed(2.2)),
       ],
     },
     {
       id: 'W13',
-      t: 70,
+      t: 78,
       section: 'runway',
       mvp: true,
       difficulties: MEDIUM_HARD,
@@ -564,58 +797,68 @@ export const stage2: StageData = {
       ],
     },
     {
-      id: 'W14',
-      t: 75,
-      section: 'runway',
-      mvp: false,
-      groups: [
-        {
-          enemy: 'missile_car',
-          count: 2,
-          countByDifficulty: { hard: 3 },
-          xs: [60, 300, 180],
-          fireStagger: 0.8,
-          move: { kind: 'ground' },
-          fire: { kind: 'missile', interval: 2.6 },
-          fireByDifficulty: {
-            medium: { kind: 'missile', interval: 2.4 },
-            hard: { kind: 'missile', interval: 2.2 },
-          },
-        },
-        {
-          enemy: 'turret2',
-          count: 1,
-          xs: [180],
-          difficulties: MEDIUM_HARD,
-          move: { kind: 'ground' },
-          fire: { kind: 'fixed2', interval: 1.6 },
-          fireByDifficulty: { hard: { kind: 'fixed2', interval: 1.3 } },
-        },
-        // Stay off the shoulder ditches (map columns 7 and 15). x ≥ 240.
-        tank('right', 288, 220, aimed(2.2)),
-        tank('bottomRight', 300, undefined, aimed(2.2)),
-      ],
-    },
-    {
       id: 'W15',
       t: 80,
       section: 'runway',
       mvp: true,
       groups: [64, 296].map((x) => ({
-        ...columnSine(x, 0.22, { kind: 'sine', vy: 125, amp: 72, period: 1.5 }, [1, 3, 5]),
+        ...columnSine(
+          x,
+          5,
+          { medium: 6, hard: 6 },
+          0.22,
+          { kind: 'sine', vy: 125, amp: 64, period: 1.5 },
+          [1, 3]
+        ),
         fireByDifficulty: { medium: aimedOnce(), hard: burstOnce() },
       })),
     },
     {
+      id: 'W26',
+      t: 82,
+      section: 'runway',
+      mvp: true,
+      groups: [
+        diveShip({ x: 100, angle: 12, delay: 0, speed: 230 }),
+        diveShip({
+          x: 180,
+          angle: 0,
+          delay: 0.12,
+          speed: 230,
+          fireBy: { medium: aimedOnce(0.28), hard: aimedOnce(0.28) },
+        }),
+        diveShip({ x: 260, angle: -12, delay: 0.24, speed: 230 }),
+        diveShip({ x: 180, angle: 0, delay: 0.36, speed: 230, difficulties: HARD }),
+      ],
+    },
+    {
+      id: 'W27',
+      t: 84,
+      section: 'runway',
+      mvp: true,
+      difficulties: MEDIUM_HARD,
+      groups: [
+        {
+          enemy: 'small',
+          count: 2,
+          countByDifficulty: { hard: 3 },
+          xs: [150, 210, 180],
+          interval: 0.12,
+          move: { kind: 'dive_once', speed: 260, angle: 0 },
+          fire: { kind: 'none' },
+        },
+      ],
+    },
+    {
       id: 'W16',
-      t: 86,
+      t: 87,
       section: 'runway',
       mvp: true,
       groups: runwayArcs(),
     },
     {
       id: 'W22',
-      t: 88,
+      t: 90,
       section: 'runway',
       mvp: true,
       difficulties: HARD,
@@ -748,6 +991,33 @@ export const stage2: StageData = {
       ],
     },
     {
+      id: 'W28',
+      t: 102,
+      section: 'woods',
+      mvp: true,
+      difficulties: HARD,
+      groups: [
+        stepLane({
+          x: 72,
+          run: 40,
+          count: 2,
+          speed: 170,
+          drop: 64,
+          steps: 1,
+          interval: 0.24,
+        }),
+        stepLane({
+          x: 288,
+          run: -40,
+          count: 2,
+          speed: 170,
+          drop: 64,
+          steps: 1,
+          interval: 0.24,
+        }),
+      ],
+    },
+    {
       id: 'W19',
       t: 104,
       section: 'woods',
@@ -760,6 +1030,22 @@ export const stage2: StageData = {
         tank('right', 288, 240, aimed(2.2), TANK_WOODS),
         tank('bottomLeft', 80, undefined, aimed(2.2), TANK_WOODS),
         tank('bottomRight', 280, undefined, aimed(2.2), TANK_WOODS),
+      ],
+    },
+    {
+      id: 'W29',
+      t: 108,
+      section: 'woods',
+      mvp: true,
+      groups: [
+        {
+          enemy: 'small',
+          count: 3,
+          xs: [120, 180, 240],
+          interval: 0.1,
+          move: { kind: 'dive_once', speed: 260, angle: 0 },
+          fire: { kind: 'none' },
+        },
       ],
     },
     {
@@ -786,8 +1072,19 @@ export const stage2: StageData = {
           fireByDifficulty: W20_BY,
           drops: [{ index: 0, item: 'B' }],
         },
-        escort(70, 10, 200, 3, { hard: 4 }, MEDIUM_HARD),
-        escort(290, -10, 200, 3, { hard: 4 }, MEDIUM_HARD),
+        escort(70, 10, 200, 2, { hard: 3 }, MEDIUM_HARD),
+        escort(290, -10, 200, 2, { hard: 3 }, MEDIUM_HARD),
+      ],
+    },
+    {
+      id: 'W32',
+      t: 112,
+      section: 'woods',
+      mvp: false,
+      groups: [
+        tank('left', 56, 200, aimed(2.0), TANK_LATE),
+        tank('right', 304, 280, aimed(2.0), TANK_LATE),
+        tank('left', 80, 120, aimed(2.0), TANK_LATE, HARD),
       ],
     },
     {
@@ -814,7 +1111,7 @@ export const stage2: StageData = {
   riskCrates: [
     { t: 46, x: 180, difficulties: ['easy'] },
     { t: 46, x: 48, difficulties: ['medium', 'hard'] },
-    { t: 70, x: 220, difficulties: ['hard'] },
+    { t: 78, x: 220, difficulties: ['hard'] },
     { t: 100, x: 312, difficulties: ['medium', 'hard'] },
   ],
 

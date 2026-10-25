@@ -1040,7 +1040,7 @@ describe('铁堡 phases', () => {
     expect(core.score).toBe(0);
     expect(boss.phase).toBe('overloadIn');
     expect(boss.invulnerable).toBe(true);
-    expect(core.convertBullets).toBe(true);
+    expect(core.convertBullets).toBe(false);
 
     const around = world(9);
     for (let i = 0; i < Math.ceil(TIEBAO_OVERLOAD_TRANSITION / FIXED_DT) + 2; i++) {

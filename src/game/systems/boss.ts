@@ -183,9 +183,15 @@ export interface BossEvents {
   bolts: BossBolt[];
   /** A ground blast reached the player. */
   hurtPlayer: boolean;
-  /** Phase change: on-screen enemy bullets become score. */
+  /**
+   * Kept on the event so older callers stay shaped the same way.
+   * Phase changes do not set it, and the battle does not clear bullets from it.
+   */
   convertBullets: boolean;
-  /** Boss death: clear enemy bullets with no score. */
+  /**
+   * Kept on the event so older callers stay shaped the same way.
+   * Death does not set it, and the battle does not clear bullets from it.
+   */
   clearBullets: boolean;
   shake: BossShake | null;
   /** STAGE CLEAR hold finished; show the result screen. */
@@ -902,8 +908,8 @@ function killPart(boss: BossRuntime, part: BossPartRuntime, ev: BossEvents): voi
   else beginDeath(boss, ev);
 }
 
-/** Next phase: revive its targets on their segment HP, convert bullets, go invulnerable. */
-function beginTransition(boss: BossRuntime, ev: BossEvents): void {
+/** Next phase: revive its targets on their segment HP and go invulnerable. */
+function beginTransition(boss: BossRuntime, _ev: BossEvents): void {
   boss.phaseIndex++;
   const next = boss.phases[boss.phaseIndex]!;
   for (const id of next.targets) {
@@ -919,7 +925,6 @@ function beginTransition(boss: BossRuntime, ev: BossEvents): void {
   boss.invulnerable = true;
   boss.enraged = false;
   resetLaserSweep(boss.laser);
-  ev.convertBullets = true;
   if (next.transition) setStage(boss, 'transition');
   else startFight(boss);
 }
@@ -931,7 +936,6 @@ function beginDeath(boss: BossRuntime, ev: BossEvents): void {
   boss.invulnerable = true;
   boss.laser.mode = 'idle';
   boss.deathSpawned = 0;
-  ev.clearBullets = true;
   ev.shake = { intensity: SHAKE_BIG_INTENSITY, duration: boss.def.death.duration };
   if (boss.def.script === 'tiebao') tiebaoOnDeath(boss, ev);
   emitDeathExplosion(boss, 0, ev);

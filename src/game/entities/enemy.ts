@@ -210,6 +210,82 @@ export function rearDiagHeading(move: Extract<Move, { kind: 'rear_diag' }>): num
 }
 
 /**
+ * Offset from the spawn point along a staircase.
+ * `steps` down/side pairs, then the leftover distance keeps going down.
+ * Heading is 0 down, 90 right, 270 left — the same degrees `straight` uses.
+ */
+export function stepSlidePose(
+  move: Extract<Move, { kind: 'step_slide' }>,
+  elapsed: number
+): { dx: number; dy: number; heading: number } {
+  let remain = Math.max(0, elapsed) * move.speed;
+  let dx = 0;
+  let dy = 0;
+  const sign = move.run < 0 ? -1 : 1;
+  const runLen = Math.abs(move.run);
+  const sideHeading = sign < 0 ? 270 : 90;
+
+  for (let i = 0; i < move.steps; i++) {
+    const down = Math.min(remain, move.drop);
+    dy += down;
+    remain -= down;
+    if (remain <= 0) return { dx, dy, heading: 0 };
+    const side = Math.min(remain, runLen);
+    dx += sign * side;
+    remain -= side;
+    if (remain <= 0) return { dx, dy, heading: sideHeading };
+  }
+  dy += remain;
+  return { dx, dy, heading: 0 };
+}
+
+/** One committed dive. Positive `angle` drifts right; y always increases. */
+export function diveOnceOffset(
+  move: Extract<Move, { kind: 'dive_once' }>,
+  elapsed: number
+): { dx: number; dy: number; heading: number } {
+  const rad = (move.angle * Math.PI) / 180;
+  const dist = move.speed * Math.max(0, elapsed);
+  return {
+    dx: Math.sin(rad) * dist,
+    dy: Math.cos(rad) * dist,
+    heading: move.angle,
+  };
+}
+
+/**
+ * Heading for a nose-down sprite, or null when the sprite stays nose-down
+ * in world space (`straight` angle 0, sine, hover, ground, …).
+ */
+export function enemyTravelHeading(enemy: Enemy): number | null {
+  const { move } = enemy;
+  if (move.kind === 'rear_diag') return rearDiagHeading(move);
+  if (move.kind === 'step_slide') return stepSlidePose(move, enemy.moveTimer).heading;
+  if (move.kind === 'dive_once') return diveOnceOffset(move, enemy.moveTimer).heading;
+  return null;
+}
+
+/**
+ * The fire clock does not advance off the field.
+ * Every ship waits until y ≥ 8. `rear_diag`, `step_slide`, and `dive_once`
+ * also wait until x is inside the field window. The two downward moves
+ * stop the clock again once they pass the bottom edge, so a fast exit
+ * cannot shoot from under the screen.
+ */
+export function enemyFireClockHeld(enemy: Enemy): boolean {
+  if (enemy.y < 8) return true;
+  const kind = enemy.move.kind;
+  if (
+    (kind === 'rear_diag' || kind === 'step_slide' || kind === 'dive_once') &&
+    (enemy.x < REAR_DIAG_FIRE_X_MIN || enemy.x > REAR_DIAG_FIRE_X_MAX)
+  ) {
+    return true;
+  }
+  if ((kind === 'step_slide' || kind === 'dive_once') && enemy.y > LOGICAL_H) return true;
+  return false;
+}
+
+/**
  * Canvas rotation that aims a nose-down sprite along a `straight` heading.
  * Zero keeps the nose pointing down. Negative headings turn it toward up.
  */
@@ -386,6 +462,20 @@ function updateEnemyMovement(
       break;
     }
 
+    case 'step_slide': {
+      const pose = stepSlidePose(move, enemy.moveTimer);
+      enemy.x = enemy.startX + pose.dx;
+      enemy.y = enemy.startY + pose.dy;
+      break;
+    }
+
+    case 'dive_once': {
+      const offset = diveOnceOffset(move, enemy.moveTimer);
+      enemy.x = enemy.startX + offset.dx;
+      enemy.y = enemy.startY + offset.dy;
+      break;
+    }
+
     case 'side_arc': {
       const radius = SIDE_ARC_RADIUS;
       const arcLen = (Math.PI / 2) * radius;
@@ -519,16 +609,8 @@ export function shouldEnemyFire(
     return { shouldFire: false, fireData: enemy.fire };
   }
 
-  if (enemy.y < 8) {
-    return { shouldFire: false, fireData: enemy.fire };
-  }
-
-  // Born under the lower edge. The clock starts once x is on the field,
-  // same as the y < 8 gate: time spent off-screen does not count.
-  if (
-    enemy.move.kind === 'rear_diag' &&
-    (enemy.x < REAR_DIAG_FIRE_X_MIN || enemy.x > REAR_DIAG_FIRE_X_MAX)
-  ) {
+  // Time spent off the field does not count, same as the old y < 8 gate.
+  if (enemyFireClockHeld(enemy)) {
     return { shouldFire: false, fireData: enemy.fire };
   }
 

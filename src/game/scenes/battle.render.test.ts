@@ -226,16 +226,16 @@ function stageRun(
 }
 
 const EXPECTED: Record<string, RenderResult> = {
-  'stage easy': { outcome: 'result', frames: 11341, renders: 495, calls: 84982, hash: 4083327259 },
+  'stage easy': { outcome: 'result', frames: 11366, renders: 496, calls: 85759, hash: 3930305795 },
   'stage hard': {
-    outcome: 'gameover',
-    frames: 13569,
-    renders: 591,
-    calls: 98239,
-    hash: 3707910952,
+    outcome: 'result',
+    frames: 14009,
+    renders: 611,
+    calls: 100766,
+    hash: 3617704030,
   },
   'stage demo': { outcome: 'gameover', frames: 5575, renders: 244, calls: 35067, hash: 766989114 },
-  'boss hard': { outcome: 'result', frames: 5453, renders: 239, calls: 36255, hash: 3992588818 },
+  'boss hard': { outcome: 'result', frames: 5465, renders: 239, calls: 36771, hash: 2228888089 },
   attract: { outcome: 'timeout', frames: 5400, renders: 318, calls: 24899, hash: 727918577 },
   weaponTest: { outcome: 'timeout', frames: 600, renders: 55, calls: 26053, hash: 1189635685 },
   pause: { outcome: 'timeout', frames: 720, renders: 56, calls: 6021, hash: 2351038240 },

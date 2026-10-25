@@ -5,7 +5,7 @@ This document defines the coding conventions and constraints for all AI agents w
 ## Source of Truth
 
 - **Design Document**: `docs/电雷_设计文档_v1.1.md` — all game rules, constants, and mechanics
-- **Wave Tables**: `docs/电雷_第一关波次表_v1.md` (stage 1, implemented) and `docs/电雷_第二关波次表_v1.md` (stage 2 run: waves, drops, rear-diagonal entry). Stage 2 v1 is signed off (0 new models, `rear_diag` about 28°, warning stays at 118s) and implemented in `stage2.ts` (P28). Boss behavior stays in `docs/电雷_第二关_铁堡Boss设计_v1.md`
+- **Wave Tables**: `docs/电雷_第一关波次表_v1.md` (stage 1, implemented) and `docs/电雷_第二关波次表_v2.md` (stage 2 run: waves, drops, rear-diagonal entry, `step_slide`, `dive_once`, factory AA). v1 of that table is history only. Stage 2 v2 revokes the old "0 new models" lock: one new enemy (`factory_aa`) and two new small-plane moves, `rear_diag` kept, warning stays at 118s, implemented in `stage2.ts`. Boss behavior stays in `docs/电雷_第二关_铁堡Boss设计_v1.md`
 - When design docs and code conflict, **docs are authoritative**
 - Update docs when rules change (not just code comments)
 
@@ -49,6 +49,7 @@ This document defines the coding conventions and constraints for all AI agents w
 | Drone | 20×20 |
 | Tank | 24×24 |
 | Turret | 32×32 |
+| Factory AA | 32×32 (single barrel code-drawn) |
 | Missile car | 24×32 |
 | Risk crate | 32×16 (cyan shield ring is code-drawn while the shield is up) |
 | Pillbox | 32×32 |
@@ -93,7 +94,7 @@ This document defines the coding conventions and constraints for all AI agents w
 
 ### Size Classes
 - Every shootable object declares a size class (`small` / `medium` / `large`) and a category (`air` / `ground` / `building` / `boss`) in `src/game/entities/objectClass.ts`. Nothing else may hard-code per-type size checks
-- small: small, drone, interceptor, tank, missile_car, risk_crate, every building. medium: medium, bomber, turret2, future mini-bosses. large: the Boss
+- small: small, drone, interceptor, tank, missile_car, risk_crate, every building. medium: medium, bomber, turret2, factory_aa, future mini-bosses. large: the Boss
 
 ### Bomb
 - Hits only objects on screen at the moment of the bomb. Off-screen enemies and buildings are untouched
@@ -109,7 +110,7 @@ This document defines the coding conventions and constraints for all AI agents w
 - Death: main −1 (min Lv1), sub −1 (may become none), mate −1 (min 0)
 - Items are table-driven (`ITEM_DEFS` in `entities/item.ts`, `ITEM_PIXELS` in `art/itemSprite.ts`)
 - Buildings always drop exactly one item. A placement `drop` locks a letter, or `{ exclusive, item }` joins a group. Battle enter rolls the stage RNG once per group (members in placement order, groups in sorted key order, index `floor(rng * count)`). Stage 1 `s1-sea-mate` is B07 then B08, so exactly one of them drops M. B01 and B05 drop T. B06 drops M. Everyone else uses `BUILDING_DROP_RULES`: `BUILDING_DROP_P_SHARE` (50%) P and the rest B while main power is below `POWER_MAX`, otherwise only B (that path does not draw). Locks beat a stage or difficulty rule list. Wave-table P / B carriers do not change. There is no chance to drop nothing
-- Risk crates (P22, `risk_crate`) are shielded floaters on the stage clock, not building locks and not part of the 148-ship kill rate. Shield 12 then body 6 (`scaleHp` still applies). No shots. Destroying one drops one existing M/P/T item via `chooseRiskCrateDrop`: M when mate is 0 (no roll); otherwise M 50% / P 25% / T 25%. Never B. Stage 1: Easy one at t=50 x=180; Medium t=50 x=48 and t=100 x=312; Hard adds t=75 x=220. Those clocks are the `RISK_CRATE_*` constants and stay Stage 1 only. Stage 2 retimes the same crate in `stage2.ts`: Easy t=46 x=180; Medium t=46 x=48 and t=100 x=312; Hard adds t=70 x=220. Do not point Stage 2 at the Stage 1 constants
+- Risk crates (P22, `risk_crate`) are shielded floaters on the stage clock, not building locks and not part of the 148-ship kill rate. Shield 12 then body 6 (`scaleHp` still applies). No shots. Destroying one drops one existing M/P/T item via `chooseRiskCrateDrop`: M when mate is 0 (no roll); otherwise M 50% / P 25% / T 25%. Never B. Stage 1: Easy one at t=50 x=180; Medium t=50 x=48 and t=100 x=312; Hard adds t=75 x=220. Those clocks are the `RISK_CRATE_*` constants and stay Stage 1 only. Stage 2 retimes the same crate in `stage2.ts`: Easy t=46 x=180; Medium t=46 x=48 and t=100 x=312; Hard adds t=78 x=220. Do not point Stage 2 at the Stage 1 constants
 - The title demo uses the same weapon code paths. No demo-specific weapon logic
 - Main vulcan permanent defaults (stage, boss practice, attract, and weapon-test P速 / P伤 on enter and reset): `FIRE_RATE` = 5 volleys/s, `PLAYER_BULLET_DAMAGE` = 2. All three levels share that rate; a higher level adds bullets. Full-hit DPS stays 10 / 20 / 30
 - T homing is pinned and must not be derived from the main weapon: `HOMING_FIRE_RATE` = 1.5 volleys/s, `HOMING_DAMAGE` = 2.5. Weapon-test T速 / T伤 open at those same numbers. Do not reintroduce `HOMING_FIRE_RATE_SCALE` or `HOMING_DAMAGE_FACTOR`
@@ -118,7 +119,7 @@ This document defines the coding conventions and constraints for all AI agents w
 - Wave data in `src/game/levels/` using TypeScript types
 - Patterns driven by data, not hard-coded `if` statements
 - MVP waves marked in wave table should be playable first
-- Stage 2's run stays on 陆地B (`landB`), not 河流A. `STAGE2_WARNING_AT` (118) and `TIEBAO_ENTER_AT` (123) stay locked. The signed-off run is `docs/电雷_第二关波次表_v1.md`, filled in `stage2.ts`. `rear_diag` climbs from outside the lower left or right edge (`REAR_DIAG_SPAWN_X_*`), heading `180 ± bearing` (about 28°). The nose-down sprite rotates with the velocity; exhaust stays on the tail. Shots wait until x is inside `REAR_DIAG_FIRE_X_MIN`..`MAX`, and that wait does not advance the fire timer
+- Stage 2's run stays on 陆地B (`landB`), not 河流A. `STAGE2_WARNING_AT` (118) and `TIEBAO_ENTER_AT` (123) stay locked. The signed-off run is `docs/电雷_第二关波次表_v2.md`, filled in `stage2.ts`. `rear_diag` climbs from outside the lower left or right edge (`REAR_DIAG_SPAWN_X_*`), heading `180 ± bearing` (about 28°). `step_slide` walks down, then sideways, then down (`steps` 1 or 2). `dive_once` holds one `straight` angle until it leaves. The nose-down sprite rotates with `enemyTravelHeading` for those three moves; exhaust stays on the tail. Shots wait until x is inside `REAR_DIAG_FIRE_X_MIN`..`MAX` for all three, and that wait does not advance the fire timer. `step_slide` and `dive_once` also hold the clock once y passes the bottom. Stage 2's only new model is `factory_aa` (medium ground, 32×32, HP 40, score 1200). No armed boat, no clear-wave bonus, no timed supply ship
 - Difficulty filters are data: `Wave.difficulties`, and on a group `difficulties`, `fireByDifficulty`, `countByDifficulty`, `fireOnlyByDifficulty` (`levels/wavePlan.ts`). Omitting the scheduler difficulty applies no filter and uses the base fire, count, and fireOnly. A written difficulty uses its own override or the base; hard does not inherit medium. Do not triplicate the timeline. Do not change `FIRE_PRESETS`, `WEAPONS`, `fireRateScale`, or `bulletSpeedScale` for Stage 2
 - Clear-wave bonus and the timed supply ship are not implemented. The scheduler does not read those fields. W21 stays the `powerBelowMax` relief carrier
 - `StageSection` labels for Stage 2 are `outskirts`, `runway`, and `woods`. They do not pick a map
