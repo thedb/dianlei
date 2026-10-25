@@ -708,10 +708,11 @@ export const BOSS_TURRET_SIZE = 40;
 
 /**
  * Stage-clear exit, shared by every stage and every player ship.
- * After the boss death animation: freeze, ease back to the battle spawn,
- * swell the tail flame, then climb off the top. Spawn is
- * `(LOGICAL_W / 2, PLAYER_SPAWN_Y)`, the same point the fly-in parks on.
- * `stepVictoryExit` in `systems/victoryExit.ts` is the only path.
+ * After the boss death animation the ship snaps to the upright bank frame,
+ * then freezes, eases back to the battle spawn, swells the tail flame, and
+ * climbs off the top. A bank held at the kill does not carry into that
+ * flight. Spawn is `(LOGICAL_W / 2, PLAYER_SPAWN_Y)`, the same point the
+ * fly-in parks on. `stepVictoryExit` in `systems/victoryExit.ts` is the only path.
  */
 export const VICTORY_EXIT_WAIT = 2;
 /** Smoothstep back to the spawn, seconds. Zero speed at both ends. */

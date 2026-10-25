@@ -18,7 +18,7 @@ import { nextStageId } from '@/game/levels/registry';
 import { stepVictoryExit, victoryExitBlocksInput } from '@/game/systems/victoryExit';
 import { clearEnemyBullets, publishRun, runDifficulty, runProfile, type Battle } from './context';
 import { spawnExplosion, triggerShake } from './fx';
-import { isPlayerVulnerable, killPlayer, snapshotRun } from './player';
+import { isPlayerVulnerable, killPlayer, neutralizePlayerPose, snapshotRun } from './player';
 
 /** Fight-start WARNING, once per boss. Separate from the pre-enter cue. */
 const fightWarningPlayed = new WeakSet<BossRuntime>();
@@ -105,6 +105,11 @@ export function stepBoss(b: Battle, dt: number): 'result' | null {
   if (victoryExitBlocksInput(victory.phase)) {
     player.x = victory.x;
     player.y = victory.y;
+    // The ship step already ran this frame. On the step the exit leaves idle
+    // that step was still steering, so the snap has to happen here, before
+    // render, or the banked frame is carried into the wait and the climb.
+    neutralizePlayerPose(player);
+    player.velocityY = 0;
   }
   if (cue === 'victory') {
     const done = releaseBossResult(boss);
