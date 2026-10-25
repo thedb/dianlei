@@ -71,6 +71,7 @@ import {
   TIEBAO_RAM_WARN,
   TIEBAO_ROOF_CAR_ROW,
   TIEBAO_ROOF_LOCO_ROW,
+  TIEBAO_SHED_BLAST_FRAME,
   TIEBAO_SHED_DELAY,
   TIEBAO_SHED_SLIDE,
   TIEBAO_SWITCH_CROSS_SPAN,
@@ -570,9 +571,10 @@ function burstSheds(state: TiebaoState, ev: BossEvents, toSheds: number): void {
     const top = tiebaoTailY(cars) - tiebaoHullHeight(cars);
     const y = top + tiebaoCarCenterRow(cars - 1);
     const x = consistX(state, y);
-    ev.explosions.push({ x, y, delay: 0, size: 'medium' });
-    ev.explosions.push({ x: x - 10, y: y + 8, delay: 0, size: 'small' });
-    ev.explosions.push({ x: x + 8, y: y - 6, delay: 0, size: 'small' });
+    const frameTime = TIEBAO_SHED_BLAST_FRAME;
+    ev.explosions.push({ x, y, delay: 0, size: 'medium', frameTime });
+    ev.explosions.push({ x: x - 10, y: y + 8, delay: 0, size: 'small', frameTime });
+    ev.explosions.push({ x: x + 8, y: y - 6, delay: 0, size: 'small', frameTime });
   }
   state.shedBurst = toSheds;
 }

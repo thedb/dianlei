@@ -25,6 +25,10 @@ import {
   TIEBAO_LOCO_H,
   TIEBAO_ROOF_CAR_ROW,
   TIEBAO_ROOF_LOCO_ROW,
+  TIEBAO_TAIL_LAMP_H,
+  TIEBAO_TAIL_LAMP_W,
+  TIEBAO_TAIL_LAMP_X,
+  TIEBAO_TAIL_LAMP_Y_FROM_BOTTOM,
 } from '@/game/config';
 import { tiebaoCarBodyY } from '@/game/systems/tiebaoShed';
 import { COLOR } from '@/game/palette';
@@ -325,11 +329,11 @@ function buffer(g: SpriteData, tall: boolean): void {
   fillRect(g, CAR_X, y, CAR_W, h, DG);
   fillRect(g, CAR_X + 3, y + 2, CAR_W - 6, Math.max(2, h - 4), MG);
   hline(g, CAR_X + 3, y + 2, CAR_W - 6, LG);
-  const lampY = TIEBAO_FULL_H - 8;
-  fillRect(g, 24, lampY, 8, 3, EY);
-  fillRect(g, 48, lampY, 8, 3, EY);
-  plot(g, 26, lampY + 1, W);
-  plot(g, 50, lampY + 1, W);
+  const lampY = TIEBAO_FULL_H - TIEBAO_TAIL_LAMP_Y_FROM_BOTTOM;
+  for (const sx of TIEBAO_TAIL_LAMP_X) {
+    fillRect(g, sx, lampY, TIEBAO_TAIL_LAMP_W, TIEBAO_TAIL_LAMP_H, EY);
+    plot(g, sx + 2, lampY + 1, W);
+  }
   fillRect(g, CX - 3, y + h - 3, 6, 2, K);
 }
 

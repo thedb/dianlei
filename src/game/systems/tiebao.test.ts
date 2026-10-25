@@ -21,6 +21,7 @@ import {
   TIEBAO_OVERLOAD_PERIOD,
   TIEBAO_HULL_W,
   TIEBAO_SHED_ADVANCE,
+  TIEBAO_SHED_BLAST_FRAME,
   TIEBAO_SHED_DELAY,
   TIEBAO_SHED_SLIDE,
   TIEBAO_SWITCH_CROSS_SPAN,
@@ -862,6 +863,22 @@ describe('铁堡 rails', () => {
     expect(boss.invulnerable).toBe(false);
   });
 
+  it('holds a third longer after a slower shed blast, then slides at the same rate', () => {
+    expect(TIEBAO_SHED_BLAST_FRAME).toBe(0.08);
+    expect(TIEBAO_SHED_DELAY).toBe(1.2);
+    expect(TIEBAO_CHASE_FLAME).toBe(0.35);
+    expect(TIEBAO_SHED_SLIDE).toBe(0.4);
+    const frames = 6;
+    const blast = frames * TIEBAO_SHED_BLAST_FRAME;
+    const settled = TIEBAO_SHED_DELAY - blast;
+    const oldBlast = frames * 0.06;
+    const oldSettled = 0.9 - oldBlast;
+    expect(blast).toBeCloseTo(0.48);
+    expect(settled).toBeCloseTo(0.72);
+    expect(blast / oldBlast).toBeCloseTo(4 / 3);
+    expect(settled / oldSettled).toBeCloseTo(4 / 3);
+  });
+
   it('explodes one rear car when main HP crosses 90%', () => {
     const boss = createBoss(TIEBAO);
     const around = world(3);
@@ -880,6 +897,7 @@ describe('铁堡 rails', () => {
     expect(TIEBAO_RAIL_X).toContain(boss.x);
     expect(ev.explosions).toHaveLength(3);
     expect(ev.explosions.filter((burst) => burst.size === 'medium')).toHaveLength(1);
+    expect(ev.explosions.every((burst) => burst.frameTime === TIEBAO_SHED_BLAST_FRAME)).toBe(true);
     const drop = tiebaoRestCenter(8) - holdY;
     expect(drop).toBeGreaterThan(TIEBAO_CAR_H);
     expect(drop).toBeCloseTo(TIEBAO_CAR_PITCH + TIEBAO_SHED_ADVANCE, 6);
@@ -922,6 +940,7 @@ describe('铁堡 rails', () => {
     expect(boss.phase).toBe('main');
     expect(ev.explosions).toHaveLength(21);
     expect(ev.explosions.filter((burst) => burst.size === 'medium')).toHaveLength(7);
+    expect(ev.explosions.every((burst) => burst.frameTime === TIEBAO_SHED_BLAST_FRAME)).toBe(true);
     step(boss, around, TIEBAO_SHED_DELAY - FIXED_DT * 2);
     expect(tiebaoCommittedCars(boss)).toBe(2);
     expect(boss.y).toBeCloseTo(holdY, 2);

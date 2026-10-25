@@ -5,12 +5,17 @@ import {
   TIEBAO_CAR_PITCH,
   TIEBAO_CARS,
   TIEBAO_CORE_ROW,
+  TIEBAO_BUFFER,
   TIEBAO_FULL_H,
   TIEBAO_HULL_H,
   TIEBAO_HULL_W,
   TIEBAO_LOCO_H,
   TIEBAO_ROOF_CAR_ROW,
   TIEBAO_ROOF_LOCO_ROW,
+  TIEBAO_TAIL_LAMP_H,
+  TIEBAO_TAIL_LAMP_W,
+  TIEBAO_TAIL_LAMP_X,
+  TIEBAO_TAIL_LAMP_Y_FROM_BOTTOM,
 } from '@/game/config';
 import { FACTORY_LOOK_IDS, FACTORY_LOOK_NAMES, paintFactoryLook } from '@/game/art/factoryLooks';
 import { TIEBAO_LOOK_IDS, TIEBAO_LOOK_NAMES, buildTiebaoHull } from '@/game/art/tiebaoLooks';
@@ -104,6 +109,30 @@ describe('铁堡外观', () => {
         expect(muzzles).toBeGreaterThan(0);
       }
       expect(hashSprite(buildTiebaoHull(id, true))).not.toBe(hashSprite(hull));
+    }
+  });
+
+  it('bakes one tail-lamp pair on the buffer and no second yellow block there', () => {
+    const hull = buildTiebaoHull('A', false);
+    const lampY = TIEBAO_FULL_H - TIEBAO_TAIL_LAMP_Y_FROM_BOTTOM;
+    const owned = new Set<string>();
+    for (const sx of TIEBAO_TAIL_LAMP_X) {
+      let yellow = 0;
+      for (let y = lampY; y < lampY + TIEBAO_TAIL_LAMP_H; y++) {
+        for (let x = sx; x < sx + TIEBAO_TAIL_LAMP_W; x++) {
+          owned.add(`${x},${y}`);
+          const cell = hull[y]?.[x];
+          expect(cell === COLOR.EXPLOSION_YELLOW || cell === COLOR.WHITE).toBe(true);
+          if (cell === COLOR.EXPLOSION_YELLOW) yellow++;
+        }
+      }
+      expect(yellow).toBe(TIEBAO_TAIL_LAMP_W * TIEBAO_TAIL_LAMP_H - 1);
+    }
+    for (let y = TIEBAO_FULL_H - TIEBAO_BUFFER; y < TIEBAO_FULL_H; y++) {
+      for (let x = 0; x < TIEBAO_HULL_W; x++) {
+        if (owned.has(`${x},${y}`)) continue;
+        expect(hull[y]?.[x]).not.toBe(COLOR.EXPLOSION_YELLOW);
+      }
     }
   });
 });

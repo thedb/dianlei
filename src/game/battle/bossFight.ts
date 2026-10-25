@@ -58,7 +58,7 @@ export function applyBossEvents(b: Battle, ev: BossEvents): void {
   }
   if (ev.clearBullets) b.enemyBullets.releaseAll();
   for (const boom of ev.explosions) {
-    spawnExplosion(b.fx, boom.x, boom.y, boom.size, boom.delay);
+    spawnExplosion(b.fx, boom.x, boom.y, boom.size, boom.delay, boom.frameTime);
   }
   if (ev.chaseBoost !== undefined) b.chaseBoost = ev.chaseBoost;
   if (ev.shake) triggerShake(b.fx, ev.shake.intensity, ev.shake.duration);

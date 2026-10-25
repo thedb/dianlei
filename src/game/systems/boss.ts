@@ -133,6 +133,11 @@ export interface BossExplosion {
   delay: number;
   /** Crate pop is small. Part pop is medium. The death sequence is large. */
   size: 'small' | 'medium' | 'large';
+  /**
+   * Seconds per baked frame. Shed bursts set `TIEBAO_SHED_BLAST_FRAME`.
+   * Omitted bursts use the shared explosion frame time.
+   */
+  frameTime?: number;
 }
 
 export interface BossShot {
