@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BOSS_HULL_H, BOSS_HULL_W, BOSS_TURRET_SIZE, PALETTE_SIZE } from '@/game/config';
 import { COLOR, PALETTE } from '@/game/palette';
 import { opaqueCount } from './pixelDraw';
-import { buildBossHull, buildBossTurret } from './bossSprite';
+import { buildBossHull, buildBossTurret, tiebaoTailLampsFlash } from './bossSprite';
 
 function expectPalette(grid: number[][]): void {
   expect(grid.length).toBeGreaterThan(0);
@@ -43,5 +43,15 @@ describe('boss sprites', () => {
       core
     );
     expect(core).not.toBe(closed[80]?.[110]);
+  });
+});
+
+describe('铁堡尾灯', () => {
+  it('draws no second pair unless the ram warn is on a bright frame', () => {
+    expect(tiebaoTailLampsFlash(false, 0)).toBe(false);
+    expect(tiebaoTailLampsFlash(false, 0.2)).toBe(false);
+    expect(tiebaoTailLampsFlash(true, 0)).toBe(true);
+    expect(tiebaoTailLampsFlash(true, 1 / 16)).toBe(false);
+    expect(tiebaoTailLampsFlash(true, 2 / 16)).toBe(true);
   });
 });

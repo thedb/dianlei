@@ -89,14 +89,22 @@ export function clearFx(fx: Fx): void {
   fx.sparks.releaseAll();
 }
 
-/** Native frame size; kind selects the raster. */
-export function spawnExplosion(fx: Fx, x: number, y: number, kind: ExplosionKind, delay = 0): void {
+/** Native frame size; kind selects the raster. `frameTime` overrides the shared step. */
+export function spawnExplosion(
+  fx: Fx,
+  x: number,
+  y: number,
+  kind: ExplosionKind,
+  delay = 0,
+  frameTime = EXPLOSION_FRAME_TIME
+): void {
   const exp = fx.explosions.tryAcquire();
   if (!exp) return;
   exp.x = x;
   exp.y = y;
   exp.delay = delay;
   exp.kind = kind;
+  exp.frameTime = frameTime;
   exp.frameCount = explosionFrameCount(kind);
 }
 

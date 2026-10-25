@@ -795,10 +795,18 @@ export const TIEBAO_ENCOUNTER_TAIL_Y = 160;
 /** Tail drop per shed car. 7 × 24 brings the end-form nose to TIEBAO_END_NOSE_Y. */
 export const TIEBAO_SHED_ADVANCE = 24;
 /**
- * After the rear car explodes, the remaining cars stay put this long.
- * They do not slide up into the gap during the hold.
+ * Seconds per baked frame of a shed burst only. Every other explosion stays
+ * on `EXPLOSION_FRAME_TIME` (0.06). A medium shed blast is 6 frames:
+ * 0.48s, up from 0.36s.
  */
-export const TIEBAO_SHED_DELAY = 0.9;
+export const TIEBAO_SHED_BLAST_FRAME = 0.08;
+/**
+ * After the rear car explodes, the remaining cars stay put this long.
+ * They do not slide up into the gap during the hold. The medium blast
+ * ends at 0.48s, so the settled wait before the drop is 0.72s
+ * (was 0.9s total, with 0.54s settled after a 0.36s blast).
+ */
+export const TIEBAO_SHED_DELAY = 1.2;
 /** Drop into the locked rest pose, seconds per car lost in that batch. */
 export const TIEBAO_SHED_SLIDE = 0.4;
 /**
@@ -817,8 +825,14 @@ export const TIEBAO_ENTER_Y = TIEBAO_ENTER_TAIL_Y - TIEBAO_FULL_H / 2;
  * A 9-car hull is 840px and would fill the screen on the dive.
  */
 export const TIEBAO_RAM_MAX_CARS = 4;
-/** Bottom rows of the full sprite pasted onto the live tail (beam + lamps). */
+/** Bottom rows of the full sprite pasted onto the live tail (beam + one lamp pair). */
 export const TIEBAO_BUFFER = 20;
+/** The only tail lamps. Sprite x inside the 80px hull. Not drawn a second time. */
+export const TIEBAO_TAIL_LAMP_X = [24, 48] as const;
+export const TIEBAO_TAIL_LAMP_W = 8;
+export const TIEBAO_TAIL_LAMP_H = 3;
+/** Top of those lamps, pixels above the bottom row of the live hull. */
+export const TIEBAO_TAIL_LAMP_Y_FROM_BOTTOM = 8;
 export const TIEBAO_ENTER_DURATION = 2;
 /** Fight starts this many seconds after the stage clock's zero. See STAGE2_WARNING_AT. */
 export const TIEBAO_ENTER_AT = 123;
@@ -901,6 +915,12 @@ export const TIEBAO_CORE = { x: 0, y: TIEBAO_CORE_ROW - TIEBAO_END_CY } as const
 export const TIEBAO_FAN_INTERVAL = 1.4;
 export const TIEBAO_FAN_FIRST = 0.4;
 export const TIEBAO_FAN_SPREAD = 60;
+/**
+ * Side muzzle, local x from the hull center. Half of the 36px boxcar
+ * (sprite columns 22–57). The old broadside ±34 sat in the transparent
+ * margin of the 80px hull, beside the painted body.
+ */
+export const TIEBAO_SIDE_MUZZLE_X = 18;
 
 /** Every attack interval except the fan is the P24 draft times this (+50% rate). */
 export const TIEBAO_RATE_SCALE = 2 / 3;

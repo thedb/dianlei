@@ -13,11 +13,16 @@ import {
   TIEBAO_CAR_PITCH,
   TIEBAO_CARS,
   TIEBAO_ENCOUNTER_TAIL_Y,
+  TIEBAO_HULL_W,
   TIEBAO_LOCO_H,
   TIEBAO_RAM_MAX_CARS,
   TIEBAO_SHED_ADVANCE,
   TIEBAO_SHED_AT,
   TIEBAO_TAIL,
+  TIEBAO_TAIL_LAMP_H,
+  TIEBAO_TAIL_LAMP_W,
+  TIEBAO_TAIL_LAMP_X,
+  TIEBAO_TAIL_LAMP_Y_FROM_BOTTOM,
 } from '@/game/config';
 
 export function tiebaoHullHeight(cars: number): number {
@@ -63,4 +68,29 @@ export function tiebaoCarCenterRow(index: number): number {
  */
 export function tiebaoRamArmed(cars: number): boolean {
   return cars <= TIEBAO_RAM_MAX_CARS;
+}
+
+export interface TiebaoTailLamp {
+  /** Local x, hull center at 0, +x to the right. */
+  x: number;
+  /** Local y, piece center at 0, +y toward the buffer. */
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * The one tail-lamp pair, in the last piece's local space.
+ * These are the buffer pixels (`TIEBAO_TAIL_LAMP_*`). A second pair drawn
+ * at `h/2 - 10` and then shifted by `sin(angle) * along` sits off the beam
+ * once the car banks.
+ */
+export function tiebaoTailLampLocals(pieceH: number): TiebaoTailLamp[] {
+  const y = pieceH / 2 - TIEBAO_TAIL_LAMP_Y_FROM_BOTTOM;
+  return TIEBAO_TAIL_LAMP_X.map((spriteX) => ({
+    x: spriteX - TIEBAO_HULL_W / 2,
+    y,
+    w: TIEBAO_TAIL_LAMP_W,
+    h: TIEBAO_TAIL_LAMP_H,
+  }));
 }

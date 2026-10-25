@@ -60,6 +60,7 @@ import {
   tiebaoPlaceEnter,
   tiebaoResolveBomb,
   tiebaoChaseBoost,
+  tiebaoSyncMounts,
   tiebaoSyncScroll,
   tiebaoTryShot,
 } from '@/game/systems/tiebao';
@@ -133,6 +134,11 @@ export interface BossExplosion {
   delay: number;
   /** Crate pop is small. Part pop is medium. The death sequence is large. */
   size: 'small' | 'medium' | 'large';
+  /**
+   * Seconds per baked frame. Shed bursts set `TIEBAO_SHED_BLAST_FRAME`.
+   * Omitted bursts use the shared explosion frame time.
+   */
+  frameTime?: number;
 }
 
 export interface BossShot {
@@ -1008,6 +1014,10 @@ function fallDebris(boss: BossRuntime, dt: number): void {
 }
 
 function syncParts(boss: BossRuntime): void {
+  if (boss.def.script === 'tiebao') {
+    tiebaoSyncMounts(boss);
+    return;
+  }
   for (const part of boss.parts) {
     if (part.falling) continue;
     part.worldX = boss.x + part.offsetX;

@@ -13,6 +13,10 @@ import {
   TIEBAO_HULL_W,
   TIEBAO_LOOK,
   TIEBAO_RAIL_X,
+  TIEBAO_TAIL_LAMP_H,
+  TIEBAO_TAIL_LAMP_W,
+  TIEBAO_TAIL_LAMP_X,
+  TIEBAO_TAIL_LAMP_Y_FROM_BOTTOM,
 } from '@/game/config';
 import { PALETTE, COLOR } from '@/game/palette';
 import type { BossHpBarLayout, BossRuntime } from '@/game/systems/boss';
@@ -21,13 +25,15 @@ import {
   tiebaoCarPoses,
   tiebaoClosureX,
   tiebaoLiveHull,
+  tiebaoPartMount,
   tiebaoSpanMarks,
   tiebaoVisual,
   type TiebaoCarPose,
   type TiebaoVisual,
 } from '@/game/systems/tiebao';
-import { buildTiebaoHull } from './tiebaoLooks';
+import { tiebaoTailLampLocals } from '@/game/systems/tiebaoShed';
 import { laserSweepRadians } from '@/game/systems/danmaku';
+import { buildTiebaoHull } from './tiebaoLooks';
 import type { SpriteData, SpriteFrame } from './types';
 import { createGrid, fillEllipse, fillPoly, fillRect, outline, plot } from './pixelDraw';
 import { renderSprite } from './spriteRenderer';
@@ -407,10 +413,11 @@ export function drawBossWorld(
 
   for (const part of boss.parts) {
     if (!part.sprite) continue;
+    const bank = tiebaoPartBank(boss, part);
     if (!part.alive && !part.falling) {
       const broken = assets.parts[`${part.sprite}Broken`];
       if (broken) {
-        draw.drawImage(broken.canvas, part.worldX - broken.anchorX, part.worldY - broken.anchorY);
+        drawPartSprite(ctx, draw, broken, part.worldX, part.worldY, bank);
         continue;
       }
       if (open) drawSocketSparks(ctx, part.worldX, part.worldY, time);
@@ -418,7 +425,7 @@ export function drawBossWorld(
     }
     const frame = assets.parts[part.sprite];
     if (!frame) continue;
-    draw.drawImage(frame.canvas, part.worldX - frame.anchorX, part.worldY - frame.anchorY);
+    drawPartSprite(ctx, draw, frame, part.worldX, part.worldY, bank);
   }
 
   if (tiebao) drawTiebaoAir(ctx, boss, time, look.smoke);
@@ -448,6 +455,36 @@ export function drawBossWorld(
     ctx.fill();
     ctx.restore();
   }
+}
+
+/** Bank of the rigid car this part is bolted to. Falling debris stays upright. */
+function tiebaoPartBank(boss: BossRuntime, part: BossRuntime['parts'][number]): number {
+  if (boss.def.art !== 'tiebao' || part.falling) return 0;
+  return tiebaoPartMount(boss, part.id)?.angle ?? 0;
+}
+
+/**
+ * Roof guns share the parent car's rotate. A zero bank keeps the untransformed
+ * blit, so a straight rail does not shift the sprite by a subpixel.
+ */
+function drawPartSprite(
+  ctx: CanvasRenderingContext2D,
+  draw: BossDraw,
+  frame: SpriteFrame,
+  x: number,
+  y: number,
+  angle: number
+): void {
+  if (angle === 0) {
+    draw.drawImage(frame.canvas, x - frame.anchorX, y - frame.anchorY);
+    return;
+  }
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  draw.drawImage(frame.canvas, -frame.anchorX, -frame.anchorY);
+  ctx.restore();
 }
 
 /** Straight crop. The tail beam is the bottom of the full sprite, pasted on the live tail. */
@@ -728,18 +765,51 @@ function drawTiebaoAir(
       ctx.fill();
     });
   }
+  drawTiebaoTailBrighten(ctx, boss, time, visual.ramWarn);
+  ctx.restore();
+}
+
+/**
+ * Ram-warn blink only. The pair itself is the buffer stamp on the last car.
+ * A steady second pair, or one shifted by `sin(angle) * along` before the
+ * rotate, ghosts beside the beam while the consist is on a turnout.
+ */
+export function tiebaoTailLampsFlash(ramWarn: boolean, time: number): boolean {
+  return ramWarn && Math.floor(time * 16) % 2 === 0;
+}
+
+function drawTiebaoTailBrighten(
+  ctx: CanvasRenderingContext2D,
+  boss: BossRuntime,
+  time: number,
+  ramWarn: boolean
+): void {
+  if (!tiebaoTailLampsFlash(ramWarn, time)) return;
   const poses = tiebaoCarPoses(boss);
   const tail = poses.length > 0 ? poses[poses.length - 1] : undefined;
-  const along = tail ? tail.h / 2 - 10 : 0;
-  const lampX = tail ? tail.x + Math.sin(tail.angle) * along : boss.x;
-  const lampY = tail ? tail.y + Math.cos(tail.angle) * along : boss.y;
-  const flashing = visual.ramWarn && Math.floor(time * 16) % 2 === 0;
-  ctx.globalAlpha = flashing ? 0.95 : 0.55;
+  const anchor = poses[0];
+  if (!tail || !anchor) return;
+  const straight = poses.every((pose) => pose.angle === 0 && pose.x === anchor.x);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = 0.9;
   ctx.fillStyle = PALETTE[COLOR.EXPLOSION_YELLOW];
-  ctx.translate(lampX, lampY);
-  ctx.rotate(tail?.angle ?? 0);
-  ctx.fillRect(-16, 0, 8, 3);
-  ctx.fillRect(8, 0, 8, 3);
+  ctx.imageSmoothingEnabled = false;
+  if (straight) {
+    const height = tiebaoLiveHull(boss).h;
+    const left = Math.floor(anchor.x - TIEBAO_HULL_W / 2);
+    const top = Math.floor(boss.y - height / 2);
+    const y = top + height - TIEBAO_TAIL_LAMP_Y_FROM_BOTTOM;
+    for (const sx of TIEBAO_TAIL_LAMP_X) {
+      ctx.fillRect(left + sx, y, TIEBAO_TAIL_LAMP_W, TIEBAO_TAIL_LAMP_H);
+    }
+  } else {
+    ctx.translate(tail.x, tail.y);
+    ctx.rotate(tail.angle);
+    for (const lamp of tiebaoTailLampLocals(tail.h)) {
+      ctx.fillRect(lamp.x, lamp.y, lamp.w, lamp.h);
+    }
+  }
   ctx.restore();
 }
 
