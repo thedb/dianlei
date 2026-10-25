@@ -121,7 +121,7 @@ function drawMates(
       { width: w, height: h, anchorX: ax, anchorY: ay },
       b.player.velocityY,
       b.gameTime,
-      b.victory.flame
+      Math.max(b.victory.flame, b.chaseBoost)
     );
     renderer.drawImage(frame.canvas, x - ax, y - ay, w, h);
   }
@@ -151,7 +151,7 @@ function drawShip(renderer: Renderer, b: Battle, assets: GameAssets, alpha: numb
     bankFrame.nozzles,
     player.velocityY,
     gameTime,
-    b.victory.flame
+    Math.max(b.victory.flame, b.chaseBoost)
   );
   renderer.drawImage(bankFrame.canvas, renderX - bankFrame.anchorX, renderY - bankFrame.anchorY);
   ctx.globalAlpha = 1;

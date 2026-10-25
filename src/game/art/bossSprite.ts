@@ -13,12 +13,19 @@ import {
   TIEBAO_HULL_W,
   TIEBAO_LOOK,
   TIEBAO_RAIL_X,
-  TIEBAO_SWITCH_SPAN,
 } from '@/game/config';
 import { PALETTE, COLOR } from '@/game/palette';
 import type { BossHpBarLayout, BossRuntime } from '@/game/systems/boss';
 import { bossActiveLaser, bossLook } from '@/game/systems/boss';
-import { tiebaoLiveHull, tiebaoSwitchX, tiebaoVisual } from '@/game/systems/tiebao';
+import {
+  tiebaoCarPoses,
+  tiebaoClosureX,
+  tiebaoLiveHull,
+  tiebaoSpanMarks,
+  tiebaoVisual,
+  type TiebaoCarPose,
+  type TiebaoVisual,
+} from '@/game/systems/tiebao';
 import { buildTiebaoHull } from './tiebaoLooks';
 import { laserSweepRadians } from '@/game/systems/danmaku';
 import type { SpriteData, SpriteFrame } from './types';
@@ -443,18 +450,15 @@ export function drawBossWorld(
   }
 }
 
-/**
- * Crop the full consist to the cars still attached and paste the tail beam
- * onto the bottom. Shed cars, and the mounts painted on them, leave with the crop.
- */
-function drawTiebaoHull(
+/** Straight crop. The tail beam is the bottom of the full sprite, pasted on the live tail. */
+function blitTiebaoStraight(
   ctx: CanvasRenderingContext2D,
   frame: SpriteFrame,
-  boss: BossRuntime
+  centerX: number,
+  top: number,
+  height: number
 ): void {
-  const height = tiebaoLiveHull(boss).h;
-  const left = Math.floor(boss.x - TIEBAO_HULL_W / 2);
-  const top = Math.floor(boss.y - height / 2);
+  const left = Math.floor(centerX - TIEBAO_HULL_W / 2);
   const stamp = Math.min(TIEBAO_BUFFER, height);
   const body = height - stamp;
   if (body > 0) {
@@ -474,39 +478,198 @@ function drawTiebaoHull(
 }
 
 /**
- * Background frog. The train body stays on a rail center; this is paint only.
- * Map tiles keep the three straight rails.
+ * One rigid crop. Rows above the tail stamp come from the live sprite.
+ * The stamp itself is the bottom of the full consist, pasted onto this piece
+ * so the beam stays on the last car. Rotation is the pose bank; pixels are
+ * not sheared.
  */
-function drawTurnout(
+function blitTiebaoRigid(
   ctx: CanvasRenderingContext2D,
-  fromX: number,
-  toX: number,
-  u: number,
-  tailY: number
+  frame: SpriteFrame,
+  pose: TiebaoCarPose,
+  bodyEnd: number,
+  height: number
 ): void {
-  const y0 = Math.max(0, Math.floor(tailY - TIEBAO_SWITCH_SPAN + u * TIEBAO_SWITCH_SPAN));
-  const y1 = Math.min(LOGICAL_H, Math.ceil(y0 + TIEBAO_SWITCH_SPAN));
-  ctx.fillStyle = PALETTE[COLOR.TERRAIN_CONCRETE];
-  for (let y = y0; y < y1; y += 8) {
-    const x = Math.round(tiebaoSwitchX(y, fromX, toX, u, tailY));
-    ctx.fillRect(x - 8, y, 16, 2);
+  const row1 = pose.row + pose.h;
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.translate(pose.x, pose.y);
+  ctx.rotate(pose.angle);
+  const localTop = -pose.h / 2;
+  const body0 = Math.max(pose.row, 0);
+  const body1 = Math.min(row1, bodyEnd);
+  if (body1 > body0) {
+    ctx.drawImage(
+      frame.canvas,
+      0,
+      body0,
+      TIEBAO_HULL_W,
+      body1 - body0,
+      -TIEBAO_HULL_W / 2,
+      localTop + (body0 - pose.row),
+      TIEBAO_HULL_W,
+      body1 - body0
+    );
   }
-  for (let y = y0; y < y1; y++) {
-    const x = Math.round(tiebaoSwitchX(y, fromX, toX, u, tailY));
+  const stamp0 = Math.max(pose.row, bodyEnd);
+  const stamp1 = Math.min(row1, height);
+  if (stamp1 > stamp0) {
+    ctx.drawImage(
+      frame.canvas,
+      0,
+      frame.height - (height - stamp0),
+      TIEBAO_HULL_W,
+      stamp1 - stamp0,
+      -TIEBAO_HULL_W / 2,
+      localTop + (stamp0 - pose.row),
+      TIEBAO_HULL_W,
+      stamp1 - stamp0
+    );
+  }
+  ctx.restore();
+}
+
+/**
+ * Crop the full consist to the cars still attached and paste the tail beam
+ * onto the bottom. On a straight rail this is one blit. On a turnout each
+ * remaining car is its own rectangle, banked onto the same curve as the
+ * painted rails. Shed cars leave with the crop. Strips are not offset.
+ */
+function drawTiebaoHull(
+  ctx: CanvasRenderingContext2D,
+  frame: SpriteFrame,
+  boss: BossRuntime
+): void {
+  const height = tiebaoLiveHull(boss).h;
+  const top = Math.floor(boss.y - height / 2);
+  const poses = tiebaoCarPoses(boss);
+  const anchor = poses[0];
+  const straight =
+    anchor !== undefined && poses.every((pose) => pose.angle === 0 && pose.x === anchor.x);
+  if (straight) {
+    blitTiebaoStraight(ctx, frame, anchor.x, top, height);
+    return;
+  }
+  const bodyEnd = height - Math.min(TIEBAO_BUFFER, height);
+  for (const pose of poses) blitTiebaoRigid(ctx, frame, pose, bodyEnd, height);
+}
+
+function drawRailPixels(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+  const xi = Math.round(x);
+  ctx.fillStyle = PALETTE[COLOR.GRAY];
+  ctx.fillRect(xi - 2, y, 1, 1);
+  ctx.fillRect(xi + 1, y, 1, 1);
+  ctx.fillStyle = PALETTE[COLOR.BLACK];
+  ctx.fillRect(xi - 1, y, 1, 1);
+  ctx.fillStyle = PALETTE[COLOR.PALE_GRAY];
+  ctx.fillRect(xi, y, 1, 1);
+}
+
+function nearestStock(x: number): number {
+  let best = Infinity;
+  for (const rail of TIEBAO_RAIL_X) best = Math.min(best, Math.abs(x - rail));
+  return best;
+}
+
+/**
+ * Point blade beside the stock. The stock centerline is left alone; the
+ * straight rail is redrawn on top of the whole closure afterwards.
+ */
+function drawSwitchPoints(
+  ctx: CanvasRenderingContext2D,
+  stockX: number,
+  y: number,
+  dir: number
+): void {
+  const xi = Math.round(stockX);
+  const len = 28;
+  for (let i = 0; i < len; i++) {
+    const py = Math.round(y) - i;
+    if (py < 0 || py >= LOGICAL_H) continue;
+    const open = 5 + Math.round((i / (len - 1)) * 7);
+    const bx = xi + open * dir;
+    if (i % 4 === 0) {
+      ctx.fillStyle = PALETTE[COLOR.TERRAIN_CONCRETE];
+      ctx.fillRect(Math.min(xi + 4 * dir, bx), py, Math.abs(bx - (xi + 4 * dir)) + 1, 2);
+    }
+    drawRailPixels(ctx, bx, py);
+  }
+}
+
+/**
+ * Frog wing on the diverging side of the target stock. The stock itself is
+ * not painted here, so the straight rail is not cut.
+ */
+function drawFrog(ctx: CanvasRenderingContext2D, x: number, y: number, dir: number): void {
+  const xi = Math.round(x);
+  const yi = Math.round(y);
+  for (let i = -8; i <= 8; i++) {
+    const py = yi + i;
+    if (py < 0 || py >= LOGICAL_H) continue;
+    const gap = 5 + Math.round(Math.abs(i) * 0.45);
+    const bx = xi + dir * gap;
+    if (Math.abs(i) % 4 === 0) {
+      ctx.fillStyle = PALETTE[COLOR.TERRAIN_CONCRETE];
+      const left = Math.min(xi + dir * 5, bx);
+      ctx.fillRect(left, py, Math.abs(bx - (xi + dir * 5)) + 1, 2);
+    }
+    drawRailPixels(ctx, bx, py);
+  }
+}
+
+/** Straight stock steel, on top of any closure paint in this span. */
+function drawStockSteel(ctx: CanvasRenderingContext2D, y0: number, y1: number): void {
+  const yStart = Math.max(0, Math.floor(y0));
+  const yEnd = Math.min(LOGICAL_H, Math.ceil(y1));
+  const h = yEnd - yStart;
+  if (h <= 0) return;
+  for (const rail of TIEBAO_RAIL_X) {
+    const xi = Math.round(rail);
+    ctx.fillStyle = PALETTE[COLOR.GRAY];
+    ctx.fillRect(xi - 2, yStart, 1, h);
+    ctx.fillRect(xi + 1, yStart, 1, h);
     ctx.fillStyle = PALETTE[COLOR.BLACK];
-    ctx.fillRect(x - 2, y, 1, 1);
-    ctx.fillRect(x + 2, y, 1, 1);
+    ctx.fillRect(xi - 1, yStart, 1, h);
     ctx.fillStyle = PALETTE[COLOR.PALE_GRAY];
-    ctx.fillRect(x - 1, y, 2, 1);
+    ctx.fillRect(xi, yStart, 1, h);
   }
+}
+
+type ClosureSpan = TiebaoVisual['turnouts'][number];
+
+/**
+ * Diverging route only: points, closure steel, frog. Samples are `tiebaoClosureX`,
+ * the same curve the cars ride. Pixels on a stock rail are skipped, and the
+ * three stock rails are redrawn straight through the span. No highlight.
+ */
+function drawClosure(ctx: CanvasRenderingContext2D, span: ClosureSpan): void {
+  const yStart = Math.max(0, Math.floor(span.y0));
+  const yEnd = Math.min(LOGICAL_H, Math.ceil(span.y1));
+  for (let y = yStart; y < yEnd; y++) {
+    const x = tiebaoClosureX(y, span.fromX, span.toX, span.y0, span.y1);
+    const clear = nearestStock(x);
+    if (clear < 6) continue;
+    if ((y & 3) < 2 && clear > 14) {
+      ctx.fillStyle = PALETTE[COLOR.TERRAIN_CONCRETE];
+      ctx.fillRect(Math.round(x) - 6, y, 12, 1);
+    }
+    drawRailPixels(ctx, x, y);
+  }
+  for (const mark of tiebaoSpanMarks(span.y0, span.y1, span.fromX, span.toX)) {
+    if (mark.y < -40 || mark.y > LOGICAL_H + 8) continue;
+    const dir = mark.joinX >= mark.stockX ? 1 : -1;
+    if (mark.kind === 'points') drawSwitchPoints(ctx, mark.stockX, mark.y, dir);
+    else drawFrog(ctx, mark.joinX, mark.y, dir);
+  }
+  drawStockSteel(ctx, span.y0, span.y1);
 }
 
 /** Turnout, warning circles, and the rail-break sparks under the train. */
 function drawTiebaoGround(ctx: CanvasRenderingContext2D, boss: BossRuntime, time: number): void {
   const visual = tiebaoVisual(boss);
   ctx.save();
-  if (visual?.switch) {
-    drawTurnout(ctx, visual.switch.fromX, visual.switch.toX, visual.switch.u, visual.switch.tailY);
+  if (visual) {
+    for (const turnout of visual.turnouts) drawClosure(ctx, turnout);
   }
   if (visual?.rocketWarn) {
     ctx.fillStyle = PALETTE[COLOR.EXPLOSION_YELLOW];
@@ -565,12 +728,18 @@ function drawTiebaoAir(
       ctx.fill();
     });
   }
-  const lampY = boss.y + tiebaoLiveHull(boss).h / 2 - 10;
+  const poses = tiebaoCarPoses(boss);
+  const tail = poses.length > 0 ? poses[poses.length - 1] : undefined;
+  const along = tail ? tail.h / 2 - 10 : 0;
+  const lampX = tail ? tail.x + Math.sin(tail.angle) * along : boss.x;
+  const lampY = tail ? tail.y + Math.cos(tail.angle) * along : boss.y;
   const flashing = visual.ramWarn && Math.floor(time * 16) % 2 === 0;
   ctx.globalAlpha = flashing ? 0.95 : 0.55;
   ctx.fillStyle = PALETTE[COLOR.EXPLOSION_YELLOW];
-  ctx.fillRect(boss.x - 16, lampY, 8, 3);
-  ctx.fillRect(boss.x + 8, lampY, 8, 3);
+  ctx.translate(lampX, lampY);
+  ctx.rotate(tail?.angle ?? 0);
+  ctx.fillRect(-16, 0, 8, 3);
+  ctx.fillRect(8, 0, 8, 3);
   ctx.restore();
 }
 

@@ -111,6 +111,8 @@ export interface Battle {
   readonly spawner: BulletSpawner;
   readonly emitter: WeaponEmitter;
   readonly victory: VictoryExit;
+  /** 0–1 exhaust swell while 铁堡 holds a shed. Victory flame still wins. */
+  chaseBoost: number;
   readonly tune: WeaponTestTune;
   readonly meter: DamageMeter;
   /** Fire clocks, one per weapon slot. */
@@ -216,6 +218,7 @@ export function createBattle(scene: SceneContext): Battle {
       },
     },
     victory: createVictoryExit(),
+    chaseBoost: 0,
     tune: createWeaponTestTune(),
     meter: createDamageMeter(),
     guns: { main: 0, sub: 0 },

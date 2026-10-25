@@ -52,12 +52,15 @@ import {
 } from '@/game/systems/danmaku';
 import {
   stepTiebao,
+  tiebaoHullSegments,
   tiebaoLiveHull,
   tiebaoMarkBomb,
   tiebaoOnDeath,
   tiebaoOnFight,
   tiebaoPlaceEnter,
   tiebaoResolveBomb,
+  tiebaoChaseBoost,
+  tiebaoSyncScroll,
   tiebaoTryShot,
 } from '@/game/systems/tiebao';
 
@@ -155,6 +158,11 @@ export interface BossWorld {
   playerX: number;
   playerY: number;
   rng: Rng;
+  /**
+   * World scroll in pixels. 铁堡's laid turnouts add this so they ride the
+   * factory downward. Omitted means the turnouts stay where they were painted.
+   */
+  scroll?: number;
 }
 
 export interface BossShake {
@@ -177,6 +185,11 @@ export interface BossEvents {
   /** STAGE CLEAR hold finished; show the result screen. */
   enterResult: boolean;
   consumedBullet: boolean;
+  /**
+   * Player exhaust boost, 0–1, while 铁堡 holds a shed. Shot events omit it
+   * so they do not clear a boost `updateBoss` already published.
+   */
+  chaseBoost?: number;
 }
 
 export interface BulletBox {
@@ -341,6 +354,12 @@ export function bossPart(boss: BossRuntime, id: string): BossPartRuntime | undef
   return boss.parts.find((part) => part.id === id);
 }
 
+/**
+ * Axis-aligned hull. 铁堡 shots and the player use `tiebaoHullSegments` instead:
+ * one rigid box per car, which tiles this rect while parked and follows the
+ * turnout while the cars are banked. One rect at `boss.x` would miss the nose
+ * or the tail.
+ */
 export function bossHullRect(boss: BossRuntime): { x: number; y: number; w: number; h: number } {
   if (boss.def.script === 'tiebao') {
     const hull = tiebaoLiveHull(boss);
@@ -481,6 +500,7 @@ export function updateBoss(boss: BossRuntime, dt: number, world?: BossWorld): Bo
   if (boss.stage === 'done') return ev;
   const def = boss.def;
   const scripted = def.script === 'tiebao';
+  if (scripted) tiebaoSyncScroll(boss, world?.scroll);
 
   boss.prevX = boss.x;
   boss.prevY = boss.y;
@@ -548,6 +568,7 @@ export function updateBoss(boss: BossRuntime, dt: number, world?: BossWorld): Bo
     syncParts(boss);
   }
   if (attackDt > 0 && boss.stage === 'fight') tickAttacks(boss, attackDt, ev);
+  if (scripted) ev.chaseBoost = tiebaoChaseBoost(boss);
   return ev;
 }
 
@@ -613,10 +634,9 @@ export function resolveBossBullet(
   );
   if (direct) return connect(direct);
 
-  const hull = bossHullRect(boss);
   const left = bullet.x - bullet.w / 2;
   const top = bullet.y - bullet.h / 2;
-  if (!rectsOverlap(left, top, bullet.w, bullet.h, hull.x, hull.y, hull.w, hull.h)) return ev;
+  if (!hullOverlapsBullet(boss, left, top, bullet.w, bullet.h)) return ev;
 
   if (boss.def.hullTransfers) {
     const any = nearestPart(hittable, bullet, () => true);
@@ -629,6 +649,7 @@ export function resolveBossBullet(
   // weak-point face. A shot into that face damages the nearest living part
   // immediately, including off-center and 15° streams. Armor above the
   // part centers still stops a bullet without hurting anything.
+  const hull = bossHullRect(boss);
   const faceBottom = hull.y + hull.h;
   const facing = nearestPart(hittable, bullet, (part) => {
     const bulletTop = bullet.y - bullet.h / 2;
@@ -641,10 +662,32 @@ export function resolveBossBullet(
   return ev;
 }
 
+function hullOverlapsBullet(
+  boss: BossRuntime,
+  left: number,
+  top: number,
+  w: number,
+  h: number
+): boolean {
+  if (boss.def.script === 'tiebao') {
+    return tiebaoHullSegments(boss).some((seg) =>
+      rectsOverlap(left, top, w, h, seg.x, seg.y, seg.w, seg.h)
+    );
+  }
+  const hull = bossHullRect(boss);
+  return rectsOverlap(left, top, w, h, hull.x, hull.y, hull.w, hull.h);
+}
+
 export function bossHitsPlayer(boss: BossRuntime, px: number, py: number): boolean {
   if (!bossBlocksShots(boss)) return false;
-  const hull = bossHullRect(boss);
-  if (circleRect(px, py, HITBOX_RADIUS, hull.x, hull.y, hull.w, hull.h)) return true;
+  if (boss.def.script === 'tiebao') {
+    for (const seg of tiebaoHullSegments(boss)) {
+      if (circleRect(px, py, HITBOX_RADIUS, seg.x, seg.y, seg.w, seg.h)) return true;
+    }
+  } else {
+    const hull = bossHullRect(boss);
+    if (circleRect(px, py, HITBOX_RADIUS, hull.x, hull.y, hull.w, hull.h)) return true;
+  }
   for (const part of boss.parts) {
     if (!part.alive || part.falling) continue;
     const dx = px - part.worldX;

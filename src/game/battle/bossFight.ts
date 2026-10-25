@@ -60,6 +60,7 @@ export function applyBossEvents(b: Battle, ev: BossEvents): void {
   for (const boom of ev.explosions) {
     spawnExplosion(b.fx, boom.x, boom.y, boom.size, boom.delay);
   }
+  if (ev.chaseBoost !== undefined) b.chaseBoost = ev.chaseBoost;
   if (ev.shake) triggerShake(b.fx, ev.shake.intensity, ev.shake.duration);
   if (ev.explosions.length > 0) b.sfx('enemyExplode');
 }
@@ -68,7 +69,12 @@ export function applyBossEvents(b: Battle, ev: BossEvents): void {
 export function stepBoss(b: Battle, dt: number): 'result' | null {
   const boss = b.boss;
   if (!boss || boss.phase === 'done') return null;
-  const ev = updateBoss(boss, dt, { playerX: b.player.x, playerY: b.player.y, rng: b.rng });
+  const ev = updateBoss(boss, dt, {
+    playerX: b.player.x,
+    playerY: b.player.y,
+    rng: b.rng,
+    scroll: b.scrollFrame.scroll,
+  });
   applyBossEvents(b, ev);
   if (ev.hurtPlayer && isPlayerVulnerable(b)) killPlayer(b);
   const warnFor = boss.def.fightWarning;

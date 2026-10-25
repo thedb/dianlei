@@ -794,6 +794,19 @@ export const TIEBAO_END_PARK_Y = TIEBAO_END_NOSE_Y + TIEBAO_HULL_H / 2;
 export const TIEBAO_ENCOUNTER_TAIL_Y = 160;
 /** Tail drop per shed car. 7 × 24 brings the end-form nose to TIEBAO_END_NOSE_Y. */
 export const TIEBAO_SHED_ADVANCE = 24;
+/**
+ * After the rear car explodes, the remaining cars stay put this long.
+ * They do not slide up into the gap during the hold.
+ */
+export const TIEBAO_SHED_DELAY = 0.9;
+/** Drop into the locked rest pose, seconds per car lost in that batch. */
+export const TIEBAO_SHED_SLIDE = 0.4;
+/**
+ * Player exhaust boost while the shed hold is running. Same 0–1 scale as the
+ * victory flame (`length * (1 + boost * VICTORY_FLAME_BOOST)`). 0.35 is about
+ * 60% longer than cruise. It drops back to 0 when the drop animation starts.
+ */
+export const TIEBAO_CHASE_FLAME = 0.35;
 /** Hull center at the encounter (9 cars, tail at TIEBAO_ENCOUNTER_TAIL_Y). */
 export const TIEBAO_PARK_Y = TIEBAO_ENCOUNTER_TAIL_Y - TIEBAO_FULL_H / 2;
 /** Tail just above the screen at the start of the slide-in. */
@@ -813,16 +826,52 @@ export const TIEBAO_ENTER_AT = 123;
 export const TIEBAO_WARNING = 1.5;
 
 /**
- * Park-to-park. Output, then a background turnout. No telegraph and no lit rail.
- * The hull X stays on a rail center and snaps when the move completes.
- * Hard overload uses the same 6s.
+ * Park-to-park base. Output is `PERIOD - MOVE` (4.8s) and stays that long so
+ * the weapon window does not shrink. The live move is longer: adjacent rails
+ * take `MOVE + MOVE_EXTRA`, and a left↔right compound turnout takes twice
+ * that adjacent time. Hard overload uses the same output and the same move
+ * rule. The turnout is still pre-laid by `TIEBAO_SWITCH_LEAD` (distance, not
+ * extra time) and finishes only once the whole consist is on the new rail.
+ * Stock rails stay straight. The closure is extra steel and stays on the map
+ * after the move, scrolling off with the factory.
  */
 export const TIEBAO_SWITCH_PERIOD = 6;
+/** Original move. Adjacent duration is this plus `TIEBAO_MOVE_EXTRA`. */
 export const TIEBAO_MOVE = 1.2;
-/** Vertical length of the background frog. The train body does not follow it. */
-export const TIEBAO_SWITCH_SPAN = 176;
+/** Added to every switch on top of `TIEBAO_MOVE`. Not applied a second time to L↔R. */
+export const TIEBAO_MOVE_EXTRA = 0.7;
+/**
+ * Vertical length of one turnout (points through frog). Adjacent rails use this.
+ * Lengthened from 176 so the chord is gentler under the bank cap.
+ * The heel starts `TIEBAO_SWITCH_LEAD` above the nose and finishes at the tail.
+ */
+export const TIEBAO_SWITCH_SPAN = 240;
+/** L↔R crossover: two turnouts in series. The path passes through the middle rail. */
+export const TIEBAO_SWITCH_CROSS_SPAN = TIEBAO_SWITCH_SPAN * 2;
+/**
+ * Pixels of turnout already laid ahead of the nose at the start of a move.
+ * Cars stay on the old rail until the heel reaches them. Not added to the 1.2s.
+ */
+export const TIEBAO_SWITCH_LEAD = 64;
+/**
+ * Fraction of a move used to bring the heel down to the screen when the nose
+ * is still above it. The rest of the 1.9s / 3.8s is the on-screen tail and the
+ * closure actually crossing. A consist whose nose is already on screen keeps
+ * a linear sweep. Curve parameter still runs 0 → 1; this only retimes it.
+ */
+export const TIEBAO_SWITCH_RUSH = 0.22;
+/** Max rigid-car bank, degrees. A steeper chord clamps; pixels are never sheared. */
+export const TIEBAO_CAR_MAX_BANK = 25;
+/** Where on one turnout (0 = heel, 1 = toe) the point blades sit. */
+export const TIEBAO_POINT_AT = 0.14;
+/** Where on one turnout the frog sits. */
+export const TIEBAO_FROG_AT = 0.9;
 
-/** Hard overload. Same period as the main fight; weapons and smoke still differ. */
+/**
+ * Hard overload. Same output window and the same move rule as the main fight
+ * (`TIEBAO_MOVE` plus `TIEBAO_MOVE_EXTRA`, doubled for a left↔right cross).
+ * Weapons and smoke still differ.
+ */
 export const TIEBAO_OVERLOAD_PERIOD = 6;
 export const TIEBAO_OVERLOAD_MOVE = 1.2;
 export const TIEBAO_OVERLOAD_HP = 240;
@@ -897,6 +946,7 @@ export const TIEBAO_RAM_RETURN = 1.9;
 /** Screen y the hull bottom reaches at the end of the dive. */
 export const TIEBAO_RAM_BOTTOM = LOGICAL_H;
 
+/** Retired with the rocket volley. The fight does not read these. */
 export const TIEBAO_ROCKET_SPEED = 64;
 export const TIEBAO_ROCKET_Y = -16;
 export const TIEBAO_ROCKET_WARN = 0.45 * TIEBAO_RATE_SCALE;
@@ -909,6 +959,7 @@ export const TIEBAO_CRATE_SCORE = 300;
 export const TIEBAO_CRATE_LAND_Y = 480;
 export const TIEBAO_CRATE_BLAST = 22;
 export const TIEBAO_CRATE_SIZE = 12;
+/** Retired with the crate volley. Overload still uses `TIEBAO_OVERLOAD_CRATE_EVERY`. */
 export const TIEBAO_CRATE_FIRST = 0.5 * TIEBAO_RATE_SCALE;
 export const TIEBAO_CRATE_GAP = 1.2 * TIEBAO_RATE_SCALE;
 export const TIEBAO_CRATE_PER_WINDOW = 2;
