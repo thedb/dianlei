@@ -15,7 +15,21 @@ import type {
 } from '@/game/levels/types';
 import { getStage } from '@/game/levels/registry';
 import { mvpSkipsGroup } from '@/game/levels/stageStats';
-import { LOGICAL_H, LOGICAL_W, RISK_CRATE_HOLD, RISK_CRATE_STOP_Y } from '@/game/config';
+import {
+  groupEnabled,
+  resolveFireOnly,
+  resolveGroupCount,
+  resolveGroupFire,
+  waveEnabled,
+} from '@/game/levels/wavePlan';
+import {
+  LOGICAL_H,
+  LOGICAL_W,
+  REAR_DIAG_SPAWN_X_LEFT,
+  REAR_DIAG_SPAWN_X_RIGHT,
+  RISK_CRATE_HOLD,
+  RISK_CRATE_STOP_Y,
+} from '@/game/config';
 import { ENEMY_DEFS } from '@/game/entities/enemyDefs';
 import { withFireStagger } from '@/game/systems/danmaku';
 
@@ -65,6 +79,7 @@ interface PendingSpawn {
 export class WaveScheduler {
   private waves: Wave[];
   private readonly mvpOnly: boolean;
+  private readonly difficulty: Difficulty | undefined;
   private readonly riskCrates: RiskCrateSpawn[];
   private currentWaveIndex: number = 0;
   private nextRisk: number = 0;
@@ -77,6 +92,7 @@ export class WaveScheduler {
 
   constructor(config: WaveSchedulerConfig) {
     this.mvpOnly = config.mvpOnly;
+    this.difficulty = config.difficulty;
     const stage = config.stage ?? getStage();
     if (config.mvpOnly) {
       this.waves = stage.waves.filter((w) => w.mvp === true || w.mvp === 'partial');
@@ -197,19 +213,30 @@ export class WaveScheduler {
     return requests;
   }
 
-  /** Schedule all spawns from a wave */
+  /**
+   * Schedule all spawns from a wave.
+   * A clear-wave bonus or a timed supply ship is not read (stage 2 §5.3).
+   * `powerBelowMax` is the relief carrier, not that supply ship.
+   */
   private scheduleWave(wave: Wave): void {
+    if (!waveEnabled(wave, this.difficulty)) return;
+
     for (let gi = 0; gi < wave.groups.length; gi++) {
       const group = wave.groups[gi]!;
+      if (!groupEnabled(group, this.difficulty)) continue;
 
       // P1 partial waves drop non-fighter groups. The full stage keeps them.
       if (this.mvpOnly && mvpSkipsGroup(wave, group.enemy)) continue;
 
-      for (let i = 0; i < group.count; i++) {
+      const count = resolveGroupCount(group, this.difficulty);
+      const pattern = resolveGroupFire(group, this.difficulty);
+      const only = resolveFireOnly(group, this.difficulty);
+
+      for (let i = 0; i < count; i++) {
         const spawnTime = wave.t + (group.delay ?? 0) + (group.interval ?? 0) * i;
         const pos = resolveSpawnPosition(group, i);
 
-        const canFire = !group.fireOnly || group.fireOnly.includes(i);
+        const canFire = !only || only.includes(i);
 
         let drop: 'P' | 'B' | null = null;
         if (group.drops) {
@@ -220,7 +247,7 @@ export class WaveScheduler {
         }
 
         const stagger = (group.fireStagger ?? 0) * i;
-        const fire = canFire ? withFireStagger(group.fire, stagger) : { kind: 'none' as const };
+        const fire = canFire ? withFireStagger(pattern, stagger) : { kind: 'none' as const };
 
         this.pendingSpawns.push({
           waveId: wave.id,
@@ -302,6 +329,12 @@ export class WaveScheduler {
 export function resolveSpawnPosition(group: SpawnGroup, index: number): { x: number; y: number } {
   const laneX = group.xs[index % group.xs.length] ?? 180;
   if (group.move.kind === 'side_arc') return { x: laneX, y: group.y ?? group.move.y0 };
+  if (group.move.kind === 'rear_diag') {
+    return {
+      x: group.move.side === 'left' ? REAR_DIAG_SPAWN_X_LEFT : REAR_DIAG_SPAWN_X_RIGHT,
+      y: group.y ?? group.move.y0,
+    };
+  }
   if (group.move.kind === 'ground') return resolveGroundSpawn(group, index, laneX);
   return { x: laneX, y: group.y ?? -20 };
 }

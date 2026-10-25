@@ -38,7 +38,12 @@ import {
 } from '@/game/art';
 import { matePixels, matePlacements } from '@/game/systems/mate';
 import { ENEMY_DEFS } from '@/game/entities/enemyDefs';
-import { isGroundEnemy, type Enemy } from '@/game/entities/enemy';
+import {
+  headingSpriteRotation,
+  isGroundEnemy,
+  rearDiagHeading,
+  type Enemy,
+} from '@/game/entities/enemy';
 import { isItemFlashing } from '@/game/entities/item';
 import { bombWaveRadius } from '@/game/systems/bomb';
 import { warningBulletAlpha } from '@/game/systems/background';
@@ -65,18 +70,31 @@ function drawEnemy(
   const sheet = assets.enemies.byType[enemy.type];
   const frame = enemy.hitFlashTimer > 0 ? sheet.hitFlash : sheet.idle;
 
-  for (const nozzle of sheet.nozzles) {
-    drawEnemyFlame(ctx, ex + nozzle.x, ey + nozzle.y, time);
-  }
-
-  if (def.spin !== undefined) {
+  // Nose-down art rotated onto the climb. Flames stay on the tail.
+  // Stage 1 never takes this branch, so its draw order stays the one below.
+  if (enemy.move.kind === 'rear_diag') {
     ctx.save();
     ctx.translate(ex, ey);
-    ctx.rotate(enemy.moveTimer * def.spin);
-    ctx.drawImage(frame.canvas, -frame.anchorX, -frame.anchorY);
+    ctx.rotate(headingSpriteRotation(rearDiagHeading(enemy.move)));
+    for (const nozzle of sheet.nozzles) {
+      drawEnemyFlame(ctx, nozzle.x, nozzle.y, time);
+    }
+    renderer.drawImage(frame.canvas, -frame.anchorX, -frame.anchorY);
     ctx.restore();
   } else {
-    renderer.drawImage(frame.canvas, ex - frame.anchorX, ey - frame.anchorY);
+    for (const nozzle of sheet.nozzles) {
+      drawEnemyFlame(ctx, ex + nozzle.x, ey + nozzle.y, time);
+    }
+
+    if (def.spin !== undefined) {
+      ctx.save();
+      ctx.translate(ex, ey);
+      ctx.rotate(enemy.moveTimer * def.spin);
+      ctx.drawImage(frame.canvas, -frame.anchorX, -frame.anchorY);
+      ctx.restore();
+    } else {
+      renderer.drawImage(frame.canvas, ex - frame.anchorX, ey - frame.anchorY);
+    }
   }
 
   if (def.barrel) drawGunBarrel(ctx, ex, ey, enemy.aimAngle, def.barrel === 'twin');

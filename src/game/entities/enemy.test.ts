@@ -2,13 +2,25 @@ import { describe, expect, it } from 'vitest';
 import {
   BG_SCROLL_SPEED,
   FIXED_DT,
+  REAR_DIAG_FIRE_X_MIN,
+  REAR_DIAG_SPAWN_X_LEFT,
+  REAR_DIAG_SPAWN_X_RIGHT,
   SIDE_ARC_RADIUS,
   TANK_DIAG_CLIMB,
   TANK_DIAG_VX,
   TANK_ENTRY_SPEED,
   TURRET_TURN_RATE,
 } from '@/game/config';
-import { ENEMY_STATS, createEnemy, isGroundEnemy, spawnEnemy, updateEnemy } from './enemy';
+import {
+  ENEMY_STATS,
+  createEnemy,
+  headingSpriteRotation,
+  isGroundEnemy,
+  rearDiagHeading,
+  shouldEnemyFire,
+  spawnEnemy,
+  updateEnemy,
+} from './enemy';
 
 function step(enemy: ReturnType<typeof createEnemy>, seconds: number, scroll = 0): void {
   const frames = Math.round(seconds / FIXED_DT);
@@ -213,6 +225,107 @@ describe('enemy movement', () => {
     step(enemy, 0.5);
     expect(enemy.x).toBeGreaterThan(-12);
     expect(enemy.y).toBeGreaterThan(40);
+  });
+
+  it('climbs rear_diag up and inward from both lower edges', () => {
+    expect(REAR_DIAG_SPAWN_X_LEFT).toBe(-16);
+    expect(REAR_DIAG_SPAWN_X_RIGHT).toBe(376);
+    expect(REAR_DIAG_FIRE_X_MIN).toBe(24);
+
+    const left = createEnemy();
+    spawnEnemy(
+      left,
+      'small',
+      REAR_DIAG_SPAWN_X_LEFT,
+      620,
+      { kind: 'rear_diag', side: 'left', y0: 620, bearing: 28, speed: 170 },
+      { kind: 'none' }
+    );
+    updateEnemy(left, 0.4, 180, 560, 0);
+    const vx = Math.sin((28 * Math.PI) / 180) * 170;
+    const vy = -Math.cos((28 * Math.PI) / 180) * 170;
+    expect(left.x).toBeCloseTo(-16 + vx * 0.4, 4);
+    expect(left.y).toBeCloseTo(620 + vy * 0.4, 4);
+    expect(left.x).toBeCloseTo(16, 0);
+    expect(left.y).toBeCloseTo(560, 0);
+    expect(left.y).toBeLessThan(620);
+
+    const right = createEnemy();
+    spawnEnemy(
+      right,
+      'small',
+      REAR_DIAG_SPAWN_X_RIGHT,
+      620,
+      { kind: 'rear_diag', side: 'right', y0: 620, bearing: 28, speed: 170 },
+      { kind: 'none' }
+    );
+    updateEnemy(right, 0.4, 180, 560, 0);
+    expect(REAR_DIAG_SPAWN_X_RIGHT - right.x).toBeCloseTo(left.x - REAR_DIAG_SPAWN_X_LEFT, 4);
+    expect(right.y).toBeCloseTo(left.y, 4);
+    expect(right.x).toBeLessThan(REAR_DIAG_SPAWN_X_RIGHT);
+  });
+
+  it('aims the nose-down sprite along the rear_diag climb', () => {
+    const left = rearDiagHeading({
+      kind: 'rear_diag',
+      side: 'left',
+      y0: 620,
+      bearing: 28,
+      speed: 170,
+    });
+    expect(left).toBe(152);
+    const leftRot = headingSpriteRotation(left);
+    expect(-Math.sin(leftRot)).toBeGreaterThan(0);
+    expect(Math.cos(leftRot)).toBeLessThan(0);
+
+    const right = rearDiagHeading({
+      kind: 'rear_diag',
+      side: 'right',
+      y0: 620,
+      bearing: 28,
+      speed: 170,
+    });
+    expect(right).toBe(208);
+    const rightRot = headingSpriteRotation(right);
+    expect(-Math.sin(rightRot)).toBeLessThan(0);
+    expect(Math.cos(rightRot)).toBeLessThan(0);
+    expect(headingSpriteRotation(180)).toBeCloseTo(-Math.PI);
+  });
+
+  it('holds rear_diag fire until x is on the field, then honors firstDelay', () => {
+    const waiting = createEnemy();
+    spawnEnemy(
+      waiting,
+      'small',
+      20,
+      400,
+      { kind: 'rear_diag', side: 'left', y0: 400, bearing: 28, speed: 170 },
+      { kind: 'aimed1', maxShots: 1, firstDelay: 0 }
+    );
+    expect(shouldEnemyFire(waiting, 5, 180, 200).shouldFire).toBe(false);
+    expect(waiting.fireTimer).toBe(0);
+    expect(waiting.shotsFired).toBe(0);
+
+    let guard = 0;
+    while (waiting.x < REAR_DIAG_FIRE_X_MIN && guard < 30) {
+      updateEnemy(waiting, FIXED_DT, 180, 200, 0);
+      guard += 1;
+    }
+    expect(waiting.x).toBeGreaterThanOrEqual(REAR_DIAG_FIRE_X_MIN);
+    expect(waiting.fireTimer).toBe(0);
+    expect(shouldEnemyFire(waiting, FIXED_DT, 180, 200).shouldFire).toBe(true);
+
+    const paced = createEnemy();
+    spawnEnemy(
+      paced,
+      'small',
+      40,
+      400,
+      { kind: 'rear_diag', side: 'left', y0: 400, bearing: 28, speed: 160 },
+      { kind: 'aimed1', maxShots: 1, firstDelay: 0.55 }
+    );
+    expect(shouldEnemyFire(paced, 0.5, 180, 200).shouldFire).toBe(false);
+    expect(shouldEnemyFire(paced, 0.05, 180, 200).shouldFire).toBe(true);
   });
 
   it('limits turret traverse to TURRET_TURN_RATE', () => {

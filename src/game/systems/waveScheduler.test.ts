@@ -195,6 +195,13 @@ describe('WaveScheduler full stage', () => {
     expect(scheduler.getDebugInfo().spawned).toBe(0);
   });
 
+  it('keeps the stage 1 ship count when a difficulty is set', () => {
+    const scheduler = new WaveScheduler({ mvpOnly: false, difficulty: 'hard' });
+    scheduler.setPowerLevel(1);
+    for (let i = 0; i < 200; i++) scheduler.update(1);
+    expect(scheduler.getDebugInfo().spawned).toBe(getStageEnemyCount(true));
+  });
+
   it('keeps interceptors out of the MVP partial wave', () => {
     const mvp = new WaveScheduler({ mvpOnly: true });
     const full = new WaveScheduler({ mvpOnly: false });

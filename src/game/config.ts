@@ -402,6 +402,19 @@ export const ORBIT_EXIT_SPEED = 90;
 /** Side-entry arc radius before the dive */
 export const SIDE_ARC_RADIUS = 140;
 
+/**
+ * Rear diagonal entry (stage 2 wave table §3.3).
+ * Born just outside the left or right edge and below the player's park,
+ * then a straight climb inward. Shots wait until x is on the field, so a
+ * ship that starts under the screen edge does not fire off-screen.
+ * Spawn x stays inside the cull box (−120..480, −120..700).
+ */
+export const REAR_DIAG_SPAWN_X_LEFT = -16;
+export const REAR_DIAG_SPAWN_X_RIGHT = LOGICAL_W + 16;
+/** Inclusive x window. Outside it, `rear_diag` does not advance its fire clock. */
+export const REAR_DIAG_FIRE_X_MIN = 24;
+export const REAR_DIAG_FIRE_X_MAX = LOGICAL_W - 24;
+
 /** V-dive wings leave on this diagonal (degrees) */
 export const V_DIVE_EXIT_DEG = 45;
 
