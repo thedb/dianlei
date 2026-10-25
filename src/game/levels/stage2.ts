@@ -4,7 +4,7 @@
  * v1's "0 new models" lock is revoked. This table adds `factory_aa`,
  * `step_slide`, and `dive_once`, and keeps `rear_diag` as the signature.
  * Easy is the base count and fire. Medium and hard add ships or swap patterns
- * on the same clock (122 / 162 / 188, plus the W21 relief ship when main power
+ * on the same clock (128 / 168 / 196, plus the W21 relief ship when main power
  * is below max). `STAGE2_WARNING_AT` stays 118. 铁堡 still enters at 123.
  *
  * Clear-wave rewards and the timed supply ship are not implemented (§5.3).
@@ -186,6 +186,21 @@ const TANK_WOODS: SpawnGroup['fireByDifficulty'] = {
   hard: aimed(1.7),
 };
 
+const TANK_OPEN: SpawnGroup['fireByDifficulty'] = {
+  medium: aimed(2.1),
+  hard: aimed(1.8),
+};
+
+const TANK_MID: SpawnGroup['fireByDifficulty'] = {
+  medium: aimed(2.0),
+  hard: aimed(1.7),
+};
+
+const TANK_LATE: SpawnGroup['fireByDifficulty'] = {
+  medium: aimed(1.8),
+  hard: aimed(1.6),
+};
+
 /** Easy and medium fire one aimed shot at the arc apex. Hard replaces it. */
 const ARC_APEX: Fire = { kind: 'aimed1', maxShots: 1 };
 
@@ -261,8 +276,11 @@ function columnSine(
   return group;
 }
 
-/** Short parallel burst. Hotter than `turret2`'s steady `fixed2`, same lane gap. */
-function aaBurst(interval: number): Fire {
+/**
+ * Parallel pair along the barrel, three volleys `AIMED_BURST_GAP` (0.12s) apart.
+ * `interval` is the wait before the next trio, not a machine-gun stream.
+ */
+function aaBurst(interval: number, firstDelay = 0.55): Fire {
   return {
     kind: 'pattern',
     pattern: {
@@ -271,10 +289,44 @@ function aaBurst(interval: number): Fire {
       gap: FIXED2_SEPARATION,
       aim: 'barrel',
       bullet: 'small',
-      burst: 2,
+      burst: 3,
     },
     interval,
-    firstDelay: 0.55,
+    firstDelay,
+  };
+}
+
+/** One on-screen factory gun. Each difficulty writes its own interval. */
+function aaPlaced(x: number, y: number, firstDelay: number): SpawnGroup {
+  return {
+    enemy: 'factory_aa',
+    count: 1,
+    xs: [x],
+    y,
+    move: { kind: 'ground' },
+    fire: aaBurst(1.65, firstDelay),
+    fireByDifficulty: {
+      medium: aaBurst(1.4, firstDelay),
+      hard: aaBurst(1.15, firstDelay),
+    },
+  };
+}
+
+/** One 4-bullet fan. `maxShots` 1, so the ship does not keep spraying. */
+function quadOnce(spread: number, firstDelay: number): Fire {
+  return {
+    kind: 'pattern',
+    pattern: {
+      shape: 'fan',
+      count: 4,
+      aim: 'player',
+      bullet: 'small',
+      minDist: true,
+      spreadDeg: spread,
+    },
+    spread,
+    maxShots: 1,
+    firstDelay,
   };
 }
 
@@ -352,24 +404,26 @@ export const stage2: StageData = {
   ],
 
   waves: [
-    // Outskirts 0:06–0:44. One breather at 0:45 before the runway.
+    // Outskirts from 0:04. Guns are already on screen; the center road stays open.
     {
-      id: 'W01',
-      t: 6,
+      id: 'W30',
+      t: 4,
       section: 'outskirts',
       mvp: true,
       groups: [
-        {
-          enemy: 'small',
-          count: 6,
-          countByDifficulty: { medium: 8, hard: 9 },
-          xs: [180],
-          interval: 0.26,
-          move: { kind: 'straight', speed: 170 },
-          fire: { kind: 'none' },
-          fireOnly: [1, 3, 5, 7],
-          fireByDifficulty: { hard: aimedOnce() },
-        },
+        // Shoulders of the airfield spine, not a mirror, none on x 150–210.
+        aaPlaced(44, 56, 0.4),
+        aaPlaced(96, 132, 0.72),
+        aaPlaced(58, 220, 1.0),
+        aaPlaced(124, 292, 1.28),
+        aaPlaced(236, 44, 0.52),
+        aaPlaced(312, 108, 0.84),
+        aaPlaced(268, 188, 1.12),
+        aaPlaced(332, 268, 1.36),
+        tank('left', 48, 200, aimed(2.4), TANK_OPEN),
+        tank('right', 312, 280, aimed(2.4), TANK_OPEN),
+        tank('left', 72, 140, aimed(2.4), TANK_OPEN, MEDIUM_HARD),
+        tank('right', 288, 360, aimed(2.4), TANK_OPEN, HARD),
       ],
     },
     {
@@ -396,13 +450,15 @@ export const stage2: StageData = {
       groups: [
         {
           enemy: 'medium',
-          count: 1,
-          xs: [180],
-          move: { kind: 'hover', stopY: 140, hold: 3.5 },
-          fire: fan('fan3', 36, 1.3, 0.7),
+          count: 2,
+          xs: [104, 256],
+          interval: 1.4,
+          fireStagger: 0.5,
+          move: { kind: 'hover', stopY: 125, hold: 5 },
+          fire: quadOnce(52, 0.9),
           fireByDifficulty: {
-            medium: fan('fan3', 40, 1.15, 0.7),
-            hard: fan('fan5', 36, 1.05, 0.7),
+            medium: quadOnce(40, 0.75),
+            hard: quadOnce(28, 0.6),
           },
           drops: [{ index: 0, item: 'P' }],
         },
@@ -488,22 +544,6 @@ export const stage2: StageData = {
         },
         tank('bottomLeft', 72, undefined, aimed(2.2), TANK_EARLY),
         tank('bottomRight', 288, undefined, aimed(2.2), TANK_EARLY),
-      ],
-    },
-    {
-      id: 'W24',
-      t: 40,
-      section: 'outskirts',
-      mvp: true,
-      groups: [
-        {
-          enemy: 'small',
-          count: 3,
-          xs: [140, 180, 220],
-          interval: 0.12,
-          move: { kind: 'dive_once', speed: 250, angle: 0 },
-          fire: { kind: 'none' },
-        },
       ],
     },
     {
@@ -612,6 +652,18 @@ export const stage2: StageData = {
       groups: [70, 150, 310, 230].map((x, i) =>
         drone(x, i * 0.35, 32, 4.5, W11_FIRE, W11_BY, i === 3 ? MEDIUM_HARD : undefined)
       ),
+    },
+    {
+      id: 'W31',
+      t: 61,
+      section: 'runway',
+      mvp: false,
+      groups: [
+        tank('left', 64, 160, aimed(2.2), TANK_MID),
+        tank('right', 300, 250, aimed(2.2), TANK_MID),
+        tank('left', 88, 320, aimed(2.2), TANK_MID, MEDIUM_HARD),
+        tank('right', 276, 90, aimed(2.2), TANK_MID, HARD),
+      ],
     },
     {
       id: 'W12',
@@ -1026,6 +1078,17 @@ export const stage2: StageData = {
         },
         escort(70, 10, 200, 2, { hard: 3 }, MEDIUM_HARD),
         escort(290, -10, 200, 2, { hard: 3 }, MEDIUM_HARD),
+      ],
+    },
+    {
+      id: 'W32',
+      t: 112,
+      section: 'woods',
+      mvp: false,
+      groups: [
+        tank('left', 56, 200, aimed(2.0), TANK_LATE),
+        tank('right', 304, 280, aimed(2.0), TANK_LATE),
+        tank('left', 80, 120, aimed(2.0), TANK_LATE, HARD),
       ],
     },
     {

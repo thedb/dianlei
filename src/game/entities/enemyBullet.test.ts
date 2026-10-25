@@ -237,7 +237,7 @@ describe('enemy fire patterns', () => {
           gap: 10,
           aim: 'barrel',
           bullet: 'small',
-          burst: 2,
+          burst: 3,
         },
         interval: 1.65,
         firstDelay: 0,
@@ -248,6 +248,8 @@ describe('enemy fire patterns', () => {
     expect(shots).toHaveLength(2);
     updateEnemyWeapons(enemy, 0.12, 40, 240, spawner, true);
     expect(shots).toHaveLength(4);
+    updateEnemyWeapons(enemy, 0.12, 40, 240, spawner, true);
+    expect(shots).toHaveLength(6);
     for (const shot of shots) {
       expect(shot.vx).toBeCloseTo(0, 4);
       expect(shot.vy).toBeGreaterThan(0);
