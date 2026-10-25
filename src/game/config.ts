@@ -939,6 +939,7 @@ export const TIEBAO_RAM_RETURN = 1.9;
 /** Screen y the hull bottom reaches at the end of the dive. */
 export const TIEBAO_RAM_BOTTOM = LOGICAL_H;
 
+/** Retired with the rocket volley. The fight does not read these. */
 export const TIEBAO_ROCKET_SPEED = 64;
 export const TIEBAO_ROCKET_Y = -16;
 export const TIEBAO_ROCKET_WARN = 0.45 * TIEBAO_RATE_SCALE;
@@ -951,6 +952,7 @@ export const TIEBAO_CRATE_SCORE = 300;
 export const TIEBAO_CRATE_LAND_Y = 480;
 export const TIEBAO_CRATE_BLAST = 22;
 export const TIEBAO_CRATE_SIZE = 12;
+/** Retired with the crate volley. Overload still uses `TIEBAO_OVERLOAD_CRATE_EVERY`. */
 export const TIEBAO_CRATE_FIRST = 0.5 * TIEBAO_RATE_SCALE;
 export const TIEBAO_CRATE_GAP = 1.2 * TIEBAO_RATE_SCALE;
 export const TIEBAO_CRATE_PER_WINDOW = 2;

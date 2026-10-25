@@ -1,7 +1,7 @@
 /**
  * 铁堡 (stage 2 boss) rail script. The generic runner still owns parts, HP,
  * phases, and the victory exit. This module only moves the hull between the
- * three fixed rails and runs the weapon cycle. State lives in a WeakMap so
+ * three fixed rails and runs the rail-bound weapon pairs. State lives in a WeakMap so
  * `BossRuntime` stays the battleship's shape for the stage-1 render digest.
  *
  * Design: docs/电雷_第二关_铁堡Boss设计_v1.md. No laser. No Math.random.
@@ -24,12 +24,9 @@ import {
   TIEBAO_BROADSIDE_SWEEP,
   TIEBAO_BROADSIDE_TO,
   TIEBAO_CRATE_BLAST,
-  TIEBAO_CRATE_FIRST,
   TIEBAO_CRATE_FLIGHT,
-  TIEBAO_CRATE_GAP,
   TIEBAO_CRATE_HP,
   TIEBAO_CRATE_LAND_Y,
-  TIEBAO_CRATE_PER_WINDOW,
   TIEBAO_CRATE_SCORE,
   TIEBAO_CRATE_SIZE,
   TIEBAO_FAN_FIRST,
@@ -72,11 +69,6 @@ import {
   TIEBAO_RAM_RETURN,
   TIEBAO_RAM_START,
   TIEBAO_RAM_WARN,
-  TIEBAO_ROCKET_RADIUS,
-  TIEBAO_ROCKET_SPEED,
-  TIEBAO_ROCKET_START,
-  TIEBAO_ROCKET_WARN,
-  TIEBAO_ROCKET_Y,
   TIEBAO_ROOF_CAR_ROW,
   TIEBAO_ROOF_LOCO_ROW,
   TIEBAO_SHED_DELAY,
@@ -105,16 +97,7 @@ import {
   tiebaoTailY,
 } from '@/game/systems/tiebaoShed';
 
-export const TIEBAO_MODE_IDS = [
-  'fan',
-  'missiles',
-  'rain',
-  'broadside',
-  'wall',
-  'ram',
-  'rockets',
-  'crates',
-] as const;
+export const TIEBAO_MODE_IDS = ['fan', 'missiles', 'rain', 'broadside', 'wall', 'ram'] as const;
 
 export const TIEBAO_MODE_NAMES = [
   '高射扇',
@@ -123,13 +106,28 @@ export const TIEBAO_MODE_NAMES = [
   '侧舷扫射',
   '封轨弹墙',
   '冲轨撞击',
-  '三轨火箭',
-  '弹链抛射',
 ] as const;
 
 export const TIEBAO_OVERLOAD_MODE_IDS = ['rain', 'wall', 'missiles'] as const;
 
 export type TiebaoModeId = (typeof TIEBAO_MODE_IDS)[number];
+
+/**
+ * Mode A is the odd park (1st, 3rd, …). Mode B is the even park.
+ * Left 72, center 180, right 288.
+ */
+const RAIL_MODES = [
+  ['broadside', 'wall'],
+  ['fan', 'missiles'],
+  ['rain', 'ram'],
+] as const satisfies ReadonlyArray<readonly [TiebaoModeId, TiebaoModeId]>;
+
+/** Weapon for `visits` parks on `rail`. A visit of 0 displays mode A and does not count. */
+export function tiebaoRailMode(rail: number, visits: number): TiebaoModeId {
+  const pair = RAIL_MODES[rail] ?? RAIL_MODES[1];
+  const count = Math.max(1, Math.floor(visits));
+  return count % 2 === 1 ? pair[0] : pair[1];
+}
 type RailPhase = 'output' | 'move';
 type RamPhase = 'idle' | 'warn' | 'dive' | 'return';
 type RailIndex = 0 | 1 | 2;
@@ -180,7 +178,10 @@ interface TiebaoState {
   /** Every switch left on the map, oldest first. Culled once it scrolls off the bottom. */
   laid: LaidTurnout[];
   list: 'main' | 'overload';
+  /** Overload cycle index. The main fight reads `visits` instead. */
   mode: number;
+  /** Parks on rail 0/1/2. Center starts at 1. Only a finished switch increments. */
+  visits: [number, number, number];
   weaponClock: number;
   fanNext: number;
   fanSide: number;
@@ -193,9 +194,6 @@ interface TiebaoState {
   broadShot: number;
   wallVolley: number;
   wallNext: number;
-  rocket: 0 | 1 | 2;
-  crateSpawned: number;
-  crateNext: number;
   ram: RamPhase;
   /** One dash per output window. Stays set after the retreat so it does not dive again. */
   ramDone: boolean;
@@ -629,6 +627,8 @@ function finishSlide(state: TiebaoState, boss: BossRuntime): void {
  * `TIEBAO_SHED_DELAY`, then the remaining cars drop to the locked rest pose.
  */
 function stepShed(boss: BossRuntime, state: TiebaoState, dt: number, ev: BossEvents | null): void {
+  // A live turnout owns the pose. HP crossed during the move waits until park.
+  if (state.phase === 'move') return;
   const goal = tiebaoShedCountFromRatio(tiebaoMainRatio(boss));
   if (!shedAnimated(boss)) {
     if (ev && goal > state.shedBurst) burstSheds(state, ev, goal);
@@ -687,13 +687,11 @@ export function tiebaoPlaceEnter(boss: BossRuntime, u: number): void {
   boss.y = tail - height / 2;
 }
 
-function modeList(list: TiebaoState['list']): readonly TiebaoModeId[] {
-  return list === 'overload' ? TIEBAO_OVERLOAD_MODE_IDS : TIEBAO_MODE_IDS;
-}
-
 function modeIdOf(state: TiebaoState): TiebaoModeId {
-  const list = modeList(state.list);
-  return list[state.mode % list.length] ?? 'fan';
+  if (state.list === 'overload') {
+    return TIEBAO_OVERLOAD_MODE_IDS[state.mode % TIEBAO_OVERLOAD_MODE_IDS.length] ?? 'rain';
+  }
+  return tiebaoRailMode(state.rail, state.visits[state.rail] ?? 1);
 }
 
 function modeNameOf(id: TiebaoModeId): string {
@@ -736,9 +734,6 @@ function resetSchedules(state: TiebaoState): void {
   state.broadShot = 0;
   state.wallVolley = 0;
   state.wallNext = TIEBAO_WALL_FIRST;
-  state.rocket = 0;
-  state.crateSpawned = 0;
-  state.crateNext = TIEBAO_CRATE_FIRST;
   state.ram = 'idle';
   state.ramDone = false;
   state.ramClock = 0;
@@ -755,6 +750,7 @@ function createState(): TiebaoState {
     laid: [],
     list: 'main',
     mode: 0,
+    visits: [0, 1, 0],
     weaponClock: 0,
     fanNext: 0,
     fanSide: 0,
@@ -767,9 +763,6 @@ function createState(): TiebaoState {
     broadShot: 0,
     wallVolley: 0,
     wallNext: 0,
-    rocket: 0,
-    crateSpawned: 0,
-    crateNext: 0,
     ram: 'idle',
     ramDone: false,
     ramClock: 0,
@@ -855,7 +848,7 @@ export function tiebaoVisual(boss: BossRuntime): TiebaoVisual | null {
       return { fromX: item.fromX, toX: item.toX, y1, y0: y1 - item.span };
     }),
     ramWarn: state.ram === 'warn',
-    rocketWarn: state.rocket === 1 && modeIdOf(state) === 'rockets',
+    rocketWarn: false,
     circles: state.circles.map((circle) => ({
       x: circle.x,
       y: circle.y,
@@ -937,11 +930,16 @@ export function tiebaoSyncScroll(boss: BossRuntime, scroll: number | undefined):
   cullTurnouts(state);
 }
 
+/** Ram and the shed presentation both own `boss.y`. A turnout waits for them. */
+function parkedReady(state: TiebaoState): boolean {
+  return state.ram === 'idle' && state.shedPhase === 'idle';
+}
+
 function advanceRail(state: TiebaoState, dt: number, world: BossWorld | undefined): boolean {
   const output = outputSeconds(state.list);
   if (state.phase === 'output') {
     state.clock += dt;
-    if (state.clock >= output && state.ram === 'idle') {
+    if (state.clock >= output && parkedReady(state)) {
       const over = state.clock - output;
       beginMove(state, world);
       state.clock = over;
@@ -958,8 +956,11 @@ function advanceRail(state: TiebaoState, dt: number, world: BossWorld | undefine
   state.rail = state.target;
   state.phase = 'output';
   state.clock = over;
-  const list = modeList(state.list);
-  state.mode = (state.mode + 1) % list.length;
+  if (state.list === 'overload') {
+    state.mode = (state.mode + 1) % TIEBAO_OVERLOAD_MODE_IDS.length;
+  } else {
+    state.visits[state.rail] += 1;
+  }
   state.weaponClock = over;
   resetSchedules(state);
   return true;
@@ -1012,7 +1013,7 @@ function pose(state: TiebaoState, boss: BossRuntime): void {
 /**
  * Death and the overload gate cancel a half-finished move. The tail settles
  * onto whichever of the two rails it is closer to, and the cars straighten in
- * that frame. The weapon index does not advance. The closure already laid
+ * that frame. The rail's park count does not advance. The closure already laid
  * stays on the map.
  */
 function settleTail(state: TiebaoState, boss: BossRuntime): void {
@@ -1194,17 +1195,6 @@ function fireWall(state: TiebaoState, boss: BossRuntime, ev: BossEvents): void {
   state.wallNext += gap;
 }
 
-function fireRockets(state: TiebaoState, ev: BossEvents): void {
-  if (modeIdOf(state) !== 'rockets') return;
-  if (state.rocket === 0 && state.weaponClock + 1e-9 >= TIEBAO_ROCKET_START) state.rocket = 1;
-  if (state.rocket !== 1) return;
-  if (state.weaponClock + 1e-9 < TIEBAO_ROCKET_START + TIEBAO_ROCKET_WARN) return;
-  for (const x of TIEBAO_RAIL_X) {
-    pushBolt(ev, x, TIEBAO_ROCKET_Y, 0, TIEBAO_ROCKET_SPEED, 'missile', TIEBAO_ROCKET_RADIUS);
-  }
-  state.rocket = 2;
-}
-
 function spawnCrate(state: TiebaoState, boss: BossRuntime, world: BossWorld | undefined): void {
   if (state.crates.length >= 16) return;
   const ly = TIEBAO_CRATE_LAND_Y - TIEBAO_CRATE_SIZE / 2;
@@ -1223,15 +1213,6 @@ function spawnCrate(state: TiebaoState, boss: BossRuntime, world: BossWorld | un
   crate.x = crate.sx;
   crate.y = crate.sy;
   state.crates.push(crate);
-}
-
-function fireCrates(state: TiebaoState, boss: BossRuntime, world: BossWorld | undefined): void {
-  if (modeIdOf(state) !== 'crates') return;
-  if (state.crateSpawned >= TIEBAO_CRATE_PER_WINDOW) return;
-  if (state.weaponClock + 1e-9 < state.crateNext) return;
-  spawnCrate(state, boss, world);
-  state.crateSpawned++;
-  state.crateNext += TIEBAO_CRATE_GAP;
 }
 
 function stepRam(state: TiebaoState, dt: number, boss: BossRuntime): void {
@@ -1338,8 +1319,6 @@ function fireWeapons(
   fireRain(state, boss, world);
   fireBroadside(state, boss, ev);
   fireWall(state, boss, ev);
-  fireRockets(state, ev);
-  fireCrates(state, boss, world);
 }
 
 function fightSlice(
@@ -1352,6 +1331,7 @@ function fightSlice(
   if (state.broken) return;
   stepShed(boss, state, dt, ev);
   const arrived = advanceRail(state, dt, world);
+  if (arrived) stepShed(boss, state, dt, ev);
   if (state.phase === 'move') {
     if (state.shedPhase === 'idle') boss.y = tiebaoRestCenter(carsOf(state));
     state.ram = 'idle';
@@ -1362,10 +1342,11 @@ function fightSlice(
     fireWeapons(state, boss, world, ev);
     stepRam(state, dt, boss);
   }
-  if (state.phase === 'output' && state.ram === 'idle') {
+  if (state.phase === 'output' && parkedReady(state)) {
     if (state.clock >= outputSeconds(state.list) - 1e-9) beginMove(state, world);
   }
   anchorLive(state);
+  boss.invulnerable = state.phase === 'move';
   if (state.list === 'overload') {
     state.ambient += dt;
     while (state.ambient >= TIEBAO_OVERLOAD_CRATE_EVERY) {
