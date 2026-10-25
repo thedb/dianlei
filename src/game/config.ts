@@ -1002,6 +1002,13 @@ export const TIEBAO_OVERLOAD_CRATE_EVERY = 2.2 * TIEBAO_RATE_SCALE;
 export const TIEBAO_DEATH_EXPLOSIONS = 8;
 export const TIEBAO_DEATH_DURATION = 2.8;
 
+/**
+ * Black card between a cleared stage and the next one, seconds.
+ * A normal stage clear (not 挑战 Boss) holds this long, then starts the
+ * next stage at t = 0. The last stage still opens the result screen.
+ */
+export const STAGE_CARD_TIME = 3;
+
 /** Opening cards, seconds from stage start (0:00–0:05). */
 export const INTRO_STAGE_UNTIL = 1.6;
 export const INTRO_READY_UNTIL = 3.6;

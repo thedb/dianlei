@@ -332,6 +332,8 @@ export interface StageData {
   id: string;
   /** Shown in the STAGE intro banner and the pause menu. */
   label: string;
+  /** Story name, drawn on the stage card and the debug stage list. */
+  name: string;
   stage: number;
   scrollSpeed: number;
   warningAt: number;

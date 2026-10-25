@@ -17,7 +17,7 @@ import {
   validateBuildingFootprint,
 } from '@/game/entities/building';
 import { ENEMY_DEFS } from '@/game/entities/enemyDefs';
-import { getStage, stageEnemyCount } from '@/game/levels/registry';
+import { getStage, nextStageId, stageEnemyCount } from '@/game/levels/registry';
 import { getMapGrid } from '@/game/maps';
 import { buildStageTrack } from '@/game/maps/track';
 import { chooseBuildingDrop, resolvePlacementDrops } from '@/game/systems/dropRules';
@@ -125,6 +125,9 @@ describe('stage 2 waves', () => {
     expect(STAGE2_WARNING_AT).toBe(118);
     expect(stage.warningAt).toBe(118);
     expect(stage.boss.enterAt).toBe(123);
+    expect(stage.name).toBe('工业走廊');
+    expect(nextStageId('1')).toBe('2');
+    expect(nextStageId('2')).toBeUndefined();
     expect(stage.boss.id).toBe('tiebao');
     expect(stage.maps).toEqual({ run: [{ map: 'landB', at: 0 }], boss: 'factoryBoss' });
     expect(stage.captions).toEqual([

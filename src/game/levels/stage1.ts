@@ -68,6 +68,7 @@ const w20Anchors: ReadonlyArray<readonly [number, number]> = [
 export const stage1: StageData = {
   id: '1',
   label: '1',
+  name: '边境突袭',
   stage: 1,
   scrollSpeed: 40,
   warningAt: 150,

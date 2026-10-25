@@ -259,6 +259,7 @@ function columnSine(
 export const stage2: StageData = {
   id: '2',
   label: '2',
+  name: '工业走廊',
   stage: 2,
   scrollSpeed: BG_SCROLL_SPEED,
   warningAt: STAGE2_WARNING_AT,

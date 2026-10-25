@@ -50,7 +50,8 @@ import {
   weaponTestVolleyDamage,
   weaponTestVolleyRate,
 } from '@/game/scenes/weaponTest';
-import { clearEnemyBullets, type Battle } from './context';
+import type { CarriedRun } from '@/game/scenes/types';
+import { clearEnemyBullets, type Battle, type GameState } from './context';
 import { spawnExplosion, triggerShake } from './fx';
 
 /** Player death burst: [dx, dy, delay] — staggered blasts around the wreck */
@@ -61,6 +62,32 @@ const DEATH_BURSTS: ReadonlyArray<readonly [number, number, number]> = [
   [-4, 7, 0.22],
   [5, -8, 0.3],
 ];
+
+/** End-of-stage stock, copied before the next stage's fresh-ship reset. */
+export function snapshotRun(state: GameState): CarriedRun {
+  return {
+    score: state.score,
+    lives: state.lives,
+    bombs: state.bombs,
+    deaths: state.deaths,
+    main: { id: state.main.id, level: state.main.level },
+    sub: state.sub ? { id: state.sub.id, level: state.sub.level } : null,
+    mate: state.mate,
+    nextExtendScore: state.nextExtendScore,
+  };
+}
+
+/** Puts a carried run back after `resetPlayer`. Position and fly-in stay fresh. */
+export function applyCarriedRun(state: GameState, carried: CarriedRun): void {
+  state.score = carried.score;
+  state.lives = carried.lives;
+  state.bombs = carried.bombs;
+  state.deaths = carried.deaths;
+  state.main = { id: carried.main.id, level: carried.main.level };
+  state.sub = carried.sub ? { id: carried.sub.id, level: carried.sub.level } : null;
+  state.mate = carried.mate;
+  state.nextExtendScore = carried.nextExtendScore;
+}
 
 /** Fresh run: full stock, Lv1 loadout, and the ship flying in from below. */
 export function resetPlayer(b: Battle): void {

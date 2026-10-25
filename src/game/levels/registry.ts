@@ -24,4 +24,11 @@ export function getStage(id: string = DEFAULT_STAGE_ID): StageData {
   return STAGES.find((stage) => stage.id === id) ?? STAGES[0]!;
 }
 
+/** The stage after `id` in play order. Undefined on the last stage. */
+export function nextStageId(id: string): string | undefined {
+  const index = STAGES.findIndex((stage) => stage.id === id);
+  if (index < 0) return undefined;
+  return STAGES[index + 1]?.id;
+}
+
 export { stageEnemyCount, stageMvpEnemyCount, stageMvpWaves } from './stageStats';

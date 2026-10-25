@@ -14,10 +14,11 @@ import {
   type BossEvents,
   type BossRuntime,
 } from '@/game/systems/boss';
+import { nextStageId } from '@/game/levels/registry';
 import { stepVictoryExit, victoryExitBlocksInput } from '@/game/systems/victoryExit';
 import { clearEnemyBullets, publishRun, runDifficulty, runProfile, type Battle } from './context';
 import { spawnExplosion, triggerShake } from './fx';
-import { isPlayerVulnerable, killPlayer } from './player';
+import { isPlayerVulnerable, killPlayer, snapshotRun } from './player';
 
 /** Fight-start WARNING, once per boss. Separate from the pre-enter cue. */
 const fightWarningPlayed = new WeakSet<BossRuntime>();
@@ -110,6 +111,22 @@ export function stepBoss(b: Battle, dt: number): 'result' | null {
     applyBossEvents(b, done);
     if (done.enterResult) {
       publishRun(b, 'clear');
+      // A normal clear with a later stage holds on the black card. 挑战 Boss
+      // and the last stage still open the result screen. The return stays
+      // 'result' so stage-1 replay digests keep the same outcome frame.
+      if (b.scene.battleEntry === 'stage') {
+        const next = nextStageId(b.stage.id);
+        if (next) {
+          b.scene.campaignNext = next;
+          b.scene.carriedRun = snapshotRun(b.state);
+        } else {
+          delete b.scene.campaignNext;
+          delete b.scene.carriedRun;
+        }
+      } else {
+        delete b.scene.campaignNext;
+        delete b.scene.carriedRun;
+      }
       return 'result';
     }
   }
