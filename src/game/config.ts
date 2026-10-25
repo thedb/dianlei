@@ -853,6 +853,13 @@ export const TIEBAO_SWITCH_CROSS_SPAN = TIEBAO_SWITCH_SPAN * 2;
  * Cars stay on the old rail until the heel reaches them. Not added to the 1.2s.
  */
 export const TIEBAO_SWITCH_LEAD = 64;
+/**
+ * Fraction of a move used to bring the heel down to the screen when the nose
+ * is still above it. The rest of the 1.9s / 3.8s is the on-screen tail and the
+ * closure actually crossing. A consist whose nose is already on screen keeps
+ * a linear sweep. Curve parameter still runs 0 → 1; this only retimes it.
+ */
+export const TIEBAO_SWITCH_RUSH = 0.22;
 /** Max rigid-car bank, degrees. A steeper chord clamps; pixels are never sheared. */
 export const TIEBAO_CAR_MAX_BANK = 25;
 /** Where on one turnout (0 = heel, 1 = toe) the point blades sit. */

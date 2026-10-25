@@ -37,6 +37,7 @@ import {
   TIEBAO_ROOF_HP,
   TIEBAO_ROOF_SCORE,
   TIEBAO_SWITCH_PERIOD,
+  TIEBAO_SWITCH_RUSH,
 } from '@/game/config';
 import { prepareBossConfig } from '@/game/difficulty';
 import { TIEBAO } from '@/game/levels/bosses/tiebao';
@@ -299,6 +300,123 @@ describe('铁堡 rails', () => {
     expect(boss.phase).toBe('main');
   });
 
+  it('runs a visible 1.9s or 3.8s turnout and only then takes damage', () => {
+    expect(TIEBAO_SWITCH_RUSH).toBe(0.22);
+    const boss = createBoss(TIEBAO);
+    const around = world(1);
+    park(boss, around);
+    const depart = tiebaoView(boss);
+    expect(depart).toMatchObject({ rail: 1, phase: 'output', modeId: 'fan' });
+
+    let guard = 0;
+    while (tiebaoView(boss)?.phase !== 'move' && guard < 2000) {
+      expect(boss.invulnerable).toBe(false);
+      updateBoss(boss, FIXED_DT, around);
+      guard++;
+    }
+    expect(guard * FIXED_DT).toBeGreaterThan(4.5);
+    expect(guard * FIXED_DT).toBeLessThan(5.1);
+    const opening = tiebaoVisual(boss)?.switch;
+    const view = tiebaoView(boss);
+    expect(opening).not.toBeNull();
+    expect(view?.phase).toBe('move');
+    expect(view?.rail).toBe(1);
+    expect(view?.target).not.toBe(view?.rail);
+    expect(boss.invulnerable).toBe(true);
+    const fromX = opening?.fromX ?? 0;
+    const toX = opening?.toX ?? 0;
+    const adjacent = Math.abs(toX - fromX) < 150;
+    expect(adjacent).toBe(true);
+    const onScreen = tiebaoCarPoses(boss).filter((pose) => pose.y > 0 && pose.y < LOGICAL_H);
+    expect(onScreen.length).toBeGreaterThan(0);
+    expect(onScreen.every((pose) => pose.angle === 0 && Math.abs(pose.x - fromX) < 1)).toBe(true);
+    setMainHp(boss, 756);
+    expect(tiebaoCommittedCars(boss)).toBe(9);
+
+    const hp = boss.parts.reduce((sum, part) => sum + part.hp, 0);
+    let frames = 0;
+    let tailMoving = 0;
+    let turnoutOnScreen = 0;
+    let bent = false;
+    while (tiebaoView(boss)?.phase === 'move' && frames < 2000) {
+      expect(boss.invulnerable).toBe(true);
+      expect(tiebaoView(boss)?.rail).toBe(1);
+      expect(tiebaoView(boss)?.target).not.toBe(1);
+      expect(tiebaoVisual(boss)?.switch).not.toBeNull();
+      const marks = tiebaoVisual(boss)?.turnouts ?? [];
+      if (marks.some((mark) => mark.y1 > 8 && mark.y0 < LOGICAL_H - 8)) turnoutOnScreen++;
+      const poses = tiebaoCarPoses(boss).filter((pose) => pose.y > 0 && pose.y < LOGICAL_H);
+      if (poses.some((pose) => Math.abs(pose.x - fromX) > 18)) tailMoving++;
+      if (poses.some((pose) => Math.abs(pose.angle) > 0.02)) bent = true;
+      const tail = poses[poses.length - 1];
+      if (tail) {
+        const before = boss.parts.reduce((sum, part) => sum + part.hp, 0);
+        expect(shot(boss, tail.x, tail.y, 6).consumedBullet).toBe(true);
+        expect(boss.parts.reduce((sum, part) => sum + part.hp, 0)).toBe(before);
+      }
+      updateBoss(boss, FIXED_DT, around);
+      frames++;
+    }
+
+    const parked = tiebaoView(boss);
+    expect(parked?.phase).toBe('output');
+    expect(boss.invulnerable).toBe(false);
+    expect(parked?.rail).not.toBe(1);
+    expect(boss.x).toBeCloseTo(toX, 4);
+    expect(parked?.modeId).toBe(tiebaoRailMode(parked?.rail ?? 0, 1));
+    expect(Math.abs(frames * FIXED_DT - tiebaoMoveTime(fromX, toX))).toBeLessThan(0.08);
+    expect(tiebaoMoveTime(fromX, toX)).toBeCloseTo(TIEBAO_MOVE + TIEBAO_MOVE_EXTRA, 5);
+    expect(tailMoving / frames).toBeGreaterThan(0.45);
+    expect(turnoutOnScreen / frames).toBeGreaterThan(0.6);
+    expect(bent).toBe(true);
+    expect(tiebaoCommittedCars(boss)).toBe(8);
+    expect(tiebaoChaseBoost(boss)).toBe(TIEBAO_CHASE_FLAME);
+    const parkedHp = boss.parts.reduce((sum, part) => sum + part.hp, 0);
+    expect(parkedHp).toBe(hp);
+    const tail = tiebaoCarPoses(boss).filter((pose) => pose.y > 0 && pose.y < LOGICAL_H);
+    const hit = tail[tail.length - 1];
+    expect(hit).toBeDefined();
+    if (hit) shot(boss, hit.x, hit.y, 6);
+    expect(boss.parts.reduce((sum, part) => sum + part.hp, 0)).toBe(parkedHp - 6);
+
+    let crossFrames = 0;
+    let crossSpan = 0;
+    let crossMoving = 0;
+    for (let hop = 0; hop < 12 && crossSpan < 200; hop++) {
+      let wait = 0;
+      while (tiebaoView(boss)?.phase !== 'move' && wait < 2000) {
+        updateBoss(boss, FIXED_DT, around);
+        wait++;
+      }
+      const sw = tiebaoVisual(boss)?.switch;
+      expect(sw).not.toBeNull();
+      const span = Math.abs((sw?.toX ?? 0) - (sw?.fromX ?? 0));
+      const started = sw?.fromX ?? 0;
+      let n = 0;
+      let moving = 0;
+      while (tiebaoView(boss)?.phase === 'move' && n < 2000) {
+        expect(boss.invulnerable).toBe(true);
+        const poses = tiebaoCarPoses(boss).filter((pose) => pose.y > 0 && pose.y < LOGICAL_H);
+        if (poses.some((pose) => Math.abs(pose.x - started) > 18)) moving++;
+        updateBoss(boss, FIXED_DT, around);
+        n++;
+      }
+      expect(tiebaoView(boss)?.phase).toBe('output');
+      expect(boss.invulnerable).toBe(false);
+      expect(Math.abs(n * FIXED_DT - tiebaoMoveTime(sw?.fromX ?? 0, sw?.toX ?? 0))).toBeLessThan(
+        0.08
+      );
+      if (span > 200) {
+        crossFrames = n;
+        crossSpan = span;
+        crossMoving = moving;
+      }
+    }
+    expect(crossSpan).toBe(TIEBAO_RAIL_X[2] - TIEBAO_RAIL_X[0]);
+    expect(crossFrames * FIXED_DT).toBeCloseTo(2 * (TIEBAO_MOVE + TIEBAO_MOVE_EXTRA), 1);
+    expect(crossMoving / crossFrames).toBeGreaterThan(0.45);
+  });
+
   it('waits out a shed presentation before the next turnout', () => {
     const boss = createBoss(TIEBAO);
     const around = world(1);
@@ -314,6 +432,7 @@ describe('铁堡 rails', () => {
       if (view.phase === 'move') break;
       if (tiebaoChaseBoost(boss) > 0) sawHold = true;
       expect(view.phase).toBe('output');
+      expect(boss.invulnerable).toBe(false);
       expect(tiebaoCommittedCars(boss)).toBe(8);
     }
     expect(sawHold).toBe(true);
@@ -321,6 +440,31 @@ describe('铁堡 rails', () => {
     expect(tiebaoChaseBoost(boss)).toBe(0);
     expect(boss.y).toBeCloseTo(tiebaoRestCenter(8), 2);
     expect(boss.invulnerable).toBe(true);
+
+    const departed = tiebaoView(boss)?.rail;
+    let crossing = 0;
+    while (tiebaoView(boss)?.phase === 'move' && crossing < 800) {
+      expect(boss.invulnerable).toBe(true);
+      expect(tiebaoVisual(boss)?.switch).not.toBeNull();
+      updateBoss(boss, FIXED_DT, around);
+      crossing++;
+    }
+    expect(tiebaoView(boss)?.phase).toBe('output');
+    expect(boss.invulnerable).toBe(false);
+    expect(tiebaoView(boss)?.rail).not.toBe(departed);
+    expect(crossing * FIXED_DT).toBeGreaterThan(1.4);
+    expect(crossing * FIXED_DT).toBeLessThan(4.1);
+
+    let again = 0;
+    while (tiebaoView(boss)?.phase !== 'move' && again < 800) {
+      expect(tiebaoView(boss)?.phase).toBe('output');
+      expect(boss.invulnerable).toBe(false);
+      updateBoss(boss, FIXED_DT, around);
+      again++;
+    }
+    expect(tiebaoView(boss)?.phase).toBe('move');
+    expect(again * FIXED_DT).toBeGreaterThan(4);
+    expect(again * FIXED_DT).toBeLessThan(TIEBAO_SWITCH_PERIOD - TIEBAO_MOVE + 0.25);
   });
 
   it('transfers a nose hit to the locomotive gun and a tail hit to the rear gun', () => {

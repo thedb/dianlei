@@ -76,6 +76,7 @@ import {
   TIEBAO_SWITCH_CROSS_SPAN,
   TIEBAO_SWITCH_LEAD,
   TIEBAO_SWITCH_PERIOD,
+  TIEBAO_SWITCH_RUSH,
   TIEBAO_SWITCH_SPAN,
   TIEBAO_WALL_COUNT,
   TIEBAO_WALL_FIRST,
@@ -966,8 +967,28 @@ function advanceRail(state: TiebaoState, dt: number, world: BossWorld | undefine
   return true;
 }
 
+/**
+ * Curve parameter 0 → 1 over the move. A 9-car nose sits far above the screen,
+ * so a linear sweep would park the visible tail on the old rail for most of
+ * the 1.9s while the bend is still off the top. Spend `TIEBAO_SWITCH_RUSH`
+ * bringing the heel down to the screen, then the rest of the move on the
+ * visible crossing. A nose that is already on screen stays linear.
+ */
 function moveU(state: TiebaoState): number {
-  return clamp(state.clock / Math.max(0.05, moveSeconds(state)), 0, 1);
+  const seconds = Math.max(0.05, moveSeconds(state));
+  const t = clamp(state.clock / seconds, 0, 1);
+  const cars = carsOf(state);
+  const height = tiebaoHullHeight(cars);
+  const tail = tiebaoTailY(cars);
+  const nose = tail - height;
+  const span = tiebaoSwitchSpan(state.fromX, railX(state.target));
+  const travel = Math.max(1, height + span + TIEBAO_SWITCH_LEAD);
+  const visibleY = nose >= 0 ? nose : Math.min(tail, 0);
+  const uHit = clamp((visibleY - (nose - TIEBAO_SWITCH_LEAD)) / travel, 0, 1 - TIEBAO_SWITCH_RUSH);
+  if (uHit <= TIEBAO_SWITCH_RUSH) return t;
+  if (t <= TIEBAO_SWITCH_RUSH) return (t / TIEBAO_SWITCH_RUSH) * uHit;
+  const rest = (t - TIEBAO_SWITCH_RUSH) / (1 - TIEBAO_SWITCH_RUSH);
+  return uHit + rest * (1 - uHit);
 }
 
 function consistX(state: TiebaoState, y: number): number {
