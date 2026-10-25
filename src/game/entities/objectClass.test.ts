@@ -14,6 +14,7 @@ const ENEMY_SIZES: Record<EnemyType, 'small' | 'medium'> = {
   medium: 'medium',
   bomber: 'medium',
   turret2: 'medium',
+  factory_aa: 'medium',
 };
 
 describe('object size class', () => {
@@ -33,6 +34,7 @@ describe('object size class', () => {
     }
     expect(enemyClass('tank').category).toBe('ground');
     expect(enemyClass('turret2').category).toBe('ground');
+    expect(enemyClass('factory_aa').category).toBe('ground');
     expect(enemyClass('missile_car').category).toBe('ground');
     expect(enemyClass('bomber').category).toBe('air');
   });

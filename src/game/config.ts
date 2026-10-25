@@ -343,6 +343,9 @@ export const SCORE_DRONE = 300;
 export const SCORE_MISSILE_CAR = 300;
 export const SCORE_MEDIUM_FIGHTER = 1000;
 export const SCORE_DUAL_TURRET = 1000;
+/** Stage-2 factory AA. Medium ground, a step above the dual turret. */
+export const FACTORY_AA_HP = 40;
+export const SCORE_FACTORY_AA = 1200;
 export const SCORE_BOMBER = 2000;
 export const SCORE_BOSS_PART = 5000;
 export const SCORE_BOSS_CORE = 30000;
@@ -408,10 +411,15 @@ export const SIDE_ARC_RADIUS = 140;
  * then a straight climb inward. Shots wait until x is on the field, so a
  * ship that starts under the screen edge does not fire off-screen.
  * Spawn x stays inside the cull box (−120..480, −120..700).
+ * `step_slide` and `dive_once` share this x window, and they also hold the
+ * clock once y passes the bottom of the field.
  */
 export const REAR_DIAG_SPAWN_X_LEFT = -16;
 export const REAR_DIAG_SPAWN_X_RIGHT = LOGICAL_W + 16;
-/** Inclusive x window. Outside it, `rear_diag` does not advance its fire clock. */
+/**
+ * Inclusive x window. Outside it, `rear_diag`, `step_slide`, and `dive_once`
+ * do not advance the fire clock.
+ */
 export const REAR_DIAG_FIRE_X_MIN = 24;
 export const REAR_DIAG_FIRE_X_MAX = LOGICAL_W - 24;
 

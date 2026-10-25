@@ -33,40 +33,40 @@ const stage = getStage('2');
 
 const COUNTS = {
   easy: {
-    small: 84,
+    small: 83,
     medium: 6,
     interceptor: 10,
     bomber: 3,
     drone: 6,
     tank: 10,
-    turret2: 1,
+    factory_aa: 2,
     missile_car: 2,
     total: 122,
-    score: 27800,
+    score: 29100,
   },
   medium: {
-    small: 115,
+    small: 118,
     medium: 6,
     interceptor: 12,
     bomber: 3,
     drone: 8,
     tank: 10,
-    turret2: 3,
+    factory_aa: 3,
     missile_car: 2,
-    total: 159,
-    score: 33900,
+    total: 162,
+    score: 34800,
   },
   hard: {
-    small: 138,
+    small: 140,
     medium: 6,
     interceptor: 14,
     bomber: 3,
     drone: 8,
     tank: 11,
-    turret2: 3,
+    factory_aa: 3,
     missile_car: 3,
-    total: 186,
-    score: 37100,
+    total: 188,
+    score: 37900,
   },
 } as const;
 
@@ -157,9 +157,9 @@ describe('stage 2 waves', () => {
     const w13 = stage.waves.find((wave) => wave.id === 'W13');
     const w22 = stage.waves.find((wave) => wave.id === 'W22');
     expect(w13?.difficulties).toEqual(['medium', 'hard']);
-    expect(w13?.t).toBe(70);
+    expect(w13?.t).toBe(78);
     expect(w22?.difficulties).toEqual(['hard']);
-    expect(w22?.t).toBe(88);
+    expect(w22?.t).toBe(90);
     expect(w22 && stage.waves.findIndex((wave) => wave.id === 'W22')).toBeGreaterThan(
       stage.waves.findIndex((wave) => wave.id === 'W16')
     );
@@ -201,7 +201,7 @@ describe('stage 2 waves', () => {
         bomber: expected.bomber,
         drone: expected.drone,
         tank: expected.tank,
-        turret2: expected.turret2,
+        factory_aa: expected.factory_aa,
         missile_car: expected.missile_car,
       });
       expect(tally(full).medium).toBe(expected.medium + 1);
@@ -300,23 +300,23 @@ describe('stage 2 waves', () => {
 
     const column = (spawns: SpawnRequest[]) =>
       spawns.filter((spawn) => spawn.move.kind === 'straight' && spawn.move.speed === 170);
-    expect(column(easy)).toHaveLength(8);
+    expect(column(easy)).toHaveLength(6);
     expect(column(easy).every((spawn) => spawn.fire.kind === 'none')).toBe(true);
-    expect(column(hard)).toHaveLength(10);
+    expect(column(hard)).toHaveLength(9);
     expect(column(hard).filter((spawn) => spawn.fire.kind === 'aimed1')).toHaveLength(4);
 
     const dive = (spawns: SpawnRequest[]) => spawns.filter((spawn) => spawn.move.kind === 'v_dive');
-    expect(dive(easy)).toHaveLength(8);
+    expect(dive(easy)).toHaveLength(6);
     expect(dive(easy).every((spawn) => spawn.fire.kind === 'aimed1')).toBe(true);
-    expect(dive(hard)).toHaveLength(12);
+    expect(dive(hard)).toHaveLength(8);
     expect(dive(hard).every((spawn) => spawn.fire.kind === 'aimed3burst')).toBe(true);
 
     const cross = (spawns: SpawnRequest[]) => spawns.filter((spawn) => spawn.move.kind === 'cross');
-    expect(cross(easy)).toHaveLength(16);
+    expect(cross(easy)).toHaveLength(12);
     expect(cross(easy).every((spawn) => spawn.fire.kind === 'none')).toBe(true);
     expect(cross(medium).filter((spawn) => spawn.fire.kind === 'aimed1')).toHaveLength(4);
-    expect(cross(hard)).toHaveLength(20);
-    expect(cross(hard).filter((spawn) => spawn.fire.kind === 'aimed3burst')).toHaveLength(10);
+    expect(cross(hard)).toHaveLength(14);
+    expect(cross(hard).filter((spawn) => spawn.fire.kind === 'aimed3burst')).toHaveLength(6);
 
     const arcs = (spawns: SpawnRequest[]) => spawns.filter((spawn) => spawn.type === 'interceptor');
     expect(arcs(easy)).toHaveLength(10);
@@ -348,14 +348,75 @@ describe('stage 2 waves', () => {
 
     const flank = (spawns: SpawnRequest[], speed: number) =>
       spawns.filter((spawn) => spawn.move.kind === 'straight' && spawn.move.speed === speed);
-    expect(flank(easy, 190)).toHaveLength(6);
+    expect(flank(easy, 190)).toHaveLength(4);
     expect(flank(easy, 190).every((spawn) => spawn.fire.kind === 'none')).toBe(true);
-    expect(flank(hard, 190)).toHaveLength(8);
+    expect(flank(hard, 190)).toHaveLength(6);
     expect(flank(hard, 190).every((spawn) => spawn.fire.kind === 'aimed1')).toBe(true);
     expect(flank(easy, 200)).toHaveLength(0);
-    expect(flank(medium, 200)).toHaveLength(6);
-    expect(flank(hard, 200)).toHaveLength(8);
+    expect(flank(medium, 200)).toHaveLength(4);
+    expect(flank(hard, 200)).toHaveLength(6);
     expect(flank(hard, 200).every((spawn) => spawn.fire.kind === 'none')).toBe(true);
+
+    const steps = (spawns: SpawnRequest[]) =>
+      spawns.filter((spawn) => spawn.move.kind === 'step_slide');
+    expect(steps(easy)).toHaveLength(10);
+    expect(steps(medium)).toHaveLength(13);
+    expect(steps(hard)).toHaveLength(18);
+    expect(steps(easy).every((spawn) => spawn.fire.kind === 'none')).toBe(true);
+    expect(
+      steps(easy).some((spawn) => spawn.move.kind === 'step_slide' && spawn.move.speed === 170)
+    ).toBe(false);
+    expect(steps(medium).filter((spawn) => spawn.fire.kind === 'aimed1')).toHaveLength(4);
+    expect(steps(hard).filter((spawn) => spawn.fire.kind === 'aimed3burst')).toHaveLength(4);
+    expect(
+      steps(hard).filter((spawn) => spawn.move.kind === 'step_slide' && spawn.move.speed === 170)
+    ).toHaveLength(4);
+
+    const once = (spawns: SpawnRequest[]) =>
+      spawns.filter((spawn) => spawn.move.kind === 'dive_once');
+    expect(once(easy)).toHaveLength(9);
+    expect(once(medium)).toHaveLength(11);
+    expect(once(hard)).toHaveLength(13);
+    expect(once(easy).every((spawn) => spawn.fire.kind === 'none')).toBe(true);
+    expect(once(medium).filter((spawn) => spawn.fire.kind === 'aimed1')).toHaveLength(1);
+    expect(once(hard).filter((spawn) => spawn.fire.kind === 'aimed1')).toHaveLength(1);
+
+    const aa = (spawns: SpawnRequest[]) => spawns.filter((spawn) => spawn.type === 'factory_aa');
+    expect(aa(easy)).toHaveLength(2);
+    expect(aa(medium)).toHaveLength(3);
+    expect(aa(hard)).toHaveLength(3);
+    expect(easy.some((spawn) => spawn.type === 'turret2')).toBe(false);
+    expect(
+      aa(easy).every((spawn) => spawn.fire.kind === 'pattern' && spawn.fire.interval === 1.65)
+    ).toBe(true);
+    expect(
+      aa(medium).every((spawn) => spawn.fire.kind === 'pattern' && spawn.fire.interval === 1.4)
+    ).toBe(true);
+    expect(
+      aa(hard).every((spawn) => spawn.fire.kind === 'pattern' && spawn.fire.interval === 1.15)
+    ).toBe(true);
+    const sample = aa(easy)[0]!.fire;
+    expect(sample.kind === 'pattern' && sample.pattern).toMatchObject({
+      shape: 'parallel',
+      count: 2,
+      gap: 10,
+      aim: 'barrel',
+      bullet: 'small',
+      burst: 2,
+    });
+
+    const stepTimes = new Set(
+      stage.waves
+        .filter((wave) => wave.groups.some((group) => group.move.kind === 'step_slide'))
+        .map((wave) => wave.t)
+    );
+    for (const wave of stage.waves) {
+      if (wave.groups.some((group) => group.move.kind === 'v_dive')) {
+        expect(stepTimes.has(wave.t)).toBe(false);
+      }
+    }
+    expect(stage.waves.find((wave) => wave.id === 'W27')?.difficulties).toEqual(['medium', 'hard']);
+    expect(stage.waves.find((wave) => wave.id === 'W28')?.difficulties).toEqual(['hard']);
   });
 
   it('seeks to 铁堡 without counting ships that never spawned', () => {
@@ -383,7 +444,7 @@ describe('stage 2 risk crates', () => {
       riskCratesFor(stage.riskCrates ?? [], 'hard').map((crate) => [crate.t, crate.x])
     ).toEqual([
       [46, 48],
-      [70, 220],
+      [78, 220],
       [100, 312],
     ]);
 

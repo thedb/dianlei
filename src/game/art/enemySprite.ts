@@ -399,6 +399,35 @@ function drawTurret(): EnemyArt {
   return art(g, []);
 }
 
+/**
+ * Factory flak pit (stage 2). A concrete pad with a hazard lip and one olive
+ * cupola. The single barrel is code-drawn on top, so the hub stays open.
+ */
+function drawFactoryAa(): EnemyArt {
+  const g = createGrid(32, 32);
+  for (let y = 4; y <= 27; y++) {
+    for (let x = 3; x <= 28; x++) {
+      g[y]![x] = y > 22 ? AS : y < 9 ? DG : G;
+    }
+  }
+  for (let x = 6; x <= 25; x++) {
+    const band = Math.floor((x - 6) / 3) % 2 === 0;
+    plot(g, x, 24, band ? COLOR.EXPLOSION_YELLOW : K);
+    plot(g, x, 25, band ? K : COLOR.EXPLOSION_YELLOW);
+  }
+  fillEllipse(g, 16, 14, 7.2, 6.2, OD);
+  fillEllipse(g, 16, 13.5, 4.6, 3.8, OL);
+  fillEllipse(g, 16, 13.2, 2.1, 1.6, OI);
+  plot(g, 10, 9, PG);
+  plot(g, 21, 9, PG);
+  plot(g, 10, 19, TN);
+  plot(g, 21, 19, TN);
+  plot(g, 12, 11, COLOR.EXPLOSION_YELLOW);
+  plot(g, 19, 11, COLOR.EXPLOSION_YELLOW);
+  rim(g, ER);
+  return art(g, []);
+}
+
 function drawMissileCar(): EnemyArt {
   const g = createGrid(24, 32);
   for (let y = 2; y <= 28; y++) {
@@ -489,6 +518,7 @@ const BUILDERS: Record<EnemyType, () => EnemyArt> = {
   drone: drawDrone,
   tank: drawTank,
   turret2: drawTurret,
+  factory_aa: drawFactoryAa,
   missile_car: drawMissileCar,
   risk_crate: drawRiskCrate,
 };

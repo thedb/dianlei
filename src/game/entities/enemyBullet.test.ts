@@ -190,4 +190,67 @@ describe('enemy fire patterns', () => {
     updateEnemyWeapons(enemy, 2, 180, 400, spawner, true);
     expect(shots).toHaveLength(1);
   });
+
+  it('does not fire step_slide or dive_once while the ship is off the field', () => {
+    const dive = createEnemy();
+    spawnEnemy(
+      dive,
+      'small',
+      180,
+      700,
+      { kind: 'dive_once', speed: 240, angle: 0 },
+      { kind: 'aimed1', maxShots: 1, firstDelay: 0 }
+    );
+    const below = recorder();
+    updateEnemyWeapons(dive, 1, 180, 400, below.spawner, true);
+    expect(below.shots).toHaveLength(0);
+    expect(dive.fireTimer).toBe(0);
+
+    const ladder = createEnemy();
+    spawnEnemy(
+      ladder,
+      'small',
+      -30,
+      200,
+      { kind: 'step_slide', speed: 100, drop: 20, run: 40, steps: 1 },
+      { kind: 'aimed1', maxShots: 1, firstDelay: 0 }
+    );
+    const side = recorder();
+    updateEnemyWeapons(ladder, 1, 180, 400, side.spawner, true);
+    expect(side.shots).toHaveLength(0);
+    expect(ladder.fireTimer).toBe(0);
+  });
+
+  it('bursts factory AA along the barrel, including the follow-up volley', () => {
+    const enemy = createEnemy();
+    spawnEnemy(
+      enemy,
+      'factory_aa',
+      180,
+      240,
+      { kind: 'ground' },
+      {
+        kind: 'pattern',
+        pattern: {
+          shape: 'parallel',
+          count: 2,
+          gap: 10,
+          aim: 'barrel',
+          bullet: 'small',
+          burst: 2,
+        },
+        interval: 1.65,
+        firstDelay: 0,
+      }
+    );
+    const { shots, spawner } = recorder();
+    updateEnemyWeapons(enemy, 0.01, 40, 240, spawner, true);
+    expect(shots).toHaveLength(2);
+    updateEnemyWeapons(enemy, 0.12, 40, 240, spawner, true);
+    expect(shots).toHaveLength(4);
+    for (const shot of shots) {
+      expect(shot.vx).toBeCloseTo(0, 4);
+      expect(shot.vy).toBeGreaterThan(0);
+    }
+  });
 });

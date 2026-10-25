@@ -69,7 +69,7 @@ describe('bomb damage by size class', () => {
 
   it('takes half of MAX HP from medium objects', () => {
     expect(BOMB_MEDIUM_RATIO).toBe(0.5);
-    for (const type of ['medium', 'bomber', 'turret2'] as const) {
+    for (const type of ['medium', 'bomber', 'turret2', 'factory_aa'] as const) {
       expect(enemyClass(type).size).toBe('medium');
       const max = ENEMY_STATS[type].hp;
       expect(bombDamage('medium', max, max), type).toBe(max / 2);
