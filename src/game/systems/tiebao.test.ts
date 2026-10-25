@@ -36,6 +36,7 @@ import {
   TIEBAO_RAM_START,
   TIEBAO_RATE_SCALE,
   TIEBAO_ROOF_HP,
+  TIEBAO_SIDE_MUZZLE_X,
   TIEBAO_ROOF_SCORE,
   TIEBAO_SWITCH_PERIOD,
   TIEBAO_SWITCH_RUSH,
@@ -63,9 +64,12 @@ import {
   tiebaoChaseBoost,
   tiebaoClosureX,
   tiebaoCommittedCars,
+  tiebaoFanLocalX,
   tiebaoHullSegments,
   tiebaoLiveHull,
+  tiebaoLocalOnPose,
   tiebaoMoveTime,
+  tiebaoPartMount,
   tiebaoPiecePoses,
   tiebaoPieces,
   tiebaoRailMode,
@@ -76,7 +80,12 @@ import {
   tiebaoView,
   tiebaoVisual,
 } from '@/game/systems/tiebao';
-import { tiebaoHullHeight, tiebaoRestCenter, tiebaoTailY } from '@/game/systems/tiebaoShed';
+import {
+  tiebaoCarCenterRow,
+  tiebaoHullHeight,
+  tiebaoRestCenter,
+  tiebaoTailY,
+} from '@/game/systems/tiebaoShed';
 
 function world(seed = 1): BossWorld {
   return { playerX: 180, playerY: 520, rng: createRng(seed) };
@@ -209,6 +218,15 @@ describe('铁堡 rails', () => {
       modeName: '高射扇',
       list: 'main',
     });
+    for (const id of ['core', 'roofLoco', 'roofCar'] as const) {
+      const part = bossPart(boss, id)!;
+      const mount = tiebaoPartMount(boss, id)!;
+      expect(mount.angle).toBe(0);
+      expect(part.worldX).toBeCloseTo(boss.x, 6);
+      expect(part.worldY).toBeCloseTo(boss.y + part.offsetY, 6);
+      expect(part.worldX).toBeCloseTo(mount.x, 6);
+      expect(part.worldY).toBeCloseTo(mount.y, 6);
+    }
   });
 
   it('rotates each rail A then B, and blocks damage and sheds while switching', () => {
@@ -787,10 +805,17 @@ describe('铁堡 rails', () => {
       expect(Math.abs(noseX - sw.toX)).toBeLessThan(Math.abs(tailX - sw.toX));
       for (const id of ['core', 'roofLoco', 'roofCar'] as const) {
         const part = bossPart(boss, id)!;
-        expect(part.worldX).toBeCloseTo(
-          tiebaoSwitchX(part.worldY, sw.fromX, sw.toX, sw.u, sw.tailY, sw.height),
-          4
-        );
+        const mount = tiebaoPartMount(boss, id)!;
+        expect(part.worldX).toBeCloseTo(mount.x, 4);
+        expect(part.worldY).toBeCloseTo(mount.y, 4);
+        expect(part.offsetX).toBeCloseTo(mount.x - boss.x, 4);
+      }
+      const banked = poses.find((pose) => Math.abs(pose.angle) > (8 * Math.PI) / 180);
+      if (banked) {
+        const localY = -banked.h / 4;
+        const stuck = tiebaoLocalOnPose(banked, 0, localY);
+        const shear = tiebaoSwitchX(banked.y + localY, sw.fromX, sw.toX, sw.u, sw.tailY, sw.height);
+        expect(Math.abs(stuck.x - shear)).toBeGreaterThan(4);
       }
       const hp = boss.parts.reduce((sum, part) => sum + part.hp, 0);
       expect(boss.invulnerable).toBe(true);
@@ -1072,5 +1097,73 @@ describe('铁堡 phases', () => {
     const dying = coreShot(boss);
     expect(dying.score).toBe(TIEBAO_CORE_SCORE);
     expect(boss.stage).toBe('death');
+  });
+
+  it('keeps an off-center mount on the rotated car', () => {
+    const top = 40;
+    const xAt = (y: number) => (y < 180 ? 72 : 180);
+    const poses = tiebaoPiecePoses(2, top, xAt);
+    const pose = poses.find((item) => Math.abs(item.angle) > (8 * Math.PI) / 180);
+    expect(pose).toBeDefined();
+    if (!pose) return;
+    const localY = -pose.h / 4;
+    const at = tiebaoLocalOnPose(pose, 0, localY);
+    const unrotatedY = pose.y + localY;
+    expect(Math.abs(at.x - xAt(unrotatedY))).toBeGreaterThan(4);
+    expect(at.y).not.toBeCloseTo(unrotatedY, 0);
+    const side = tiebaoLocalOnPose(pose, TIEBAO_SIDE_MUZZLE_X, 0);
+    const c = Math.cos(pose.angle);
+    const s = Math.sin(pose.angle);
+    expect(side.x).toBeCloseTo(pose.x + TIEBAO_SIDE_MUZZLE_X * c, 5);
+    expect(side.y).toBeCloseTo(pose.y + TIEBAO_SIDE_MUZZLE_X * s, 5);
+  });
+
+  it('places 高射扇 on the visible car sides', () => {
+    expect(TIEBAO_SIDE_MUZZLE_X).toBe(18);
+    expect(tiebaoFanLocalX(0, Math.PI / 2)).toBe(0);
+    expect(tiebaoFanLocalX(0, Math.PI / 2 - 0.3)).toBe(TIEBAO_SIDE_MUZZLE_X);
+    expect(tiebaoFanLocalX(0, Math.PI / 2 + 0.3)).toBe(-TIEBAO_SIDE_MUZZLE_X);
+    const boss = createBoss(TIEBAO);
+    const around = world();
+    park(boss, around);
+    expect(tiebaoView(boss)?.modeId).toBe('fan');
+    let volley: Array<{ x: number; y: number; vx: number; vy: number }> | undefined;
+    for (let i = 0; i < 40 && !volley; i++) {
+      const ev = updateBoss(boss, FIXED_DT, around);
+      if (ev.bolts.length > 0) volley = ev.bolts;
+    }
+    expect(volley).toHaveLength(5);
+    const rail = boss.x;
+    const xs = volley!.map((bolt) => bolt.x);
+    expect(xs.filter((x) => Math.abs(x - (rail - TIEBAO_SIDE_MUZZLE_X)) < 1e-4)).toHaveLength(2);
+    expect(xs.filter((x) => Math.abs(x - rail) < 1e-4)).toHaveLength(1);
+    expect(xs.filter((x) => Math.abs(x - (rail + TIEBAO_SIDE_MUZZLE_X)) < 1e-4)).toHaveLength(2);
+    const top = boss.y - tiebaoHullHeight(tiebaoCommittedCars(boss)) / 2;
+    const y = top + tiebaoCarCenterRow(tiebaoCommittedCars(boss) - 1);
+    const center = volley!.find((bolt) => Math.abs(bolt.x - rail) < 1e-4)!;
+    expect(center.vx).toBeCloseTo(0, 4);
+    expect(center.vy).toBeGreaterThan(0);
+    for (const bolt of volley!) {
+      expect(bolt.y).toBeCloseTo(y, 4);
+      expect(Math.abs(bolt.x - rail)).toBeLessThanOrEqual(TIEBAO_SIDE_MUZZLE_X + 1e-4);
+    }
+  });
+
+  it('fires broadside from the boxcar edges', () => {
+    const boss = createBoss(TIEBAO);
+    const around = world(1);
+    park(boss, around);
+    let seen = false;
+    for (let i = 0; i < 20000 && !seen; i++) {
+      const ev = updateBoss(boss, FIXED_DT, around);
+      if (tiebaoView(boss)?.modeId !== 'broadside' || ev.bolts.length < 2) continue;
+      seen = true;
+      const xs = [...ev.bolts.map((bolt) => bolt.x)].sort((a, b) => a - b);
+      expect(xs[0]).toBeCloseTo(boss.x - TIEBAO_SIDE_MUZZLE_X, 4);
+      expect(xs[1]).toBeCloseTo(boss.x + TIEBAO_SIDE_MUZZLE_X, 4);
+      expect(Math.abs((xs[0] ?? 0) - (boss.x - 34))).toBeGreaterThan(10);
+      expect(ev.bolts[0]!.y).toBeCloseTo(ev.bolts[1]!.y, 4);
+    }
+    expect(seen).toBe(true);
   });
 });

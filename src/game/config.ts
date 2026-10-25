@@ -915,6 +915,12 @@ export const TIEBAO_CORE = { x: 0, y: TIEBAO_CORE_ROW - TIEBAO_END_CY } as const
 export const TIEBAO_FAN_INTERVAL = 1.4;
 export const TIEBAO_FAN_FIRST = 0.4;
 export const TIEBAO_FAN_SPREAD = 60;
+/**
+ * Side muzzle, local x from the hull center. Half of the 36px boxcar
+ * (sprite columns 22–57). The old broadside ±34 sat in the transparent
+ * margin of the 80px hull, beside the painted body.
+ */
+export const TIEBAO_SIDE_MUZZLE_X = 18;
 
 /** Every attack interval except the fan is the P24 draft times this (+50% rate). */
 export const TIEBAO_RATE_SCALE = 2 / 3;

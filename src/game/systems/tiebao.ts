@@ -11,6 +11,9 @@
 
 import type { Rng } from '@/engine/rng';
 import {
+  AIMED_MIN_DIST,
+  EB_SPEED_SMALL,
+  ENEMY_BULLET_SPEED_SCALE,
   FIXED_DT,
   HITBOX_RADIUS,
   LOGICAL_H,
@@ -74,6 +77,7 @@ import {
   TIEBAO_SHED_BLAST_FRAME,
   TIEBAO_SHED_DELAY,
   TIEBAO_SHED_SLIDE,
+  TIEBAO_SIDE_MUZZLE_X,
   TIEBAO_SWITCH_CROSS_SPAN,
   TIEBAO_SWITCH_LEAD,
   TIEBAO_SWITCH_PERIOD,
@@ -508,6 +512,96 @@ export function tiebaoPiecePoses(
   });
 }
 
+/**
+ * One rigid pose's local point, in screen pixels.
+ * Local +x is the car's right, local +y points at the tail. The same map as
+ * `blitTiebaoRigid`: `x = cx + lx·cos − ly·sin`, `y = cy + lx·sin + ly·cos`.
+ */
+export function tiebaoLocalOnPose(
+  pose: TiebaoCarPose,
+  localX: number,
+  localY: number
+): { x: number; y: number } {
+  const c = Math.cos(pose.angle);
+  const s = Math.sin(pose.angle);
+  return {
+    x: pose.x + localX * c - localY * s,
+    y: pose.y + localX * s + localY * c,
+  };
+}
+
+/** Which side of this car a shot travels. 0 stays on the centerline. */
+export function tiebaoFanLocalX(carAngle: number, shotAngle: number): number {
+  const alongRight =
+    Math.cos(shotAngle) * Math.cos(carAngle) + Math.sin(shotAngle) * Math.sin(carAngle);
+  if (alongRight > 1e-3) return TIEBAO_SIDE_MUZZLE_X;
+  if (alongRight < -1e-3) return -TIEBAO_SIDE_MUZZLE_X;
+  return 0;
+}
+
+const PART_ROW: Readonly<Record<string, number>> = {
+  core: TIEBAO_CORE_ROW,
+  roofLoco: TIEBAO_ROOF_LOCO_ROW,
+  roofCar: TIEBAO_ROOF_CAR_ROW,
+};
+
+function poseAtRow(poses: readonly TiebaoCarPose[], row: number): TiebaoCarPose | undefined {
+  return (
+    poses.find((pose) => row >= pose.row && row < pose.row + pose.h) ?? poses[poses.length - 1]
+  );
+}
+
+/**
+ * Screen mount of a sprite row on the rigid car that contains it.
+ * Straight: this is `(boss.x + localX, top + row)`, the old parked point.
+ * Banked: it rides that car's translate and rotate, not the curve sample at
+ * the unrotated y.
+ */
+export function tiebaoRowMount(boss: BossRuntime, spriteRow: number, localX = 0): TiebaoMount {
+  const poses = tiebaoCarPoses(boss);
+  const pose = poseAtRow(poses, spriteRow);
+  if (!pose) return { x: boss.x + localX, y: boss.y, angle: 0 };
+  const localY = spriteRow - pose.row - pose.h / 2;
+  const at = tiebaoLocalOnPose(pose, localX, localY);
+  return { x: at.x, y: at.y, angle: pose.angle };
+}
+
+/** Core glow and the two roof guns. Null for any other id. */
+export function tiebaoPartMount(boss: BossRuntime, partId: string): TiebaoMount | null {
+  const row = PART_ROW[partId];
+  if (row === undefined) return null;
+  return tiebaoRowMount(boss, row, 0);
+}
+
+/**
+ * Write each living part's screen point from its rigid mount.
+ * `offsetY` stays the unrotated row offset (`row − height/2`). Falling
+ * debris is left where it broke off. Before the rail script exists, parts
+ * keep the generic `boss + offset` placement.
+ */
+export function tiebaoSyncMounts(boss: BossRuntime): void {
+  if (!states.has(boss)) return;
+  for (const part of boss.parts) {
+    if (part.falling) continue;
+    const mount = tiebaoPartMount(boss, part.id);
+    if (!mount) {
+      part.worldX = boss.x + part.offsetX;
+      part.worldY = boss.y + part.offsetY;
+      continue;
+    }
+    part.worldX = mount.x;
+    part.worldY = mount.y;
+    part.offsetX = mount.x - boss.x;
+  }
+}
+
+export interface TiebaoMount {
+  x: number;
+  y: number;
+  /** Car bank, clockwise radians. 0 on a straight rail. */
+  angle: number;
+}
+
 /** Live poses. A parked consist is one X and angle 0. A move uses `tiebaoSwitchX`. */
 export function tiebaoCarPoses(boss: BossRuntime): TiebaoCarPose[] {
   const cars = tiebaoCommittedCars(boss);
@@ -555,12 +649,20 @@ function consistTop(boss: BossRuntime, cars: number): number {
   return boss.y - tiebaoHullHeight(cars) / 2;
 }
 
+/**
+ * Sprite row of the car a centerline weapon may fire from.
+ * The lead car once its center is on screen, otherwise the rear car.
+ */
+function visibleMuzzleRow(boss: BossRuntime, cars: number): number {
+  const top = consistTop(boss, cars);
+  const lead = tiebaoCarCenterRow(0);
+  if (top + lead > 8) return lead;
+  return tiebaoCarCenterRow(Math.max(0, cars - 1));
+}
+
 /** Visible muzzle. The lead car once it is on screen, otherwise the rear car. */
 function muzzleY(boss: BossRuntime, cars: number): number {
-  const top = consistTop(boss, cars);
-  const lead = top + tiebaoCarCenterRow(0);
-  if (lead > 8) return lead;
-  return top + tiebaoCarCenterRow(Math.max(0, cars - 1));
+  return consistTop(boss, cars) + visibleMuzzleRow(boss, cars);
 }
 
 function burstSheds(state: TiebaoState, ev: BossEvents, toSheds: number): void {
@@ -1010,27 +1112,19 @@ function zeroOffsets(boss: BossRuntime): void {
   for (const part of boss.parts) {
     if (part.falling) continue;
     part.offsetX = 0;
-    part.worldX = boss.x;
   }
+  tiebaoSyncMounts(boss);
 }
 
 /**
- * Parked: one rail center. Moving: the hull center and every part sit on the
- * turnout at their own Y. `syncParts` copies `offsetX` into `worldX`.
+ * Parked: one rail center, every mount upright. Moving: `boss.x` is the curve
+ * at the consist center, and each part sticks to the rigid car that owns its
+ * sprite row. Sampling the curve at the part's unrotated y shears the guns
+ * off the body.
  */
 function pose(state: TiebaoState, boss: BossRuntime): void {
-  if (state.phase !== 'move') {
-    boss.x = railX(state.rail);
-    zeroOffsets(boss);
-    return;
-  }
-  boss.x = consistX(state, boss.y);
-  for (const part of boss.parts) {
-    if (part.falling) continue;
-    const y = boss.y + part.offsetY;
-    part.offsetX = consistX(state, y) - boss.x;
-    part.worldX = boss.x + part.offsetX;
-  }
+  boss.x = state.phase === 'move' ? consistX(state, boss.y) : railX(state.rail);
+  tiebaoSyncMounts(boss);
 }
 
 /**
@@ -1073,20 +1167,44 @@ function pushBolt(
   );
 }
 
-function fireFan(state: TiebaoState, boss: BossRuntime, ev: BossEvents): void {
+/**
+ * Gun row when that roof gun is on screen. Otherwise the visible car, so the
+ * volley is not spawned above the screen and culled.
+ */
+function fanRow(boss: BossRuntime, cars: number, gunRow: number): number {
+  if (consistTop(boss, cars) + gunRow > 8) return gunRow;
+  return visibleMuzzleRow(boss, cars);
+}
+
+function fireFan(
+  state: TiebaoState,
+  boss: BossRuntime,
+  world: BossWorld | undefined,
+  ev: BossEvents
+): void {
   if (modeIdOf(state) !== 'fan') return;
   const cars = carsOf(state);
-  const visible = muzzleY(boss, cars);
+  const playerX = world?.playerX ?? LOGICAL_W / 2;
+  const playerY = world?.playerY ?? LOGICAL_H * 0.8;
+  const speed = EB_SPEED_SMALL * ENEMY_BULLET_SPEED_SCALE;
   for (let n = 0; n < 4 && state.weaponClock + 1e-9 >= state.fanNext; n++) {
     const id = state.fanSide % 2 === 0 ? 'roofCar' : 'roofLoco';
-    const part = boss.parts.find((item) => item.id === id);
-    const gunY = boss.y + (part?.offsetY ?? 0);
-    ev.shots.push({
-      fire: { kind: 'fan5', spread: TIEBAO_FAN_SPREAD, interval: TIEBAO_FAN_INTERVAL },
-      x: boss.x + (part?.offsetX ?? 0),
-      y: gunY > 8 ? gunY : visible,
-      rotation: 0,
-    });
+    const gunRow = id === 'roofCar' ? TIEBAO_ROOF_CAR_ROW : TIEBAO_ROOF_LOCO_ROW;
+    const row = fanRow(boss, cars, gunRow);
+    const center = tiebaoRowMount(boss, row, 0);
+    const dx = playerX - center.x;
+    const dy = playerY - center.y;
+    if (Math.hypot(dx, dy) >= AIMED_MIN_DIST) {
+      const base = Math.atan2(dy, dx);
+      const spread = TIEBAO_FAN_SPREAD * DEG;
+      const count = 5;
+      const step = spread / (count - 1);
+      for (let i = 0; i < count; i++) {
+        const angle = base + (i - (count - 1) / 2) * step;
+        const at = tiebaoRowMount(boss, row, tiebaoFanLocalX(center.angle, angle));
+        pushBolt(ev, at.x, at.y, Math.cos(angle) * speed, Math.sin(angle) * speed, 'small');
+      }
+    }
     state.fanSide++;
     state.fanNext += TIEBAO_FAN_INTERVAL;
   }
@@ -1184,9 +1302,25 @@ function fireBroadside(state: TiebaoState, boss: BossRuntime, ev: BossEvents): v
     t
   );
   const speed = TIEBAO_BROADSIDE_SPEED;
-  const y = muzzleY(boss, carsOf(state));
-  pushBolt(ev, boss.x - 34, y, Math.cos(left) * speed, Math.sin(left) * speed, 'small');
-  pushBolt(ev, boss.x + 34, y, Math.cos(right) * speed, Math.sin(right) * speed, 'small');
+  const row = visibleMuzzleRow(boss, carsOf(state));
+  const port = tiebaoRowMount(boss, row, -TIEBAO_SIDE_MUZZLE_X);
+  const starboard = tiebaoRowMount(boss, row, TIEBAO_SIDE_MUZZLE_X);
+  pushBolt(
+    ev,
+    port.x,
+    port.y,
+    Math.cos(left + port.angle) * speed,
+    Math.sin(left + port.angle) * speed,
+    'small'
+  );
+  pushBolt(
+    ev,
+    starboard.x,
+    starboard.y,
+    Math.cos(right + starboard.angle) * speed,
+    Math.sin(right + starboard.angle) * speed,
+    'small'
+  );
   state.broadShot++;
   if (state.broadShot >= BROADSIDE_SHOTS) {
     state.broadSweep++;
@@ -1337,7 +1471,7 @@ function fireWeapons(
   world: BossWorld | undefined,
   ev: BossEvents
 ): void {
-  fireFan(state, boss, ev);
+  fireFan(state, boss, world, ev);
   fireMissiles(state, boss, ev);
   fireRain(state, boss, world);
   fireBroadside(state, boss, ev);

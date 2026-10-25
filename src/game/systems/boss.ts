@@ -60,6 +60,7 @@ import {
   tiebaoPlaceEnter,
   tiebaoResolveBomb,
   tiebaoChaseBoost,
+  tiebaoSyncMounts,
   tiebaoSyncScroll,
   tiebaoTryShot,
 } from '@/game/systems/tiebao';
@@ -1013,6 +1014,10 @@ function fallDebris(boss: BossRuntime, dt: number): void {
 }
 
 function syncParts(boss: BossRuntime): void {
+  if (boss.def.script === 'tiebao') {
+    tiebaoSyncMounts(boss);
+    return;
+  }
   for (const part of boss.parts) {
     if (part.falling) continue;
     part.worldX = boss.x + part.offsetX;
