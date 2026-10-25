@@ -51,7 +51,7 @@ import {
   weaponTestVolleyRate,
 } from '@/game/scenes/weaponTest';
 import type { CarriedRun } from '@/game/scenes/types';
-import { clearEnemyBullets, type Battle, type GameState } from './context';
+import { clearEnemyBullets, type Battle, type GameState, type PlayerShip } from './context';
 import { spawnExplosion, triggerShake } from './fx';
 
 /** Player death burst: [dx, dy, delay] — staggered blasts around the wreck */
@@ -89,6 +89,17 @@ export function applyCarriedRun(state: GameState, carried: CarriedRun): void {
   state.nextExtendScore = carried.nextExtendScore;
 }
 
+/**
+ * Upright top-down pose. The drawn ship is `lastBankFrame`, so clearing
+ * `bank` alone leaves a tilted sprite. Victory exit snaps here before the
+ * return, and death / a fresh ship use the same center frame.
+ */
+export function neutralizePlayerPose(player: PlayerShip): void {
+  player.bank = 0;
+  player.targetBank = 0;
+  player.lastBankFrame = getBankFrameIndex(0);
+}
+
 /** Fresh run: full stock, Lv1 loadout, and the ship flying in from below. */
 export function resetPlayer(b: Battle): void {
   const { player, state } = b;
@@ -96,9 +107,7 @@ export function resetPlayer(b: Battle): void {
   player.y = PLAYER_SPAWN_Y;
   player.prevX = player.x;
   player.prevY = player.y;
-  player.bank = 0;
-  player.targetBank = 0;
-  player.lastBankFrame = 5;
+  neutralizePlayerPose(player);
   player.velocityY = 0;
 
   state.lives = LIVES_START;
@@ -179,9 +188,7 @@ export function killPlayer(b: Battle): void {
   state.respawnTimer = RESPAWN_DELAY;
 
   state.isFlying = false;
-  player.bank = 0;
-  player.targetBank = 0;
-  player.lastBankFrame = 5;
+  neutralizePlayerPose(player);
   player.velocityY = 0;
 
   // Breathing room for the next ship

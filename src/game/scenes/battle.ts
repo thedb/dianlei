@@ -34,6 +34,7 @@ import {
   collectItem,
   readButtons,
   applyCarriedRun,
+  neutralizePlayerPose,
   resetPlayer,
   spawnNewShip,
   steerPlayer,
@@ -210,8 +211,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
           }
         }
       } else if (victoryExitBlocksInput(b.victory.phase)) {
-        player.bank = 0;
-        player.targetBank = 0;
+        neutralizePlayerPose(player);
         player.velocityY = 0;
       } else if (state.isFlying) {
         stepFlyIn(b, dt);
