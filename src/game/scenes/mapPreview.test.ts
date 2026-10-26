@@ -165,13 +165,14 @@ describe('地图预览 entry on the title', () => {
     return title;
   }
 
-  it('lists 陆地A, 陆地B, 河流A, 百战要塞, 铁堡厂轨, 宇宙A, then 返回', () => {
+  it('lists 陆地A, 陆地B, 河流A, 百战要塞, 铁堡厂轨, 炉心浮台, 宇宙A, then 返回', () => {
     expect(MAP_PREVIEW_ROWS.map((r) => r.title)).toEqual([
       '陆地A',
       '陆地B',
       '河流A',
       '百战要塞',
       '铁堡厂轨',
+      '炉心浮台',
       '宇宙A',
       '返回',
     ]);
