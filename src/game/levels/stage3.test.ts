@@ -16,7 +16,7 @@ describe('stage 3 stub', () => {
   const stage = getStage('3');
 
   it('registers 叛军心脏 after stage 2 and keeps its own clocks', () => {
-    const src = readFileSync(new URL('./stage3.ts', import.meta.url), 'utf8');
+    const src = readFileSync('src/game/levels/stage3.ts', 'utf8');
     expect(src).not.toContain('STAGE2_');
     expect(src).not.toContain('TIEBAO_');
     expect(stage.id).toBe('3');
