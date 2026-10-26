@@ -6,6 +6,7 @@ This document defines the coding conventions and constraints for all AI agents w
 
 - **Design Document**: `docs/电雷_设计文档_v1.1.md` — all game rules, constants, and mechanics
 - **Wave Tables**: `docs/电雷_第一关波次表_v1.md` (stage 1, implemented) and `docs/电雷_第二关波次表_v2.md` (stage 2 run: waves, drops, rear-diagonal entry, `step_slide`, `dive_once`, factory AA). v1 of that table is history only. Stage 2 v2 revokes the old "0 new models" lock: one new enemy (`factory_aa`) and two new small-plane moves, `rear_diag` kept, warning stays at 118s, implemented in `stage2.ts`. Boss behavior stays in `docs/电雷_第二关_铁堡Boss设计_v1.md`
+- **Stage 3 / 4 specs (docs only, not implemented)**: `docs/电雷_第三关_炉心Boss设计_v1.md` and `docs/电雷_第三关波次表_v1.md` lock stage 3 (run `riverA`, boss map `furnaceBoss`, orbiting gun pods then iris armor petals, no gameplay laser). `docs/电雷_第四关_黑曜Boss设计_v1.md` and `docs/电雷_第四关波次表_v1.md` lock stage 4 (new run map `seaB`, boss map `obsidianBoss`, HP-empty saucer sequence instead of a normal explosion clear). Do not implement these from this file. A later PR folds the locks into the sections below after the code exists. `spaceA` stays stage 5. Clear-wave bonus and the timed supply ship stay unimplemented
 - When design docs and code conflict, **docs are authoritative**
 - Update docs when rules change (not just code comments)
 
