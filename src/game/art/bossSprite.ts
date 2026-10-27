@@ -379,8 +379,9 @@ export const BOSS_ART: Readonly<Record<string, () => BossAssets>> = {
     hull: renderSprite(buildFurnaceChassis(false)),
     hullOpen: renderSprite(buildFurnaceChassis(true)),
     parts: {
-      pod: renderSprite(buildFurnacePod(false)),
-      podBroken: renderSprite(buildFurnacePod(true)),
+      pod: renderSprite(buildFurnacePod('intact')),
+      podDamaged: renderSprite(buildFurnacePod('damaged')),
+      podWrecked: renderSprite(buildFurnacePod('wrecked')),
       petal: renderSprite(buildFurnacePetal()),
       core: renderSprite(buildFurnaceCore()),
     },

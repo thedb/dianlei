@@ -1,11 +1,19 @@
 /**
  * 炉心 (stage 3 boss) sprites and the furnace draw pass.
- * Chassis 200×132, pods 28×28, petals 24×24, core 32×32, palette indices only.
- * Every baked coordinate is a whole pixel. Core glow, flames, petal and pod
- * rotation, and the hit flash are drawn in code.
+ * Chassis 200×132, pods 28×28 (intact / damaged / wrecked), petals 24×24,
+ * core 32×32, palette indices only. Every baked coordinate is a whole pixel.
+ * Core glow, flames, petal and pod rotation, pod muzzle glow / smoke / wreck
+ * sparks, and the hit flash are drawn in code.
  */
 
-import { FURNACE_HULL_H, FURNACE_HULL_W } from '@/game/config';
+import {
+  FURNACE_HULL_H,
+  FURNACE_HULL_W,
+  FURNACE_POD_MUZZLE,
+  FURNACE_POD_SMOKE_ON,
+  FURNACE_POD_SMOKE_PERIOD,
+  FURNACE_POD_SPARK_TIME,
+} from '@/game/config';
 import { COLOR, PALETTE } from '@/game/palette';
 import type { BossRuntime } from '@/game/systems/boss';
 import { bossLook } from '@/game/systems/boss';
@@ -15,7 +23,11 @@ import {
   furnaceCorePhase,
   furnaceOpenness,
   furnacePetals,
+  furnaceOffset,
   furnacePodAngle,
+  furnacePodLook,
+  furnacePodWreckAge,
+  type FurnacePodLook,
 } from '@/game/systems/furnace';
 import { drawEnemyFlame } from './engineFlame';
 import { createGrid, fillEllipse, fillPoly, fillRect, outline, plot } from './pixelDraw';
@@ -39,6 +51,9 @@ const OY = COLOR.EXPLOSION_ORANGE_YELLOW;
 const OR = COLOR.EXPLOSION_ORANGE;
 const RO = COLOR.EXPLOSION_RED_ORANGE;
 const YE = COLOR.EXPLOSION_YELLOW;
+const RD = COLOR.ENEMY_DARK_RED;
+const RC = COLOR.ENEMY_CRIMSON;
+const BR = COLOR.TERRAIN_BROWN;
 
 export const FURNACE_POD_SIZE = 28;
 export const FURNACE_PETAL_SIZE = 24;
@@ -133,6 +148,24 @@ export function buildFurnaceChassis(open: boolean): SpriteData {
     plot(grid, 60 + i * 16, h - 25, G);
   }
 
+  // Scrap-port wear: rust runs under the rivets and on the hull flanks.
+  for (let i = 0; i < 6; i++) {
+    const x = 61 + i * 16;
+    const run = 3 + (i % 3);
+    fillRect(grid, x, 25, 1, run, RD);
+    plot(grid, x, 25 + run, BR);
+    fillRect(grid, x, h - 24, 1, run - 1, RD);
+  }
+  for (const [x, y, rw, rh] of [
+    [12, 50, 3, 5],
+    [w - 15, 76, 3, 6],
+    [30, h - 30, 4, 2],
+    [w - 40, 20, 5, 2],
+  ] as const) {
+    fillRect(grid, x, y, rw, rh, RD);
+    plot(grid, x, y, BR);
+  }
+
   // Thruster blocks along the rear (top edge).
   for (const dx of NOZZLE_DX) {
     fillRect(grid, cx + dx - 9, 2, 18, 9, EB);
@@ -192,33 +225,141 @@ export function buildFurnaceChassis(open: boolean): SpriteData {
   return grid;
 }
 
-/** Orbiting gun pod. The barrel points down (outward); the draw rotates it by the orbit angle. */
-export function buildFurnacePod(broken: boolean): SpriteData {
+/** Pod hex seat: flat top and bottom, points left and right, centered on (14, 11). */
+const POD_HEX: ReadonlyArray<readonly [number, number]> = [
+  [3, 11],
+  [8, 2],
+  [19, 2],
+  [24, 11],
+  [19, 20],
+  [8, 20],
+];
+const POD_HEX_IN: ReadonlyArray<readonly [number, number]> = [
+  [7, 11],
+  [10, 5],
+  [17, 5],
+  [20, 11],
+  [17, 17],
+  [10, 17],
+];
+
+function podBarrel(grid: SpriteData, c: number, end: number, lit: boolean): void {
+  fillRect(grid, c - 2, 15, 4, end - 15, EB);
+  fillRect(grid, c - 1, 15, 1, end - 15, lit ? G : MG);
+  fillRect(grid, c, 15, 1, end - 15, lit ? MG : S);
+}
+
+/**
+ * Orbiting gun pod: a hex seat, a turret cap, and a barrel pointing down
+ * (outward); the draw rotates it by the orbit angle. `damaged` adds cracks,
+ * a chipped corner, and dark red strips. `wrecked` is the seat ring left on
+ * the orbit with a black hole and a snapped barrel stub.
+ */
+export function buildFurnacePod(look: FurnacePodLook): SpriteData {
   const n = FURNACE_POD_SIZE;
   const c = n / 2;
   const grid = createGrid(n, n);
-  if (broken) {
-    fillEllipse(grid, c, c - 1, 10, 10, K);
-    fillEllipse(grid, c, c - 1, 6, 6, S);
-    plot(grid, c - 3, c - 4, OR);
-    plot(grid, c + 3, c + 1, RO);
-    plot(grid, c, c - 6, YE);
-    plot(grid, c + 5, c - 3, BD);
+  if (look === 'wrecked') {
+    fillPoly(grid, POD_HEX, DG);
+    fillPoly(grid, POD_HEX_IN, K);
+    fillEllipse(grid, c, 11, 4, 4, S);
+    fillEllipse(grid, c, 11, 3, 3, K);
+    for (const [x, y, w, h] of [
+      [3, 8, 4, 6],
+      [17, 2, 3, 3],
+      [19, 16, 4, 3],
+    ] as const) {
+      for (let yy = y; yy < y + h; yy++) for (let xx = x; xx < x + w; xx++) grid[yy]![xx] = -1;
+    }
+    fillRect(grid, c - 2, 18, 4, 4, EB);
+    fillRect(grid, c - 1, 18, 1, 4, DG);
+    plot(grid, c - 2, 22, EB);
+    plot(grid, c + 1, 23, EB);
+    plot(grid, c, 22, S);
+    for (const [x, y, col] of [
+      [9, 4, MG],
+      [12, 3, MG],
+      [21, 10, MG],
+      [8, 17, S],
+      [11, 7, RD],
+      [16, 14, RD],
+      [10, 14, BR],
+    ] as const) {
+      plot(grid, x, y, col);
+    }
     outline(grid, K);
     return grid;
   }
-  fillEllipse(grid, c, c - 2, 11, 11, DG);
-  fillEllipse(grid, c, c - 2, 8, 8, MG);
-  fillEllipse(grid, c, c - 3, 4, 4, G);
-  fillRect(grid, c - 2, c + 6, 4, 7, EB);
-  fillRect(grid, c - 1, c + 7, 2, 5, S);
-  plot(grid, c - 1, c + 12, ER);
-  plot(grid, c, c + 12, ER);
-  plot(grid, c - 1, c - 4, BM);
-  plot(grid, c, c - 4, BM);
-  plot(grid, c - 6, c - 2, CY);
-  plot(grid, c + 5, c - 2, CY);
-  plot(grid, c - 1, c - 8, LG);
+  const damaged = look === 'damaged';
+  fillPoly(grid, POD_HEX, damaged ? S : DG);
+  fillPoly(grid, POD_HEX_IN, damaged ? DG : MG);
+  for (let i = 0; i < 6; i++) plot(grid, 9 + i, 3, damaged ? MG : LG);
+  plot(grid, 7, 5, damaged ? MG : G);
+  plot(grid, 6, 7, damaged ? MG : G);
+  fillRect(grid, c - 4, 7, 8, 8, damaged ? MG : G);
+  fillRect(grid, c - 4, 7, 8, 1, damaged ? G : LG);
+  fillRect(grid, c - 4, 7, 1, 8, damaged ? G : LG);
+  fillRect(grid, c + 3, 8, 1, 7, S);
+  fillRect(grid, c - 3, 14, 7, 1, S);
+  plot(grid, c - 2, 9, K);
+  plot(grid, c + 1, 12, K);
+  podBarrel(grid, c, damaged ? 25 : 26, !damaged);
+  fillRect(grid, c - 3, 22, 6, 3, damaged ? S : MG);
+  fillRect(grid, c - 3, 22, 6, 1, damaged ? DG : G);
+  if (!damaged) {
+    fillRect(grid, c - 1, 25, 2, 2, OR);
+    plot(grid, c - 1, 26, OY);
+  } else {
+    fillRect(grid, c - 1, 24, 2, 1, RO);
+  }
+  const strip = damaged ? RD : CY;
+  const glint = damaged ? RC : CP;
+  fillRect(grid, 6, 9, 1, 5, strip);
+  fillRect(grid, 21, 9, 1, 5, strip);
+  plot(grid, 6, 10, glint);
+  plot(grid, 21, 12, glint);
+  plot(grid, c - 1, 4, damaged ? RD : BM);
+  plot(grid, c, 4, damaged ? RD : BM);
+  if (damaged) {
+    for (const [x, y] of [
+      [9, 6],
+      [10, 7],
+      [10, 8],
+      [11, 9],
+      [12, 9],
+      [17, 13],
+      [18, 14],
+      [18, 15],
+      [19, 16],
+      [8, 15],
+      [9, 14],
+    ] as const) {
+      plot(grid, x, y, K);
+    }
+    for (const [x, y, col] of [
+      [11, 8, RO],
+      [10, 6, RO],
+      [12, 10, OR],
+      [18, 13, OR],
+      [19, 15, RO],
+      [9, 15, RO],
+    ] as const) {
+      plot(grid, x, y, col);
+    }
+    for (const [x, y] of [
+      [19, 2],
+      [20, 3],
+      [21, 4],
+      [20, 2],
+      [21, 3],
+      [22, 5],
+      [21, 2],
+      [22, 3],
+      [22, 4],
+    ] as const) {
+      grid[y]![x] = -1;
+    }
+  }
   outline(grid, K);
   return grid;
 }
@@ -311,6 +452,77 @@ function blitRotated(
   ctx.restore();
 }
 
+const POD_SPARKS = 8;
+const POD_SPARK_REACH = 16;
+const POD_SMOKE_RISE = 14;
+
+/**
+ * Code-drawn pod state cues: a warm muzzle glow on a live barrel (it gutters
+ * when damaged), smoke puffs from a damaged pod, and a short spark burst over
+ * a fresh wreck. Time-driven only; never touches `rng`.
+ */
+function drawPodFx(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  angle: number,
+  podLook: FurnacePodLook,
+  wreckAge: number | null,
+  time: number,
+  index: number
+): void {
+  ctx.save();
+  if (podLook !== 'wrecked') {
+    const tip = furnaceOffset(angle, FURNACE_POD_MUZZLE);
+    const lit = podLook === 'intact' || Math.sin(time * 23 + index * 2) > 0.3;
+    if (lit) {
+      const pulse = podLook === 'intact' ? 0.4 + 0.2 * Math.sin(time * 9 + index) : 0.25;
+      ctx.globalAlpha = pulse;
+      ctx.fillStyle = PALETTE[OR];
+      ctx.beginPath();
+      ctx.arc(x + tip.x, y + tip.y, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = Math.min(1, pulse * 1.8);
+      ctx.fillStyle = PALETTE[YE];
+      ctx.fillRect(Math.round(x + tip.x) - 1, Math.round(y + tip.y) - 1, 2, 2);
+    }
+  }
+  if (podLook === 'damaged') {
+    const phase = (time + index * 0.37) % FURNACE_POD_SMOKE_PERIOD;
+    if (phase < FURNACE_POD_SMOKE_ON) {
+      ctx.fillStyle = PALETTE[G];
+      for (let k = 0; k < 3; k++) {
+        const rise = (phase / FURNACE_POD_SMOKE_ON + k / 3) % 1;
+        ctx.globalAlpha = 0.45 * (1 - rise);
+        ctx.beginPath();
+        ctx.arc(
+          x + Math.sin(rise * 5 + k) * 3,
+          y - 2 - rise * POD_SMOKE_RISE,
+          2 + rise * 3,
+          0,
+          Math.PI * 2
+        );
+        ctx.fill();
+      }
+    }
+  }
+  if (podLook === 'wrecked' && wreckAge !== null && wreckAge < FURNACE_POD_SPARK_TIME) {
+    const u = wreckAge / FURNACE_POD_SPARK_TIME;
+    ctx.globalAlpha = 0.5 * (1 - u);
+    ctx.fillStyle = PALETTE[RO];
+    ctx.beginPath();
+    ctx.arc(x, y, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1 - u;
+    for (let k = 0; k < POD_SPARKS; k++) {
+      const o = furnaceOffset(k * (360 / POD_SPARKS) + index * 20, 4 + u * POD_SPARK_REACH);
+      ctx.fillStyle = PALETTE[k % 2 ? OR : YE];
+      ctx.fillRect(Math.round(x + o.x) - 1, Math.round(y + o.y) - 1, 2, 2);
+    }
+  }
+  ctx.restore();
+}
+
 /** Chassis, core, petals, pods, flames, glow, and the hit flash. */
 export function drawFurnaceBoss(
   ctx: CanvasRenderingContext2D,
@@ -368,14 +580,20 @@ export function drawFurnaceBoss(
     }
   }
 
-  const pod = assets.parts.pod;
-  const podBroken = assets.parts.podBroken;
+  const podFrames: Record<FurnacePodLook, SpriteFrame | undefined> = {
+    intact: assets.parts.pod,
+    damaged: assets.parts.podDamaged,
+    wrecked: assets.parts.podWrecked,
+  };
   FURNACE_POD_IDS.forEach((id, i) => {
     const part = boss.parts.find((p) => p.id === id);
     if (!part) return;
-    const frame = part.alive ? pod : podBroken;
+    const podLook = furnacePodLook(part);
+    const frame = podFrames[podLook];
     if (!frame) return;
-    blitRotated(ctx, draw, frame, part.worldX, part.worldY, furnacePodAngle(boss, i));
+    const angle = furnacePodAngle(boss, i);
+    blitRotated(ctx, draw, frame, part.worldX, part.worldY, angle);
+    drawPodFx(ctx, part.worldX, part.worldY, angle, podLook, furnacePodWreckAge(boss, i), time, i);
   });
 
   if (look.smoke) {

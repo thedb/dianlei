@@ -3,7 +3,7 @@ import { createRng } from '@/engine/rng';
 import { FIXED_DT, FURNACE_ENTER_DURATION, FURNACE_HULL_H, FURNACE_HULL_W } from '@/game/config';
 import { prepareBossConfig } from '@/game/difficulty';
 import { FURNACE } from '@/game/levels/bosses/furnace';
-import { PALETTE } from '@/game/palette';
+import { COLOR, PALETTE } from '@/game/palette';
 import { bossPart, createBoss, resolveBossBullet, updateBoss } from '@/game/systems/boss';
 import { FURNACE_POD_IDS, furnaceCoreExposed } from '@/game/systems/furnace';
 import { BOSS_ART, createBossAssets, drawBossWorld } from './bossSprite';
@@ -49,10 +49,37 @@ describe('asset bake', () => {
   it('bakes every furnace sprite as a whole-pixel palette grid', () => {
     expectCleanGrid(buildFurnaceChassis(false), FURNACE_HULL_W, FURNACE_HULL_H, 'chassis');
     expectCleanGrid(buildFurnaceChassis(true), FURNACE_HULL_W, FURNACE_HULL_H, 'chassis open');
-    expectCleanGrid(buildFurnacePod(false), 28, 28, 'pod');
-    expectCleanGrid(buildFurnacePod(true), 28, 28, 'pod broken');
+    expectCleanGrid(buildFurnacePod('intact'), 28, 28, 'pod');
+    expectCleanGrid(buildFurnacePod('damaged'), 28, 28, 'pod damaged');
+    expectCleanGrid(buildFurnacePod('wrecked'), 28, 28, 'pod wrecked');
     expectCleanGrid(buildFurnacePetal(), 24, 24, 'petal');
     expectCleanGrid(buildFurnaceCore(), 32, 32, 'core');
+  });
+
+  it('draws the pod as a hex seat with a barrel, then cracked, then an empty ring', () => {
+    const intact = buildFurnacePod('intact');
+    const damaged = buildFurnacePod('damaged');
+    const wrecked = buildFurnacePod('wrecked');
+    const span = (grid: SpriteData, y: number) => {
+      const xs = grid[y]!.flatMap((v, x) => (v >= 0 ? [x] : []));
+      return xs.length ? xs[xs.length - 1]! - xs[0]! + 1 : 0;
+    };
+    // Hex seat: wide at the points, flat and narrower on top; not a disc.
+    expect(span(intact, 11)).toBeGreaterThanOrEqual(22);
+    expect(span(intact, 2)).toBeLessThanOrEqual(14);
+    // The barrel runs past the seat to a warm muzzle.
+    expect(span(intact, 24)).toBeLessThanOrEqual(8);
+    expect(intact[26]![13]).toBe(COLOR.EXPLOSION_ORANGE_YELLOW);
+    const colors = (grid: SpriteData) => new Set(grid.flat());
+    expect(colors(intact).has(COLOR.PLAYER_CYAN)).toBe(true);
+    expect(colors(damaged).has(COLOR.PLAYER_CYAN)).toBe(false);
+    expect(colors(damaged).has(COLOR.ENEMY_DARK_RED)).toBe(true);
+    expect(colors(damaged).has(COLOR.EXPLOSION_RED_ORANGE)).toBe(true);
+    // Wreck: black hole in the seat, barrel snapped well short of the muzzle.
+    expect(wrecked[11]![14]).toBe(COLOR.BLACK);
+    expect(wrecked.slice(25).every((row) => row.every((v) => v < 0))).toBe(true);
+    expect(colors(wrecked).has(COLOR.PLAYER_CYAN)).toBe(false);
+    expect(colors(wrecked).has(COLOR.EXPLOSION_ORANGE_YELLOW)).toBe(false);
   });
 
   it('bakes the stage 3 enemies at their table size', () => {
@@ -69,7 +96,8 @@ describe('asset bake', () => {
       'core',
       'petal',
       'pod',
-      'podBroken',
+      'podDamaged',
+      'podWrecked',
     ]);
     expect(bosses.furnace!.hull.width).toBe(FURNACE_HULL_W);
     expect(() => createGameAssets()).not.toThrow();
@@ -97,7 +125,15 @@ describe('asset bake', () => {
     run(FURNACE_ENTER_DURATION + 0.5);
     for (const id of FURNACE_POD_IDS) {
       const pod = bossPart(boss, id)!;
-      resolveBossBullet(boss, { x: pod.worldX, y: pod.worldY, w: 4, h: 12 }, 100000);
+      resolveBossBullet(boss, { x: pod.worldX, y: pod.worldY, w: 4, h: 12 }, pod.maxHp * 0.6);
+    }
+    run(1.5);
+    const first = bossPart(boss, FURNACE_POD_IDS[0])!;
+    resolveBossBullet(boss, { x: first.worldX, y: first.worldY, w: 4, h: 12 }, 100000);
+    run(1);
+    for (const id of FURNACE_POD_IDS) {
+      const pod = bossPart(boss, id)!;
+      if (pod.alive) resolveBossBullet(boss, { x: pod.worldX, y: pod.worldY, w: 4, h: 12 }, 100000);
     }
     run(12, true);
     run(12, true);

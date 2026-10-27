@@ -50,6 +50,7 @@ import {
   FURNACE_PETAL_TRAVEL,
   FURNACE_PETAL_TURN,
   FURNACE_POD_ANGLES,
+  FURNACE_POD_DAMAGED_RATIO,
   FURNACE_POD_FAN_COUNT,
   FURNACE_POD_FAN_FIRST,
   FURNACE_POD_FAN_INTERVAL,
@@ -82,6 +83,8 @@ export const FURNACE_POD_IDS = ['pod0', 'pod1', 'pod2', 'pod3'] as const;
 export const FURNACE_PETALS = 4;
 
 export type FurnaceIris = 'closed' | 'opening' | 'open' | 'closing';
+/** Pod art state. `wrecked` pods stay on the orbit as a shell and take no hits. */
+export type FurnacePodLook = 'intact' | 'damaged' | 'wrecked';
 const IRIS_ORDER: readonly FurnaceIris[] = ['closed', 'opening', 'open', 'closing'];
 
 type IrisTable = Readonly<Record<FurnaceIris, number>>;
@@ -106,6 +109,8 @@ interface FurnaceState {
   flames: number;
   /** Openness when a transition started; it closes from there. */
   holdOpen: number;
+  /** `orbitTime` when each pod was first seen destroyed; NaN while it lives. Art only. */
+  podDown: number[];
 }
 
 const states = new WeakMap<BossRuntime, FurnaceState>();
@@ -116,6 +121,7 @@ function freshState(): FurnaceState {
     orbitTime: 0,
     podClock: 0,
     podFans: FURNACE_POD_ANGLES.map(() => 0),
+    podDown: FURNACE_POD_ANGLES.map(() => NaN),
     podFlakRounds: 0,
     podMissileWaves: 0,
     list: 'main',
@@ -385,6 +391,23 @@ export function stepFurnace(
     left -= slice;
   }
   furnaceSyncMounts(boss);
+  FURNACE_POD_IDS.forEach((id, i) => {
+    const pod = boss.parts.find((p) => p.id === id);
+    if (pod && !pod.alive && Number.isNaN(state.podDown[i]!)) state.podDown[i] = state.orbitTime;
+  });
+}
+
+export function furnacePodLook(pod: BossPartRuntime): FurnacePodLook {
+  if (!pod.alive) return 'wrecked';
+  return pod.hp <= pod.maxHp * FURNACE_POD_DAMAGED_RATIO ? 'damaged' : 'intact';
+}
+
+/** Seconds since this pod was destroyed (orbit clock), or null while it lives. */
+export function furnacePodWreckAge(boss: BossRuntime, index: number): number | null {
+  const state = states.get(boss);
+  const down = state?.podDown[index];
+  if (!state || down === undefined || Number.isNaN(down)) return null;
+  return state.orbitTime - down;
 }
 
 function podSlice(

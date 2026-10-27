@@ -12,7 +12,9 @@ import {
   FURNACE_OVERLOAD_HP,
   FURNACE_PETAL_STEP,
   FURNACE_PHASE_INVULN,
+  FURNACE_POD_DAMAGED_RATIO,
   FURNACE_POD_HP,
+  FURNACE_POD_ORBIT,
   FURNACE_POD_SCORE,
   STAGE3_WARNING_AT,
 } from '@/game/config';
@@ -37,7 +39,11 @@ import {
   furnaceCoreExposed,
   furnaceIris,
   furnacePetalBase,
+  furnaceOffset,
   furnacePetals,
+  furnacePodAngle,
+  furnacePodLook,
+  furnacePodWreckAge,
   furnaceReadout,
 } from './furnace';
 
@@ -159,6 +165,41 @@ describe('炉心 pods', () => {
     const pod = bossPart(boss, 'pod1')!;
     const ev = shot(boss, pod.worldX, pod.worldY, 100000);
     expect(ev.score).toBe(FURNACE_POD_SCORE);
+    expect(pod.alive).toBe(false);
+  });
+
+  it('looks intact, then damaged at half HP, then a wreck that keeps orbiting', () => {
+    const around = world();
+    const boss = easy();
+    park(boss, around);
+    const pod = bossPart(boss, 'pod2')!;
+    const half = pod.maxHp * FURNACE_POD_DAMAGED_RATIO;
+    expect(FURNACE_POD_DAMAGED_RATIO).toBe(0.5);
+    expect(furnacePodLook(pod)).toBe('intact');
+    shot(boss, pod.worldX, pod.worldY, pod.maxHp - half - 1);
+    expect(furnacePodLook(pod)).toBe('intact');
+    shot(boss, pod.worldX, pod.worldY, 1);
+    expect(pod.hp).toBe(half);
+    expect(furnacePodLook(pod)).toBe('damaged');
+    expect(furnacePodWreckAge(boss, 2)).toBeNull();
+
+    shot(boss, pod.worldX, pod.worldY, 100000);
+    expect(furnacePodLook(pod)).toBe('wrecked');
+    step(boss, around, FIXED_DT);
+    expect(furnacePodWreckAge(boss, 2)).toBeCloseTo(0, 6);
+    step(boss, around, 0.5);
+    expect(furnacePodWreckAge(boss, 2)).toBeCloseTo(0.5, 6);
+    expect(furnacePodWreckAge(boss, 0)).toBeNull();
+
+    const hp = pod.hp;
+    const from = { x: pod.worldX, y: pod.worldY };
+    step(boss, around, 1);
+    const o = furnaceOffset(furnacePodAngle(boss, 2), FURNACE_POD_ORBIT);
+    expect(pod.worldX).toBeCloseTo(boss.x + o.x, 6);
+    expect(pod.worldY).toBeCloseTo(boss.y + o.y, 6);
+    expect(Math.hypot(pod.worldX - from.x, pod.worldY - from.y)).toBeGreaterThan(10);
+    shot(boss, pod.worldX, pod.worldY, 9);
+    expect(pod.hp).toBe(hp);
     expect(pod.alive).toBe(false);
   });
 

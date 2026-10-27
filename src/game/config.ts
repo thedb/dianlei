@@ -619,14 +619,17 @@ export const STAGE2_WARNING_AT = 118;
 
 /**
  * 炉心浮台 (`furnaceBoss`): one approach chunk whose row 0 is 河流A's last row,
- * then a chassis floor that loops. Stage 3's boss map. No cloud sheet, no
- * water on the loop.
+ * then a dockyard floor that loops. Stage 3's boss map. No cloud sheet, no
+ * water tiles on the loop.
  */
 export const FURNACE_BOSS_CHUNKS = 2;
 export const FURNACE_BOSS_SEED = 31;
 
-/** Locked chassis look A 灯带四瓣. B–E are reserved for stills, not the fight. */
+/** Locked boss sprite look A 灯带四瓣. B–E are reserved for stills, not the fight. */
 export const FURNACE_LOOK = 'A' as const;
+
+/** Locked arena look C 淹水船坞废港: dry docks, sunk barges, crane skeletons, mud. */
+export const FURNACE_MAP_LOOK = 'C' as const;
 
 /**
  * Stage 3 warning. Own constant, same value as stage 2: 河流A is 5760 px, and
@@ -1074,6 +1077,15 @@ export const FURNACE_POD_RADIUS = 14;
 export const FURNACE_POD_SPIN = 36;
 export const FURNACE_POD_HP = 70;
 export const FURNACE_POD_SCORE = 2500;
+/** Pod art: a live pod at or under this share of max HP shows cracks, red strips, and smoke. */
+export const FURNACE_POD_DAMAGED_RATIO = 0.5;
+/** Seconds of sparks on a destroyed pod before only the black shell is left. */
+export const FURNACE_POD_SPARK_TIME = 0.6;
+/** Damaged-pod smoke: one puff train every period, lasting `ON` seconds. */
+export const FURNACE_POD_SMOKE_PERIOD = 1.1;
+export const FURNACE_POD_SMOKE_ON = 0.55;
+/** Barrel tip, px from the pod center along its outward heading (muzzle glow). */
+export const FURNACE_POD_MUZZLE = 12;
 
 export const FURNACE_CORE_HP = 280;
 export const FURNACE_CORE_SCORE = 30000;

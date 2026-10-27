@@ -9,14 +9,19 @@
  *   next to it gets a sand rim,
  * - bridges are a plank deck over that water,
  * - forest canopy gets a ragged rim where it meets open ground,
- * - crop plots get a lit top-left and shaded bottom-right border.
+ * - crop plots get a lit top-left and shaded bottom-right border,
+ * - 炉心浮台 harbor tiles: dry-dock pits get stepped walls toward the yard,
+ *   barge hulls get an outline with a rounded bow and flooded deck patches,
+ *   pads get a lit coping, mud gets puddles, the quay mirrors on the right
+ *   bank, and booms / the crane foot / pilings / scrap sit on the ground or
+ *   water around them.
  * Then every tall pixel (canopy, roof, deck, boulder) casts a shadow
  * `SHADOW_OFFSET` px down-right through the palette `SHADE` ramp.
  */
 
 import { TILE_SIZE } from '@/game/config';
 import { COLOR } from '@/game/palette';
-import { TileId, getTilePixels, getTileTallMasks, hash } from './tiles';
+import { TileId, getTileOverlays, getTilePixels, getTileTallMasks, hash } from './tiles';
 
 export const SHADOW_OFFSET = 3;
 
@@ -63,6 +68,47 @@ const ROADLIKE = new Set<number>([TileId.road, TileId.street, TileId.bridge]);
 const WATERLIKE = new Set<number>([TileId.lake, TileId.bridge]);
 const CROPS = new Set<number>([TileId.cropGreen, TileId.cropWheat, TileId.cropPlowed]);
 const MEADOW_BASES = [TileId.meadow, TileId.meadowB, TileId.meadow, TileId.meadowB] as const;
+
+const HARBOR = new Set<number>([
+  TileId.harborMud,
+  TileId.harborSlab,
+  TileId.harborQuay,
+  TileId.harborPit,
+  TileId.bargeHull,
+  TileId.craneBoomNE,
+  TileId.craneBoomNW,
+  TileId.craneFoot,
+  TileId.harborPiles,
+  TileId.harborScrap,
+  TileId.harborBurn,
+]);
+const PITLIKE = new Set<number>([TileId.harborPit, TileId.bargeHull]);
+const OVERLAYS = new Set<number>([
+  TileId.craneBoomNE,
+  TileId.craneBoomNW,
+  TileId.craneFoot,
+  TileId.harborPiles,
+  TileId.harborScrap,
+  TileId.harborBurn,
+]);
+/**
+ * Cells that may stand in water. Lake water runs under them without foam, so
+ * the layout keeps them either in water or off the lake's edge.
+ */
+const FLOATING = new Set<number>([
+  TileId.harborPiles,
+  TileId.craneBoomNE,
+  TileId.craneBoomNW,
+  TileId.bargeHull,
+]);
+const PIT_WALL = 4;
+/** Quays right of this column face the other way (water side on the right). */
+const HARBOR_MID_COL = 11;
+/** Pad expansion joints, in map pixels. */
+const SLAB_SEAM_X = 48;
+const SLAB_SEAM_Y = 32;
+const BOW_R = 6;
+const STERN_R = 3;
 
 export interface StripPixels {
   width: number;
@@ -128,6 +174,13 @@ function waterColor(d: number, gx: number, gy: number): number {
   return COLOR.WATER_OCEAN;
 }
 
+/** Flooded harbor water: no bright foam line where it meets the yard. */
+function murkyWaterColor(d: number, gx: number, gy: number): number {
+  if (d === 0) return COLOR.DARK_GRAY;
+  if (d <= 2) return COLOR.WATER_DEEP;
+  return waterColor(Math.max(d, 7), gx, gy);
+}
+
 function canopyColor(gx: number, gy: number): number {
   const j = Math.round(gy / 7);
   const offset = (((j % 2) + 2) % 2) * 4;
@@ -188,11 +241,21 @@ function paintTile(
   }
   if (id < TileId.meadow) return;
 
+  if (HARBOR.has(id)) {
+    paintHarbor(out, a, id, ox, oy, gx0, gy0, c, r);
+    return;
+  }
+
   if (WATERLIKE.has(id)) {
-    const land = (n: number) => !WATERLIKE.has(n);
+    const land = (n: number) => !WATERLIKE.has(n) && !FLOATING.has(n);
+    const murky = [a.n, a.s, a.w, a.e, a.nw, a.ne, a.sw, a.se].some((n) => HARBOR.has(n));
     for (let y = 0; y < TILE_SIZE; y++) {
       for (let x = 0; x < TILE_SIZE; x++) {
-        out.put(ox + x, oy + y, waterColor(edgeDistance(a, land, x, y), gx0 + x, gy0 + y), false);
+        const d = edgeDistance(a, land, x, y);
+        const color = murky
+          ? murkyWaterColor(d, gx0 + x, gy0 + y)
+          : waterColor(d, gx0 + x, gy0 + y);
+        out.put(ox + x, oy + y, color, false);
       }
     }
   } else if (edgeDistance(a, (n) => WATERLIKE.has(n), 7, 7) < 99) {
@@ -245,6 +308,155 @@ function paintTile(
       if (a.w !== id) out.put(ox, oy + i, lit, false);
       if (a.s !== id) out.put(ox + i, oy + TILE_SIZE - 1, dark, false);
       if (a.e !== id) out.put(ox + TILE_SIZE - 1, oy + i, dark, false);
+    }
+  }
+}
+
+/** In water: at least two sides are lake or other cells standing in it. */
+function wetAround(a: Around): boolean {
+  const sides = [a.n, a.s, a.w, a.e];
+  const wet = sides.filter((n) => WATERLIKE.has(n) || FLOATING.has(n)).length;
+  return wet >= 2 && sides.some((n) => WATERLIKE.has(n));
+}
+
+/** Ground under a hull or an overlay: water, a pit floor, a pad, or mud. */
+function harborGround(a: Around, id: number): number {
+  if (FLOATING.has(id) && wetAround(a)) return TileId.lake;
+  const sides = [a.s, a.n, a.w, a.e];
+  if (id === TileId.bargeHull) {
+    return sides.some((n) => n === TileId.harborPit) ? TileId.harborPit : TileId.harborMud;
+  }
+  for (const n of sides) {
+    if (n === TileId.harborSlab || n === TileId.harborMud || n === TileId.harborPit) return n;
+  }
+  return TileId.harborMud;
+}
+
+function groundColor(
+  ground: number,
+  a: Around,
+  x: number,
+  y: number,
+  gx: number,
+  gy: number
+): number {
+  if (ground === TileId.lake) {
+    const land = (n: number) => !WATERLIKE.has(n) && !FLOATING.has(n);
+    return murkyWaterColor(edgeDistance(a, land, x, y), gx, gy);
+  }
+  return getTilePixels()[ground]![y]![x]!;
+}
+
+/** Dry-dock sludge in 4 px blocks keyed on map pixels, so the floor never tiles. */
+function pitFloorColor(gx: number, gy: number, fallback: number): number {
+  const b = hash(positive(gx >> 2) + 503, positive(gy >> 2) + 71) % 13;
+  if (b === 0) return COLOR.ENEMY_DARK_RED;
+  if (b === 1 || b === 2) return COLOR.TERRAIN_DARK_BROWN;
+  if (b === 3 || b === 4) return COLOR.WATER_DEEP;
+  if (b === 5) return COLOR.SHADOW;
+  if (fallback === COLOR.WATER_OCEAN) return COLOR.WATER_DEEP;
+  return fallback === COLOR.ENEMY_DARK_RED ? COLOR.ENEMY_BLACK : fallback;
+}
+
+/** Hull pixel: -1 outside the rounded ends, else distance (px) to the hull edge. */
+function hullDepth(a: Around, x: number, y: number): number {
+  const L = TILE_SIZE - 1;
+  const open = (n: number) => n !== TileId.bargeHull;
+  const dn = open(a.n) ? y : 99;
+  const ds = open(a.s) ? L - y : 99;
+  const dw = open(a.w) ? x : 99;
+  const de = open(a.e) ? L - x : 99;
+  for (const [dv, R] of [
+    [dn, BOW_R],
+    [ds, STERN_R],
+  ] as const) {
+    for (const dh of [dw, de]) {
+      if (dv < R && dh < R) {
+        const d = R - Math.hypot(R - dv - 0.5, R - dh - 0.5);
+        return d < 0 ? -1 : Math.floor(d);
+      }
+    }
+  }
+  return Math.min(dn, ds, dw, de);
+}
+
+function paintHarbor(
+  out: StripWriter,
+  a: Around,
+  id: number,
+  ox: number,
+  oy: number,
+  gx0: number,
+  gy0: number,
+  c: number,
+  r: number
+): void {
+  const art = getTilePixels()[id]!;
+  const overlay = getTileOverlays()[id];
+  const L = TILE_SIZE - 1;
+  const notPit = (n: number) => !PITLIKE.has(n);
+  const ground = OVERLAYS.has(id) || id === TileId.bargeHull ? harborGround(a, id) : id;
+  const mirror = id === TileId.harborQuay && c > HARBOR_MID_COL;
+  const pad = (n: number) => n === TileId.harborSlab || OVERLAYS.has(n);
+  const h = hash(positive(c) + 911, positive(r) + 37);
+  const puddle = id === TileId.harborMud && h % 3 === 0;
+  const px = 4 + (h % 8);
+  const py = 4 + ((h >>> 4) % 8);
+  const pr = 2 + ((h >>> 8) % 2);
+
+  for (let y = 0; y < TILE_SIZE; y++) {
+    for (let x = 0; x < TILE_SIZE; x++) {
+      const gx = gx0 + x;
+      const gy = gy0 + y;
+      let color: number;
+      let tall = false;
+      if (overlay) {
+        const cell = overlay[y]![x]!;
+        color = cell >= 0 ? cell : groundColor(ground, a, x, y, gx, gy);
+        tall = cell >= 0 && id !== TileId.harborScrap && id !== TileId.harborBurn;
+      } else if (id === TileId.bargeHull) {
+        const d = hullDepth(a, x, y);
+        const wet = hash(positive(gx >> 2), positive(gy >> 2)) % 5 === 0;
+        if (d < 0) color = groundColor(ground, a, x, y, gx, gy);
+        else if (d === 0) color = COLOR.ENEMY_BLACK;
+        else if (d === 1) {
+          color = COLOR.ENEMY_CRIMSON;
+          tall = true;
+        } else if (d === 2) color = COLOR.ENEMY_DARK_RED;
+        else if (wet) color = (gx + gy) % 5 === 0 ? COLOR.WATER_OCEAN : COLOR.WATER_DEEP;
+        else color = art[y]![x]!;
+      } else if (id === TileId.harborPit) {
+        const d = edgeDistance(a, notPit, x, y);
+        color = pitFloorColor(gx, gy, art[h & 1 ? L - y : y]![h & 2 ? L - x : x]!);
+        if (d === 0) {
+          color = COLOR.GRAY;
+          tall = true;
+        } else if (d < PIT_WALL) {
+          const step = positive(gx + gy) % 4 === 0;
+          color = d % 2 === 1 ? COLOR.MEDIUM_GRAY : step ? COLOR.SHADOW : COLOR.DARK_GRAY;
+        } else if (d === PIT_WALL) {
+          color = COLOR.BLACK;
+        }
+      } else {
+        const fx = mirror || (id === TileId.harborSlab && h & 2) ? L - x : x;
+        color = art[id === TileId.harborSlab && h & 1 ? L - y : y]![fx]!;
+        if (id === TileId.harborSlab) {
+          const seam = positive(gx) % SLAB_SEAM_X === 0 || positive(gy) % SLAB_SEAM_Y === 0;
+          if (seam) color = COLOR.DARK_GRAY;
+          if ((y === 0 && !pad(a.n)) || (x === 0 && !pad(a.w))) color = COLOR.GRAY;
+          if ((y === L && !pad(a.s)) || (x === L && !pad(a.e))) color = COLOR.SHADOW;
+        }
+        if (puddle) {
+          const dx = x - px;
+          const dy = y - py;
+          const inside = dx * dx + dy * dy * 2 <= pr * pr * 2;
+          if (inside) color = dx < 0 && dy < 0 ? COLOR.WATER_OCEAN : COLOR.WATER_DEEP;
+        }
+        const wd = edgeDistance(a, (n) => WATERLIKE.has(n), x, y);
+        if (wd === 0) color = COLOR.DARK_GRAY;
+        else if (wd === 1 && (x + y) % 2 === 0) color = COLOR.GROUND_DARK_OLIVE;
+      }
+      out.put(ox + x, oy + y, color, tall);
     }
   }
 }
