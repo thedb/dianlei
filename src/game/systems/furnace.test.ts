@@ -292,6 +292,19 @@ describe('炉心 pods', () => {
     expect(core(boss).hp).toBe(FURNACE_CORE_HP);
   });
 
+  it('keeps the main iris a cycle with a long open window and a slower close', () => {
+    expect(FURNACE_IRIS_MAIN).toEqual({ closed: 1.8, opening: 0.4, open: 3.4, closing: 0.6 });
+    expect(FURNACE_IRIS_OVERLOAD).toEqual({ closed: 1.4, opening: 0.3, open: 1.6, closing: 0.3 });
+    const cycle =
+      FURNACE_IRIS_MAIN.closed +
+      FURNACE_IRIS_MAIN.opening +
+      FURNACE_IRIS_MAIN.open +
+      FURNACE_IRIS_MAIN.closing;
+    expect(cycle).toBeCloseTo(6.2, 9);
+    // Still a cycle: the shut part (closed + closing) is over a third of it.
+    expect((FURNACE_IRIS_MAIN.closed + FURNACE_IRIS_MAIN.closing) / cycle).toBeGreaterThan(1 / 3);
+  });
+
   it('holds 1.2s invulnerable after the last pod, then opens the core phase closed', () => {
     const around = world();
     const boss = easy();
@@ -340,13 +353,14 @@ describe('炉心 iris', () => {
     expect(shot(boss, c.worldX, c.worldY, 5).consumedBullet).toBe(true);
     expect(c.hp).toBe(FURNACE_CORE_HP - 10);
 
-    // Hit circle is the draft 20 × 1.2: a 4px bullet 23px off center still lands.
-    expect(FURNACE_CORE_RADIUS).toBe(24);
-    expect(shot(boss, c.worldX + 23, c.worldY, 1).consumedBullet).toBe(true);
-    expect(shot(boss, c.worldX - 23, c.worldY, 1).consumedBullet).toBe(true);
+    // Hit circle 28: a 4px bullet 27px off center still lands (its near edge is
+    // 25px out, past the old 24).
+    expect(FURNACE_CORE_RADIUS).toBe(28);
+    expect(shot(boss, c.worldX + 27, c.worldY, 1).consumedBullet).toBe(true);
+    expect(shot(boss, c.worldX - 27, c.worldY, 1).consumedBullet).toBe(true);
     expect(c.hp).toBe(FURNACE_CORE_HP - 12);
     // Throat under the core is as wide as the hit circle.
-    const edge = shot(boss, c.worldX + 23, c.worldY + FURNACE_CORE_RADIUS + 30, 1);
+    const edge = shot(boss, c.worldX + 27, c.worldY + FURNACE_CORE_RADIUS + 30, 1);
     expect(edge.consumedBullet).toBe(false);
 
     for (const petal of furnacePetals(boss)) {

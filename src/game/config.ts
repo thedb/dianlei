@@ -1087,15 +1087,15 @@ export const FURNACE_POD_MUZZLE = 12;
 
 export const FURNACE_CORE_HP = 280;
 export const FURNACE_CORE_SCORE = 30000;
-/** Core hit circle and the open throat's half width (draft 20 × 1.2). */
-export const FURNACE_CORE_RADIUS = 24;
+/** Core hit circle, the open throat's half width, and the homing radius. */
+export const FURNACE_CORE_RADIUS = 28;
 /** Hard only, before the Hard scale. The core's 30000 waits for this segment. */
 export const FURNACE_OVERLOAD_HP = 180;
 /** Pods cleared → core, and core → overload. Invulnerable, no fire, no bomb. */
 export const FURNACE_PHASE_INVULN = 1.2;
 
 /** Iris clock, seconds per state: closed, opening, open, closing. */
-export const FURNACE_IRIS_MAIN = { closed: 1.8, opening: 0.4, open: 2.2, closing: 0.4 } as const;
+export const FURNACE_IRIS_MAIN = { closed: 1.8, opening: 0.4, open: 3.4, closing: 0.6 } as const;
 export const FURNACE_IRIS_OVERLOAD = {
   closed: 1.4,
   opening: 0.3,

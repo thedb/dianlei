@@ -1,6 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createRng } from '@/engine/rng';
-import { FIXED_DT, FURNACE_ENTER_DURATION, FURNACE_HULL_H, FURNACE_HULL_W } from '@/game/config';
+import {
+  FIXED_DT,
+  FURNACE_CORE_RADIUS,
+  FURNACE_ENTER_DURATION,
+  FURNACE_HULL_H,
+  FURNACE_HULL_W,
+} from '@/game/config';
 import { prepareBossConfig } from '@/game/difficulty';
 import { FURNACE } from '@/game/levels/bosses/furnace';
 import { COLOR, PALETTE } from '@/game/palette';
@@ -45,6 +51,19 @@ describe('asset bake', () => {
     const grid = createGrid(4, 4);
     expect(() => plot(grid, 1.5, 121.21, 3)).not.toThrow();
     expect(grid.flat().every((cell) => cell === -1)).toBe(true);
+  });
+
+  it('opens the chassis throat exactly as wide as the core hit circle', () => {
+    const open = buildFurnaceChassis(true);
+    const cx = FURNACE_HULL_W / 2;
+    const row = open[FURNACE_HULL_H - 12]!;
+    expect(row[cx]).toBe(COLOR.BLACK);
+    let left = cx;
+    while (row[left - 1] === COLOR.BLACK) left--;
+    let right = cx;
+    while (row[right + 1] === COLOR.BLACK) right++;
+    expect(right - left + 1).toBe(FURNACE_CORE_RADIUS * 2);
+    expect(FURNACE_CORE_RADIUS * 2).toBe(56);
   });
 
   it('bakes every furnace sprite as a whole-pixel palette grid', () => {
