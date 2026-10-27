@@ -39,6 +39,7 @@ import {
   buildFurnaceCore,
   buildFurnacePetal,
   buildFurnacePod,
+  buildFurnacePodMark,
   drawFurnaceBoss,
 } from './furnaceLooks';
 import type { SpriteData, SpriteFrame } from './types';
@@ -380,7 +381,8 @@ export const BOSS_ART: Readonly<Record<string, () => BossAssets>> = {
     hullOpen: renderSprite(buildFurnaceChassis(true)),
     parts: {
       pod: renderSprite(buildFurnacePod('intact')),
-      podDamaged: renderSprite(buildFurnacePod('damaged')),
+      podActive: renderSprite(buildFurnacePod('active')),
+      podMark: renderSprite(buildFurnacePodMark()),
       podWrecked: renderSprite(buildFurnacePod('wrecked')),
       petal: renderSprite(buildFurnacePetal()),
       core: renderSprite(buildFurnaceCore()),

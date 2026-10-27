@@ -50,7 +50,6 @@ import {
   FURNACE_PETAL_TRAVEL,
   FURNACE_PETAL_TURN,
   FURNACE_POD_ANGLES,
-  FURNACE_POD_DAMAGED_RATIO,
   FURNACE_POD_FAN_COUNT,
   FURNACE_POD_FAN_FIRST,
   FURNACE_POD_FAN_INTERVAL,
@@ -83,8 +82,12 @@ export const FURNACE_POD_IDS = ['pod0', 'pod1', 'pod2', 'pod3'] as const;
 export const FURNACE_PETALS = 4;
 
 export type FurnaceIris = 'closed' | 'opening' | 'open' | 'closing';
-/** Pod art state. `wrecked` pods stay on the orbit as a shell and take no hits. */
-export type FurnacePodLook = 'intact' | 'damaged' | 'wrecked';
+/**
+ * Pod art state. `active` is the one pod that takes damage now (cracked,
+ * smoking, highlighted); `intact` pods wait their turn; `wrecked` pods stay on
+ * the orbit as a shell and take no hits.
+ */
+export type FurnacePodLook = 'intact' | 'active' | 'wrecked';
 const IRIS_ORDER: readonly FurnaceIris[] = ['closed', 'opening', 'open', 'closing'];
 
 type IrisTable = Readonly<Record<FurnaceIris, number>>;
@@ -275,62 +278,96 @@ export function furnaceAcceptsMissiles(boss: BossRuntime): boolean {
   return furnaceCoreExposed(boss);
 }
 
-/**
- * What a player bullet does in the core phases and their transitions.
- * `core` damages the core, `block` eats the bullet, `pass` lets it fly on.
- * Null hands the shot to the generic runner (enter and the pod phase).
- *
- * Petals block in every state. The chassis blocks while the iris is shut;
- * once it opens, only the throat straight under the core lets shots through,
- * so a bullet has to reach the core radius to count.
- */
-export function furnaceShotVerdict(
-  boss: BossRuntime,
-  bullet: BulletBox
-): 'core' | 'block' | 'pass' | null {
+function podPhase(boss: BossRuntime): boolean {
   const phase = livePhase(boss);
-  if (!phase || !furnaceCorePhase(phase)) return null;
-  if (boss.stage === 'enter') return null;
-  const core = boss.parts.find((part) => part.id === FURNACE_CORE_ID);
-  const cx = core?.worldX ?? boss.x;
-  const cy = core?.worldY ?? boss.y;
-  const touchesCore = checkBulletEnemyCollision(
-    bullet.x,
-    bullet.y,
-    bullet.w,
-    bullet.h,
-    cx,
-    cy,
-    FURNACE_CORE_RADIUS
-  );
-  const exposed = furnaceCoreExposed(boss);
-  if (exposed && touchesCore) return 'core';
-  for (const petal of furnacePetals(boss)) {
-    if (
-      checkBulletEnemyCollision(
-        bullet.x,
-        bullet.y,
-        bullet.w,
-        bullet.h,
-        petal.x,
-        petal.y,
-        FURNACE_PETAL_RADIUS
-      )
-    ) {
-      return 'block';
-    }
+  return phase !== undefined && !furnaceCorePhase(phase);
+}
+
+/**
+ * The one pod that can take damage: the first living pod in id order
+ * (pod0 → pod3, clockwise from the start angle). Pod phase only.
+ */
+export function furnaceActivePod(boss: BossRuntime): BossPartRuntime | null {
+  if (!podPhase(boss)) return null;
+  for (const id of FURNACE_POD_IDS) {
+    const pod = boss.parts.find((p) => p.id === id);
+    if (pod?.alive && !pod.falling) return pod;
   }
-  if (touchesCore) return 'block';
+  return null;
+}
+
+/**
+ * Narrow the runner's live targets: in the pod phase only the active pod can
+ * be hurt, so bombs and homing missiles reach it alone.
+ */
+export function furnaceDamageable(boss: BossRuntime, parts: BossPartRuntime[]): BossPartRuntime[] {
+  if (!podPhase(boss)) return parts;
+  const active = furnaceActivePod(boss);
+  return parts.filter((part) => part === active);
+}
+
+function onHull(boss: BossRuntime, bullet: BulletBox): boolean {
   const left = bullet.x - bullet.w / 2;
   const top = bullet.y - bullet.h / 2;
   const hx = boss.x - FURNACE_HULL_W / 2;
   const hy = boss.y - FURNACE_HULL_H / 2;
-  const onHull =
+  return (
     left < hx + FURNACE_HULL_W &&
     left + bullet.w > hx &&
     top < hy + FURNACE_HULL_H &&
-    top + bullet.h > hy;
-  if (!onHull) return 'pass';
+    top + bullet.h > hy
+  );
+}
+
+function touches(bullet: BulletBox, x: number, y: number, r: number): boolean {
+  return checkBulletEnemyCollision(bullet.x, bullet.y, bullet.w, bullet.h, x, y, r);
+}
+
+/**
+ * Pod phase: only the active pod's hit circle counts. A waiting pod and the
+ * chassis eat the bullet without hurting anything; a wreck has no hit box,
+ * so a shot over it is the chassis or open air.
+ */
+function podVerdict(boss: BossRuntime, bullet: BulletBox): 'hit' | 'block' | 'pass' {
+  const active = furnaceActivePod(boss);
+  if (active && touches(bullet, active.worldX, active.worldY, active.radius)) return 'hit';
+  for (const id of FURNACE_POD_IDS) {
+    const pod = boss.parts.find((p) => p.id === id);
+    if (!pod?.alive || pod === active) continue;
+    if (touches(bullet, pod.worldX, pod.worldY, pod.radius)) return 'block';
+  }
+  return onHull(boss, bullet) ? 'block' : 'pass';
+}
+
+/**
+ * What a player bullet does from the boss's arrival on. `hit` damages the one
+ * live target (the active pod, or the core), `block` eats the bullet, `pass`
+ * lets it fly on. Null hands the shot to the generic runner.
+ *
+ * Pod phase: see `podVerdict`; nothing is moved onto another pod.
+ * Core phases: petals block in every state. The chassis blocks while the iris
+ * is shut; once it opens, only the throat straight under the core lets shots
+ * through, so a bullet has to reach the core radius to count.
+ */
+export function furnaceShotVerdict(
+  boss: BossRuntime,
+  bullet: BulletBox
+): 'hit' | 'block' | 'pass' | null {
+  const phase = livePhase(boss);
+  if (!phase) return null;
+  if (!furnaceCorePhase(phase)) return podVerdict(boss, bullet);
+  if (boss.stage === 'enter') return null;
+  const core = boss.parts.find((part) => part.id === FURNACE_CORE_ID);
+  const cx = core?.worldX ?? boss.x;
+  const cy = core?.worldY ?? boss.y;
+  const touchesCore = touches(bullet, cx, cy, FURNACE_CORE_RADIUS);
+  const exposed = furnaceCoreExposed(boss);
+  if (exposed && touchesCore) return 'hit';
+  for (const petal of furnacePetals(boss)) {
+    if (touches(bullet, petal.x, petal.y, FURNACE_PETAL_RADIUS)) return 'block';
+  }
+  if (touchesCore) return 'block';
+  if (!onHull(boss, bullet)) return 'pass';
   if (exposed && Math.abs(bullet.x - cx) <= FURNACE_CORE_RADIUS) return 'pass';
   return 'block';
 }
@@ -397,9 +434,19 @@ export function stepFurnace(
   });
 }
 
-export function furnacePodLook(pod: BossPartRuntime): FurnacePodLook {
+export function furnacePodLook(boss: BossRuntime, pod: BossPartRuntime): FurnacePodLook {
   if (!pod.alive) return 'wrecked';
-  return pod.hp <= pod.maxHp * FURNACE_POD_DAMAGED_RATIO ? 'damaged' : 'intact';
+  return pod === furnaceActivePod(boss) ? 'active' : 'intact';
+}
+
+/** Seconds since the most recent pod wreck (the active pod's turn began), or null. */
+export function furnaceLastWreckAge(boss: BossRuntime): number | null {
+  let best: number | null = null;
+  FURNACE_POD_IDS.forEach((_, i) => {
+    const age = furnacePodWreckAge(boss, i);
+    if (age !== null && (best === null || age < best)) best = age;
+  });
+  return best;
 }
 
 /** Seconds since this pod was destroyed (orbit clock), or null while it lives. */

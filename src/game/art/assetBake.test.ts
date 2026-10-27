@@ -13,6 +13,7 @@ import {
   buildFurnaceCore,
   buildFurnacePetal,
   buildFurnacePod,
+  buildFurnacePodMark,
 } from './furnaceLooks';
 import { createGameAssets } from './index';
 import { createGrid, plot } from './pixelDraw';
@@ -50,15 +51,16 @@ describe('asset bake', () => {
     expectCleanGrid(buildFurnaceChassis(false), FURNACE_HULL_W, FURNACE_HULL_H, 'chassis');
     expectCleanGrid(buildFurnaceChassis(true), FURNACE_HULL_W, FURNACE_HULL_H, 'chassis open');
     expectCleanGrid(buildFurnacePod('intact'), 28, 28, 'pod');
-    expectCleanGrid(buildFurnacePod('damaged'), 28, 28, 'pod damaged');
+    expectCleanGrid(buildFurnacePod('active'), 28, 28, 'pod active');
+    expectCleanGrid(buildFurnacePodMark(), 28, 28, 'pod mark');
     expectCleanGrid(buildFurnacePod('wrecked'), 28, 28, 'pod wrecked');
     expectCleanGrid(buildFurnacePetal(), 24, 24, 'petal');
     expectCleanGrid(buildFurnaceCore(), 32, 32, 'core');
   });
 
-  it('draws the pod as a hex seat with a barrel, then cracked, then an empty ring', () => {
+  it('draws the pod as a hex seat with a barrel, cracked while active, then an empty ring', () => {
     const intact = buildFurnacePod('intact');
-    const damaged = buildFurnacePod('damaged');
+    const damaged = buildFurnacePod('active');
     const wrecked = buildFurnacePod('wrecked');
     const span = (grid: SpriteData, y: number) => {
       const xs = grid[y]!.flatMap((v, x) => (v >= 0 ? [x] : []));
@@ -82,6 +84,24 @@ describe('asset bake', () => {
     expect(colors(wrecked).has(COLOR.EXPLOSION_ORANGE_YELLOW)).toBe(false);
   });
 
+  it('rings the active pod in yellow just outside its outline, strips included', () => {
+    const active = buildFurnacePod('active');
+    const mark = buildFurnacePodMark();
+    const lit = mark.flatMap((row, y) => row.flatMap((v, x) => (v >= 0 ? [{ x, y, v }] : [])));
+    expect(lit.length).toBeGreaterThan(60);
+    expect(new Set(lit.map((c) => c.v))).toEqual(new Set([COLOR.EXPLOSION_YELLOW]));
+    // Ring cells sit on transparent pod cells, apart from the two side strips.
+    const onPod = lit.filter((c) => active[c.y]![c.x]! >= 0);
+    expect(onPod.map((c) => [c.x, c.y])).toEqual(
+      [9, 10, 11, 12, 13]
+        .flatMap((y) => [
+          [6, y],
+          [21, y],
+        ])
+        .sort((a, b) => a[1]! - b[1]! || a[0]! - b[0]!)
+    );
+  });
+
   it('bakes the stage 3 enemies at their table size', () => {
     expectCleanGrid(buildEnemyArt('parked_fighter').pixels, 32, 32, 'parked_fighter');
     expect(buildEnemyArt('parked_fighter').nozzles).toEqual([]);
@@ -96,7 +116,8 @@ describe('asset bake', () => {
       'core',
       'petal',
       'pod',
-      'podDamaged',
+      'podActive',
+      'podMark',
       'podWrecked',
     ]);
     expect(bosses.furnace!.hull.width).toBe(FURNACE_HULL_W);

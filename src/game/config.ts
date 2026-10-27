@@ -1077,8 +1077,9 @@ export const FURNACE_POD_RADIUS = 14;
 export const FURNACE_POD_SPIN = 36;
 export const FURNACE_POD_HP = 70;
 export const FURNACE_POD_SCORE = 2500;
-/** Pod art: a live pod at or under this share of max HP shows cracks, red strips, and smoke. */
-export const FURNACE_POD_DAMAGED_RATIO = 0.5;
+/** Active-pod highlight: blink rate (Hz) and the brighter flash when a pod's turn begins (s). */
+export const FURNACE_POD_MARK_HZ = 4;
+export const FURNACE_POD_MARK_FLASH = 0.4;
 /** Seconds of sparks on a destroyed pod before only the black shell is left. */
 export const FURNACE_POD_SPARK_TIME = 0.6;
 /** Damaged-pod smoke: one puff train every period, lasting `ON` seconds. */

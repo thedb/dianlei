@@ -66,6 +66,7 @@ import {
 } from '@/game/systems/tiebao';
 import {
   furnaceAcceptsMissiles,
+  furnaceDamageable,
   furnaceOnFight,
   furnaceOnHold,
   furnaceShotVerdict,
@@ -649,8 +650,8 @@ export function resolveBossBullet(
     if (verdict === 'pass') return ev;
     if (verdict !== null) {
       ev.consumedBullet = true;
-      const core = hittable[0];
-      if (verdict === 'core' && core && !boss.invulnerable) hurtPart(boss, core, damage, ev);
+      const target = hittable[0];
+      if (verdict === 'hit' && target && !boss.invulnerable) hurtPart(boss, target, damage, ev);
       return ev;
     }
   }
@@ -1037,9 +1038,10 @@ function damageableParts(boss: BossRuntime): BossPartRuntime[] {
   const index = boss.stage === 'transition' ? boss.phaseIndex - 1 : boss.phaseIndex;
   const phase = boss.phases[index];
   if (!phase) return [];
-  return boss.parts.filter(
+  const live = boss.parts.filter(
     (part) => phase.targets.includes(part.id) && part.alive && !part.falling
   );
+  return boss.def.script === 'furnace' ? furnaceDamageable(boss, live) : live;
 }
 
 function fallDebris(boss: BossRuntime, dt: number): void {

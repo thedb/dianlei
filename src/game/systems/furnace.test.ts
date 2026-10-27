@@ -12,7 +12,8 @@ import {
   FURNACE_OVERLOAD_HP,
   FURNACE_PETAL_STEP,
   FURNACE_PHASE_INVULN,
-  FURNACE_POD_DAMAGED_RATIO,
+  FURNACE_POD_MARK_FLASH,
+  FURNACE_POD_MARK_HZ,
   FURNACE_POD_HP,
   FURNACE_POD_ORBIT,
   FURNACE_POD_SCORE,
@@ -36,8 +37,10 @@ import {
 import {
   FURNACE_CORE_ID,
   FURNACE_POD_IDS,
+  furnaceActivePod,
   furnaceCoreExposed,
   furnaceIris,
+  furnaceLastWreckAge,
   furnacePetalBase,
   furnaceOffset,
   furnacePetals,
@@ -110,7 +113,7 @@ describe('炉心 config', () => {
     expect(FURNACE.enterAt).toBe(FURNACE_ENTER_AT);
     expect(FURNACE_ENTER_AT).toBe(123);
     expect(STAGE3_WARNING_AT).toBe(118);
-    expect(FURNACE.hullTransfers).toBe(true);
+    expect(FURNACE.hullTransfers).toBeUndefined();
     expect(FURNACE.parts.map((p) => p.id)).toEqual([...FURNACE_POD_IDS, FURNACE_CORE_ID]);
     for (const phase of FURNACE.phases) {
       expect(phase.attacks).toEqual([]);
@@ -135,21 +138,63 @@ describe('炉心 config', () => {
 });
 
 describe('炉心 pods', () => {
-  it('takes pod hits directly and moves chassis hits onto the nearest pod', () => {
+  function podHp(boss: BossRuntime): number[] {
+    return FURNACE_POD_IDS.map((id) => bossPart(boss, id)!.hp);
+  }
+
+  it('lets only the active pod take damage; waiting pods and the chassis eat shots for 0', () => {
     const around = world();
     const boss = easy();
     park(boss, around);
-    const pod = bossPart(boss, 'pod0')!;
-    const before = pod.hp;
-    expect(shot(boss, pod.worldX, pod.worldY, 5).consumedBullet).toBe(true);
-    expect(pod.hp).toBe(before - 5);
+    const [p0, p1, p2, p3] = FURNACE_POD_IDS.map((id) => bossPart(boss, id)!);
+    expect(furnaceActivePod(boss)).toBe(p0);
 
-    const hpBefore = FURNACE_POD_IDS.map((id) => bossPart(boss, id)!.hp);
-    const ev = shot(boss, boss.x + 70, boss.y - 10, 3);
+    const full = podHp(boss);
+    for (const pod of [p1!, p2!, p3!]) {
+      expect(shot(boss, pod.worldX, pod.worldY, 9).consumedBullet).toBe(true);
+    }
+    expect(podHp(boss)).toEqual(full);
+
+    // Chassis away from every pod: blocked, nothing moved onto a pod or the core.
+    const ev = shot(boss, boss.x + 40, boss.y + 20, 9);
     expect(ev.consumedBullet).toBe(true);
-    const hpAfter = FURNACE_POD_IDS.map((id) => bossPart(boss, id)!.hp);
-    expect(hpAfter.reduce((a, b) => a + b, 0)).toBe(hpBefore.reduce((a, b) => a + b, 0) - 3);
+    expect(podHp(boss)).toEqual(full);
     expect(core(boss).hp).toBe(FURNACE_CORE_HP);
+
+    expect(shot(boss, p0!.worldX, p0!.worldY, 5).consumedBullet).toBe(true);
+    expect(podHp(boss)).toEqual([full[0]! - 5, full[1], full[2], full[3]]);
+  });
+
+  it('aims homing and bombs at the active pod only', () => {
+    const around = world();
+    const boss = easy();
+    park(boss, around);
+    expect(bossMissileTargets(boss).map((p) => p.id)).toEqual(['pod0']);
+    const full = podHp(boss);
+    applyBossBomb(boss);
+    const after = podHp(boss);
+    expect(after[0]).toBeLessThan(full[0]!);
+    expect(after.slice(1)).toEqual(full.slice(1));
+    expect(core(boss).hp).toBe(FURNACE_CORE_HP);
+  });
+
+  it('hands the turn on in order pod0 → pod3, one damageable pod at a time', () => {
+    const around = world();
+    const boss = easy();
+    park(boss, around);
+    FURNACE_POD_IDS.forEach((id, i) => {
+      const pod = bossPart(boss, id)!;
+      expect(furnaceActivePod(boss)).toBe(pod);
+      expect(bossMissileTargets(boss)).toEqual([pod]);
+      FURNACE_POD_IDS.forEach((other, j) => {
+        const look = furnacePodLook(boss, bossPart(boss, other)!);
+        expect(look).toBe(j < i ? 'wrecked' : j === i ? 'active' : 'intact');
+      });
+      expect(shot(boss, pod.worldX, pod.worldY, 100000).score).toBe(FURNACE_POD_SCORE);
+      step(boss, around, FIXED_DT);
+    });
+    expect(furnaceActivePod(boss)).toBeNull();
+    expect(boss.stage).toBe('transition');
   });
 
   it('pays each pod and fires only fans, flak, and missiles while orbiting', () => {
@@ -162,39 +207,41 @@ describe('炉心 pods', () => {
     expect([...types].sort()).toEqual(['missile', 'small']);
     expect(bossActiveLaser(boss)).toBeNull();
 
-    const pod = bossPart(boss, 'pod1')!;
+    const pod = bossPart(boss, 'pod0')!;
     const ev = shot(boss, pod.worldX, pod.worldY, 100000);
     expect(ev.score).toBe(FURNACE_POD_SCORE);
     expect(pod.alive).toBe(false);
   });
 
-  it('looks intact, then damaged at half HP, then a wreck that keeps orbiting', () => {
+  it('looks active while it is the target, then a wreck that keeps orbiting', () => {
     const around = world();
     const boss = easy();
     park(boss, around);
-    const pod = bossPart(boss, 'pod2')!;
-    const half = pod.maxHp * FURNACE_POD_DAMAGED_RATIO;
-    expect(FURNACE_POD_DAMAGED_RATIO).toBe(0.5);
-    expect(furnacePodLook(pod)).toBe('intact');
-    shot(boss, pod.worldX, pod.worldY, pod.maxHp - half - 1);
-    expect(furnacePodLook(pod)).toBe('intact');
-    shot(boss, pod.worldX, pod.worldY, 1);
-    expect(pod.hp).toBe(half);
-    expect(furnacePodLook(pod)).toBe('damaged');
-    expect(furnacePodWreckAge(boss, 2)).toBeNull();
+    const pod = bossPart(boss, 'pod0')!;
+    const next = bossPart(boss, 'pod1')!;
+    expect(FURNACE_POD_MARK_HZ).toBeGreaterThan(0);
+    expect(FURNACE_POD_MARK_FLASH).toBeGreaterThan(0);
+    expect(furnacePodLook(boss, pod)).toBe('active');
+    expect(furnacePodLook(boss, next)).toBe('intact');
+    shot(boss, pod.worldX, pod.worldY, pod.maxHp - 1);
+    expect(furnacePodLook(boss, pod)).toBe('active');
+    expect(furnacePodWreckAge(boss, 0)).toBeNull();
+    expect(furnaceLastWreckAge(boss)).toBeNull();
 
     shot(boss, pod.worldX, pod.worldY, 100000);
-    expect(furnacePodLook(pod)).toBe('wrecked');
+    expect(furnacePodLook(boss, pod)).toBe('wrecked');
+    expect(furnacePodLook(boss, next)).toBe('active');
     step(boss, around, FIXED_DT);
-    expect(furnacePodWreckAge(boss, 2)).toBeCloseTo(0, 6);
+    expect(furnacePodWreckAge(boss, 0)).toBeCloseTo(0, 6);
+    expect(furnaceLastWreckAge(boss)).toBeCloseTo(0, 6);
     step(boss, around, 0.5);
-    expect(furnacePodWreckAge(boss, 2)).toBeCloseTo(0.5, 6);
-    expect(furnacePodWreckAge(boss, 0)).toBeNull();
+    expect(furnacePodWreckAge(boss, 0)).toBeCloseTo(0.5, 6);
+    expect(furnacePodWreckAge(boss, 1)).toBeNull();
 
     const hp = pod.hp;
     const from = { x: pod.worldX, y: pod.worldY };
     step(boss, around, 1);
-    const o = furnaceOffset(furnacePodAngle(boss, 2), FURNACE_POD_ORBIT);
+    const o = furnaceOffset(furnacePodAngle(boss, 0), FURNACE_POD_ORBIT);
     expect(pod.worldX).toBeCloseTo(boss.x + o.x, 6);
     expect(pod.worldY).toBeCloseTo(boss.y + o.y, 6);
     expect(Math.hypot(pod.worldX - from.x, pod.worldY - from.y)).toBeGreaterThan(10);

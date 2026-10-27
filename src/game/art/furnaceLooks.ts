@@ -1,14 +1,17 @@
 /**
  * 炉心 (stage 3 boss) sprites and the furnace draw pass.
- * Chassis 200×132, pods 28×28 (intact / damaged / wrecked), petals 24×24,
- * core 32×32, palette indices only. Every baked coordinate is a whole pixel.
- * Core glow, flames, petal and pod rotation, pod muzzle glow / smoke / wreck
- * sparks, and the hit flash are drawn in code.
+ * Chassis 200×132, pods 28×28 (intact / active / wrecked, plus the active
+ * highlight ring), petals 24×24, core 32×32, palette indices only. Every baked
+ * coordinate is a whole pixel. Core glow, flames, petal and pod rotation, the
+ * highlight blink, pod muzzle glow / smoke / wreck sparks, and the hit flash
+ * are drawn in code.
  */
 
 import {
   FURNACE_HULL_H,
   FURNACE_HULL_W,
+  FURNACE_POD_MARK_FLASH,
+  FURNACE_POD_MARK_HZ,
   FURNACE_POD_MUZZLE,
   FURNACE_POD_SMOKE_ON,
   FURNACE_POD_SMOKE_PERIOD,
@@ -21,6 +24,7 @@ import {
   FURNACE_CORE_ID,
   FURNACE_POD_IDS,
   furnaceCorePhase,
+  furnaceLastWreckAge,
   furnaceOpenness,
   furnacePetals,
   furnaceOffset,
@@ -251,8 +255,8 @@ function podBarrel(grid: SpriteData, c: number, end: number, lit: boolean): void
 
 /**
  * Orbiting gun pod: a hex seat, a turret cap, and a barrel pointing down
- * (outward); the draw rotates it by the orbit angle. `damaged` adds cracks,
- * a chipped corner, and dark red strips. `wrecked` is the seat ring left on
+ * (outward); the draw rotates it by the orbit angle. `active` (the pod that
+ * takes damage now) adds cracks, a chipped corner, and dark red strips. `wrecked` is the seat ring left on
  * the orbit with a black hole and a snapped barrel stub.
  */
 export function buildFurnacePod(look: FurnacePodLook): SpriteData {
@@ -290,7 +294,7 @@ export function buildFurnacePod(look: FurnacePodLook): SpriteData {
     outline(grid, K);
     return grid;
   }
-  const damaged = look === 'damaged';
+  const damaged = look === 'active';
   fillPoly(grid, POD_HEX, damaged ? S : DG);
   fillPoly(grid, POD_HEX_IN, damaged ? DG : MG);
   for (let i = 0; i < 6; i++) plot(grid, 9 + i, 3, damaged ? MG : LG);
@@ -314,8 +318,7 @@ export function buildFurnacePod(look: FurnacePodLook): SpriteData {
   }
   const strip = damaged ? RD : CY;
   const glint = damaged ? RC : CP;
-  fillRect(grid, 6, 9, 1, 5, strip);
-  fillRect(grid, 21, 9, 1, 5, strip);
+  for (const x of POD_STRIP_X) fillRect(grid, x, POD_STRIP_Y, 1, POD_STRIP_H, strip);
   plot(grid, 6, 10, glint);
   plot(grid, 21, 12, glint);
   plot(grid, c - 1, 4, damaged ? RD : BM);
@@ -361,6 +364,27 @@ export function buildFurnacePod(look: FurnacePodLook): SpriteData {
     }
   }
   outline(grid, K);
+  return grid;
+}
+
+/** Pod side light strips (pod pixels), lit yellow by the active highlight. */
+const POD_STRIP_X = [6, 21] as const;
+const POD_STRIP_Y = 9;
+const POD_STRIP_H = 5;
+
+/**
+ * Active-pod highlight: a yellow ring one pixel outside the active pod's black
+ * outline, plus its two side strips. Same size and anchor as the pod, so the
+ * draw rotates it the same way.
+ */
+export function buildFurnacePodMark(): SpriteData {
+  const grid = buildFurnacePod('active');
+  outline(grid, YE);
+  const n = FURNACE_POD_SIZE;
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) if (grid[y]![x] !== YE) grid[y]![x] = -1;
+  }
+  for (const x of POD_STRIP_X) fillRect(grid, x, POD_STRIP_Y, 1, POD_STRIP_H, YE);
   return grid;
 }
 
@@ -455,10 +479,22 @@ function blitRotated(
 const POD_SPARKS = 8;
 const POD_SPARK_REACH = 16;
 const POD_SMOKE_RISE = 14;
+const POD_MARK_ALPHA = [0.35, 0.85] as const;
+
+/**
+ * Highlight strength: a steady blink, held at full for
+ * `FURNACE_POD_MARK_FLASH` after the previous pod's wreck hands over the turn.
+ */
+function podMarkAlpha(boss: BossRuntime, time: number): number {
+  const handover = furnaceLastWreckAge(boss);
+  if (handover !== null && handover < FURNACE_POD_MARK_FLASH) return 1;
+  const on = Math.sin(time * FURNACE_POD_MARK_HZ * Math.PI * 2) >= 0;
+  return POD_MARK_ALPHA[on ? 1 : 0];
+}
 
 /**
  * Code-drawn pod state cues: a warm muzzle glow on a live barrel (it gutters
- * when damaged), smoke puffs from a damaged pod, and a short spark burst over
+ * on the active pod), smoke puffs from the active pod, and a short spark burst over
  * a fresh wreck. Time-driven only; never touches `rng`.
  */
 function drawPodFx(
@@ -487,7 +523,7 @@ function drawPodFx(
       ctx.fillRect(Math.round(x + tip.x) - 1, Math.round(y + tip.y) - 1, 2, 2);
     }
   }
-  if (podLook === 'damaged') {
+  if (podLook === 'active') {
     const phase = (time + index * 0.37) % FURNACE_POD_SMOKE_PERIOD;
     if (phase < FURNACE_POD_SMOKE_ON) {
       ctx.fillStyle = PALETTE[G];
@@ -582,17 +618,24 @@ export function drawFurnaceBoss(
 
   const podFrames: Record<FurnacePodLook, SpriteFrame | undefined> = {
     intact: assets.parts.pod,
-    damaged: assets.parts.podDamaged,
+    active: assets.parts.podActive,
     wrecked: assets.parts.podWrecked,
   };
   FURNACE_POD_IDS.forEach((id, i) => {
     const part = boss.parts.find((p) => p.id === id);
     if (!part) return;
-    const podLook = furnacePodLook(part);
+    const podLook = furnacePodLook(boss, part);
     const frame = podFrames[podLook];
     if (!frame) return;
     const angle = furnacePodAngle(boss, i);
     blitRotated(ctx, draw, frame, part.worldX, part.worldY, angle);
+    const mark = assets.parts.podMark;
+    if (podLook === 'active' && mark) {
+      ctx.save();
+      ctx.globalAlpha = podMarkAlpha(boss, time);
+      blitRotated(ctx, draw, mark, part.worldX, part.worldY, angle);
+      ctx.restore();
+    }
     drawPodFx(ctx, part.worldX, part.worldY, angle, podLook, furnacePodWreckAge(boss, i), time, i);
   });
 

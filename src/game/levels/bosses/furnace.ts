@@ -1,6 +1,8 @@
 /**
  * Stage 3 boss 炉心 (赛博浮垒). A wide floating fortress parked in the upper
- * half. Four gun pods orbit it first; once they are gone, four armor petals
+ * half. Four gun pods orbit it first and fall one at a time, pod0 → pod3:
+ * only the active pod takes damage, and hull hits never move onto a pod.
+ * Once they are gone, four armor petals
  * open and close on a fixed clock and the core only takes bullets while they
  * are opening or open. Orbit, iris, and weapons live in `systems/furnace.ts`.
  * Easy and Medium end when the core dies. Hard revives the core for the
@@ -56,7 +58,6 @@ export const FURNACE: BossDef = {
   subtitle: '赛博浮垒',
   fightWarning: FURNACE_WARNING,
   vulnerableEnter: true,
-  hullTransfers: true,
   enterAt: FURNACE_ENTER_AT,
   enterDuration: FURNACE_ENTER_DURATION,
   anchorX: LOGICAL_W / 2,
