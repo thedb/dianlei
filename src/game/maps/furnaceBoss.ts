@@ -3,14 +3,17 @@
  * One approach chunk, then a dockyard floor that loops. Row 0 of the approach
  * is 河流A's last row, cell for cell, so the stitch has no seam. Above it the
  * river banks burn out into mud, the channel floods a harbor basin (a
- * half-sunk barge, broken pilings, a crane boom down in the water), the basin
- * silts into a mud lane between two quays, and the yard starts. The approach
- * top row and both loop edges are the same seam row.
+ * half-sunk barge, broken pilings, a crane boom down in the water), and the
+ * basin narrows into the dock mouth: the river runs on as the center canal
+ * (河流A's channel columns 9–13) between two quays, with a waterway down each
+ * screen edge. The approach top row and both loop edges are the same seam row.
  *
- * The loop is dry: a mud lane down the middle (where the river ran), rusted
- * pads, quay walls, two dry-dock pits (one with a stranded barge), two crane
- * skeletons, pilings, and scrap. Puddles are painted on the mud, not water
- * tiles. No cloud sheet.
+ * The loop keeps that water: the canal never breaks, and both side waterways
+ * stay open. Between them sit two concrete piers with quay walls, three
+ * dry-dock pits (one with a stranded barge), two flooded slips (one off the
+ * canal with a moored barge, one off the left waterway), a barge moored in the
+ * canal, two crane skeletons, pilings, and scrap. Bright daytime port in 河流A's
+ * water colours; it never cuts to dark. No cloud sheet.
  *
  * Layouts are written top row first, as they read on screen.
  */
@@ -47,92 +50,91 @@ export const FURNACE_LEGEND: Readonly<Record<string, TileId>> = {
 };
 
 /** The seam row: the approach's top row and both edges of the loop. */
-export const FURNACE_SEAM = '..|######.....######|..';
+export const FURNACE_SEAM = '~~|#####|~~~~~|#####|~~';
 
 /** Looping dockyard, rows 39 → 0. First and last are the seam. */
 export const FURNACE_LOOP: readonly string[] = [
   FURNACE_SEAM,
-  '..|##b###..%..######|.%',
-  '..|######.....###b##|..',
-  '..|######.....######|..',
-  '..|######..i..######|..',
-  '..|PPPPP#.....######|..',
-  '.%|PPPPP#.....##b###|..',
-  '..|PPPPP#..%..######|..',
-  '..|PPPPP#.....######|..',
-  '..|PPPPP#i....\\#####|..',
-  '..|PPPPP#.....#\\####|..',
-  '..|PPPPP#.....##\\###|..',
-  '..|PPPPP#..%..###\\##|..',
-  '..|PPPPP#.....####X#|..',
-  '.%|PPPPP#.....######|..',
-  '..|PPPPP#.....##b###|..',
-  '..|PPPPP#..i..######|.%',
-  '..|PPPPP#.....######|..',
-  '..|######.....######|..',
-  '..|##b###.....######|..',
-  '..|######..%..######|..',
-  '..|######.....######|..',
-  '..|######.....#PPPPP|..',
-  '..|######.....#PPPPP|..',
-  '..|###b##..i..#PPPPP|..',
-  '..|######.....#PHHHP|..',
-  '..|######.....#PHHHP|..',
-  '..|#####/.....#PHHHP|..',
-  '..|####/#.....#PHHHP|..',
-  '..|###/##..%..#PHHHP|..',
-  '..|##/###.....#PHHHP|..',
-  '..|#X####.....#PHHHP|..',
-  '..|######.....#PHHHP|..',
-  '.%|######..i..#PPPPP|..',
-  '..|######.....#PPPPP|..',
-  '..|######.....#PPPPP|..',
-  '..|##b###.....######|..',
-  '..|######..%..######|%.',
-  '..|######.....######|..',
+  '~~|##b##|~~~~~|#####|~~',
+  '~i|#####|~~~~~|##%##|~~',
+  '~~|#####|~~~~~|#####|.~',
+  '~~|#PPP#|~~~~~|####/|..',
+  '~~|#PPP#|~~~~~|###/#|.%',
+  '~~|#PPP#|~~~~~|##/##|.~',
+  '~~|#PPP#|~~~~~|#/###|~~',
+  '~~|#PPP#|~~~~~|X####|~~',
+  FURNACE_SEAM,
+  '~~|##%##|~~~~~|##b##|~i',
+  '~~|#####|~~~~~~~~~~#|~~',
+  '~~|#####|~~~~~~HHH~#|~~',
+  '~~|##b##|~~~~~~HHH~#|~~',
+  '~~|#####|~~~~~~HHH~#|~~',
+  '~~|#####|~~~~~~HHH~#|~~',
+  '~~|###%#|~~~~~~~~~~#|~~',
+  FURNACE_SEAM,
+  FURNACE_SEAM,
+  '~~|PPPPP|~~~~~|#####|~~',
+  '~~|PPPPP|~~~~~|#####|~~',
+  '~~|PHHHP|~~~~~|\\####|~~',
+  '~~|PHHHP|~~~~~|#\\###|~~',
+  '~~|PHHHP|~~~~~|##\\##|~~',
+  '~~|PHHHP|~~~~~|###\\#|~~',
+  '~~|PHHHP|~~~~~|####X|~~',
+  '~i|PHHHP|~~~~~|#####|.~',
+  '~~|PHHHP|~~~~~|##b##|..',
+  '~~|PPPPP|~~~~~|#####|%.',
+  '~~|PPPPP|~~~~~|#####|.~',
+  '~~|#####|~~~~~|###%#|~~',
+  FURNACE_SEAM,
+  '~~~~~~##|~~~~~|#PPP#|~~',
+  '~~~i~~##|~HHH~|#PPP#|~~',
+  '~~~~~~##|~HHH~|#PPP#|~~',
+  '~~~~~~##|~HHH~|#PPP#|~~',
+  '~~~i~~##|~HHH~|#####|~~',
+  '~~~~~~##|~HHH~|#####|~~',
+  '~~|#####|~~~~~|##b##|~~',
   FURNACE_SEAM,
 ];
 
 /** Approach rows 39 → 1. Row 0 is 河流A's last row. */
-/** Approach rows 39 → 1. Row 0 is 河流A's last row. */
 export const FURNACE_APPROACH: readonly string[] = [
   FURNACE_SEAM,
-  '..|######.....######|..',
-  '..|##b###..i..######|..',
-  '..|######.....###b##|..',
-  '.%|######.....######|..',
-  '..|######..%..######|..',
-  '..|PPPPP#.....######|..',
-  '..|PPPPP#.....##b###|..',
-  '..|PPPPP#..i..######|..',
-  '..|PPPPP#.....######|..',
-  '..|######.....######|..',
-  '..|######..~..######|..',
-  '..|######.~~~.######|.%',
-  '.%|#####..~~~..#####|..',
-  '..|####..~~~~~..####|..',
-  '..|###..~~~~~~~..###|..',
-  '..|##..~~~~~~~~~..##|..',
-  '..|#..~~~~HHH~~~~~..#|.',
-  '.%|..~~~~~HHH~~~~~~..|%',
-  '..|.~~~~~~HHH~~~~~~~.|.',
-  '..|~~~i~~~HHH~~~i~~~|..',
-  '..~~~~~~~~HHH~~~~~~~~..',
-  '.b~~~~~~~~HHH~~~~\\~~~~.',
-  '..~~~i~~~~~~~~~~~~\\~~..',
-  '.b~~~~~~~~~~~~~~~~~\\~..',
-  '...~~~~i~~~~~~~~~~~~X%.',
-  '.b..~~~~~~~~~~~~~~~..%.',
-  '.....~~~~~~~~~~~~~...b.',
-  '..%...~~~~~~~~~~~..%...',
-  '.b.b....~~~~~~~.....b..',
-  '.....b...~~~~~...b.....',
-  'FF.b.....~~~~~....%..bF',
-  'FFF..%...~~~~~..b....FF',
-  'FFFFb...~~~~~~~.....FFF',
-  'FFFFFb..~~~~~~~..b.FFFF',
-  'FFFFFF..m~~~~~m...FFFFF',
+  '~~|##b##|~~~~~|#####|~~',
+  '~~|#####|~~~~~|##%##|~i',
+  '~~|#PPP#|~~~~~|#####|~~',
+  '~i|#PPP#|~~~~~|#####|~~',
+  '~~|#PPP#|~~~~~|###b#|~~',
+  '~~|#PPP#|~~~~~|#####|~~',
+  FURNACE_SEAM,
+  '~~|##%##|~~~~~|#####|~~',
+  FURNACE_SEAM,
+  '~~|####b|~~~~~|#####|~~',
+  '~~|#####~~~~~~~#####|~~',
+  '~~|####~~~~~~~~~####|~~',
+  '~~|###~~~~~~~~~~~###|~~',
+  '~~|##~~~~~~~~~~~~~##|~~',
+  '~~|#~~~~~~~~~~~~~~~#|~~',
+  '~~~~~~~~~~~~~~~~~~~~~~~',
+  '~~~~i~~~~~~~~~~~~~i~~~~',
+  '.~~~~~~HHH~~~~~~~~~~~~.',
+  '.~~~~~~HHH~~~~~~\\~~~~~.',
+  '.~~i~~~HHH~~~~~~~\\~~~~.',
+  '..~~~~~HHH~~~~~~~~\\~~..',
+  '..~~~~~HHH~~~~~~~~~\\~..',
+  'b.~~~~~HHH~~~~~~~~~~X%.',
+  '.%.~~~~~~~~~~~~~~~~~..b',
+  '...~~~i~~~~~~~~~i~~~.%.',
+  '.b..~~~~~~~~~~~~~~~..b.',
+  '..%..~~~~~~~~~~~~~..%..',
+  '.b....~~~~~~~~~~~...b..',
+  '...b...~~~~~~~~~..%....',
+  'F..%..b.~~~~~~~...b..bF',
+  'FF.b....~~~~~~~.b....FF',
+  'FFF..b...~~~~~..b..%FFF',
+  'FFFFb....~~~~~...b.FFFF',
+  'FFFFF.b.r~~~~~r.b.FFFFF',
   'FFFFFFbmr~~~~~rm.bFFFFF',
+  'FFFFFFFmr~~~~~rmbFFFFFF',
   'FFFFFFFmm~~~~~mmFFFFFFF',
   'FFFFFFFmr~~~~~rmFFFFFFF',
 ];

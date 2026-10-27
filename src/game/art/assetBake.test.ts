@@ -89,7 +89,21 @@ describe('asset bake', () => {
     const mark = buildFurnacePodMark();
     const lit = mark.flatMap((row, y) => row.flatMap((v, x) => (v >= 0 ? [{ x, y, v }] : [])));
     expect(lit.length).toBeGreaterThan(60);
-    expect(new Set(lit.map((c) => c.v))).toEqual(new Set([COLOR.EXPLOSION_YELLOW]));
+    expect(new Set(lit.map((c) => c.v))).toEqual(
+      new Set([COLOR.EXPLOSION_YELLOW, COLOR.EXPLOSION_ORANGE_YELLOW])
+    );
+    // The inner ring touches the black outline on every side of the silhouette.
+    const yellow = lit.filter((c) => c.v === COLOR.EXPLOSION_YELLOW);
+    for (const c of yellow) {
+      if (active[c.y]![c.x]! >= 0) continue;
+      const near = [
+        [c.x + 1, c.y],
+        [c.x - 1, c.y],
+        [c.x, c.y + 1],
+        [c.x, c.y - 1],
+      ].some(([x, y]) => active[y!]?.[x!] === COLOR.BLACK);
+      expect(near, `ring at ${c.x},${c.y}`).toBe(true);
+    }
     // Ring cells sit on transparent pod cells, apart from the two side strips.
     const onPod = lit.filter((c) => active[c.y]![c.x]! >= 0);
     expect(onPod.map((c) => [c.x, c.y])).toEqual(

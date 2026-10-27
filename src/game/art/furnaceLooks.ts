@@ -58,6 +58,8 @@ const YE = COLOR.EXPLOSION_YELLOW;
 const RD = COLOR.ENEMY_DARK_RED;
 const RC = COLOR.ENEMY_CRIMSON;
 const BR = COLOR.TERRAIN_BROWN;
+const RR = COLOR.ENEMY_RED;
+const PG = COLOR.PALE_GRAY;
 
 export const FURNACE_POD_SIZE = 28;
 export const FURNACE_PETAL_SIZE = 24;
@@ -113,7 +115,7 @@ export function buildFurnaceChassis(open: boolean): SpriteData {
       [2, h - 38],
       [2, 38],
     ],
-    S
+    DG
   );
   fillPoly(
     grid,
@@ -127,7 +129,7 @@ export function buildFurnaceChassis(open: boolean): SpriteData {
       [8, h - 42],
       [8, 42],
     ],
-    DG
+    MG
   );
   fillPoly(
     grid,
@@ -141,24 +143,31 @@ export function buildFurnaceChassis(open: boolean): SpriteData {
       [24, h - 48],
       [24, 48],
     ],
-    MG
+    G
   );
 
+  // Bright rust trim along the deck plate's straight edges.
+  fillRect(grid, 44, 8, w - 88, 1, RO);
+  fillRect(grid, 44, h - 9, w - 88, 1, RO);
+  fillRect(grid, 8, 42, 1, h - 84, RO);
+  fillRect(grid, w - 9, 42, 1, h - 84, RO);
+  for (let x = 48; x < w - 48; x += 12) plot(grid, x, 8, OR);
+
   // Rib plates and rivets.
-  for (const y of [30, h - 31]) fillRect(grid, 40, y, w - 80, 1, S);
-  for (const x of [52, w - 53]) fillRect(grid, x, 22, 1, h - 44, S);
+  for (const y of [30, h - 31]) fillRect(grid, 40, y, w - 80, 1, MG);
+  for (const x of [52, w - 53]) fillRect(grid, x, 22, 1, h - 44, MG);
   for (let i = 0; i < 6; i++) {
-    plot(grid, 60 + i * 16, 24, G);
-    plot(grid, 60 + i * 16, h - 25, G);
+    plot(grid, 60 + i * 16, 24, LG);
+    plot(grid, 60 + i * 16, h - 25, LG);
   }
 
   // Scrap-port wear: rust runs under the rivets and on the hull flanks.
   for (let i = 0; i < 6; i++) {
     const x = 61 + i * 16;
     const run = 3 + (i % 3);
-    fillRect(grid, x, 25, 1, run, RD);
-    plot(grid, x, 25 + run, BR);
-    fillRect(grid, x, h - 24, 1, run - 1, RD);
+    fillRect(grid, x, 25, 1, run, RR);
+    plot(grid, x, 25 + run, RO);
+    fillRect(grid, x, h - 24, 1, run - 1, RR);
   }
   for (const [x, y, rw, rh] of [
     [12, 50, 3, 5],
@@ -166,8 +175,8 @@ export function buildFurnaceChassis(open: boolean): SpriteData {
     [30, h - 30, 4, 2],
     [w - 40, 20, 5, 2],
   ] as const) {
-    fillRect(grid, x, y, rw, rh, RD);
-    plot(grid, x, y, BR);
+    fillRect(grid, x, y, rw, rh, RR);
+    plot(grid, x, y, RO);
   }
 
   // Thruster blocks along the rear (top edge).
@@ -197,8 +206,8 @@ export function buildFurnaceChassis(open: boolean): SpriteData {
   }
 
   // Iris socket.
-  ring(grid, cx, cy, SOCKET_R + 6, SOCKET_R + 3, G);
-  ring(grid, cx, cy, SOCKET_R + 3, SOCKET_R, DG);
+  ring(grid, cx, cy, SOCKET_R + 6, SOCKET_R + 3, LG);
+  ring(grid, cx, cy, SOCKET_R + 3, SOCKET_R, MG);
   fillEllipse(grid, cx, cy, SOCKET_R, SOCKET_R, EB);
   if (open) {
     fillEllipse(grid, cx, cy, SOCKET_R - 4, SOCKET_R - 4, RO);
@@ -218,11 +227,11 @@ export function buildFurnaceChassis(open: boolean): SpriteData {
       plot(grid, cx + THROAT_HALF - 1, y, OR);
     }
   } else {
-    fillRect(grid, cx - THROAT_HALF, throatTop, THROAT_HALF * 2, throatH, G);
+    fillRect(grid, cx - THROAT_HALF, throatTop, THROAT_HALF * 2, throatH, LG);
     for (let y = throatTop + 4; y < throatTop + throatH; y += 6) {
-      fillRect(grid, cx - THROAT_HALF, y, THROAT_HALF * 2, 1, DG);
+      fillRect(grid, cx - THROAT_HALF, y, THROAT_HALF * 2, 1, MG);
     }
-    fillRect(grid, cx - 1, throatTop, 2, throatH, MG);
+    fillRect(grid, cx - 1, throatTop, 2, throatH, G);
   }
 
   outline(grid, K);
@@ -373,16 +382,20 @@ const POD_STRIP_Y = 9;
 const POD_STRIP_H = 5;
 
 /**
- * Active-pod highlight: a yellow ring one pixel outside the active pod's black
- * outline, plus its two side strips. Same size and anchor as the pod, so the
- * draw rotates it the same way.
+ * Active-pod highlight: a two-pixel ring (yellow, then orange-yellow) outside
+ * the active pod's black outline, plus its two side strips. Same size and
+ * anchor as the pod, so the draw rotates it the same way.
  */
 export function buildFurnacePodMark(): SpriteData {
   const grid = buildFurnacePod('active');
   outline(grid, YE);
+  outline(grid, OY);
   const n = FURNACE_POD_SIZE;
   for (let y = 0; y < n; y++) {
-    for (let x = 0; x < n; x++) if (grid[y]![x] !== YE) grid[y]![x] = -1;
+    for (let x = 0; x < n; x++) {
+      const v = grid[y]![x];
+      if (v !== YE && v !== OY) grid[y]![x] = -1;
+    }
   }
   for (const x of POD_STRIP_X) fillRect(grid, x, POD_STRIP_Y, 1, POD_STRIP_H, YE);
   return grid;
@@ -401,7 +414,7 @@ export function buildFurnacePetal(): SpriteData {
       [3, 21],
       [3, 9],
     ],
-    G
+    LG
   );
   fillPoly(
     grid,
@@ -412,10 +425,11 @@ export function buildFurnacePetal(): SpriteData {
       [6, 15],
       [6, 10],
     ],
-    LG
+    PG
   );
-  fillRect(grid, 4, 18, 17, 2, MG);
-  fillRect(grid, 11, 5, 2, 13, MG);
+  fillRect(grid, 4, 18, 17, 1, G);
+  fillRect(grid, 4, 19, 17, 1, RO);
+  fillRect(grid, 11, 5, 2, 13, G);
   plot(grid, 7, 19, CY);
   plot(grid, 16, 19, CY);
   plot(grid, 12, 6, W);
@@ -479,7 +493,7 @@ function blitRotated(
 const POD_SPARKS = 8;
 const POD_SPARK_REACH = 16;
 const POD_SMOKE_RISE = 14;
-const POD_MARK_ALPHA = [0.35, 0.85] as const;
+const POD_MARK_ALPHA = [0.5, 0.95] as const;
 
 /**
  * Highlight strength: a steady blink, held at full for
