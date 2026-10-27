@@ -82,8 +82,9 @@ export const FACTORY_BOSS: TileMapDef = {
 };
 
 /**
- * Stage 3 boss arena (炉心浮台). Row 0 is 河流A's last row; a scorched gate
- * leads onto a chassis floor that loops. No cloud sheet, no water on the loop.
+ * Stage 3 boss arena (炉心浮台). Row 0 is 河流A's last row; burnt banks and a
+ * flooded basin lead into a waterside dockyard that loops, with 河流A's
+ * channel running on as its center canal. No cloud sheet.
  */
 export const FURNACE_BOSS: TileMapDef = {
   id: 'furnaceBoss',

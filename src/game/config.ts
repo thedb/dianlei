@@ -1082,7 +1082,7 @@ export const FURNACE_POD_MARK_HZ = 4;
 export const FURNACE_POD_MARK_FLASH = 0.4;
 /** Seconds of sparks on a destroyed pod before only the black shell is left. */
 export const FURNACE_POD_SPARK_TIME = 0.6;
-/** Damaged-pod smoke: one puff train every period, lasting `ON` seconds. */
+/** Active-pod smoke: one puff train every period, lasting `ON` seconds. */
 export const FURNACE_POD_SMOKE_PERIOD = 1.1;
 export const FURNACE_POD_SMOKE_ON = 0.55;
 /** Barrel tip, px from the pod center along its outward heading (muzzle glow). */
