@@ -1077,9 +1077,6 @@ export const FURNACE_POD_RADIUS = 14;
 export const FURNACE_POD_SPIN = 36;
 export const FURNACE_POD_HP = 70;
 export const FURNACE_POD_SCORE = 2500;
-/** Active-pod highlight: blink rate (Hz) and the brighter flash when a pod's turn begins (s). */
-export const FURNACE_POD_MARK_HZ = 4;
-export const FURNACE_POD_MARK_FLASH = 0.4;
 /** Seconds of sparks on a destroyed pod before only the black shell is left. */
 export const FURNACE_POD_SPARK_TIME = 0.6;
 /** Active-pod smoke: one puff train every period, lasting `ON` seconds. */
@@ -1090,7 +1087,8 @@ export const FURNACE_POD_MUZZLE = 12;
 
 export const FURNACE_CORE_HP = 280;
 export const FURNACE_CORE_SCORE = 30000;
-export const FURNACE_CORE_RADIUS = 20;
+/** Core hit circle and the open throat's half width (draft 20 × 1.2). */
+export const FURNACE_CORE_RADIUS = 24;
 /** Hard only, before the Hard scale. The core's 30000 waits for this segment. */
 export const FURNACE_OVERLOAD_HP = 180;
 /** Pods cleared → core, and core → overload. Invulnerable, no fire, no bomb. */

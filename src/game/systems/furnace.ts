@@ -324,9 +324,10 @@ function touches(bullet: BulletBox, x: number, y: number, r: number): boolean {
 }
 
 /**
- * Pod phase: only the active pod's hit circle counts. A waiting pod and the
- * chassis eat the bullet without hurting anything; a wreck has no hit box,
- * so a shot over it is the chassis or open air.
+ * Pod phase: only the active pod's hit circle counts. A waiting pod eats the
+ * bullet without hurting anything. The chassis, petals, and core do not stop
+ * bullets here, so a shot flies on to a pod orbiting past; a wreck has no hit
+ * box either. Ramming the chassis still kills the player (separate check).
  */
 function podVerdict(boss: BossRuntime, bullet: BulletBox): 'hit' | 'block' | 'pass' {
   const active = furnaceActivePod(boss);
@@ -336,7 +337,7 @@ function podVerdict(boss: BossRuntime, bullet: BulletBox): 'hit' | 'block' | 'pa
     if (!pod?.alive || pod === active) continue;
     if (touches(bullet, pod.worldX, pod.worldY, pod.radius)) return 'block';
   }
-  return onHull(boss, bullet) ? 'block' : 'pass';
+  return 'pass';
 }
 
 /**
@@ -344,7 +345,8 @@ function podVerdict(boss: BossRuntime, bullet: BulletBox): 'hit' | 'block' | 'pa
  * live target (the active pod, or the core), `block` eats the bullet, `pass`
  * lets it fly on. Null hands the shot to the generic runner.
  *
- * Pod phase: see `podVerdict`; nothing is moved onto another pod.
+ * Pod phase: see `podVerdict`; the body lets bullets through and nothing is
+ * moved onto another pod.
  * Core phases: petals block in every state. The chassis blocks while the iris
  * is shut; once it opens, only the throat straight under the core lets shots
  * through, so a bullet has to reach the core radius to count.
@@ -437,16 +439,6 @@ export function stepFurnace(
 export function furnacePodLook(boss: BossRuntime, pod: BossPartRuntime): FurnacePodLook {
   if (!pod.alive) return 'wrecked';
   return pod === furnaceActivePod(boss) ? 'active' : 'intact';
-}
-
-/** Seconds since the most recent pod wreck (the active pod's turn began), or null. */
-export function furnaceLastWreckAge(boss: BossRuntime): number | null {
-  let best: number | null = null;
-  FURNACE_POD_IDS.forEach((_, i) => {
-    const age = furnacePodWreckAge(boss, i);
-    if (age !== null && (best === null || age < best)) best = age;
-  });
-  return best;
 }
 
 /** Seconds since this pod was destroyed (orbit clock), or null while it lives. */

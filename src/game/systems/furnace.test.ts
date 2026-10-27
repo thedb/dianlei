@@ -7,13 +7,13 @@ import {
   FURNACE_CORE_SCORE,
   FURNACE_ENTER_AT,
   FURNACE_ENTER_DURATION,
+  FURNACE_HULL_H,
+  FURNACE_HULL_W,
   FURNACE_IRIS_MAIN,
   FURNACE_IRIS_OVERLOAD,
   FURNACE_OVERLOAD_HP,
   FURNACE_PETAL_STEP,
   FURNACE_PHASE_INVULN,
-  FURNACE_POD_MARK_FLASH,
-  FURNACE_POD_MARK_HZ,
   FURNACE_POD_HP,
   FURNACE_POD_ORBIT,
   FURNACE_POD_SCORE,
@@ -40,7 +40,6 @@ import {
   furnaceActivePod,
   furnaceCoreExposed,
   furnaceIris,
-  furnaceLastWreckAge,
   furnacePetalBase,
   furnaceOffset,
   furnacePetals,
@@ -142,7 +141,7 @@ describe('炉心 pods', () => {
     return FURNACE_POD_IDS.map((id) => bossPart(boss, id)!.hp);
   }
 
-  it('lets only the active pod take damage; waiting pods and the chassis eat shots for 0', () => {
+  it('lets only the active pod take damage; waiting pods eat shots for 0', () => {
     const around = world();
     const boss = easy();
     park(boss, around);
@@ -155,14 +154,49 @@ describe('炉心 pods', () => {
     }
     expect(podHp(boss)).toEqual(full);
 
-    // Chassis away from every pod: blocked, nothing moved onto a pod or the core.
-    const ev = shot(boss, boss.x + 40, boss.y + 20, 9);
-    expect(ev.consumedBullet).toBe(true);
-    expect(podHp(boss)).toEqual(full);
-    expect(core(boss).hp).toBe(FURNACE_CORE_HP);
-
     expect(shot(boss, p0!.worldX, p0!.worldY, 5).consumedBullet).toBe(true);
     expect(podHp(boss)).toEqual([full[0]! - 5, full[1], full[2], full[3]]);
+  });
+
+  it('lets bullets fly through the chassis, petals, and core while pods remain', () => {
+    const around = world();
+    const boss = easy();
+    park(boss, around);
+    const full = podHp(boss);
+    const clear = (x: number, y: number) =>
+      FURNACE_POD_IDS.every((id) => {
+        const pod = bossPart(boss, id)!;
+        return Math.hypot(pod.worldX - x, pod.worldY - y) > pod.radius + 12;
+      });
+    const spots = [
+      { x: boss.x + 40, y: boss.y + 20 },
+      { x: boss.x - 70, y: boss.y + 50 },
+      ...furnacePetals(boss),
+      { x: core(boss).worldX, y: core(boss).worldY },
+    ].filter((p) => clear(p.x, p.y));
+    expect(spots.length).toBeGreaterThanOrEqual(4);
+    for (const p of spots) {
+      const ev = shot(boss, p.x, p.y, 9);
+      expect(ev.consumedBullet, `${p.x},${p.y}`).toBe(false);
+      expect(ev.score).toBe(0);
+    }
+    expect(podHp(boss)).toEqual(full);
+    expect(core(boss).hp).toBe(FURNACE_CORE_HP);
+  });
+
+  it('hits the active pod while it orbits over the chassis', () => {
+    const around = world();
+    const boss = easy();
+    park(boss, around);
+    const pod = furnaceActivePod(boss)!;
+    const overHull = () =>
+      Math.abs(pod.worldX - boss.x) < FURNACE_HULL_W / 2 - pod.radius &&
+      Math.abs(pod.worldY - boss.y) < FURNACE_HULL_H / 2 - pod.radius;
+    for (let i = 0; i < 1200 && !overHull(); i++) step(boss, around, FIXED_DT);
+    expect(overHull()).toBe(true);
+    const before = pod.hp;
+    expect(shot(boss, pod.worldX, pod.worldY, 7).consumedBullet).toBe(true);
+    expect(pod.hp).toBe(before - 7);
   });
 
   it('aims homing and bombs at the active pod only', () => {
@@ -219,21 +253,17 @@ describe('炉心 pods', () => {
     park(boss, around);
     const pod = bossPart(boss, 'pod0')!;
     const next = bossPart(boss, 'pod1')!;
-    expect(FURNACE_POD_MARK_HZ).toBeGreaterThan(0);
-    expect(FURNACE_POD_MARK_FLASH).toBeGreaterThan(0);
     expect(furnacePodLook(boss, pod)).toBe('active');
     expect(furnacePodLook(boss, next)).toBe('intact');
     shot(boss, pod.worldX, pod.worldY, pod.maxHp - 1);
     expect(furnacePodLook(boss, pod)).toBe('active');
     expect(furnacePodWreckAge(boss, 0)).toBeNull();
-    expect(furnaceLastWreckAge(boss)).toBeNull();
 
     shot(boss, pod.worldX, pod.worldY, 100000);
     expect(furnacePodLook(boss, pod)).toBe('wrecked');
     expect(furnacePodLook(boss, next)).toBe('active');
     step(boss, around, FIXED_DT);
     expect(furnacePodWreckAge(boss, 0)).toBeCloseTo(0, 6);
-    expect(furnaceLastWreckAge(boss)).toBeCloseTo(0, 6);
     step(boss, around, 0.5);
     expect(furnacePodWreckAge(boss, 0)).toBeCloseTo(0.5, 6);
     expect(furnacePodWreckAge(boss, 1)).toBeNull();
@@ -248,6 +278,18 @@ describe('炉心 pods', () => {
     shot(boss, pod.worldX, pod.worldY, 9);
     expect(pod.hp).toBe(hp);
     expect(pod.alive).toBe(false);
+  });
+
+  it('restores body blocking once the pods are gone: petals and chassis eat shots', () => {
+    const around = world();
+    const boss = easy();
+    toCore(boss, around);
+    expect(furnaceIris(boss)).toBe('closed');
+    for (const petal of furnacePetals(boss)) {
+      expect(shot(boss, petal.x, petal.y, 5).consumedBullet).toBe(true);
+    }
+    expect(shot(boss, boss.x + 40, boss.y + 20, 5).consumedBullet).toBe(true);
+    expect(core(boss).hp).toBe(FURNACE_CORE_HP);
   });
 
   it('holds 1.2s invulnerable after the last pod, then opens the core phase closed', () => {
@@ -298,23 +340,32 @@ describe('炉心 iris', () => {
     expect(shot(boss, c.worldX, c.worldY, 5).consumedBullet).toBe(true);
     expect(c.hp).toBe(FURNACE_CORE_HP - 10);
 
+    // Hit circle is the draft 20 × 1.2: a 4px bullet 23px off center still lands.
+    expect(FURNACE_CORE_RADIUS).toBe(24);
+    expect(shot(boss, c.worldX + 23, c.worldY, 1).consumedBullet).toBe(true);
+    expect(shot(boss, c.worldX - 23, c.worldY, 1).consumedBullet).toBe(true);
+    expect(c.hp).toBe(FURNACE_CORE_HP - 12);
+    // Throat under the core is as wide as the hit circle.
+    const edge = shot(boss, c.worldX + 23, c.worldY + FURNACE_CORE_RADIUS + 30, 1);
+    expect(edge.consumedBullet).toBe(false);
+
     for (const petal of furnacePetals(boss)) {
       expect(shot(boss, petal.x, petal.y, 5).consumedBullet).toBe(true);
     }
-    expect(c.hp).toBe(FURNACE_CORE_HP - 10);
+    expect(c.hp).toBe(FURNACE_CORE_HP - 12);
 
     // The throat under the core is open: a shot there flies on toward the core.
     const throat = shot(boss, c.worldX, c.worldY + FURNACE_CORE_RADIUS + 30, 5);
     expect(throat.consumedBullet).toBe(false);
     // Chassis away from the throat still blocks.
     expect(shot(boss, boss.x + 80, boss.y + 40, 5).consumedBullet).toBe(true);
-    expect(c.hp).toBe(FURNACE_CORE_HP - 10);
+    expect(c.hp).toBe(FURNACE_CORE_HP - 12);
 
     step(boss, around, FURNACE_IRIS_MAIN.open + 0.05);
     expect(furnaceIris(boss)).toBe('closing');
     expect(furnaceCoreExposed(boss)).toBe(false);
     expect(shot(boss, c.worldX, c.worldY, 5).consumedBullet).toBe(true);
-    expect(c.hp).toBe(FURNACE_CORE_HP - 10);
+    expect(c.hp).toBe(FURNACE_CORE_HP - 12);
   });
 
   it('turns the petals 45° on every return to closed', () => {

@@ -138,6 +138,47 @@ describe('asset bake', () => {
     expect(() => createGameAssets()).not.toThrow();
   });
 
+  it('draws the active pod’s ring on every frame, at full strength, through a handover', () => {
+    const bosses = createBossAssets();
+    const mark = bosses.furnace!.parts.podMark!.canvas;
+    const ctx = fakeContext();
+    const seen: number[] = [];
+    let frameMarks = 0;
+    const record = (image: unknown) => {
+      if (image !== mark) return;
+      frameMarks++;
+      seen.push(ctx.globalAlpha);
+    };
+    const stack: number[] = [];
+    Object.assign(ctx, {
+      globalAlpha: 1,
+      drawImage: record,
+      save: () => stack.push(ctx.globalAlpha),
+      restore: () => {
+        ctx.globalAlpha = stack.pop() ?? 1;
+      },
+    });
+    const draw = { drawImage: record };
+    const around = { playerX: 180, playerY: 560, rng: createRng(5) };
+    const boss = createBoss(prepareBossConfig(FURNACE, 'easy'));
+    let t = 0;
+    const frames = (seconds: number) => {
+      for (let i = 0; i < Math.round(seconds / FIXED_DT); i++) {
+        updateBoss(boss, FIXED_DT, around);
+        t += FIXED_DT;
+        ctx.globalAlpha = 1;
+        frameMarks = 0;
+        drawBossWorld(ctx, draw, boss, bosses, t);
+        expect(frameMarks).toBe(1);
+      }
+    };
+    frames(FURNACE_ENTER_DURATION + 0.5);
+    const first = bossPart(boss, FURNACE_POD_IDS[0])!;
+    resolveBossBullet(boss, { x: first.worldX, y: first.worldY, w: 4, h: 12 }, 100000);
+    frames(1.5);
+    expect(new Set(seen)).toEqual(new Set([1]));
+  });
+
   it('draws 炉心 through enter, pods, iris, and death without throwing', () => {
     const bosses = createBossAssets();
     const ctx = fakeContext();

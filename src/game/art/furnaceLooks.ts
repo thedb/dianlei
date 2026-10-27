@@ -2,16 +2,15 @@
  * 炉心 (stage 3 boss) sprites and the furnace draw pass.
  * Chassis 200×132, pods 28×28 (intact / active / wrecked, plus the active
  * highlight ring), petals 24×24, core 32×32, palette indices only. Every baked
- * coordinate is a whole pixel. Core glow, flames, petal and pod rotation, the
- * highlight blink, pod muzzle glow / smoke / wreck sparks, and the hit flash
- * are drawn in code.
+ * coordinate is a whole pixel. Core glow, flames, petal and pod rotation, pod
+ * muzzle glow / smoke / wreck sparks, and the hit flash are drawn in code. The
+ * active pod's highlight ring is drawn at full strength every frame.
  */
 
 import {
   FURNACE_HULL_H,
+  FURNACE_CORE_RADIUS,
   FURNACE_HULL_W,
-  FURNACE_POD_MARK_FLASH,
-  FURNACE_POD_MARK_HZ,
   FURNACE_POD_MUZZLE,
   FURNACE_POD_SMOKE_ON,
   FURNACE_POD_SMOKE_PERIOD,
@@ -24,7 +23,6 @@ import {
   FURNACE_CORE_ID,
   FURNACE_POD_IDS,
   furnaceCorePhase,
-  furnaceLastWreckAge,
   furnaceOpenness,
   furnacePetals,
   furnaceOffset,
@@ -64,8 +62,8 @@ const PG = COLOR.PALE_GRAY;
 export const FURNACE_POD_SIZE = 28;
 export const FURNACE_PETAL_SIZE = 24;
 export const FURNACE_CORE_SIZE = 32;
-/** Throat channel under the socket, in chassis pixels. Matches `FURNACE_CORE_RADIUS` × 2. */
-const THROAT_HALF = 20;
+/** Throat channel under the socket, in chassis pixels: the core hit radius each side. */
+const THROAT_HALF = FURNACE_CORE_RADIUS;
 const SOCKET_R = 30;
 const NOZZLE_DX = [-44, 44] as const;
 
@@ -493,18 +491,6 @@ function blitRotated(
 const POD_SPARKS = 8;
 const POD_SPARK_REACH = 16;
 const POD_SMOKE_RISE = 14;
-const POD_MARK_ALPHA = [0.5, 0.95] as const;
-
-/**
- * Highlight strength: a steady blink, held at full for
- * `FURNACE_POD_MARK_FLASH` after the previous pod's wreck hands over the turn.
- */
-function podMarkAlpha(boss: BossRuntime, time: number): number {
-  const handover = furnaceLastWreckAge(boss);
-  if (handover !== null && handover < FURNACE_POD_MARK_FLASH) return 1;
-  const on = Math.sin(time * FURNACE_POD_MARK_HZ * Math.PI * 2) >= 0;
-  return POD_MARK_ALPHA[on ? 1 : 0];
-}
 
 /**
  * Code-drawn pod state cues: a warm muzzle glow on a live barrel (it gutters
@@ -644,12 +630,7 @@ export function drawFurnaceBoss(
     const angle = furnacePodAngle(boss, i);
     blitRotated(ctx, draw, frame, part.worldX, part.worldY, angle);
     const mark = assets.parts.podMark;
-    if (podLook === 'active' && mark) {
-      ctx.save();
-      ctx.globalAlpha = podMarkAlpha(boss, time);
-      blitRotated(ctx, draw, mark, part.worldX, part.worldY, angle);
-      ctx.restore();
-    }
+    if (podLook === 'active' && mark) blitRotated(ctx, draw, mark, part.worldX, part.worldY, angle);
     drawPodFx(ctx, part.worldX, part.worldY, angle, podLook, furnacePodWreckAge(boss, i), time, i);
   });
 
