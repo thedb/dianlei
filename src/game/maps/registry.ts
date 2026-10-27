@@ -13,6 +13,7 @@ import { MAP_CHUNK_ROWS, SPACE_A_PREVIEW_SECONDS } from '@/game/config';
 import { composeChunks } from './chunks';
 import { LAND_A_SPEC } from './landA';
 import { FACTORY_BOSS_LOOP_ROW, FACTORY_BOSS_SPEC } from './factoryBoss';
+import { FURNACE_BOSS_LOOP_ROW, FURNACE_BOSS_SPEC } from './furnaceBoss';
 import { LAND_BOSS_LOOP_ROW, LAND_BOSS_SPEC } from './landBoss';
 import { LAND_B_SPEC } from './landB';
 import { RIVER_A_SPEC } from './riverA';
@@ -80,6 +81,19 @@ export const FACTORY_BOSS: TileMapDef = {
   loopFrom: FACTORY_BOSS_LOOP_ROW,
 };
 
+/**
+ * Stage 3 boss arena (炉心浮台). Row 0 is 河流A's last row; a scorched gate
+ * leads onto a chassis floor that loops. No cloud sheet, no water on the loop.
+ */
+export const FURNACE_BOSS: TileMapDef = {
+  id: 'furnaceBoss',
+  label: '炉心浮台',
+  kind: 'tiles',
+  rows: FURNACE_BOSS_SPEC.slots.length * MAP_CHUNK_ROWS,
+  build: () => composeChunks(FURNACE_BOSS_SPEC),
+  loopFrom: FURNACE_BOSS_LOOP_ROW,
+};
+
 /** Starfield for a real space stage and for 地图预览. Stage 1's boss does not use it. */
 export const SPACE_A: StarfieldMapDef = {
   id: 'spaceA',
@@ -88,7 +102,15 @@ export const SPACE_A: StarfieldMapDef = {
   previewSeconds: SPACE_A_PREVIEW_SECONDS,
 };
 
-const MAPS: readonly MapDef[] = [LAND_A, LAND_B, RIVER_A, LAND_BOSS, FACTORY_BOSS, SPACE_A];
+const MAPS: readonly MapDef[] = [
+  LAND_A,
+  LAND_B,
+  RIVER_A,
+  LAND_BOSS,
+  FACTORY_BOSS,
+  FURNACE_BOSS,
+  SPACE_A,
+];
 
 export function listMaps(): readonly MapDef[] {
   return MAPS;
