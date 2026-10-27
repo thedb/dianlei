@@ -22,6 +22,7 @@ import {
   shouldEnemyFire,
   spawnEnemy,
   stepSlidePose,
+  strafePose,
   updateEnemy,
 } from './enemy';
 
@@ -546,5 +547,70 @@ describe('enemy movement', () => {
       height: 16,
       score: 500,
     });
+  });
+});
+
+describe('stage 3 moves', () => {
+  it('keeps a planted jet on its map cell: scroll only, no drive', () => {
+    const jet = createEnemy();
+    spawnEnemy(jet, 'parked_fighter', 204, -16, { kind: 'planted' }, { kind: 'none' });
+    for (let i = 0; i < 60; i++) updateEnemy(jet, FIXED_DT, 180, 500, i % 3 === 0 ? 1 : 0);
+    expect(jet.x).toBe(204);
+    expect(jet.y).toBe(-16 + 20);
+    expect(enemyTravelHeading(jet)).toBeNull();
+    expect(isGroundEnemy('parked_fighter')).toBe(true);
+  });
+
+  it('flies strafe as dive, level run, then exit, with the nose on each leg', () => {
+    const move = {
+      kind: 'strafe' as const,
+      speed: 100,
+      levelY: 150,
+      run: 120,
+      enterAngle: 0,
+      exitAngle: 30,
+    };
+    expect(strafePose(move, -50, 1)).toEqual({ dx: 0, dy: 100, heading: 0, leg: 'enter' });
+    const run = strafePose(move, -50, 2.5);
+    expect(run.leg).toBe('run');
+    expect(run.heading).toBe(90);
+    expect(run.dy).toBeCloseTo(200, 6);
+    expect(run.dx).toBeCloseTo(50, 6);
+    const exit = strafePose(move, -50, 4.2);
+    expect(exit.leg).toBe('exit');
+    expect(exit.heading).toBe(30);
+    expect(exit.dx).toBeCloseTo(120 + 0.5 * 100, 6);
+    expect(exit.dy).toBeGreaterThan(200);
+
+    const left = strafePose({ ...move, run: -120, enterAngle: -20 }, -50, 3);
+    expect(left.leg).toBe('run');
+    expect(left.heading).toBe(270);
+    expect(left.dx).toBeLessThan(0);
+  });
+
+  it('runs the strafe fire clock only on the level leg', () => {
+    const jet = createEnemy();
+    spawnEnemy(
+      jet,
+      'strike',
+      64,
+      -24,
+      { kind: 'strafe', speed: 120, levelY: 150, run: 150, enterAngle: 20, exitAngle: 25 },
+      { kind: 'aimed1', maxShots: 1, firstDelay: 0.2 }
+    );
+    let fired = 0;
+    let firedLeg = '';
+    for (let i = 0; i < 600; i++) {
+      if (shouldEnemyFire(jet, FIXED_DT, 180, 560).shouldFire) {
+        fired += 1;
+        jet.shotsFired += 1;
+        if (jet.move.kind === 'strafe')
+          firedLeg = strafePose(jet.move, jet.startY, jet.moveTimer).leg;
+      }
+      updateEnemy(jet, FIXED_DT, 180, 560, 0);
+    }
+    expect(fired).toBe(1);
+    expect(firedLeg).toBe('run');
+    expect(jet.y).toBeGreaterThan(150);
   });
 });
