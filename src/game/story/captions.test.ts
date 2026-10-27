@@ -18,6 +18,8 @@ describe('story captions', () => {
     expect(CAPTION_LINES.s1_end).toBe('前线已肃清。叛军残部向工业带撤退。');
     expect(CAPTION_LINES.s2_open).toBe('目标：沿岸兵工厂。切断叛军补给。');
     expect(CAPTION_LINES.s2_end).toBe('工厂记录提到「打捞物」。继续追查。');
+    expect(CAPTION_LINES.s3_open).toBe('突入叛军主基地。电雷，撕开防线。');
+    expect(CAPTION_LINES.s3_end).toBe('航母坐标已锁定。准备舰载出击。');
     expect(CAPTION_OPEN_AT + CAPTION_HOLD).toBe(INTRO_GO_UNTIL);
   });
 

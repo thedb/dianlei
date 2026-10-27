@@ -1012,6 +1012,124 @@ export const TIEBAO_DEATH_EXPLOSIONS = 8;
 export const TIEBAO_DEATH_DURATION = 2.8;
 
 /**
+ * 炉心浮台 (`furnaceBoss`). One scorched approach, then a looping chassis.
+ * Same length as 百战要塞 and 铁堡厂轨. No cloud sheet. Seed is a draft.
+ */
+export const FURNACE_BOSS_CHUNKS = 2;
+export const FURNACE_BOSS_SEED = 31;
+
+/** Fight look A 灯带四瓣. Later letters stay off the battle. */
+export const FURNACE_LOOK = 'A' as const;
+
+/**
+ * Stage 3 warning. riverA is 5760 px, so `warning * 40 + 640` stays under
+ * that and the boss origin sits on riverA's last row. Named on its own:
+ * do not point this at `STAGE2_WARNING_AT`.
+ */
+export const STAGE3_WARNING_AT = 118;
+
+/** Five seconds after the warning, equal to `WARNING_DURATION`. */
+export const FURNACE_ENTER_AT = 123;
+
+/** Anchor x. Same screen center as `BOSS_ANCHOR_X`, stored separately. */
+export const FURNACE_ANCHOR_X = 180;
+export const FURNACE_PARK_Y = 168;
+export const FURNACE_ENTER_Y = -72;
+/** Slide in. Can take damage. Does not fire. */
+export const FURNACE_ENTER_DURATION = 2;
+/** WARNING banner once the fight starts. */
+export const FURNACE_WARNING = 1.5;
+
+export const FURNACE_HULL_W = 200;
+export const FURNACE_HULL_H = 132;
+
+/** Sine drift after the slide. The 1.2s gate keeps moving and stays hittable only outside that gate. */
+export const FURNACE_DRIFT_AMP = 32;
+export const FURNACE_DRIFT_PERIOD = 8;
+
+export const FURNACE_POD_COUNT = 4;
+export const FURNACE_POD_HP = 70;
+export const FURNACE_POD_SCORE = 2500;
+export const FURNACE_POD_RADIUS = 14;
+export const FURNACE_POD_ORBIT = 76;
+/** Degrees per second, clockwise. 0° is straight down. */
+export const FURNACE_POD_SPIN = 36;
+export const FURNACE_POD_ANGLES = [45, 135, 225, 315] as const;
+
+export const FURNACE_CORE_HP = 280;
+export const FURNACE_CORE_SCORE = 30000;
+export const FURNACE_CORE_RADIUS = 20;
+export const FURNACE_OVERLOAD_HP = 180;
+
+/** Petals have no HP. They eat shots that miss the core. */
+export const FURNACE_PETAL_COUNT = 4;
+export const FURNACE_PETAL_STEP = 45;
+export const FURNACE_PETAL_REST = 18;
+export const FURNACE_PETAL_TRAVEL = 24;
+export const FURNACE_PETAL_RADIUS = 16;
+
+/** Iris timings, seconds: closed / opening / open / closing. */
+export const FURNACE_CLOSED = 1.8;
+export const FURNACE_OPENING = 0.4;
+export const FURNACE_OPEN = 2.2;
+export const FURNACE_CLOSING = 0.4;
+export const FURNACE_OVERLOAD_CLOSED = 1.4;
+export const FURNACE_OVERLOAD_OPENING = 0.3;
+export const FURNACE_OVERLOAD_OPEN = 1.6;
+export const FURNACE_OVERLOAD_CLOSING = 0.3;
+
+/** Invulnerable, no fire, between the pod ring and the iris, and again into overload. */
+export const FURNACE_PHASE_INVULN = 1.2;
+
+/**
+ * Flight speeds below are pixels per second after `ENEMY_BULLET_SPEED_SCALE`.
+ * The script writes them straight onto the bolt. It does not multiply again.
+ */
+export const FURNACE_POD_FAN_COUNT = 3;
+export const FURNACE_POD_FAN_SPREAD = 28;
+export const FURNACE_POD_FAN_INTERVAL = 1.5;
+export const FURNACE_POD_FAN_FIRST = 0.4;
+export const FURNACE_POD_FAN_STAGGER = 0.2;
+export const FURNACE_POD_FAN_SPEED = 120;
+
+export const FURNACE_POD_AA_LANES = 2;
+export const FURNACE_POD_AA_GAP = 28;
+export const FURNACE_POD_AA_BURST = 3;
+export const FURNACE_POD_AA_STEP = 0.12;
+export const FURNACE_POD_AA_INTERVAL = 2;
+
+export const FURNACE_POD_MISSILE_INTERVAL = 3;
+export const FURNACE_POD_MISSILE_FIRST = 1.2;
+
+export const FURNACE_AA_SPEED = 120;
+export const FURNACE_CLOSED_AA_LANES = 2;
+export const FURNACE_CLOSED_AA_GAP = 36;
+export const FURNACE_CLOSED_AA_AT = [0.25, 1.05] as const;
+export const FURNACE_OVERLOAD_AA_LANES = 3;
+export const FURNACE_OVERLOAD_AA_GAP = 32;
+export const FURNACE_OVERLOAD_AA_AT = [0.2, 0.85] as const;
+
+export const FURNACE_MISSILE_COUNT = 5;
+export const FURNACE_OVERLOAD_MISSILE_COUNT = 6;
+export const FURNACE_MISSILE_AT = 0.35;
+export const FURNACE_MISSILE_GAP = 0.08;
+export const FURNACE_MISSILE_HOMING = 0.5;
+export const FURNACE_MISSILE_SPEED = 88;
+/** Front-edge spawn, left and right of the center line. */
+export const FURNACE_MISSILE_X = 40;
+
+export const FURNACE_FLAME_COUNT = 5;
+export const FURNACE_FLAME_SPREAD = 56;
+export const FURNACE_FLAME_INTERVAL = 0.7;
+export const FURNACE_OVERLOAD_FLAME_COUNT = 7;
+export const FURNACE_OVERLOAD_FLAME_SPREAD = 68;
+export const FURNACE_OVERLOAD_FLAME_INTERVAL = 0.5;
+export const FURNACE_FLAME_SPEED = 96;
+
+export const FURNACE_DEATH_EXPLOSIONS = 6;
+export const FURNACE_DEATH_DURATION = 2.4;
+
+/**
  * Black card between a cleared stage and the next one, seconds.
  * A normal stage clear (not 挑战 Boss) holds this long, then starts the
  * next stage at t = 0. The last stage still opens the result screen.

@@ -33,6 +33,7 @@ import {
 } from '@/game/systems/tiebao';
 import { tiebaoTailLampLocals } from '@/game/systems/tiebaoShed';
 import { laserSweepRadians } from '@/game/systems/danmaku';
+import { drawFurnaceBoss, furnaceFrames } from './furnaceLooks';
 import { buildTiebaoHull } from './tiebaoLooks';
 import type { SpriteData, SpriteFrame } from './types';
 import { createGrid, fillEllipse, fillPoly, fillRect, outline, plot } from './pixelDraw';
@@ -368,6 +369,18 @@ export const BOSS_ART: Readonly<Record<string, () => BossAssets>> = {
       aaBroken: renderSprite(buildTiebaoAa(true)),
     },
   }),
+  furnace: () => {
+    const frames = furnaceFrames();
+    return {
+      hull: frames.hull,
+      hullOpen: frames.hull,
+      parts: {
+        petal: frames.petal,
+        pod: frames.pod,
+        podBroken: frames.podBroken,
+      },
+    };
+  },
 };
 
 /** Bake every registered boss. */
@@ -398,6 +411,10 @@ export function drawBossWorld(
   const look = bossLook(boss);
   const assets = bosses[boss.def.art];
   if (!look || !assets) return;
+  if (boss.def.art === 'furnace') {
+    drawFurnaceBoss(ctx, draw, boss, assets, time);
+    return;
+  }
 
   const open = look.hull === 'open';
   const hull = open ? assets.hullOpen : assets.hull;

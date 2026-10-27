@@ -131,7 +131,17 @@ export interface SpawnGroup {
  * Wave-table section a wave belongs to. A label only; scenery comes from `StageData.maps`.
  * Stage 1 uses `ground` / `coast` / `base`. Stage 2 uses `outskirts` / `runway` / `woods`.
  */
-export type StageSection = 'ground' | 'coast' | 'base' | 'outskirts' | 'runway' | 'woods';
+export type StageSection =
+  | 'ground'
+  | 'coast'
+  | 'base'
+  | 'outskirts'
+  | 'runway'
+  | 'woods'
+  | 'valley'
+  | 'dock'
+  | 'crossing'
+  | 'scorch';
 
 /** One map in a stage's pre-boss run. */
 export interface StageMapEntry {
@@ -292,7 +302,7 @@ export interface BossDef {
    * Scripted motion on top of the phase table. `tiebao` rides fixed rails and
    * runs its own weapon cycle. Omit it and the boss keeps the sine drift.
    */
-  script?: 'tiebao';
+  script?: 'tiebao' | 'furnace';
   /** Two-line name plate. Omitted bosses draw none. */
   title?: string;
   subtitle?: string;
