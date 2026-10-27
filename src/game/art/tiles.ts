@@ -8,9 +8,8 @@
  * trench, wreck, snag). Ids 64–69 are the P14 props: a 2×2 parked plane,
  * a water wheel, and a thatched hut. Ids 70–75 are the 铁堡厂轨 floor:
  * concrete, wall, a high window, and three rail tiles whose stripe sits on
- * screen X 72 / 180 / 288 after the 4px crop. Ids 76–79 are the 炉心浮台
- * chassis: plate, rib, light strip, and outboard dark. Planes, wheels, and
- * huts are map decoration only.
+ * screen X 72 / 180 / 288 after the 4px crop. Planes, wheels, and huts are
+ * map decoration only.
  */
 
 import { COLOR } from '@/game/palette';
@@ -118,15 +117,11 @@ export const TileId = {
   factoryRailW: 73,
   factoryRailC: 74,
   factoryRailE: 75,
-  furnacePlate: 76,
-  furnaceRib: 77,
-  furnaceStrip: 78,
-  furnaceVoid: 79,
 } as const;
 
 export type TileId = (typeof TileId)[keyof typeof TileId];
 
-export const TILE_COUNT = 80;
+export const TILE_COUNT = 76;
 
 /** Screen quadrants of a 2×2 parked plane: top-left, top-right, bottom-left, bottom-right. */
 export const PLANE = [TileId.planeTL, TileId.planeTR, TileId.planeBL, TileId.planeBR] as const;
@@ -429,7 +424,6 @@ function paintTiles(tall: Array<boolean[][] | null>): SpriteData[] {
 
   paintLandTiles(tiles, tall);
   paintFactoryTiles(tiles);
-  paintFurnaceTiles(tiles);
   return tiles;
 }
 
@@ -845,44 +839,6 @@ function paintFactoryTiles(tiles: SpriteData[]): void {
   tiles[TileId.factoryRailW] = look.railW;
   tiles[TileId.factoryRailC] = look.railC;
   tiles[TileId.factoryRailE] = look.railE;
-}
-
-/** 炉心浮台 chassis. Void is dark steel, not a starfield. */
-function paintFurnaceTiles(tiles: SpriteData[]): void {
-  const plate = createGrid(TILE_SIZE, TILE_SIZE, COLOR.DARK_GRAY);
-  for (let y = 0; y < TILE_SIZE; y++) {
-    for (let x = 0; x < TILE_SIZE; x++) {
-      if (x === 0 || y === 0) plate[y]![x] = COLOR.MEDIUM_GRAY;
-      else if ((x * 3 + y * 5) % 11 === 0) plate[y]![x] = COLOR.SHADOW;
-    }
-  }
-  plot(plate, 3, 4, COLOR.GRAY);
-  plot(plate, 12, 11, COLOR.GRAY);
-  plot(plate, 11, 4, COLOR.MEDIUM_GRAY);
-  tiles[TileId.furnacePlate] = plate;
-
-  const rib = createGrid(TILE_SIZE, TILE_SIZE, COLOR.DARK_GRAY);
-  fillRect(rib, 4, 0, 8, TILE_SIZE, COLOR.SHADOW);
-  fillRect(rib, 6, 0, 4, TILE_SIZE, COLOR.MEDIUM_GRAY);
-  fillRect(rib, 7, 0, 2, TILE_SIZE, COLOR.LIGHT_GRAY);
-  tiles[TileId.furnaceRib] = rib;
-
-  const strip = createGrid(TILE_SIZE, TILE_SIZE, COLOR.DARK_GRAY);
-  fillRect(strip, 5, 0, 6, TILE_SIZE, COLOR.SHADOW);
-  for (let y = 0; y < TILE_SIZE; y++) {
-    const lamp = y % 4 < 2 ? COLOR.PLAYER_CYAN : COLOR.PLAYER_MED_CYAN;
-    strip[y]![7] = lamp;
-    strip[y]![8] = y % 4 < 2 ? COLOR.PLAYER_PALE_CYAN : COLOR.PLAYER_BLUE;
-  }
-  tiles[TileId.furnaceStrip] = strip;
-
-  const dark = createGrid(TILE_SIZE, TILE_SIZE, COLOR.BLACK);
-  for (let y = 0; y < TILE_SIZE; y++) {
-    dark[y]![13] = COLOR.SHADOW;
-    dark[y]![14] = COLOR.DARK_GRAY;
-    if (y % 6 === 0) dark[y]![6] = COLOR.SHADOW;
-  }
-  tiles[TileId.furnaceVoid] = dark;
 }
 
 function paintLandTiles(tiles: SpriteData[], tall: Array<boolean[][] | null>): void {
