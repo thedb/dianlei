@@ -7,9 +7,7 @@ import {
   MAP_CHUNK_ROWS,
   MAP_TILES_X,
   RIVER_A_CHUNKS,
-  FURNACE_ENTER_AT,
   STAGE2_WARNING_AT,
-  STAGE3_WARNING_AT,
   TIEBAO_ENTER_AT,
   TIEBAO_RAIL_X,
   TILE_SIZE,
@@ -24,7 +22,6 @@ import {
   FACTORY_RAILS,
   factoryRailScreenX,
 } from './factoryBoss';
-import { FURNACE_BOSS_LIBRARY, FURNACE_BOSS_SPEC } from './furnaceBoss';
 import { APPROACH_HANDOFF_ROWS, LAND_BOSS_LIBRARY, LAND_BOSS_SPEC } from './landBoss';
 import { LAND_A_LIBRARY, LAND_A_SPEC } from './landA';
 import { RIVER_A_LIBRARY, RIVER_A_SPEC, RIVER_EDGE_COLS } from './riverA';
@@ -68,7 +65,6 @@ describe('map registry', () => {
       ['riverA', '河流A', 'tiles'],
       ['landBoss', '百战要塞', 'tiles'],
       ['factoryBoss', '铁堡厂轨', 'tiles'],
-      ['furnaceBoss', '炉心浮台', 'tiles'],
       ['spaceA', '宇宙A', 'starfield'],
     ]);
   });
@@ -701,7 +697,6 @@ describe('tracks', () => {
       { target: 'map:riverA', label: '河流A' },
       { target: 'map:landBoss', label: '百战要塞' },
       { target: 'map:factoryBoss', label: '铁堡厂轨' },
-      { target: 'map:furnaceBoss', label: '炉心浮台' },
       { target: 'map:spaceA', label: '宇宙A' },
     ]);
     const bossPreview = buildMapTrack('landBoss');
@@ -824,49 +819,6 @@ describe('铁堡厂轨', () => {
     const scroll = scrollDistance(TIEBAO_ENTER_AT, STAGE2_WARNING_AT, 'tiles');
     expect(scroll - origin).toBeCloseTo(120, 0);
     const fade = backgroundFade(STAGE2_WARNING_AT + 1, track);
-    expect(fade.clouds).toBe(0);
-    expect(fade.stars).toBe(0);
-  });
-});
-
-describe('炉心浮台', () => {
-  const grid = getMapGrid('furnaceBoss');
-  const loop = MAP_CHUNK_ROWS;
-
-  it('is one approach chunk then a looping chassis', () => {
-    expect(FURNACE_BOSS_LIBRARY.map((c) => c.id)).toEqual(['approach', 'chassis']);
-    expect(planChunks(FURNACE_BOSS_SPEC).map((p) => p.chunk)).toEqual(['approach', 'chassis']);
-    expect(planChunks(FURNACE_BOSS_SPEC).some((p) => p.flip)).toBe(false);
-    expect(grid).toHaveLength(loop * 2);
-    expect(getTileMap('furnaceBoss').loopFrom).toBe(loop);
-    expect(getTileMap('furnaceBoss').cloudShadows).toBeFalsy();
-    expect(composeChunks(FURNACE_BOSS_SPEC)).toEqual(grid);
-  });
-
-  it('copies 河流A’s last row and keeps the chassis seam dry', () => {
-    const river = getMapGrid('riverA');
-    expect(grid[0]).toEqual(river[river.length - 1]);
-    expect(grid[loop - 1]).toEqual(grid[loop]);
-    expect(grid[grid.length - 1]).toEqual(grid[loop]);
-    expect(grid[10]!.slice(9, 14).every((id) => id === TileId.lake)).toBe(true);
-    for (let r = 16; r < grid.length; r++) {
-      for (const id of grid[r]!) expect(tileTerrain(id), `row ${r}`).not.toBe('water');
-    }
-    expect(tileTerrain(TileId.furnacePlate)).toBe('feature');
-    expect(tileTerrain(TileId.furnaceVoid)).toBe('feature');
-  });
-
-  it('hands off from 河流A with opaque tiles and no warning clouds', () => {
-    const stage = getStage('3');
-    const track = buildStageTrack(stage);
-    expect(track.handoff).toBe('tiles');
-    expect(track.layers.map((layer) => layer.map.id)).toEqual(['riverA', 'furnaceBoss']);
-    const origin = RIVER_A_CHUNKS * MAP_CHUNK_ROWS * TILE_SIZE;
-    expect(STAGE3_WARNING_AT * BG_SCROLL_SPEED + LOGICAL_H).toBeLessThan(origin);
-    expect(track.layers[1]!.origin).toBe(origin);
-    const scroll = scrollDistance(FURNACE_ENTER_AT, STAGE3_WARNING_AT, 'tiles');
-    expect(scroll - origin).toBeCloseTo(120, 0);
-    const fade = backgroundFade(STAGE3_WARNING_AT + 1, track);
     expect(fade.clouds).toBe(0);
     expect(fade.stars).toBe(0);
   });
