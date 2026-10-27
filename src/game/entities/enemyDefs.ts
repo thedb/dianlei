@@ -9,6 +9,7 @@
 
 import {
   FACTORY_AA_HP,
+  PARKED_FIGHTER_HP,
   RISK_CRATE_HP,
   RISK_CRATE_SHIELD,
   SCORE_BOMBER,
@@ -18,9 +19,12 @@ import {
   SCORE_INTERCEPTOR,
   SCORE_MEDIUM_FIGHTER,
   SCORE_MISSILE_CAR,
+  SCORE_PARKED_FIGHTER,
   SCORE_RISK_CRATE,
   SCORE_SMALL_FIGHTER,
+  SCORE_STRIKE,
   SCORE_TANK,
+  STRIKE_HP,
 } from '@/game/config';
 import type { SizeClass } from './objectClass';
 
@@ -34,7 +38,9 @@ export type EnemyType =
   | 'turret2'
   | 'factory_aa'
   | 'missile_car'
-  | 'risk_crate';
+  | 'risk_crate'
+  | 'parked_fighter'
+  | 'strike';
 
 /** Resolved at the kill, from live player state. Wave `drops` are the fixed P/B path. */
 export type KillDropKind = 'risk_crate';
@@ -180,6 +186,27 @@ export const ENEMY_DEFS: Readonly<Record<EnemyType, EnemyDef>> = {
     category: 'air',
     killDrop: 'risk_crate',
     countsInKillRate: false,
+  },
+  /** Stage-3 parked jet on the bank. Planted on land, no guns, no drop. */
+  parked_fighter: {
+    hp: PARKED_FIGHTER_HP,
+    score: SCORE_PARKED_FIGHTER,
+    width: 32,
+    height: 32,
+    hitRadius: 14,
+    size: 'small',
+    category: 'ground',
+  },
+  /** Stage-3 heavy ground-attack jet. One fan on the level run of its strafe. */
+  strike: {
+    hp: STRIKE_HP,
+    score: SCORE_STRIKE,
+    width: 40,
+    height: 36,
+    hitRadius: 17,
+    size: 'medium',
+    category: 'air',
+    deathBursts: [[-8, 4, 0.05]],
   },
 };
 

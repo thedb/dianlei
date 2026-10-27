@@ -510,6 +510,84 @@ function drawRiskCrate(): EnemyArt {
   return art(g, []);
 }
 
+const PARKED_RECOLOR: Readonly<Record<number, number>> = {
+  [EH]: OM,
+  [EC]: OL,
+  [ED]: OD,
+  [EV]: OI,
+  [ER]: OD,
+  [EB]: AS,
+};
+
+/**
+ * Parked jet (stage 3). Same top-down fighter build in olive ground paint,
+ * engines cold, with wheel chocks and a tow bar. Planted, so no exhaust.
+ */
+function drawParkedFighter(): EnemyArt {
+  const g = drawFighter({
+    w: 32,
+    h: 32,
+    engineRows: 4,
+    wingRows: 12,
+    wingHalf: 14.4,
+    engineHalf: 7,
+    notch: 2,
+    sweep: 3,
+    noseHalf: 0.6,
+    fuselage: 3,
+    dark: false,
+  });
+  for (const row of g) {
+    for (let x = 0; x < row.length; x++) {
+      const mapped = PARKED_RECOLOR[row[x]!];
+      if (mapped !== undefined) row[x] = mapped;
+    }
+  }
+  for (const x of [9, 22]) {
+    plot(g, x, 17, K);
+    plot(g, x, 18, TN);
+  }
+  plot(g, 15, 30, K);
+  plot(g, 16, 30, K);
+  plot(g, 15, 31, DG);
+  plot(g, 16, 31, DG);
+  plot(g, 15, 21, PG);
+  plot(g, 16, 21, LG);
+  rim(g, ER);
+  return art(g, []);
+}
+
+/** Heavy strike jet (stage 3). Its own 40×36 hull with twin engines and bomb racks. */
+function drawStrike(): EnemyArt {
+  const g = drawFighter({
+    w: 40,
+    h: 36,
+    engineRows: 6,
+    wingRows: 14,
+    wingHalf: 19.2,
+    engineHalf: 10,
+    notch: 3,
+    sweep: 4,
+    noseHalf: 1.4,
+    fuselage: 4.6,
+    dark: true,
+  });
+  for (const x0 of [6, 31]) {
+    for (let y = 12; y <= 21; y++) {
+      plot(g, x0, y, EB);
+      plot(g, x0 + 1, y, EB);
+      plot(g, x0 + 2, y, y === 21 ? K : DG);
+    }
+    plot(g, x0 + 1, 22, K);
+    plot(g, x0 + 1, 13, COLOR.EXPLOSION_YELLOW);
+  }
+  for (const x of [13, 26]) {
+    plot(g, x, 16, EV);
+    plot(g, x, 17, EH);
+  }
+  return art(g, twinNozzles(g, 6));
+}
+
 const BUILDERS: Record<EnemyType, () => EnemyArt> = {
   small: drawSmall,
   medium: drawMedium,
@@ -521,6 +599,8 @@ const BUILDERS: Record<EnemyType, () => EnemyArt> = {
   factory_aa: drawFactoryAa,
   missile_car: drawMissileCar,
   risk_crate: drawRiskCrate,
+  parked_fighter: drawParkedFighter,
+  strike: drawStrike,
 };
 
 /** Palette-index art for one enemy. Safe to call in unit tests (no canvas). */

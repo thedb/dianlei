@@ -11,10 +11,12 @@ const ENEMY_SIZES: Record<EnemyType, 'small' | 'medium'> = {
   tank: 'small',
   missile_car: 'small',
   risk_crate: 'small',
+  parked_fighter: 'small',
   medium: 'medium',
   bomber: 'medium',
   turret2: 'medium',
   factory_aa: 'medium',
+  strike: 'medium',
 };
 
 describe('object size class', () => {
