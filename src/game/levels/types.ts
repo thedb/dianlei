@@ -20,7 +20,9 @@ export type MoveKind =
   | 'dive_once'
   | 'orbit'
   | 'slow_push'
-  | 'ground';
+  | 'ground'
+  | 'planted'
+  | 'strafe';
 
 /**
  * How a ground unit enters.
@@ -54,7 +56,22 @@ export type Move =
   | { kind: 'dive_once'; speed: number; angle: number }
   | { kind: 'orbit'; anchor: { x: number; y: number }; r: number; period: number; hold: number }
   | { kind: 'slow_push'; stopY: number; hold: number }
-  | { kind: 'ground'; vx?: number; entry?: GroundEntry };
+  | { kind: 'ground'; vx?: number; entry?: GroundEntry }
+  /** Anchored to a map cell: rides the scroll, no drive of its own, no water escape. */
+  | { kind: 'planted' }
+  /**
+   * Enter from above at `enterAngle`, level off at `levelY`, fly `run` pixels
+   * sideways (positive = right), then leave down at `exitAngle`. Angles match
+   * `straight`: 0 is down, positive drifts right. No hover, no climb.
+   */
+  | {
+      kind: 'strafe';
+      speed: number;
+      levelY: number;
+      run: number;
+      enterAngle: number;
+      exitAngle: number;
+    };
 
 /** Shot timing shared by every non-ring fire. */
 interface ShotTiming {
@@ -130,8 +147,19 @@ export interface SpawnGroup {
 /**
  * Wave-table section a wave belongs to. A label only; scenery comes from `StageData.maps`.
  * Stage 1 uses `ground` / `coast` / `base`. Stage 2 uses `outskirts` / `runway` / `woods`.
+ * Stage 3 uses `valley` / `dock` / `crossing` / `scorch`.
  */
-export type StageSection = 'ground' | 'coast' | 'base' | 'outskirts' | 'runway' | 'woods';
+export type StageSection =
+  | 'ground'
+  | 'coast'
+  | 'base'
+  | 'outskirts'
+  | 'runway'
+  | 'woods'
+  | 'valley'
+  | 'dock'
+  | 'crossing'
+  | 'scorch';
 
 /** One map in a stage's pre-boss run. */
 export interface StageMapEntry {
@@ -185,8 +213,11 @@ export interface BossPartDef {
   score: number;
   /** Baked sprite drawn over the hull. Omit for parts that are only a glow. */
   sprite?: string;
-  /** `fall`: drops off with a medium blast and a small shake when destroyed. */
-  onDestroy?: 'fall';
+  /**
+   * `fall`: drops off with a medium blast and a small shake when destroyed.
+   * `burst`: medium blast and a small shake; the wreck stays on its mount.
+   */
+  onDestroy?: 'fall' | 'burst';
 }
 
 export interface LaserConfig {
@@ -290,9 +321,10 @@ export interface BossDef {
   };
   /**
    * Scripted motion on top of the phase table. `tiebao` rides fixed rails and
-   * runs its own weapon cycle. Omit it and the boss keeps the sine drift.
+   * runs its own weapon cycle. `furnace` keeps the sine drift and adds orbiting
+   * pods, the petal iris, and its three weapons. Omit it for the plain drift.
    */
-  script?: 'tiebao';
+  script?: 'tiebao' | 'furnace';
   /** Two-line name plate. Omitted bosses draw none. */
   title?: string;
   subtitle?: string;

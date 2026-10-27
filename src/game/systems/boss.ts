@@ -64,6 +64,15 @@ import {
   tiebaoSyncScroll,
   tiebaoTryShot,
 } from '@/game/systems/tiebao';
+import {
+  furnaceAcceptsMissiles,
+  furnaceDamageable,
+  furnaceOnFight,
+  furnaceOnHold,
+  furnaceShotVerdict,
+  furnaceSyncMounts,
+  stepFurnace,
+} from '@/game/systems/furnace';
 
 export type BossStage = 'enter' | 'transition' | 'fight' | 'death' | 'clear' | 'done';
 
@@ -76,7 +85,7 @@ export interface BossPartRuntime {
   offsetY: number;
   radius: number;
   sprite: string | null;
-  onDestroy: 'fall' | null;
+  onDestroy: 'fall' | 'burst' | null;
   alive: boolean;
   falling: boolean;
   fallVy: number;
@@ -512,6 +521,7 @@ export function updateBoss(boss: BossRuntime, dt: number, world?: BossWorld): Bo
   if (boss.stage === 'done') return ev;
   const def = boss.def;
   const scripted = def.script === 'tiebao';
+  const furnace = def.script === 'furnace';
   if (scripted) tiebaoSyncScroll(boss, world?.scroll);
 
   boss.prevX = boss.x;
@@ -541,6 +551,7 @@ export function updateBoss(boss: BossRuntime, dt: number, world?: BossWorld): Bo
     boss.driftTime += dt;
     if (scripted) scriptDt = dt;
     else drift(boss);
+    if (furnace) scriptDt = dt;
     attackDt = dt;
   } else if (boss.stage === 'transition') {
     boss.phaseTime += dt;
@@ -550,6 +561,10 @@ export function updateBoss(boss: BossRuntime, dt: number, world?: BossWorld): Bo
       const leftover = boss.phaseTime - duration;
       const held = Math.max(0, dt - leftover);
       if (scripted && held > 0) stepTiebao(boss, held, world, ev);
+      if (furnace) {
+        drift(boss);
+        if (held > 0) stepFurnace(boss, held, world, ev);
+      }
       startFight(boss);
       boss.phaseTime = leftover;
       attackDt = leftover;
@@ -558,6 +573,7 @@ export function updateBoss(boss: BossRuntime, dt: number, world?: BossWorld): Bo
       scriptDt = dt;
     } else {
       drift(boss);
+      if (furnace) scriptDt = dt;
     }
   } else if (boss.stage === 'death') {
     boss.phaseTime += dt;
@@ -579,6 +595,7 @@ export function updateBoss(boss: BossRuntime, dt: number, world?: BossWorld): Bo
     stepTiebao(boss, scriptDt, world, ev);
     syncParts(boss);
   }
+  if (scriptDt > 0 && furnace) stepFurnace(boss, scriptDt, world, ev);
   if (attackDt > 0 && boss.stage === 'fight') tickAttacks(boss, attackDt, ev);
   if (scripted) ev.chaseBoost = tiebaoChaseBoost(boss);
   return ev;
@@ -612,6 +629,7 @@ export function applyBossBomb(boss: BossRuntime): BossEvents {
 /** Weak points a homing missile may lock onto: only parts that can take damage now. */
 export function bossMissileTargets(boss: BossRuntime): BossPartRuntime[] {
   if (!canTakeDamage(boss)) return [];
+  if (boss.def.script === 'furnace' && !furnaceAcceptsMissiles(boss)) return [];
   return damageableParts(boss);
 }
 
@@ -626,6 +644,17 @@ export function resolveBossBullet(
   if (boss.def.script === 'tiebao' && tiebaoTryShot(boss, bullet, damage, ev)) return ev;
 
   const hittable = damageableParts(boss);
+
+  if (boss.def.script === 'furnace') {
+    const verdict = furnaceShotVerdict(boss, bullet);
+    if (verdict === 'pass') return ev;
+    if (verdict !== null) {
+      ev.consumedBullet = true;
+      const target = hittable[0];
+      if (verdict === 'hit' && target && !boss.invulnerable) hurtPart(boss, target, damage, ev);
+      return ev;
+    }
+  }
 
   const connect = (part: BossPartRuntime): BossEvents => {
     ev.consumedBullet = true;
@@ -764,6 +793,7 @@ function startFight(boss: BossRuntime): void {
   }
   resetLaserSweep(boss.laser);
   if (boss.def.script === 'tiebao') tiebaoOnFight(boss);
+  if (boss.def.script === 'furnace') furnaceOnFight(boss);
 }
 
 function drift(boss: BossRuntime): void {
@@ -893,6 +923,9 @@ function killPart(boss: BossRuntime, part: BossPartRuntime, ev: BossEvents): voi
     part.fallVy = BOSS_TURRET_FALL_SPEED;
     ev.explosions.push({ x: part.worldX, y: part.worldY, delay: 0, size: 'medium' });
     ev.shake = { intensity: SHAKE_SMALL_INTENSITY, duration: SHAKE_SMALL_DURATION };
+  } else if (part.onDestroy === 'burst') {
+    ev.explosions.push({ x: part.worldX, y: part.worldY, delay: 0, size: 'medium' });
+    ev.shake = { intensity: SHAKE_SMALL_INTENSITY, duration: SHAKE_SMALL_DURATION };
   }
   if (phase.survivorRateMul !== undefined) {
     const scale = phase.survivorRateMul <= 0 ? 1 : 1 / phase.survivorRateMul;
@@ -910,6 +943,7 @@ function killPart(boss: BossRuntime, part: BossPartRuntime, ev: BossEvents): voi
 
 /** Next phase: revive its targets on their segment HP and go invulnerable. */
 function beginTransition(boss: BossRuntime, _ev: BossEvents): void {
+  if (boss.def.script === 'furnace') furnaceOnHold(boss);
   boss.phaseIndex++;
   const next = boss.phases[boss.phaseIndex]!;
   for (const id of next.targets) {
@@ -931,6 +965,7 @@ function beginTransition(boss: BossRuntime, _ev: BossEvents): void {
 
 function beginDeath(boss: BossRuntime, ev: BossEvents): void {
   if (boss.stage === 'death' || boss.stage === 'clear' || boss.stage === 'done') return;
+  if (boss.def.script === 'furnace') furnaceOnHold(boss);
   setStage(boss, 'death');
   boss.phaseTime = 0;
   boss.invulnerable = true;
@@ -1003,9 +1038,10 @@ function damageableParts(boss: BossRuntime): BossPartRuntime[] {
   const index = boss.stage === 'transition' ? boss.phaseIndex - 1 : boss.phaseIndex;
   const phase = boss.phases[index];
   if (!phase) return [];
-  return boss.parts.filter(
+  const live = boss.parts.filter(
     (part) => phase.targets.includes(part.id) && part.alive && !part.falling
   );
+  return boss.def.script === 'furnace' ? furnaceDamageable(boss, live) : live;
 }
 
 function fallDebris(boss: BossRuntime, dt: number): void {
@@ -1020,6 +1056,10 @@ function fallDebris(boss: BossRuntime, dt: number): void {
 function syncParts(boss: BossRuntime): void {
   if (boss.def.script === 'tiebao') {
     tiebaoSyncMounts(boss);
+    return;
+  }
+  if (boss.def.script === 'furnace') {
+    furnaceSyncMounts(boss);
     return;
   }
   for (const part of boss.parts) {

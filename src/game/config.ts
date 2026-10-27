@@ -346,6 +346,12 @@ export const SCORE_DUAL_TURRET = 1000;
 /** Stage-2 factory AA. Medium ground, a step above the dual turret. */
 export const FACTORY_AA_HP = 40;
 export const SCORE_FACTORY_AA = 1200;
+/** Stage-3 parked fighter. Small ground, planted on a bank tile, no gun. */
+export const PARKED_FIGHTER_HP = 8;
+export const SCORE_PARKED_FIGHTER = 400;
+/** Stage-3 heavy strike plane. Medium air, one fan on its level run. */
+export const STRIKE_HP = 36;
+export const SCORE_STRIKE = 900;
 export const SCORE_BOMBER = 2000;
 export const SCORE_BOSS_PART = 5000;
 export const SCORE_BOSS_CORE = 30000;
@@ -610,6 +616,38 @@ export const TIEBAO_LOOK = 'A' as const;
  * as stage 1's `enterAt`.
  */
 export const STAGE2_WARNING_AT = 118;
+
+/**
+ * 炉心浮台 (`furnaceBoss`): one approach chunk whose row 0 is 河流A's last row,
+ * then a dockyard floor that loops. Stage 3's boss map. No cloud sheet, no
+ * water tiles on the loop.
+ */
+export const FURNACE_BOSS_CHUNKS = 2;
+export const FURNACE_BOSS_SEED = 31;
+
+/** Locked boss sprite look A 灯带四瓣. B–E are reserved for stills, not the fight. */
+export const FURNACE_LOOK = 'A' as const;
+
+/** Locked arena look C 淹水船坞废港: dry docks, sunk barges, crane skeletons, mud. */
+export const FURNACE_MAP_LOOK = 'C' as const;
+
+/**
+ * Stage 3 warning. Own constant, same value as stage 2: 河流A is 5760 px, and
+ * `118 * 40 + 640 = 5360` keeps the boss origin on 河流A's last row.
+ */
+export const STAGE3_WARNING_AT = 118;
+
+/**
+ * Stage 3 risk crates (wave table §5). Never the stage-1 `RISK_CRATE_*` clocks.
+ * Easy: early center. Medium: early left, late right. Hard adds the mid one.
+ */
+export const STAGE3_RISK_EARLY_T = 50;
+export const STAGE3_RISK_MID_T = 72;
+export const STAGE3_RISK_LATE_T = 96;
+export const STAGE3_RISK_CENTER_X = 180;
+export const STAGE3_RISK_LEFT_X = 48;
+export const STAGE3_RISK_MID_X = 220;
+export const STAGE3_RISK_RIGHT_X = 312;
 
 /**
  * Cloud shadows over maps that set `cloudShadows` (陆地A / 陆地B / 河流A / 百战要塞).
@@ -1010,6 +1048,118 @@ export const TIEBAO_OVERLOAD_CRATE_EVERY = 2.2 * TIEBAO_RATE_SCALE;
 
 export const TIEBAO_DEATH_EXPLOSIONS = 8;
 export const TIEBAO_DEATH_DURATION = 2.8;
+
+// ============================================================================
+// Stage 3 boss 炉心 (docs/电雷_第三关_炉心Boss设计_v1.md)
+// ============================================================================
+//
+// Speeds below are final pixels/second (already past ENEMY_BULLET_SPEED_SCALE).
+// The boss clock ignores fireRateScale and bulletSpeedScale. No laser.
+
+/** Fight starts five seconds after STAGE3_WARNING_AT (one WARNING_DURATION). */
+export const FURNACE_ENTER_AT = 123;
+/** Slide-in, seconds. Can take damage, does not fire. */
+export const FURNACE_ENTER_DURATION = 2;
+export const FURNACE_ENTER_Y = -72;
+export const FURNACE_PARK_Y = 168;
+/** WARNING banner after the fight starts, seconds. */
+export const FURNACE_WARNING = 1.5;
+export const FURNACE_DRIFT_AMP = 32;
+export const FURNACE_DRIFT_PERIOD = 8;
+export const FURNACE_HULL_W = 200;
+export const FURNACE_HULL_H = 132;
+
+/** Gun pods. Angles: 0° is straight down, clockwise on screen. */
+export const FURNACE_POD_ANGLES = [45, 135, 225, 315] as const;
+export const FURNACE_POD_ORBIT = 76;
+export const FURNACE_POD_RADIUS = 14;
+/** Degrees per second, clockwise. Advances only while fighting or in a transition. */
+export const FURNACE_POD_SPIN = 36;
+export const FURNACE_POD_HP = 70;
+export const FURNACE_POD_SCORE = 2500;
+/** Seconds of sparks on a destroyed pod before only the black shell is left. */
+export const FURNACE_POD_SPARK_TIME = 0.6;
+/** Active-pod smoke: one puff train every period, lasting `ON` seconds. */
+export const FURNACE_POD_SMOKE_PERIOD = 1.1;
+export const FURNACE_POD_SMOKE_ON = 0.55;
+/** Barrel tip, px from the pod center along its outward heading (muzzle glow). */
+export const FURNACE_POD_MUZZLE = 12;
+
+export const FURNACE_CORE_HP = 280;
+export const FURNACE_CORE_SCORE = 30000;
+/** Core hit circle, the open throat's half width, and the homing radius. */
+export const FURNACE_CORE_RADIUS = 28;
+/** Hard only, before the Hard scale. The core's 30000 waits for this segment. */
+export const FURNACE_OVERLOAD_HP = 180;
+/** Pods cleared → core, and core → overload. Invulnerable, no fire, no bomb. */
+export const FURNACE_PHASE_INVULN = 1.2;
+
+/** Iris clock, seconds per state: closed, opening, open, closing. */
+export const FURNACE_IRIS_MAIN = { closed: 1.8, opening: 0.4, open: 3.4, closing: 0.6 } as const;
+export const FURNACE_IRIS_OVERLOAD = {
+  closed: 1.4,
+  opening: 0.3,
+  open: 1.6,
+  closing: 0.3,
+} as const;
+/** Each return to closed turns the four petals this far, clockwise. */
+export const FURNACE_PETAL_STEP = 45;
+/** The 45° turn is drawn over this long at the start of `closed`. */
+export const FURNACE_PETAL_TURN = 0.6;
+/** Petal center distance from the core: closed, plus this times openness. */
+export const FURNACE_PETAL_REST = 14;
+export const FURNACE_PETAL_TRAVEL = 24;
+export const FURNACE_PETAL_RADIUS = 12;
+
+/** Pod fan: per living pod, along its outward normal. */
+export const FURNACE_POD_FAN_COUNT = 3;
+export const FURNACE_POD_FAN_SPREAD = 28;
+export const FURNACE_POD_FAN_INTERVAL = 1.5;
+export const FURNACE_POD_FAN_FIRST = 0.4;
+/** Pod i's first fan is FIRST + i × STAGGER. */
+export const FURNACE_POD_FAN_STAGGER = 0.2;
+export const FURNACE_POD_FAN_SPEED = 120;
+
+/** Parallel flak: straight down from the chassis bottom, small bullets. */
+export const FURNACE_FLAK_SPEED = 120;
+export const FURNACE_FLAK_ROUNDS = 3;
+export const FURNACE_FLAK_ROUND_GAP = 0.12;
+export const FURNACE_POD_FLAK_LANES = 2;
+export const FURNACE_POD_FLAK_GAP = 28;
+export const FURNACE_POD_FLAK_INTERVAL = 2.0;
+export const FURNACE_POD_FLAK_FIRST = 0.8;
+export const FURNACE_CORE_FLAK_LANES = 2;
+export const FURNACE_CORE_FLAK_GAP = 36;
+/** Group starts, seconds into `closed`. */
+export const FURNACE_CORE_FLAK_AT = [0.25, 1.05] as const;
+export const FURNACE_OVERLOAD_FLAK_LANES = 3;
+export const FURNACE_OVERLOAD_FLAK_GAP = 32;
+export const FURNACE_OVERLOAD_FLAK_AT = [0.2, 0.85] as const;
+
+/** Missiles: short homing, then straight. No guide beam. */
+export const FURNACE_MISSILE_SPEED = 88;
+export const FURNACE_MISSILE_HOMING = 0.5;
+export const FURNACE_POD_MISSILE_INTERVAL = 3.0;
+export const FURNACE_POD_MISSILE_FIRST = 1.2;
+export const FURNACE_CORE_MISSILES = 5;
+export const FURNACE_OVERLOAD_MISSILES = 6;
+/** Seconds into `closed` of the first missile, then one per GAP. */
+export const FURNACE_CLOSED_MISSILE_AT = 0.35;
+export const FURNACE_CLOSED_MISSILE_GAP = 0.08;
+/** Closed-state missiles alternate left/right of the chassis front edge. */
+export const FURNACE_CLOSED_MISSILE_X = 64;
+
+/** Flame fan: large bullets from the core while opening / open. */
+export const FURNACE_FLAME_SPEED = 96;
+export const FURNACE_FLAME_COUNT = 5;
+export const FURNACE_FLAME_SPREAD = 56;
+export const FURNACE_FLAME_INTERVAL = 0.7;
+export const FURNACE_OVERLOAD_FLAME_COUNT = 7;
+export const FURNACE_OVERLOAD_FLAME_SPREAD = 68;
+export const FURNACE_OVERLOAD_FLAME_INTERVAL = 0.5;
+
+export const FURNACE_DEATH_EXPLOSIONS = 6;
+export const FURNACE_DEATH_DURATION = 2.4;
 
 /**
  * Black card between a cleared stage and the next one, seconds.

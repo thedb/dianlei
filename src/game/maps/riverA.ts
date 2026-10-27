@@ -4,7 +4,8 @@
  * chunk edge (`RIVER_EDGE_COLS`: left bank, right bank, or the center slot)
  * and never breaks. Lakes flare off that channel inside a chunk; they do not
  * touch the edge row. Hamlets, crop plots, and water wheels sit on the banks.
- * Stage 1 does not use this map.
+ * Stage 1 does not use this map. Stage 3 runs on it; `lakeRight` and
+ * `forestHead` carry a few scorched bank cells on interior rows.
  */
 
 import { MAP_CHUNK_ROWS, MAP_TILES_X, RIVER_A_SEED } from '@/game/config';
@@ -307,6 +308,34 @@ function hamlet(p: ChunkPainter, h: Hamlet): void {
   }
 }
 
+const BURNABLE: ReadonlySet<TileId> = new Set<TileId>([
+  TileId.meadow,
+  TileId.meadowB,
+  TileId.meadowDark,
+  TileId.flowers,
+  TileId.forest,
+  TileId.oak,
+  TileId.fir,
+  TileId.bush,
+]);
+
+/**
+ * Stage 3's last stretch reads as the rebel base: scorch, craters, and snags
+ * on bank cells that are still grass or trees. Interior rows only, no RNG, so
+ * the edge contract and every other cell stay as they were.
+ */
+function scorchBanks(
+  p: ChunkPainter,
+  spots: ReadonlyArray<readonly [number, number, TileId]>
+): void {
+  for (const [c, r, id] of spots) {
+    if (r <= 0 || r >= LAST) continue;
+    const here = p.get(c, r);
+    if (here === null || !BURNABLE.has(here)) continue;
+    p.set(c, r, id);
+  }
+}
+
 function settle(p: ChunkPainter, hamlets: readonly Hamlet[]): void {
   for (const h of hamlets) hamlet(p, h);
 }
@@ -573,6 +602,17 @@ const lakeRight = riverChunk('lakeRight', 'right', 'right', (p) => {
     },
   ]);
   reeds(p);
+  scorchBanks(p, [
+    [5, 29, TileId.snag],
+    [8, 30, TileId.scorch],
+    [9, 31, TileId.crater],
+    [3, 32, TileId.scorch],
+    [11, 33, TileId.scorch],
+    [7, 34, TileId.snag],
+    [2, 36, TileId.crater],
+    [12, 36, TileId.scorch],
+    [9, 37, TileId.scorch],
+  ]);
 });
 
 const forestHead = riverChunk('forestHead', 'right', 'center', (p) => {
@@ -604,6 +644,21 @@ const forestHead = riverChunk('forestHead', 'right', 'center', (p) => {
   ]);
   reeds(p);
   p.scatter(10, [TileId.oak, TileId.fir, TileId.bush]);
+  scorchBanks(p, [
+    [7, 3, TileId.scorch],
+    [16, 4, TileId.scorch],
+    [9, 5, TileId.crater],
+    [18, 7, TileId.snag],
+    [17, 22, TileId.scorch],
+    [3, 24, TileId.scorch],
+    [20, 25, TileId.crater],
+    [6, 26, TileId.crater],
+    [9, 28, TileId.scorch],
+    [12, 30, TileId.snag],
+    [8, 33, TileId.crater],
+    [5, 35, TileId.scorch],
+    [10, 36, TileId.scorch],
+  ]);
 });
 
 export const RIVER_A_LIBRARY: readonly ChunkDef[] = [

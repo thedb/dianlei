@@ -8,13 +8,28 @@
  * trench, wreck, snag). Ids 64–69 are the P14 props: a 2×2 parked plane,
  * a water wheel, and a thatched hut. Ids 70–75 are the 铁堡厂轨 floor:
  * concrete, wall, a high window, and three rail tiles whose stripe sits on
- * screen X 72 / 180 / 288 after the 4px crop. Planes, wheels, and huts are
- * map decoration only.
+ * screen X 72 / 180 / 288 after the 4px crop. Ids 76–86 are the 炉心浮台
+ * look C 淹水船坞废港 set: mud flat, rusted pad, quay wall, dry-dock pit,
+ * barge deck, two crane-boom diagonals, crane foot, pilings, scrap, and a
+ * burn mark.
+ * Planes, wheels, and huts are map decoration only.
  */
 
 import { COLOR } from '@/game/palette';
 import { FACTORY_LOOK, LOGICAL_H, TILE_SIZE } from '@/game/config';
 import { paintFactoryLook } from './factoryLooks';
+import {
+  bargeDeckTile,
+  craneBoomTile,
+  craneFootTile,
+  harborMudTile,
+  harborPilesTile,
+  harborPitTile,
+  harborQuayTile,
+  harborBurnTile,
+  harborScrapTile,
+  harborSlabTile,
+} from './harborTiles';
 import { createGrid, fillEllipse, fillPoly, fillRect, plot } from './pixelDraw';
 import type { SpriteData } from './types';
 
@@ -117,11 +132,22 @@ export const TileId = {
   factoryRailW: 73,
   factoryRailC: 74,
   factoryRailE: 75,
+  harborMud: 76,
+  harborSlab: 77,
+  harborQuay: 78,
+  harborPit: 79,
+  bargeHull: 80,
+  craneBoomNE: 81,
+  craneBoomNW: 82,
+  craneFoot: 83,
+  harborPiles: 84,
+  harborScrap: 85,
+  harborBurn: 86,
 } as const;
 
 export type TileId = (typeof TileId)[keyof typeof TileId];
 
-export const TILE_COUNT = 76;
+export const TILE_COUNT = 87;
 
 /** Screen quadrants of a 2×2 parked plane: top-left, top-right, bottom-left, bottom-right. */
 export const PLANE = [TileId.planeTL, TileId.planeTR, TileId.planeBL, TileId.planeBR] as const;
@@ -185,7 +211,10 @@ function dirtPath(vertical: boolean): SpriteData {
   return g;
 }
 
-function paintTiles(tall: Array<boolean[][] | null>): SpriteData[] {
+function paintTiles(
+  tall: Array<boolean[][] | null>,
+  overlays: Array<SpriteData | null>
+): SpriteData[] {
   const tiles: SpriteData[] = Array.from({ length: TILE_COUNT }, () =>
     createGrid(TILE_SIZE, TILE_SIZE, GD)
   );
@@ -424,6 +453,7 @@ function paintTiles(tall: Array<boolean[][] | null>): SpriteData[] {
 
   paintLandTiles(tiles, tall);
   paintFactoryTiles(tiles);
+  paintHarborTiles(tiles, overlays);
   return tiles;
 }
 
@@ -841,6 +871,31 @@ function paintFactoryTiles(tiles: SpriteData[]): void {
   tiles[TileId.factoryRailE] = look.railE;
 }
 
+/**
+ * Harbor overlays keep their transparent art in `overlays`; the tile itself
+ * is that art on mud, so every tile stays opaque.
+ */
+function paintHarborTiles(tiles: SpriteData[], overlays: Array<SpriteData | null>): void {
+  const mud = harborMudTile();
+  tiles[TileId.harborMud] = mud;
+  tiles[TileId.harborSlab] = harborSlabTile();
+  tiles[TileId.harborQuay] = harborQuayTile();
+  tiles[TileId.harborPit] = harborPitTile();
+  tiles[TileId.bargeHull] = bargeDeckTile();
+  const art: Array<[TileId, SpriteData]> = [
+    [TileId.craneBoomNE, craneBoomTile(true)],
+    [TileId.craneBoomNW, craneBoomTile(false)],
+    [TileId.craneFoot, craneFootTile()],
+    [TileId.harborPiles, harborPilesTile()],
+    [TileId.harborScrap, harborScrapTile()],
+    [TileId.harborBurn, harborBurnTile()],
+  ];
+  for (const [id, overlay] of art) {
+    overlays[id] = overlay;
+    tiles[id] = overlay.map((row, y) => row.map((cell, x) => (cell >= 0 ? cell : mud[y]![x]!)));
+  }
+}
+
 function paintLandTiles(tiles: SpriteData[], tall: Array<boolean[][] | null>): void {
   tiles[TileId.meadow] = meadowTile(M, ML, MD, 0);
   tiles[TileId.meadowB] = meadowTile(M, ML, MD, 1);
@@ -909,13 +964,21 @@ export const HOUSE_BROWN = [
 
 let tilePixels: SpriteData[] | null = null;
 let tileTall: Array<boolean[][] | null> | null = null;
+let tileOverlays: Array<SpriteData | null> | null = null;
 
 export function getTilePixels(): SpriteData[] {
   if (!tilePixels) {
     tileTall = Array.from({ length: TILE_COUNT }, () => null);
-    tilePixels = paintTiles(tileTall);
+    tileOverlays = Array.from({ length: TILE_COUNT }, () => null);
+    tilePixels = paintTiles(tileTall, tileOverlays);
   }
   return tilePixels;
+}
+
+/** Transparent art for tiles the raster lays over the ground it picks (-1 = ground). */
+export function getTileOverlays(): ReadonlyArray<SpriteData | null> {
+  getTilePixels();
+  return tileOverlays!;
 }
 
 /**

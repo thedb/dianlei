@@ -253,6 +253,48 @@ export function diveOnceOffset(
   };
 }
 
+export type StrafeLeg = 'enter' | 'run' | 'exit';
+
+/**
+ * Offset from the spawn point along a strafe: a dive at `enterAngle` down to
+ * `levelY`, a level run of `|run|` pixels, then a dive at `exitAngle`.
+ * Spawning at or below `levelY` starts on the run.
+ */
+export function strafePose(
+  move: Extract<Move, { kind: 'strafe' }>,
+  startY: number,
+  elapsed: number
+): { dx: number; dy: number; heading: number; leg: StrafeLeg } {
+  let remain = Math.max(0, elapsed) * move.speed;
+  const enterRad = (move.enterAngle * Math.PI) / 180;
+  const cosIn = Math.max(0.2, Math.cos(enterRad));
+  const enterLen = Math.max(0, move.levelY - startY) / cosIn;
+  if (remain < enterLen) {
+    return {
+      dx: Math.sin(enterRad) * remain,
+      dy: cosIn * remain,
+      heading: move.enterAngle,
+      leg: 'enter',
+    };
+  }
+  remain -= enterLen;
+  const dx = Math.sin(enterRad) * enterLen;
+  const dy = cosIn * enterLen;
+  const runLen = Math.abs(move.run);
+  const sign = move.run < 0 ? -1 : 1;
+  if (remain < runLen) {
+    return { dx: dx + sign * remain, dy, heading: sign < 0 ? 270 : 90, leg: 'run' };
+  }
+  remain -= runLen;
+  const exitRad = (move.exitAngle * Math.PI) / 180;
+  return {
+    dx: dx + sign * runLen + Math.sin(exitRad) * remain,
+    dy: dy + Math.cos(exitRad) * remain,
+    heading: move.exitAngle,
+    leg: 'exit',
+  };
+}
+
 /**
  * Heading for a nose-down sprite, or null when the sprite stays nose-down
  * in world space (`straight` angle 0, sine, hover, ground, …).
@@ -262,6 +304,7 @@ export function enemyTravelHeading(enemy: Enemy): number | null {
   if (move.kind === 'rear_diag') return rearDiagHeading(move);
   if (move.kind === 'step_slide') return stepSlidePose(move, enemy.moveTimer).heading;
   if (move.kind === 'dive_once') return diveOnceOffset(move, enemy.moveTimer).heading;
+  if (move.kind === 'strafe') return strafePose(move, enemy.startY, enemy.moveTimer).heading;
   return null;
 }
 
@@ -270,11 +313,16 @@ export function enemyTravelHeading(enemy: Enemy): number | null {
  * Every ship waits until y ≥ 8. `rear_diag`, `step_slide`, and `dive_once`
  * also wait until x is inside the field window. The two downward moves
  * stop the clock again once they pass the bottom edge, so a fast exit
- * cannot shoot from under the screen.
+ * cannot shoot from under the screen. `strafe` only runs its clock on the
+ * level leg.
  */
 export function enemyFireClockHeld(enemy: Enemy): boolean {
   if (enemy.y < 8) return true;
-  const kind = enemy.move.kind;
+  const { move } = enemy;
+  const kind = move.kind;
+  if (move.kind === 'strafe') {
+    return strafePose(move, enemy.startY, enemy.moveTimer).leg !== 'run';
+  }
   if (
     (kind === 'rear_diag' || kind === 'step_slide' || kind === 'dive_once') &&
     (enemy.x < REAR_DIAG_FIRE_X_MIN || enemy.x > REAR_DIAG_FIRE_X_MAX)
@@ -475,6 +523,17 @@ function updateEnemyMovement(
       enemy.y = enemy.startY + offset.dy;
       break;
     }
+
+    case 'strafe': {
+      const pose = strafePose(move, enemy.startY, enemy.moveTimer);
+      enemy.x = enemy.startX + pose.dx;
+      enemy.y = enemy.startY + pose.dy;
+      break;
+    }
+
+    case 'planted':
+      enemy.y += scrollDelta;
+      break;
 
     case 'side_arc': {
       const radius = SIDE_ARC_RADIUS;

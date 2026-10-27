@@ -31,6 +31,8 @@ const LAND: readonly TileId[] = [
   TileId.scorch,
   TileId.crater,
   TileId.snag,
+  TileId.harborMud,
+  TileId.harborSlab,
 ];
 
 const WATER: readonly TileId[] = [TileId.water, TileId.waterB, TileId.shallow, TileId.lake];

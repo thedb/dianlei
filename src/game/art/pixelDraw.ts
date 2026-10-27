@@ -19,7 +19,9 @@ export function inGrid(grid: SpriteData, x: number, y: number): boolean {
   return y >= 0 && y < grid.length && x >= 0 && x < (grid[0]?.length ?? 0);
 }
 
+/** Whole-pixel cells only. A fractional row would index past the grid and throw at bake. */
 export function plot(grid: SpriteData, x: number, y: number, color: number): void {
+  if (!Number.isInteger(x) || !Number.isInteger(y)) return;
   if (!inGrid(grid, x, y) || color < 0) return;
   grid[y]![x] = color;
 }
