@@ -22,7 +22,7 @@ import {
   SHAKE_SMALL_DURATION,
   SHAKE_SMALL_INTENSITY,
 } from '@/game/config';
-import type { EnemyBulletType } from '@/game/entities/enemyBullet';
+import type { BulletFuse, EnemyBulletType } from '@/game/entities/enemyBullet';
 import type {
   BossAttack,
   BossCycleAttack,
@@ -166,6 +166,8 @@ export interface BossBolt {
   type: EnemyBulletType;
   homing: number;
   hitRadius?: number;
+  /** 铁堡 rail mine: bursts into two horizontal small rounds when this runs out. */
+  fuse?: BulletFuse;
 }
 
 /** Player position and the stage RNG. Omitted callers keep the sine drift. */

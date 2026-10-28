@@ -34,7 +34,7 @@ import { createBackgroundArt } from './mapDraw';
 import { createBossAssets } from './bossSprite';
 
 export { drawBackground } from './mapDraw';
-export { drawBossWorld, drawBossHpBar, drawBossLaser } from './bossSprite';
+export { drawBossWorld, drawBossHpBar, drawBossLaser, drawTiebaoMine } from './bossSprite';
 
 /** All game sprite assets */
 export interface GameAssets {

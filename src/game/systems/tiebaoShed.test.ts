@@ -10,7 +10,6 @@ import {
   TIEBAO_HULL_H,
   TIEBAO_LOCO_H,
   TIEBAO_PARK_Y,
-  TIEBAO_RAM_MAX_CARS,
   TIEBAO_HULL_W,
   TIEBAO_ROOF_CAR_ROW,
   TIEBAO_SHED_AT,
@@ -24,7 +23,6 @@ import {
   tiebaoCarCenterRow,
   tiebaoCarsFromRatio,
   tiebaoHullHeight,
-  tiebaoRamArmed,
   tiebaoRestCenter,
   tiebaoShedCountFromRatio,
   tiebaoTailLampLocals,
@@ -64,14 +62,9 @@ describe('铁堡剥厢', () => {
     expect(tiebaoCarCenterRow(1)).toBe(TIEBAO_ROOF_CAR_ROW);
   });
 
-  it('arms the ram only at loco+4, which is the 50% shed', () => {
-    expect(TIEBAO_RAM_MAX_CARS).toBe(4);
+  it('reaches loco+4 at the 50% shed', () => {
     expect(tiebaoCarsFromRatio(0.5001)).toBe(5);
-    expect(tiebaoRamArmed(5)).toBe(false);
     expect(tiebaoCarsFromRatio(0.5)).toBe(4);
-    expect(tiebaoRamArmed(4)).toBe(true);
-    expect(tiebaoRamArmed(TIEBAO_END_CARS)).toBe(true);
-    expect(tiebaoRamArmed(TIEBAO_CARS)).toBe(false);
   });
 
   it('keeps one lamp pair on the buffer when the last car banks', () => {

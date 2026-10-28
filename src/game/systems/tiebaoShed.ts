@@ -15,7 +15,6 @@ import {
   TIEBAO_ENCOUNTER_TAIL_Y,
   TIEBAO_HULL_W,
   TIEBAO_LOCO_H,
-  TIEBAO_RAM_MAX_CARS,
   TIEBAO_SHED_ADVANCE,
   TIEBAO_SHED_AT,
   TIEBAO_TAIL,
@@ -59,15 +58,6 @@ export function tiebaoCarBodyY(index: number): number {
 
 export function tiebaoCarCenterRow(index: number): number {
   return tiebaoCarBodyY(index) + TIEBAO_CAR_H / 2;
-}
-
-/**
- * Ram stays off until the consist is down to loco+4.
- * That is the same moment main HP crosses 50% (five of the seven sheds).
- * The 9-car hull is 840px and would cover the screen on the dive.
- */
-export function tiebaoRamArmed(cars: number): boolean {
-  return cars <= TIEBAO_RAM_MAX_CARS;
 }
 
 export interface TiebaoTailLamp {

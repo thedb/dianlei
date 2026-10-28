@@ -4,91 +4,109 @@
  * three fixed rails and runs the rail-bound weapon pairs. State lives in a WeakMap so
  * `BossRuntime` stays the battleship's shape for the stage-1 render digest.
  *
- * Design: docs/电雷_第二关_铁堡Boss设计_v1.md. No laser. No Math.random.
+ * Design: docs/电雷_第二关_铁堡Boss设计_v1.md (weapons: 武器重构 v1). No laser.
+ * No Math.random. Every round leaves from a point on its own car.
  * One turnout curve (`tiebaoSwitchX`) is shared by the background rails and the
  * rigid cars. Cars bank onto that curve. The long sprite is never sheared.
  */
 
-import type { Rng } from '@/engine/rng';
 import {
   AIMED_MIN_DIST,
-  EB_SPEED_SMALL,
-  ENEMY_BULLET_SPEED_SCALE,
   FIXED_DT,
   HITBOX_RADIUS,
   LOGICAL_H,
   LOGICAL_W,
-  TIEBAO_BROADSIDE_COUNT,
-  TIEBAO_BROADSIDE_FIRST,
-  TIEBAO_BROADSIDE_FROM,
-  TIEBAO_BROADSIDE_GAP,
-  TIEBAO_BROADSIDE_SPEED,
-  TIEBAO_BROADSIDE_STEP,
-  TIEBAO_BROADSIDE_SWEEP,
-  TIEBAO_BROADSIDE_TO,
+  TIEBAO_BEATS,
+  TIEBAO_CAR_MAX_BANK,
+  TIEBAO_CAR_PITCH,
+  TIEBAO_CARS,
+  TIEBAO_CHASE_FLAME,
+  TIEBAO_CORE_ROW,
   TIEBAO_CRATE_BLAST,
   TIEBAO_CRATE_FLIGHT,
   TIEBAO_CRATE_HP,
   TIEBAO_CRATE_LAND_Y,
   TIEBAO_CRATE_SCORE,
   TIEBAO_CRATE_SIZE,
-  TIEBAO_FAN_FIRST,
-  TIEBAO_FAN_INTERVAL,
-  TIEBAO_FAN_SPREAD,
-  TIEBAO_MISSILE_COUNT,
-  TIEBAO_MISSILE_GAP,
-  TIEBAO_MISSILE_HOMING,
-  TIEBAO_MISSILE_SPEED,
-  TIEBAO_MISSILE_WAVES,
-  TIEBAO_CHASE_FLAME,
-  TIEBAO_MOVE,
-  TIEBAO_MOVE_EXTRA,
-  TIEBAO_OVERLOAD_CRATE_EVERY,
-  TIEBAO_OVERLOAD_MISSILE_COUNT,
-  TIEBAO_OVERLOAD_MOVE,
-  TIEBAO_OVERLOAD_PERIOD,
-  TIEBAO_OVERLOAD_RAIN_WARN,
-  TIEBAO_CAR_MAX_BANK,
-  TIEBAO_CAR_PITCH,
-  TIEBAO_CARS,
-  TIEBAO_CORE_ROW,
   TIEBAO_END_CARS,
   TIEBAO_END_PARK_Y,
   TIEBAO_ENTER_TAIL_Y,
+  TIEBAO_FROG_AT,
   TIEBAO_HULL_W,
   TIEBAO_LOCO_H,
-  TIEBAO_OVERLOAD_WALL_REPEAT,
+  TIEBAO_MINE_BURST_SPEED,
+  TIEBAO_MINE_DROP,
+  TIEBAO_MINE_FLIGHT,
+  TIEBAO_MINE_FUSE,
+  TIEBAO_MINE_PAIR_GAP,
+  TIEBAO_MINE_SLIDE,
+  TIEBAO_MINE_THROWS,
+  TIEBAO_MISSILE_GAP,
+  TIEBAO_MISSILE_HOMING,
+  TIEBAO_MISSILE_SPEED,
+  TIEBAO_MISSILE_X,
+  TIEBAO_MOVE,
+  TIEBAO_MOVE_EXTRA,
+  TIEBAO_OVERLOAD_CRATE_EVERY,
+  TIEBAO_OVERLOAD_MINE_FUSE,
+  TIEBAO_OVERLOAD_MOVE,
+  TIEBAO_OVERLOAD_PERIOD,
+  TIEBAO_OVERLOAD_TWIN_GROUPS,
+  TIEBAO_OVERLOAD_TWIN_MISSILES,
+  TIEBAO_OVERLOAD_VOLLEY_ANGLES,
+  TIEBAO_OVERLOAD_VOLLEY_STARTS,
+  TIEBAO_OVERLOAD_VOLLEY_TAIL_SPREAD,
   TIEBAO_POINT_AT,
-  TIEBAO_FROG_AT,
-  TIEBAO_RAIN_COUNT,
-  TIEBAO_RAIN_FIRST,
-  TIEBAO_RAIN_RADIUS,
-  TIEBAO_RAIN_SECOND,
-  TIEBAO_RAIN_SEPARATION,
-  TIEBAO_RAIN_WARN,
   TIEBAO_RAIL_X,
   TIEBAO_RAM_BOTTOM,
   TIEBAO_RAM_DIVE,
+  TIEBAO_RAM_IMPACT,
+  TIEBAO_RAM_JITTER,
+  TIEBAO_RAM_RECOIL,
   TIEBAO_RAM_RETURN,
   TIEBAO_RAM_START,
   TIEBAO_RAM_WARN,
+  TIEBAO_RAM_WARN_FAST,
+  TIEBAO_RAM_WARN_SLOW,
   TIEBAO_ROOF_CAR_ROW,
   TIEBAO_ROOF_LOCO_ROW,
   TIEBAO_SHED_BLAST_FRAME,
   TIEBAO_SHED_DELAY,
   TIEBAO_SHED_SLIDE,
   TIEBAO_SIDE_MUZZLE_X,
+  TIEBAO_SWEEP_FROM,
+  TIEBAO_SWEEP_SPEED,
+  TIEBAO_SWEEP_STEP,
+  TIEBAO_SWEEP_TIME,
+  TIEBAO_SWEEP_TO,
   TIEBAO_SWITCH_CROSS_SPAN,
   TIEBAO_SWITCH_LEAD,
   TIEBAO_SWITCH_PERIOD,
   TIEBAO_SWITCH_RUSH,
   TIEBAO_SWITCH_SPAN,
-  TIEBAO_WALL_COUNT,
-  TIEBAO_WALL_FIRST,
-  TIEBAO_WALL_GAP,
-  TIEBAO_WALL_REPEAT,
-  TIEBAO_WALL_SPEED,
-  TIEBAO_WALL_VOLLEYS,
+  TIEBAO_TAIL,
+  TIEBAO_TELL,
+  TIEBAO_TURRET_FAN_COUNT,
+  TIEBAO_TURRET_FAN_SPREAD,
+  TIEBAO_TURRET_GAP,
+  TIEBAO_TURRET_SHOTS,
+  TIEBAO_TURRET_SPEED,
+  TIEBAO_TURRET_TURN,
+  TIEBAO_TWIN_GROUP_GAP,
+  TIEBAO_TWIN_GROUPS,
+  TIEBAO_TWIN_MISSILE_AT,
+  TIEBAO_TWIN_MISSILES,
+  TIEBAO_TWIN_PAIR_HALF,
+  TIEBAO_TWIN_SPEED,
+  TIEBAO_TWIN_SPREAD,
+  TIEBAO_VOLLEY_ANGLES,
+  TIEBAO_VOLLEY_CAR_GAP,
+  TIEBAO_VOLLEY_CAR_MAX_Y,
+  TIEBAO_VOLLEY_CARS,
+  TIEBAO_VOLLEY_SHOT_GAP,
+  TIEBAO_VOLLEY_SHOTS,
+  TIEBAO_VOLLEY_SPEED,
+  TIEBAO_VOLLEY_TAIL_DELAY,
 } from '@/game/config';
 import { checkBulletEnemyCollision } from '@/game/systems/collision';
 import { bombArrivalDelay, boxOnScreen } from '@/game/systems/bomb';
@@ -97,24 +115,24 @@ import {
   tiebaoCarCenterRow,
   tiebaoCarsFromRatio,
   tiebaoHullHeight,
-  tiebaoRamArmed,
   tiebaoRestCenter,
   tiebaoShedCountFromRatio,
   tiebaoTailY,
 } from '@/game/systems/tiebaoShed';
 
-export const TIEBAO_MODE_IDS = ['fan', 'missiles', 'rain', 'broadside', 'wall', 'ram'] as const;
+export const TIEBAO_MODE_IDS = ['sweep', 'volley', 'turret', 'twin', 'mines', 'ram'] as const;
 
 export const TIEBAO_MODE_NAMES = [
-  '高射扇',
-  '导弹齐射',
-  '落弹雨',
-  '侧舷扫射',
-  '封轨弹墙',
+  '侧舷扇扫',
+  '舷炮排射',
+  '炮塔追扫',
+  '双联散射 + 追踪导弹',
+  '尾抛轨雷',
   '冲轨撞击',
 ] as const;
 
-export const TIEBAO_OVERLOAD_MODE_IDS = ['rain', 'wall', 'missiles'] as const;
+/** Hard overload, one step per finished switch. The ram is not in it. */
+export const TIEBAO_OVERLOAD_MODE_IDS = ['mines', 'volley', 'twin'] as const;
 
 export type TiebaoModeId = (typeof TIEBAO_MODE_IDS)[number];
 
@@ -123,9 +141,9 @@ export type TiebaoModeId = (typeof TIEBAO_MODE_IDS)[number];
  * Left 72, center 180, right 288.
  */
 const RAIL_MODES = [
-  ['broadside', 'wall'],
-  ['fan', 'missiles'],
-  ['rain', 'ram'],
+  ['sweep', 'volley'],
+  ['turret', 'twin'],
+  ['mines', 'ram'],
 ] as const satisfies ReadonlyArray<readonly [TiebaoModeId, TiebaoModeId]>;
 
 /** Weapon for `visits` parks on `rail`. A visit of 0 displays mode A and does not count. */
@@ -138,15 +156,30 @@ type RailPhase = 'output' | 'move';
 type RamPhase = 'idle' | 'warn' | 'dive' | 'return';
 type RailIndex = 0 | 1 | 2;
 
-interface CircleWarn {
-  x: number;
-  y: number;
-  radius: number;
-  warn: number;
-  age: number;
+/** A rail mine in the air. Not lethal until it lands and becomes an enemy bullet. */
+interface MineShell {
   fromX: number;
   fromY: number;
+  toX: number;
+  toY: number;
+  age: number;
+  fuse: number;
 }
+
+/**
+ * One timed round (or group) inside a 4.8s output window. Built once per park
+ * by `tiebaoSchedule`. Aim and muzzle are resolved when the event fires, on
+ * the car that owns that gun at that moment.
+ */
+export type TiebaoShotEvent =
+  | { at: number; kind: 'sweep'; sweep: number; shot: number }
+  | { at: number; kind: 'side'; volley: number; slot: number; shot: number }
+  | { at: number; kind: 'tail'; volley: number }
+  | { at: number; kind: 'turret'; beat: number; shot: number }
+  | { at: number; kind: 'finisher'; beat: number }
+  | { at: number; kind: 'twin'; group: number }
+  | { at: number; kind: 'missile'; shot: number }
+  | { at: number; kind: 'lob'; lob: number };
 
 interface AmmoCrate {
   x: number;
@@ -189,17 +222,11 @@ interface TiebaoState {
   /** Parks on rail 0/1/2. Center starts at 1. Only a finished switch increments. */
   visits: [number, number, number];
   weaponClock: number;
-  fanNext: number;
-  fanSide: number;
-  missileWave: number;
-  missileShot: number;
-  missileNext: number;
-  rainWave: number;
-  broadNext: number;
-  broadSweep: number;
-  broadShot: number;
-  wallVolley: number;
-  wallNext: number;
+  /** This window's rounds, sorted by `at`. `eventNext` is the first not yet fired. */
+  events: TiebaoShotEvent[];
+  eventNext: number;
+  /** 炮塔追扫 barrel heading, radians. Turns toward the player at a capped rate. */
+  turretAim: number;
   ram: RamPhase;
   /** One dash per output window. Stays set after the retreat so it does not dive again. */
   ramDone: boolean;
@@ -218,7 +245,9 @@ interface TiebaoState {
   /** Seconds the current drop takes. One `TIEBAO_SHED_SLIDE` per car in the batch. */
   shedSlide: number;
   ambient: number;
-  circles: CircleWarn[];
+  shells: MineShell[];
+  /** Spark ring where the ram bottomed out. Null once it has faded. */
+  impact: { x: number; y: number; age: number } | null;
   crates: AmmoCrate[];
   broken: boolean;
 }
@@ -249,16 +278,14 @@ export interface TiebaoVisual {
    * their top scrolls below the screen.
    */
   turnouts: ReadonlyArray<{ fromX: number; toX: number; y0: number; y1: number }>;
-  ramWarn: boolean;
-  rocketWarn: boolean;
-  circles: ReadonlyArray<{
-    x: number;
-    y: number;
-    radius: number;
-    u: number;
-    fromX: number;
-    fromY: number;
-  }>;
+  /** Seconds into the 0.9s ram warning, or null. Drives the lamps, recoil sparks, and wheels. */
+  ramWarn: number | null;
+  /** Spark ring at the bottom of a ram, `u` 0 → 1 over `TIEBAO_RAM_IMPACT`. */
+  ramImpact: { x: number; y: number; u: number } | null;
+  /** On-car tell for the first `TIEBAO_TELL` seconds of a park. Null otherwise and for the ram. */
+  tell: { mode: TiebaoModeId; t: number } | null;
+  /** Rail mines in the air, already placed on their lob arc. */
+  shells: ReadonlyArray<{ x: number; y: number }>;
   crates: ReadonlyArray<{ x: number; y: number }>;
   broken: boolean;
   smoke: boolean;
@@ -266,7 +293,9 @@ export interface TiebaoVisual {
 
 const states = new WeakMap<BossRuntime, TiebaoState>();
 const DEG = Math.PI / 180;
-const BROADSIDE_SHOTS = Math.floor((TIEBAO_BROADSIDE_SWEEP - 1e-6) / TIEBAO_BROADSIDE_STEP) + 1;
+const SWEEP_SHOTS = Math.floor((TIEBAO_SWEEP_TIME - 1e-6) / TIEBAO_SWEEP_STEP) + 1;
+/** Height of the lob arc above the straight line from tail beam to rail. */
+const MINE_ARC = 24;
 
 /** Weapon window between parks. The live move is longer and is not taken out of this. */
 function outputSeconds(list: TiebaoState['list']): number {
@@ -665,6 +694,53 @@ function muzzleY(boss: BossRuntime, cars: number): number {
   return consistTop(boss, cars) + visibleMuzzleRow(boss, cars);
 }
 
+/** Tail-beam row: the mine launcher and the volley's aimed round. */
+function tailRow(cars: number): number {
+  return tiebaoHullHeight(cars) - TIEBAO_TAIL;
+}
+
+/**
+ * Roof gun for this beat. The two guns alternate. A gun whose row is still
+ * above the screen hands the beat to the visible car's centerline mount.
+ */
+function turretRow(boss: BossRuntime, cars: number, beat: number): number {
+  const gunRow = beat % 2 === 0 ? TIEBAO_ROOF_CAR_ROW : TIEBAO_ROOF_LOCO_ROW;
+  if (consistTop(boss, cars) + gunRow > 8) return gunRow;
+  return visibleMuzzleRow(boss, cars);
+}
+
+/** Car indices for 舷炮排射: centers on screen y 0–400, the rearmost three, front to back. */
+function volleyCars(boss: BossRuntime, cars: number): number[] {
+  const top = consistTop(boss, cars);
+  const seen: number[] = [];
+  for (let i = 0; i < cars; i++) {
+    const y = top + tiebaoCarCenterRow(i);
+    if (y >= 0 && y <= TIEBAO_VOLLEY_CAR_MAX_Y) seen.push(i);
+  }
+  return seen.slice(-TIEBAO_VOLLEY_CARS);
+}
+
+/** Sprite rows the tells light up. Same rows the guns fire from. */
+export interface TiebaoGunRows {
+  /** Visible car's side muzzles and missile tubes. */
+  muzzle: number;
+  /** Roof gun (or its visible stand-in) for the first beat. */
+  turret: number;
+  tail: number;
+  /** Car indices of the 舷炮排射 guns, front to back. */
+  volley: number[];
+}
+
+export function tiebaoGunRows(boss: BossRuntime): TiebaoGunRows {
+  const cars = tiebaoCommittedCars(boss);
+  return {
+    muzzle: visibleMuzzleRow(boss, cars),
+    turret: turretRow(boss, cars, 0),
+    tail: tailRow(cars),
+    volley: volleyCars(boss, cars),
+  };
+}
+
 function burstSheds(state: TiebaoState, ev: BossEvents, toSheds: number): void {
   const from = state.shedBurst;
   if (toSheds <= from) return;
@@ -794,7 +870,7 @@ export function tiebaoPlaceEnter(boss: BossRuntime, u: number): void {
 
 function modeIdOf(state: TiebaoState): TiebaoModeId {
   if (state.list === 'overload') {
-    return TIEBAO_OVERLOAD_MODE_IDS[state.mode % TIEBAO_OVERLOAD_MODE_IDS.length] ?? 'rain';
+    return TIEBAO_OVERLOAD_MODE_IDS[state.mode % TIEBAO_OVERLOAD_MODE_IDS.length] ?? 'mines';
   }
   return tiebaoRailMode(state.rail, state.visits[state.rail] ?? 1);
 }
@@ -827,18 +903,67 @@ function railX(index: number): number {
   return TIEBAO_RAIL_X[index] ?? TIEBAO_RAIL_X[1];
 }
 
+/**
+ * Every round of one output window for `mode`, sorted by time. Beats follow
+ * `TIEBAO_BEATS`; the ram has no rounds (its dash is `stepRam`). Times are
+ * final seconds after the park.
+ */
+export function tiebaoSchedule(
+  mode: TiebaoModeId,
+  list: TiebaoState['list'] = 'main'
+): TiebaoShotEvent[] {
+  const overload = list === 'overload';
+  const out: TiebaoShotEvent[] = [];
+  if (mode === 'sweep') {
+    TIEBAO_BEATS.forEach((start, sweep) => {
+      for (let shot = 0; shot < SWEEP_SHOTS; shot++) {
+        out.push({ at: start + shot * TIEBAO_SWEEP_STEP, kind: 'sweep', sweep, shot });
+      }
+    });
+  } else if (mode === 'volley') {
+    const starts = overload ? TIEBAO_OVERLOAD_VOLLEY_STARTS : TIEBAO_BEATS;
+    starts.forEach((start, volley) => {
+      for (let slot = 0; slot < TIEBAO_VOLLEY_CARS; slot++) {
+        for (let shot = 0; shot < TIEBAO_VOLLEY_SHOTS; shot++) {
+          const at = start + slot * TIEBAO_VOLLEY_CAR_GAP + shot * TIEBAO_VOLLEY_SHOT_GAP;
+          out.push({ at, kind: 'side', volley, slot, shot });
+        }
+      }
+      const last =
+        (TIEBAO_VOLLEY_CARS - 1) * TIEBAO_VOLLEY_CAR_GAP +
+        (TIEBAO_VOLLEY_SHOTS - 1) * TIEBAO_VOLLEY_SHOT_GAP;
+      out.push({ at: start + last + TIEBAO_VOLLEY_TAIL_DELAY, kind: 'tail', volley });
+    });
+  } else if (mode === 'turret') {
+    TIEBAO_BEATS.forEach((start, beat) => {
+      for (let shot = 0; shot < TIEBAO_TURRET_SHOTS; shot++) {
+        out.push({ at: start + shot * TIEBAO_TURRET_GAP, kind: 'turret', beat, shot });
+      }
+      out.push({ at: start + TIEBAO_TURRET_SHOTS * TIEBAO_TURRET_GAP, kind: 'finisher', beat });
+    });
+  } else if (mode === 'twin') {
+    const groups = overload ? TIEBAO_OVERLOAD_TWIN_GROUPS : TIEBAO_TWIN_GROUPS;
+    TIEBAO_BEATS.forEach((start, beat) => {
+      for (let g = 0; g < groups; g++) {
+        out.push({ at: start + g * TIEBAO_TWIN_GROUP_GAP, kind: 'twin', group: beat * groups + g });
+      }
+    });
+    const per = overload ? TIEBAO_OVERLOAD_TWIN_MISSILES : TIEBAO_TWIN_MISSILES;
+    TIEBAO_TWIN_MISSILE_AT.forEach((start, salvo) => {
+      for (let k = 0; k < per; k++) {
+        out.push({ at: start + k * TIEBAO_MISSILE_GAP, kind: 'missile', shot: salvo * per + k });
+      }
+    });
+  } else if (mode === 'mines') {
+    TIEBAO_MINE_THROWS.forEach((at, lob) => out.push({ at, kind: 'lob', lob }));
+  }
+  return out.sort((x, y) => x.at - y.at);
+}
+
 function resetSchedules(state: TiebaoState): void {
-  state.fanNext = TIEBAO_FAN_FIRST;
-  state.fanSide = 0;
-  state.missileWave = 0;
-  state.missileShot = 0;
-  state.missileNext = TIEBAO_MISSILE_WAVES[0];
-  state.rainWave = 0;
-  state.broadNext = TIEBAO_BROADSIDE_FIRST;
-  state.broadSweep = 0;
-  state.broadShot = 0;
-  state.wallVolley = 0;
-  state.wallNext = TIEBAO_WALL_FIRST;
+  state.events = tiebaoSchedule(modeIdOf(state), state.list);
+  state.eventNext = 0;
+  state.turretAim = Math.PI / 2;
   state.ram = 'idle';
   state.ramDone = false;
   state.ramClock = 0;
@@ -857,17 +982,9 @@ function createState(): TiebaoState {
     mode: 0,
     visits: [0, 1, 0],
     weaponClock: 0,
-    fanNext: 0,
-    fanSide: 0,
-    missileWave: 0,
-    missileShot: 0,
-    missileNext: 0,
-    rainWave: 0,
-    broadNext: 0,
-    broadSweep: 0,
-    broadShot: 0,
-    wallVolley: 0,
-    wallNext: 0,
+    events: [],
+    eventNext: 0,
+    turretAim: Math.PI / 2,
     ram: 'idle',
     ramDone: false,
     ramClock: 0,
@@ -880,7 +997,8 @@ function createState(): TiebaoState {
     shedToY: 0,
     shedSlide: 0,
     ambient: 0,
-    circles: [],
+    shells: [],
+    impact: null,
     crates: [],
     broken: false,
   };
@@ -931,6 +1049,23 @@ export function tiebaoView(boss: BossRuntime): TiebaoView | null {
   };
 }
 
+function tellOf(state: TiebaoState, boss: BossRuntime): TiebaoVisual['tell'] {
+  if (state.broken || boss.stage !== 'fight' || state.phase !== 'output') return null;
+  if (state.weaponClock >= TIEBAO_TELL) return null;
+  const mode = modeIdOf(state);
+  if (mode === 'ram') return null;
+  return { mode, t: Math.max(0, state.weaponClock) };
+}
+
+/** Lob position: straight line from the tail beam to the rail, lifted by a parabola. */
+function shellPoint(shell: MineShell): { x: number; y: number } {
+  const u = clamp(shell.age / TIEBAO_MINE_FLIGHT, 0, 1);
+  return {
+    x: lerp(shell.fromX, shell.toX, u),
+    y: lerp(shell.fromY, shell.toY, u) - MINE_ARC * 4 * u * (1 - u),
+  };
+}
+
 export function tiebaoVisual(boss: BossRuntime): TiebaoVisual | null {
   const state = states.get(boss);
   if (!state || boss.def.script !== 'tiebao') return null;
@@ -952,16 +1087,16 @@ export function tiebaoVisual(boss: BossRuntime): TiebaoVisual | null {
       const y1 = item.worldY1 + state.scroll;
       return { fromX: item.fromX, toX: item.toX, y1, y0: y1 - item.span };
     }),
-    ramWarn: state.ram === 'warn',
-    rocketWarn: false,
-    circles: state.circles.map((circle) => ({
-      x: circle.x,
-      y: circle.y,
-      radius: circle.radius,
-      u: clamp(circle.age / Math.max(0.05, circle.warn), 0, 1),
-      fromX: circle.fromX,
-      fromY: circle.fromY,
-    })),
+    ramWarn: state.ram === 'warn' ? state.ramClock : null,
+    ramImpact: state.impact
+      ? {
+          x: state.impact.x,
+          y: state.impact.y,
+          u: clamp(state.impact.age / TIEBAO_RAM_IMPACT, 0, 1),
+        }
+      : null,
+    tell: tellOf(state, boss),
+    shells: state.shells.map(shellPoint),
     crates: state.crates
       .filter((crate) => crate.alive)
       .map((crate) => ({ x: crate.x, y: crate.y })),
@@ -1157,7 +1292,7 @@ function pushBolt(
   y: number,
   vx: number,
   vy: number,
-  type: 'small' | 'missile',
+  type: 'small' | 'large' | 'missile',
   hitRadius?: number
 ): void {
   ev.bolts.push(
@@ -1167,189 +1302,269 @@ function pushBolt(
   );
 }
 
-/**
- * Gun row when that roof gun is on screen. Otherwise the visible car, so the
- * volley is not spawned above the screen and culled.
- */
-function fanRow(boss: BossRuntime, cars: number, gunRow: number): number {
-  if (consistTop(boss, cars) + gunRow > 8) return gunRow;
-  return visibleMuzzleRow(boss, cars);
+function pushAt(ev: BossEvents, x: number, y: number, angle: number, speed: number): void {
+  pushBolt(ev, x, y, Math.cos(angle) * speed, Math.sin(angle) * speed, 'small');
 }
 
-function fireFan(
+function playerOf(world: BossWorld | undefined): { x: number; y: number } {
+  return { x: world?.playerX ?? LOGICAL_W / 2, y: world?.playerY ?? LOGICAL_H * 0.8 };
+}
+
+/** Heading from a muzzle to the player, or null when the player is inside `AIMED_MIN_DIST`. */
+function aimFrom(world: BossWorld | undefined, x: number, y: number): number | null {
+  const p = playerOf(world);
+  if (Math.hypot(p.x - x, p.y - y) < AIMED_MIN_DIST) return null;
+  return Math.atan2(p.y - y, p.x - x);
+}
+
+function wrapAngle(a: number): number {
+  let d = a;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  return d;
+}
+
+/** `count` rounds centered on `base`, `spread` degrees edge to edge. */
+function fanFrom(
+  ev: BossEvents,
+  x: number,
+  y: number,
+  base: number,
+  count: number,
+  spread: number,
+  speed: number
+): void {
+  const step = count > 1 ? (spread * DEG) / (count - 1) : 0;
+  for (let i = 0; i < count; i++) pushAt(ev, x, y, base + (i - (count - 1) / 2) * step, speed);
+}
+
+/** 侧舷扇扫: both side muzzles of the visible car sweep outward → across the lane. */
+function fireSweep(state: TiebaoState, boss: BossRuntime, ev: BossEvents, shot: number): void {
+  const t = (shot * TIEBAO_SWEEP_STEP) / TIEBAO_SWEEP_TIME;
+  const left = lerp(Math.PI / 2 + TIEBAO_SWEEP_FROM * DEG, Math.PI / 2 - TIEBAO_SWEEP_TO * DEG, t);
+  const right = lerp(Math.PI / 2 - TIEBAO_SWEEP_FROM * DEG, Math.PI / 2 + TIEBAO_SWEEP_TO * DEG, t);
+  const row = visibleMuzzleRow(boss, carsOf(state));
+  const port = tiebaoRowMount(boss, row, -TIEBAO_SIDE_MUZZLE_X);
+  const starboard = tiebaoRowMount(boss, row, TIEBAO_SIDE_MUZZLE_X);
+  pushAt(ev, port.x, port.y, left + port.angle, TIEBAO_SWEEP_SPEED);
+  pushAt(ev, starboard.x, starboard.y, right + starboard.angle, TIEBAO_SWEEP_SPEED);
+}
+
+/** 舷炮排射: one round from each side of one car, outward at this volley's fixed angle. */
+function fireSide(
+  state: TiebaoState,
+  boss: BossRuntime,
+  ev: BossEvents,
+  volley: number,
+  slot: number
+): void {
+  const car = volleyCars(boss, carsOf(state))[slot];
+  if (car === undefined) return;
+  const angles = state.list === 'overload' ? TIEBAO_OVERLOAD_VOLLEY_ANGLES : TIEBAO_VOLLEY_ANGLES;
+  const off = (angles[volley] ?? angles[0]) * DEG;
+  const row = tiebaoCarCenterRow(car);
+  const port = tiebaoRowMount(boss, row, -TIEBAO_SIDE_MUZZLE_X);
+  const starboard = tiebaoRowMount(boss, row, TIEBAO_SIDE_MUZZLE_X);
+  pushAt(ev, port.x, port.y, Math.PI / 2 + off + port.angle, TIEBAO_VOLLEY_SPEED);
+  pushAt(ev, starboard.x, starboard.y, Math.PI / 2 - off + starboard.angle, TIEBAO_VOLLEY_SPEED);
+}
+
+/** Tail-beam round after each volley so the lane behind the car is not a free spot. */
+function fireTail(
   state: TiebaoState,
   boss: BossRuntime,
   world: BossWorld | undefined,
   ev: BossEvents
 ): void {
-  if (modeIdOf(state) !== 'fan') return;
-  const cars = carsOf(state);
-  const playerX = world?.playerX ?? LOGICAL_W / 2;
-  const playerY = world?.playerY ?? LOGICAL_H * 0.8;
-  const speed = EB_SPEED_SMALL * ENEMY_BULLET_SPEED_SCALE;
-  for (let n = 0; n < 4 && state.weaponClock + 1e-9 >= state.fanNext; n++) {
-    const id = state.fanSide % 2 === 0 ? 'roofCar' : 'roofLoco';
-    const gunRow = id === 'roofCar' ? TIEBAO_ROOF_CAR_ROW : TIEBAO_ROOF_LOCO_ROW;
-    const row = fanRow(boss, cars, gunRow);
-    const center = tiebaoRowMount(boss, row, 0);
-    const dx = playerX - center.x;
-    const dy = playerY - center.y;
-    if (Math.hypot(dx, dy) >= AIMED_MIN_DIST) {
-      const base = Math.atan2(dy, dx);
-      const spread = TIEBAO_FAN_SPREAD * DEG;
-      const count = 5;
-      const step = spread / (count - 1);
-      for (let i = 0; i < count; i++) {
-        const angle = base + (i - (count - 1) / 2) * step;
-        const at = tiebaoRowMount(boss, row, tiebaoFanLocalX(center.angle, angle));
-        pushBolt(ev, at.x, at.y, Math.cos(angle) * speed, Math.sin(angle) * speed, 'small');
-      }
-    }
-    state.fanSide++;
-    state.fanNext += TIEBAO_FAN_INTERVAL;
-  }
+  const at = tiebaoRowMount(boss, tailRow(carsOf(state)), 0);
+  const aim = aimFrom(world, at.x, at.y);
+  if (aim === null) return;
+  const overload = state.list === 'overload';
+  const count = overload ? 3 : 1;
+  const spread = overload ? TIEBAO_OVERLOAD_VOLLEY_TAIL_SPREAD : 0;
+  fanFrom(ev, at.x, at.y, aim, count, spread, TIEBAO_VOLLEY_SPEED);
 }
 
-function fireMissiles(state: TiebaoState, boss: BossRuntime, ev: BossEvents): void {
-  if (modeIdOf(state) !== 'missiles') return;
-  const count = state.list === 'overload' ? TIEBAO_OVERLOAD_MISSILE_COUNT : TIEBAO_MISSILE_COUNT;
-  for (let n = 0; n < 8 && state.missileWave < TIEBAO_MISSILE_WAVES.length; n++) {
-    if (state.weaponClock + 1e-9 < state.missileNext) return;
-    const side = state.missileShot % 2 === 0 ? -1 : 1;
-    ev.shots.push({
-      fire: {
-        kind: 'pattern',
-        pattern: {
-          shape: 'aimed',
-          bullet: 'missile',
-          speed: TIEBAO_MISSILE_SPEED,
-          homing: TIEBAO_MISSILE_HOMING,
-          minDist: true,
-        },
-      },
-      x: boss.x + side * 28,
-      y: muzzleY(boss, carsOf(state)),
-      rotation: 0,
-    });
-    state.missileShot++;
-    if (state.missileShot >= count) {
-      state.missileWave++;
-      state.missileShot = 0;
-      state.missileNext = TIEBAO_MISSILE_WAVES[state.missileWave] ?? 1e9;
-    } else {
-      state.missileNext += TIEBAO_MISSILE_GAP;
-    }
-  }
-}
-
-function spawnRain(state: TiebaoState, boss: BossRuntime, world: BossWorld | undefined): void {
-  const warn = state.list === 'overload' ? TIEBAO_OVERLOAD_RAIN_WARN : TIEBAO_RAIN_WARN;
-  const px = clamp(world?.playerX ?? LOGICAL_W / 2, 24, LOGICAL_W - 24);
-  const py = clamp(world?.playerY ?? 520, 48, LOGICAL_H - 36);
-  const spots: Array<{ x: number; y: number }> = [{ x: px, y: py }];
-  const rng: Rng | undefined = world?.rng;
-  for (let n = 1; n < TIEBAO_RAIN_COUNT; n++) {
-    let placed = false;
-    if (rng) {
-      for (let attempt = 0; attempt < 48 && !placed; attempt++) {
-        const x = 24 + rng() * (LOGICAL_W - 48);
-        const y = LOGICAL_H * 0.5 + rng() * (LOGICAL_H * 0.42);
-        const far = spots.every(
-          (spot) => Math.hypot(spot.x - x, spot.y - y) >= TIEBAO_RAIN_SEPARATION
-        );
-        if (far) {
-          spots.push({ x, y });
-          placed = true;
-        }
-      }
-    }
-    if (!placed) spots.push({ x: 40 + n * 84, y: 400 + (n % 2) * 80 });
-  }
-  for (const spot of spots) {
-    state.circles.push({
-      x: spot.x,
-      y: spot.y,
-      radius: TIEBAO_RAIN_RADIUS,
-      warn,
-      age: 0,
-      fromX: boss.x,
-      fromY: muzzleY(boss, carsOf(state)),
-    });
-  }
-}
-
-function fireRain(state: TiebaoState, boss: BossRuntime, world: BossWorld | undefined): void {
-  if (modeIdOf(state) !== 'rain') return;
-  const at = state.rainWave === 0 ? TIEBAO_RAIN_FIRST : TIEBAO_RAIN_SECOND;
-  if (state.rainWave >= 2 || state.weaponClock + 1e-9 < at) return;
-  spawnRain(state, boss, world);
-  state.rainWave++;
-}
-
-function fireBroadside(state: TiebaoState, boss: BossRuntime, ev: BossEvents): void {
-  if (modeIdOf(state) !== 'broadside') return;
-  if (state.broadSweep >= TIEBAO_BROADSIDE_COUNT) return;
-  if (state.weaponClock + 1e-9 < state.broadNext) return;
-  const t = (state.broadShot * TIEBAO_BROADSIDE_STEP) / TIEBAO_BROADSIDE_SWEEP;
-  const left = lerp(
-    Math.PI / 2 + TIEBAO_BROADSIDE_FROM * DEG,
-    Math.PI / 2 - TIEBAO_BROADSIDE_TO * DEG,
-    t
-  );
-  const right = lerp(
-    Math.PI / 2 - TIEBAO_BROADSIDE_FROM * DEG,
-    Math.PI / 2 + TIEBAO_BROADSIDE_TO * DEG,
-    t
-  );
-  const speed = TIEBAO_BROADSIDE_SPEED;
-  const row = visibleMuzzleRow(boss, carsOf(state));
-  const port = tiebaoRowMount(boss, row, -TIEBAO_SIDE_MUZZLE_X);
-  const starboard = tiebaoRowMount(boss, row, TIEBAO_SIDE_MUZZLE_X);
-  pushBolt(
-    ev,
-    port.x,
-    port.y,
-    Math.cos(left + port.angle) * speed,
-    Math.sin(left + port.angle) * speed,
-    'small'
-  );
-  pushBolt(
-    ev,
-    starboard.x,
-    starboard.y,
-    Math.cos(right + starboard.angle) * speed,
-    Math.sin(right + starboard.angle) * speed,
-    'small'
-  );
-  state.broadShot++;
-  if (state.broadShot >= BROADSIDE_SHOTS) {
-    state.broadSweep++;
-    state.broadShot = 0;
-    state.broadNext =
-      TIEBAO_BROADSIDE_FIRST + state.broadSweep * (TIEBAO_BROADSIDE_SWEEP + TIEBAO_BROADSIDE_GAP);
+/**
+ * 炮塔追扫: the first round of a beat aims at the player, then the barrel
+ * turns toward the player at no more than `TIEBAO_TURRET_TURN` °/s. Keeps
+ * firing after the roof gun is destroyed.
+ */
+function fireTurret(
+  state: TiebaoState,
+  boss: BossRuntime,
+  world: BossWorld | undefined,
+  ev: BossEvents,
+  beat: number,
+  shot: number
+): void {
+  const at = tiebaoRowMount(boss, turretRow(boss, carsOf(state), beat), 0);
+  const p = playerOf(world);
+  const want = Math.atan2(p.y - at.y, p.x - at.x);
+  if (shot === 0) {
+    state.turretAim = want;
   } else {
-    state.broadNext += TIEBAO_BROADSIDE_STEP;
+    const cap = TIEBAO_TURRET_TURN * DEG * TIEBAO_TURRET_GAP;
+    state.turretAim += clamp(wrapAngle(want - state.turretAim), -cap, cap);
   }
+  if (Math.hypot(p.x - at.x, p.y - at.y) < AIMED_MIN_DIST) return;
+  pushAt(ev, at.x, at.y, state.turretAim, TIEBAO_TURRET_SPEED);
 }
 
-function sealedRails(rail: number): RailIndex[] {
-  return rail === 1 ? [0, 2] : [1];
+/** Three-round aimed fan from the side muzzle facing the player, on the turret's car. */
+function fireFinisher(
+  state: TiebaoState,
+  boss: BossRuntime,
+  world: BossWorld | undefined,
+  ev: BossEvents,
+  beat: number
+): void {
+  const row = turretRow(boss, carsOf(state), beat);
+  const center = tiebaoRowMount(boss, row, 0);
+  const side = playerOf(world).x >= center.x ? 1 : -1;
+  const at = tiebaoRowMount(boss, row, side * TIEBAO_SIDE_MUZZLE_X);
+  const aim = aimFrom(world, at.x, at.y);
+  if (aim === null) return;
+  fanFrom(
+    ev,
+    at.x,
+    at.y,
+    aim,
+    TIEBAO_TURRET_FAN_COUNT,
+    TIEBAO_TURRET_FAN_SPREAD,
+    TIEBAO_TURRET_SPEED
+  );
 }
 
-function fireWall(state: TiebaoState, boss: BossRuntime, ev: BossEvents): void {
-  if (modeIdOf(state) !== 'wall') return;
-  if (state.wallVolley >= TIEBAO_WALL_VOLLEYS) return;
-  if (state.weaponClock + 1e-9 < state.wallNext) return;
-  const top = Math.max(4, consistTop(boss, carsOf(state)) + TIEBAO_ROOF_LOCO_ROW);
-  for (const rail of sealedRails(state.rail)) {
-    const x = railX(rail);
-    for (let i = 0; i < TIEBAO_WALL_COUNT; i++) {
-      pushBolt(ev, x, top + i * TIEBAO_WALL_GAP, 0, TIEBAO_WALL_SPEED, 'small');
+/**
+ * 双联散射: three lanes (aimed, ±`TIEBAO_TWIN_SPREAD`), two side-by-side
+ * rounds per lane, from one side muzzle. Groups alternate left and right.
+ */
+function fireTwin(
+  state: TiebaoState,
+  boss: BossRuntime,
+  world: BossWorld | undefined,
+  ev: BossEvents,
+  group: number
+): void {
+  const side = group % 2 === 0 ? -1 : 1;
+  const row = visibleMuzzleRow(boss, carsOf(state));
+  const at = tiebaoRowMount(boss, row, side * TIEBAO_SIDE_MUZZLE_X);
+  const aim = aimFrom(world, at.x, at.y);
+  if (aim === null) return;
+  for (const lane of [-1, 0, 1]) {
+    const angle = aim + lane * TIEBAO_TWIN_SPREAD * DEG;
+    const px = -Math.sin(angle) * TIEBAO_TWIN_PAIR_HALF;
+    const py = Math.cos(angle) * TIEBAO_TWIN_PAIR_HALF;
+    for (const pair of [-1, 1]) {
+      pushAt(ev, at.x + px * pair, at.y + py * pair, angle, TIEBAO_TWIN_SPEED);
     }
   }
-  state.wallVolley++;
-  const gap = state.list === 'overload' ? TIEBAO_OVERLOAD_WALL_REPEAT : TIEBAO_WALL_REPEAT;
-  state.wallNext += gap;
+}
+
+/** Short homing missile from the tubes at ±`TIEBAO_MISSILE_X` on the visible car. */
+function fireMissile(state: TiebaoState, boss: BossRuntime, ev: BossEvents, shot: number): void {
+  const side = shot % 2 === 0 ? -1 : 1;
+  const row = visibleMuzzleRow(boss, carsOf(state));
+  const at = tiebaoRowMount(boss, row, side * TIEBAO_MISSILE_X);
+  ev.shots.push({
+    fire: {
+      kind: 'pattern',
+      pattern: {
+        shape: 'aimed',
+        bullet: 'missile',
+        speed: TIEBAO_MISSILE_SPEED,
+        homing: TIEBAO_MISSILE_HOMING,
+        minDist: true,
+      },
+    },
+    x: at.x,
+    y: at.y,
+    rotation: 0,
+  });
+}
+
+/** Rails a lob lands on. Lobs 1 and 3 seal the other two rails, lob 2 this one. Overload: all. */
+export function tiebaoMineRails(rail: number, lob: number, list: TiebaoState['list']): number[] {
+  if (list === 'overload') return [0, 1, 2];
+  if (lob % 2 === 1) return [rail];
+  return [0, 1, 2].filter((index) => index !== rail);
+}
+
+/** 尾抛轨雷: lob two mines per rail from the tail beam. They land `TIEBAO_MINE_FLIGHT` later. */
+function lobMines(state: TiebaoState, boss: BossRuntime, lob: number): void {
+  const from = tiebaoRowMount(boss, tailRow(carsOf(state)), 0);
+  const fuse = state.list === 'overload' ? TIEBAO_OVERLOAD_MINE_FUSE : TIEBAO_MINE_FUSE;
+  for (const rail of tiebaoMineRails(state.rail, lob, state.list)) {
+    for (let k = 0; k < 2; k++) {
+      state.shells.push({
+        fromX: from.x,
+        fromY: from.y,
+        toX: railX(rail),
+        toY: from.y + TIEBAO_MINE_DROP + k * TIEBAO_MINE_PAIR_GAP,
+        age: 0,
+        fuse,
+      });
+    }
+  }
+}
+
+/** A landed shell becomes an ordinary enemy bullet: B clears it, the cap counts it. */
+function stepShells(state: TiebaoState, dt: number, ev: BossEvents): void {
+  if (state.shells.length === 0) return;
+  const flying: MineShell[] = [];
+  for (const shell of state.shells) {
+    shell.age += dt;
+    if (shell.age < TIEBAO_MINE_FLIGHT) {
+      flying.push(shell);
+      continue;
+    }
+    ev.bolts.push({
+      x: shell.toX,
+      y: shell.toY,
+      vx: 0,
+      vy: TIEBAO_MINE_SLIDE,
+      type: 'large',
+      homing: 0,
+      fuse: { time: shell.fuse, burstSpeed: TIEBAO_MINE_BURST_SPEED },
+    });
+  }
+  state.shells = flying;
+}
+
+function fireEvent(
+  state: TiebaoState,
+  boss: BossRuntime,
+  world: BossWorld | undefined,
+  ev: BossEvents,
+  event: TiebaoShotEvent
+): void {
+  switch (event.kind) {
+    case 'sweep':
+      fireSweep(state, boss, ev, event.shot);
+      return;
+    case 'side':
+      fireSide(state, boss, ev, event.volley, event.slot);
+      return;
+    case 'tail':
+      fireTail(state, boss, world, ev);
+      return;
+    case 'turret':
+      fireTurret(state, boss, world, ev, event.beat, event.shot);
+      return;
+    case 'finisher':
+      fireFinisher(state, boss, world, ev, event.beat);
+      return;
+    case 'twin':
+      fireTwin(state, boss, world, ev, event.group);
+      return;
+    case 'missile':
+      fireMissile(state, boss, ev, event.shot);
+      return;
+    case 'lob':
+      lobMines(state, boss, event.lob);
+      return;
+  }
 }
 
 function spawnCrate(state: TiebaoState, boss: BossRuntime, world: BossWorld | undefined): void {
@@ -1372,12 +1587,29 @@ function spawnCrate(state: TiebaoState, boss: BossRuntime, world: BossWorld | un
   state.crates.push(crate);
 }
 
+/** Recoil up during the warning: eases in over the 4 Hz stage, then holds. */
+export function tiebaoRamRecoil(warnSeconds: number): number {
+  if (warnSeconds >= TIEBAO_RAM_WARN_SLOW) return TIEBAO_RAM_RECOIL;
+  return TIEBAO_RAM_RECOIL * easeOutCubic(warnSeconds / TIEBAO_RAM_WARN_SLOW);
+}
+
+/** One-pixel shake, 8 Hz stage only. The final white hold is still. */
+export function tiebaoRamJitter(warnSeconds: number): number {
+  if (warnSeconds < TIEBAO_RAM_WARN_SLOW || warnSeconds >= TIEBAO_RAM_WARN_FAST) return 0;
+  return (Math.floor(warnSeconds / FIXED_DT) % 2 === 0 ? 1 : -1) * TIEBAO_RAM_JITTER;
+}
+
+/**
+ * Right B. Armed from the 9-car opening. `TIEBAO_RAM_START` after the park the
+ * 0.9s on-car warning runs (recoil, lamps, wheel sparks), then the dash to
+ * the bottom edge and the slow retreat. One dash per output window.
+ */
 function stepRam(state: TiebaoState, dt: number, boss: BossRuntime): void {
   if (state.shedPhase !== 'idle') return;
   const home = tiebaoRestCenter(carsOf(state));
-  // Disarmed until loco+4 (main HP ≤ 50%). A full consist would fill the screen.
-  if (modeIdOf(state) !== 'ram' || !tiebaoRamArmed(carsOf(state))) {
-    if (modeIdOf(state) !== 'ram') state.ram = 'idle';
+  const rail = railX(state.rail);
+  if (modeIdOf(state) !== 'ram') {
+    state.ram = 'idle';
     boss.y = home;
     return;
   }
@@ -1391,21 +1623,25 @@ function stepRam(state: TiebaoState, dt: number, boss: BossRuntime): void {
     state.ramClock = 0;
   }
   state.ramClock += dt;
+  const coiled = home - TIEBAO_RAM_RECOIL;
   const diveY = TIEBAO_RAM_BOTTOM - tiebaoHullHeight(carsOf(state)) / 2;
   if (state.ram === 'warn') {
-    boss.y = home;
-    if (state.ramClock >= TIEBAO_RAM_WARN) {
-      state.ram = 'dive';
-      state.ramClock -= TIEBAO_RAM_WARN;
+    if (state.ramClock < TIEBAO_RAM_WARN) {
+      boss.y = home - tiebaoRamRecoil(state.ramClock);
+      boss.x = rail + tiebaoRamJitter(state.ramClock);
+      return;
     }
+    state.ram = 'dive';
+    state.ramClock -= TIEBAO_RAM_WARN;
+    boss.x = rail;
   }
   if (state.ram === 'dive') {
     const u = easeOutCubic(state.ramClock / Math.max(0.05, TIEBAO_RAM_DIVE));
-    boss.y = lerp(home, diveY, u);
-    if (state.ramClock >= TIEBAO_RAM_DIVE) {
-      state.ram = 'return';
-      state.ramClock -= TIEBAO_RAM_DIVE;
-    }
+    boss.y = lerp(coiled, diveY, u);
+    if (state.ramClock < TIEBAO_RAM_DIVE) return;
+    state.ram = 'return';
+    state.ramClock -= TIEBAO_RAM_DIVE;
+    state.impact = { x: rail, y: TIEBAO_RAM_BOTTOM, age: 0 };
   }
   if (state.ram === 'return') {
     const u = clamp(state.ramClock / Math.max(0.05, TIEBAO_RAM_RETURN), 0, 1);
@@ -1417,31 +1653,18 @@ function stepRam(state: TiebaoState, dt: number, boss: BossRuntime): void {
   }
 }
 
+function stepImpact(state: TiebaoState, dt: number): void {
+  if (!state.impact) return;
+  state.impact.age += dt;
+  if (state.impact.age >= TIEBAO_RAM_IMPACT) state.impact = null;
+}
+
 function playerHit(world: BossWorld | undefined, x: number, y: number, radius: number): boolean {
   if (!world) return false;
   const reach = radius + HITBOX_RADIUS;
   const dx = world.playerX - x;
   const dy = world.playerY - y;
   return dx * dx + dy * dy <= reach * reach;
-}
-
-function stepCircles(
-  state: TiebaoState,
-  dt: number,
-  world: BossWorld | undefined,
-  ev: BossEvents
-): void {
-  const left: CircleWarn[] = [];
-  for (const circle of state.circles) {
-    circle.age += dt;
-    if (circle.age >= circle.warn) {
-      ev.explosions.push({ x: circle.x, y: circle.y, delay: 0, size: 'medium' });
-      if (playerHit(world, circle.x, circle.y, circle.radius)) ev.hurtPlayer = true;
-      continue;
-    }
-    left.push(circle);
-  }
-  state.circles = left;
 }
 
 function stepCrates(
@@ -1465,17 +1688,19 @@ function stepCrates(
   if (state.crates.length > 24) state.crates = state.crates.filter((crate) => crate.alive);
 }
 
+/** Fire every scheduled round whose time has come. Never runs during a move. */
 function fireWeapons(
   state: TiebaoState,
   boss: BossRuntime,
   world: BossWorld | undefined,
   ev: BossEvents
 ): void {
-  fireFan(state, boss, world, ev);
-  fireMissiles(state, boss, ev);
-  fireRain(state, boss, world);
-  fireBroadside(state, boss, ev);
-  fireWall(state, boss, ev);
+  while (state.eventNext < state.events.length) {
+    const event = state.events[state.eventNext];
+    if (!event || state.weaponClock + 1e-9 < event.at) return;
+    state.eventNext++;
+    fireEvent(state, boss, world, ev, event);
+  }
 }
 
 function fightSlice(
@@ -1511,7 +1736,8 @@ function fightSlice(
       spawnCrate(state, boss, world);
     }
   }
-  stepCircles(state, dt, world, ev);
+  stepShells(state, dt, ev);
+  stepImpact(state, dt);
   stepCrates(state, dt, world, ev);
 }
 
@@ -1528,7 +1754,8 @@ function holdSlice(
   boss.x = railX(state.rail);
   zeroOffsets(boss);
   boss.y = tiebaoRestCenter(carsOf(state));
-  stepCircles(state, dt, world, ev);
+  stepShells(state, dt, ev);
+  stepImpact(state, dt);
   stepCrates(state, dt, world, ev);
 }
 
@@ -1559,7 +1786,8 @@ export function tiebaoOnDeath(boss: BossRuntime, ev: BossEvents): void {
   snapShed(boss, state, endSheds);
   boss.y = TIEBAO_END_PARK_Y;
   state.broken = true;
-  state.circles = [];
+  state.shells = [];
+  state.impact = null;
   for (const crate of state.crates) crate.alive = false;
   TIEBAO_RAIL_X.forEach((x, index) => {
     ev.explosions.push({ x, y: 220, delay: 0.12 * index, size: 'medium' });
@@ -1596,9 +1824,14 @@ export function tiebaoTryShot(
   return false;
 }
 
+/**
+ * Bomb press. Mines still in the air are shots too, so they go with the rest
+ * of the screen's bullets. Crates wait for the ring.
+ */
 export function tiebaoMarkBomb(boss: BossRuntime, ox: number, oy: number): void {
   const state = states.get(boss);
   if (!state) return;
+  state.shells = [];
   const half = TIEBAO_CRATE_SIZE / 2;
   for (const crate of state.crates) {
     if (!crate.alive || crate.age >= TIEBAO_CRATE_FLIGHT || crate.bombIn >= 0) continue;
