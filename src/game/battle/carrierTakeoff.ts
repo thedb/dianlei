@@ -121,8 +121,17 @@ export function beginCarrierTakeoff(
   flying.isFlying = false;
 }
 
-/** Ease-in: the flame builds, then the ship accelerates up the catapult. */
+/**
+ * Cubic ease-in. u=0.5 has only covered 12.5% of the run, and the slope
+ * is steepest at u=1. Not linear.
+ */
 function rushEase(u: number): number {
+  const t = Math.min(1, Math.max(0, u));
+  return t * t * t;
+}
+
+/** Normalized speed of `rushEase` (derivative 3t², divided by 3). Ends at 1. */
+function rushSpeed(u: number): number {
   const t = Math.min(1, Math.max(0, u));
   return t * t;
 }
@@ -147,11 +156,12 @@ export function stepCarrierTakeoff(takeoff: CarrierTakeoff, player: TakeoffShip,
     return;
   }
   const u = Math.min(1, takeoff.t / CARRIER_RUSH_TIME);
+  const speed = rushSpeed(u);
   player.x = LOGICAL_W / 2;
   player.y = CARRIER_PARK_Y + (CARRIER_RELEASE_Y - CARRIER_PARK_Y) * rushEase(u);
-  // Negative y lengthens the tail flame in drawEngineFlame.
-  player.velocityY = -u;
-  takeoff.flame = u;
+  // Negative y lengthens the tail flame in drawEngineFlame. Flame tracks speed.
+  player.velocityY = -speed;
+  takeoff.flame = speed;
   if (takeoff.t + 1e-6 >= CARRIER_RUSH_TIME) {
     player.y = CARRIER_RELEASE_Y;
     player.velocityY = 0;

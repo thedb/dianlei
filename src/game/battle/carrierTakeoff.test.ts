@@ -39,17 +39,15 @@ function ship(y = 0): TakeoffShip {
 }
 
 describe('carrier takeoff', () => {
-  it('runs 1.5× the first cut and releases in the lower middle', () => {
+  it('adds 2s on the rush and releases twice as far, still on screen', () => {
     expect(CARRIER_LIGHTS_TIME).toBeCloseTo(3, 5);
-    expect(CARRIER_RUSH_TIME).toBeCloseTo(1.2, 5);
-    expect(CARRIER_LIGHTS_TIME + CARRIER_RUSH_TIME).toBeCloseTo(4.2, 5);
+    expect(CARRIER_RUSH_TIME).toBeCloseTo(3.2, 5);
+    expect(CARRIER_LIGHTS_TIME + CARRIER_RUSH_TIME).toBeCloseTo(6.2, 5);
     expect(CARRIER_LIGHT_COUNT * CARRIER_LIGHT_STEP).toBeLessThan(CARRIER_LIGHTS_TIME);
-    expect(CARRIER_RELEASE_Y).toBeGreaterThanOrEqual(380);
-    expect(CARRIER_RELEASE_Y).toBeLessThanOrEqual(450);
+    expect(CARRIER_PARK_Y - CARRIER_RELEASE_Y).toBe(384);
+    expect(CARRIER_RELEASE_Y).toBe(224);
+    expect(CARRIER_RELEASE_Y - PLAYER_SPRITE_H / 2).toBeGreaterThan(32);
     expect(CARRIER_RELEASE_Y).toBeLessThan(PLAYER_SPAWN_Y);
-    expect(CARRIER_PARK_Y - CARRIER_RELEASE_Y).toBeGreaterThanOrEqual(
-      2 * (CARRIER_PARK_Y - PLAYER_SPAWN_Y)
-    );
     expect(CARRIER_PARK_Y + PLAYER_SPRITE_H / 2).toBeLessThan(LOGICAL_H);
   });
 
@@ -98,10 +96,27 @@ describe('carrier takeoff', () => {
 
     stepCarrierTakeoff(takeoff, player, DT);
     expect(takeoff.flame).toBeGreaterThan(0);
-    expect(takeoff.flame).toBeLessThan(1);
+    expect(takeoff.flame).toBeLessThan(0.05);
     expect(player.y).toBeLessThan(CARRIER_PARK_Y);
+    expect(player.y).toBeGreaterThan(CARRIER_PARK_Y - 1);
     expect(player.velocityY).toBeLessThan(0);
     expect(carrierExhaustBoost(takeoff)).toBe(takeoff.flame);
+
+    const half = Math.round(CARRIER_RUSH_TIME / 2 / DT) - 1;
+    for (let i = 0; i < half; i++) stepCarrierTakeoff(takeoff, player, DT);
+    const midTravel = CARRIER_PARK_Y - player.y;
+    const fullTravel = CARRIER_PARK_Y - CARRIER_RELEASE_Y;
+    expect(midTravel / fullTravel).toBeLessThan(0.2);
+    expect(takeoff.flame).toBeLessThan(0.4);
+    expect(takeoff.flame).toBeGreaterThan(midTravel / fullTravel + 0.05);
+    const midFlame = takeoff.flame;
+
+    const late = Math.round((CARRIER_RUSH_TIME * 0.85) / DT) - half - 1;
+    for (let i = 0; i < late; i++) stepCarrierTakeoff(takeoff, player, DT);
+    expect(takeoff.phase).toBe('rush');
+    expect(takeoff.flame).toBeGreaterThan(midFlame);
+    expect(takeoff.flame).toBeGreaterThan(0.6);
+    expect(CARRIER_PARK_Y - player.y).toBeGreaterThan(midTravel * 3);
 
     while (takeoff.phase === 'rush') stepCarrierTakeoff(takeoff, player, DT);
     expect(takeoff.phase).toBe('done');

@@ -693,23 +693,24 @@ export const STAGE4_WRECK_AT = 96;
  * `CARRIER_RELEASE_Y` while the tail flame ramps and the map starts scrolling.
  * Control returns there, not at `PLAYER_SPAWN_Y` (respawn still uses that).
  *
- * 2026-10-28 playtest: the first cut was 2.0s + 0.8s and stopped at y=560,
- * 48px above the deck. This cut is 1.5× that clock (3.0s + 1.2s). A literal
- * 2× of the 48px hop would stop at y=512, still beside the normal spawn.
- * Release is the lower-middle of the 640 frame instead.
+ * 2026-10-28 playtest, third cut. Total is 6.2s: lamps stay 3.0s, and the
+ * extra 2.0s (on top of the previous 4.2s) is all on the rush, now 3.2s.
+ * Travel is 384px, twice the previous 192px hop from y=608 to y=416.
+ * Release is y=224. The 32px ship then spans 208–240, still on the 640
+ * frame and clear of the top HUD (score line is y=4). Screen center is 320,
+ * so this is the upper middle, not the old lower-middle stop.
  */
 export const CARRIER_LIGHTS_TIME = 3;
 export const CARRIER_LIGHT_COUNT = 5;
 export const CARRIER_LIGHT_STEP = 0.48;
-export const CARRIER_RUSH_TIME = 1.2;
+export const CARRIER_RUSH_TIME = 3.2;
 /** Parked on the deck, fully on screen (sprite is 32px, anchor at center). */
 export const CARRIER_PARK_Y = 608;
 /**
- * Control unlocks here. 416 is the middle of the 380–450 lower-middle band
- * (screen center is 320, the normal spawn is 560). Travel from the park is
- * 192px, four times the old hop and more than double it.
+ * Control unlocks here. 608 − 384 = 224. Twice the previous 192px run.
+ * Respawn still uses `PLAYER_SPAWN_Y` (560).
  */
-export const CARRIER_RELEASE_Y = 416;
+export const CARRIER_RELEASE_Y = 224;
 /** Left-side lamp gantry, logical pixels. Integer cells, palette colors. */
 export const CARRIER_LIGHT_X = 20;
 export const CARRIER_LIGHT_Y = 188;
