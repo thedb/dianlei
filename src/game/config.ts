@@ -880,11 +880,6 @@ export const TIEBAO_PARK_Y = TIEBAO_ENCOUNTER_TAIL_Y - TIEBAO_FULL_H / 2;
 /** Tail just above the screen at the start of the slide-in. */
 export const TIEBAO_ENTER_TAIL_Y = -12;
 export const TIEBAO_ENTER_Y = TIEBAO_ENTER_TAIL_Y - TIEBAO_FULL_H / 2;
-/**
- * Ram stays off until this many cars remain (loco + 4). That is the ≤50% shed.
- * A 9-car hull is 840px and would fill the screen on the dive.
- */
-export const TIEBAO_RAM_MAX_CARS = 4;
 /** Bottom rows of the full sprite pasted onto the live tail (beam + one lamp pair). */
 export const TIEBAO_BUFFER = 20;
 /** The only tail lamps. Sprite x inside the 80px hull. Not drawn a second time. */
@@ -972,9 +967,6 @@ export const TIEBAO_ROOF_CAR = { x: 0, y: TIEBAO_ROOF_CAR_ROW - TIEBAO_END_CY } 
 export const TIEBAO_ROOF_LOCO = { x: 0, y: TIEBAO_ROOF_LOCO_ROW - TIEBAO_END_CY } as const;
 export const TIEBAO_CORE = { x: 0, y: TIEBAO_CORE_ROW - TIEBAO_END_CY } as const;
 
-export const TIEBAO_FAN_INTERVAL = 1.4;
-export const TIEBAO_FAN_FIRST = 0.4;
-export const TIEBAO_FAN_SPREAD = 60;
 /**
  * Side muzzle, local x from the hull center. Half of the 36px boxcar
  * (sprite columns 22–57). The old broadside ±34 sat in the transparent
@@ -982,56 +974,103 @@ export const TIEBAO_FAN_SPREAD = 60;
  */
 export const TIEBAO_SIDE_MUZZLE_X = 18;
 
-/** Every attack interval except the fan is the P24 draft times this (+50% rate). */
-export const TIEBAO_RATE_SCALE = 2 / 3;
+/**
+ * Shared beat for every rail weapon (weapon redesign v1 §3.1). Seconds after
+ * the whole consist parks. 0–`TIEBAO_TELL` is the on-car tell with no shots.
+ * Beats start at `TIEBAO_BEATS`. The last boss-spawned shot is at or before
+ * `TIEBAO_LAST_SHOT`, leaving at least 0.6s quiet before the 4.8s window ends.
+ * These are final seconds; no rate multiplier is applied.
+ */
+export const TIEBAO_TELL = 0.4;
+export const TIEBAO_BEATS = [0.5, 2.0, 3.5] as const;
+export const TIEBAO_LAST_SHOT = 4.2;
 
-export const TIEBAO_MISSILE_COUNT = 5;
-export const TIEBAO_MISSILE_GAP = 0.12 * TIEBAO_RATE_SCALE;
+/** 侧舷扇扫 (left A). Degrees off straight down; the sweep starts outward and crosses the lane. */
+export const TIEBAO_SWEEP_FROM = 40;
+export const TIEBAO_SWEEP_TO = 15;
+export const TIEBAO_SWEEP_STEP = 0.053;
+export const TIEBAO_SWEEP_TIME = 0.667;
+export const TIEBAO_SWEEP_SPEED = 120;
+
+/** 舷炮排射 (left B). Cars whose center is on screen y 0–`CAR_MAX_Y`, rearmost three. */
+export const TIEBAO_VOLLEY_CAR_MAX_Y = 400;
+export const TIEBAO_VOLLEY_CARS = 3;
+export const TIEBAO_VOLLEY_CAR_GAP = 0.1;
+export const TIEBAO_VOLLEY_SHOTS = 3;
+export const TIEBAO_VOLLEY_SHOT_GAP = 0.05;
+/** Tail-beam aimed shot this long after the rear car's last round. */
+export const TIEBAO_VOLLEY_TAIL_DELAY = 0.1;
+/** Degrees off straight down, outward, one entry per volley. Not aimed. */
+export const TIEBAO_VOLLEY_ANGLES = [40, 60, 40] as const;
+export const TIEBAO_VOLLEY_SPEED = 110;
+export const TIEBAO_OVERLOAD_VOLLEY_STARTS = [0.4, 1.4, 2.4, 3.4] as const;
+export const TIEBAO_OVERLOAD_VOLLEY_ANGLES = [40, 60, 40, 60] as const;
+/** Overload tail shot is a three-round fan this wide. */
+export const TIEBAO_OVERLOAD_VOLLEY_TAIL_SPREAD = 30;
+
+/** 炮塔追扫 (center A, opening mode). */
+export const TIEBAO_TURRET_SHOTS = 10;
+export const TIEBAO_TURRET_GAP = 0.07;
+/** Max turret turn toward the player after the first aimed round, degrees per second. */
+export const TIEBAO_TURRET_TURN = 45;
+export const TIEBAO_TURRET_SPEED = 120;
+/** Three-round finisher from the player-side side muzzle, one gap after the stream. */
+export const TIEBAO_TURRET_FAN_COUNT = 3;
+export const TIEBAO_TURRET_FAN_SPREAD = 30;
+
+/** 双联散射 + 追踪导弹 (center B). One group is three lanes of two side-by-side rounds. */
+export const TIEBAO_TWIN_SPREAD = 16;
+/** Half the gap between the two rounds of a pair, perpendicular to the lane. */
+export const TIEBAO_TWIN_PAIR_HALF = 4;
+export const TIEBAO_TWIN_SPEED = 120;
+export const TIEBAO_TWIN_GROUPS = 3;
+export const TIEBAO_OVERLOAD_TWIN_GROUPS = 4;
+export const TIEBAO_TWIN_GROUP_GAP = 0.2;
+/** Missile salvos between beats. */
+export const TIEBAO_TWIN_MISSILE_AT = [1.25, 2.75] as const;
+export const TIEBAO_TWIN_MISSILES = 2;
+export const TIEBAO_OVERLOAD_TWIN_MISSILES = 3;
+export const TIEBAO_MISSILE_GAP = 0.08;
 export const TIEBAO_MISSILE_HOMING = 0.55;
 export const TIEBAO_MISSILE_SPEED = 88;
-export const TIEBAO_MISSILE_WAVES = [0.3 * TIEBAO_RATE_SCALE, 4 * TIEBAO_RATE_SCALE] as const;
-export const TIEBAO_OVERLOAD_MISSILE_COUNT = 6;
+/** Missile tubes, local x from the hull center. */
+export const TIEBAO_MISSILE_X = 28;
 
-export const TIEBAO_RAIN_COUNT = 4;
-export const TIEBAO_RAIN_WARN = 0.8 * TIEBAO_RATE_SCALE;
-export const TIEBAO_RAIN_RADIUS = 26;
-export const TIEBAO_RAIN_SEPARATION = 48;
-export const TIEBAO_RAIN_FIRST = 0.4 * TIEBAO_RATE_SCALE;
-export const TIEBAO_RAIN_SECOND = 4.0 * TIEBAO_RATE_SCALE;
-export const TIEBAO_OVERLOAD_RAIN_WARN = 0.55 * TIEBAO_RATE_SCALE;
+/** 尾抛轨雷 (right A). Lobbed from the tail beam; not lethal in the air. */
+export const TIEBAO_MINE_THROWS = [0.4, 1.7, 3.0] as const;
+export const TIEBAO_MINE_FLIGHT = 0.45;
+/** First mine lands this far below the tail beam; the second this much further. */
+export const TIEBAO_MINE_DROP = 48;
+export const TIEBAO_MINE_PAIR_GAP = 32;
+/** Roll down the rail. Faster than the 40 px/s map, so it reads as rolling. */
+export const TIEBAO_MINE_SLIDE = 80;
+export const TIEBAO_MINE_FUSE = 1.2;
+export const TIEBAO_OVERLOAD_MINE_FUSE = 0.9;
+/** Last seconds of the fuse that blink. */
+export const TIEBAO_MINE_BLINK = 0.3;
+/** One small round each way when the fuse ends. */
+export const TIEBAO_MINE_BURST_SPEED = 72;
 
-/** Degrees off straight down. The sweep starts outward and crosses the lane. */
-export const TIEBAO_BROADSIDE_FROM = 40;
-export const TIEBAO_BROADSIDE_TO = 15;
-export const TIEBAO_BROADSIDE_STEP = 0.08 * TIEBAO_RATE_SCALE;
-export const TIEBAO_BROADSIDE_SWEEP = 1 * TIEBAO_RATE_SCALE;
-export const TIEBAO_BROADSIDE_GAP = 0.6 * TIEBAO_RATE_SCALE;
-export const TIEBAO_BROADSIDE_COUNT = 3;
-export const TIEBAO_BROADSIDE_FIRST = 0.35 * TIEBAO_RATE_SCALE;
-export const TIEBAO_BROADSIDE_SPEED = 120;
-
-export const TIEBAO_WALL_COUNT = 8;
-export const TIEBAO_WALL_GAP = 18;
-export const TIEBAO_WALL_SPEED = 70;
-export const TIEBAO_WALL_FIRST = 0.4 * TIEBAO_RATE_SCALE;
-export const TIEBAO_WALL_REPEAT = 1.6 * TIEBAO_RATE_SCALE;
-export const TIEBAO_WALL_VOLLEYS = 2;
-export const TIEBAO_OVERLOAD_WALL_REPEAT = 1 * TIEBAO_RATE_SCALE;
-
-/** Dash starts quickly, reaches the bottom edge, then crawls back to the current rest center. */
-export const TIEBAO_RAM_START = 0.35;
-export const TIEBAO_RAM_WARN = 0;
+/**
+ * 冲轨撞击 (right B). Armed from the opening consist. 0.4s after parking the
+ * 0.9s warning runs on the car body only: tail lamps blink yellow/white at
+ * 4 Hz, then red/white at 8 Hz, then hold white; the consist recoils up
+ * `TIEBAO_RAM_RECOIL`; the last two cars throw wheel sparks. No rail is lit.
+ */
+export const TIEBAO_RAM_START = 0.4;
+export const TIEBAO_RAM_WARN = 0.9;
+/** End of the 4 Hz stage, then the 8 Hz stage ends at `WARN_FAST`, then a steady hold. */
+export const TIEBAO_RAM_WARN_SLOW = 0.5;
+export const TIEBAO_RAM_WARN_FAST = 0.85;
+export const TIEBAO_RAM_RECOIL = 6;
+/** Lateral car shake during the 8 Hz stage. The screen does not shake. */
+export const TIEBAO_RAM_JITTER = 1;
 export const TIEBAO_RAM_DIVE = 0.12;
 export const TIEBAO_RAM_RETURN = 1.9;
+/** Spark ring at the tail when the dive bottoms out. Code-drawn, no hitbox. */
+export const TIEBAO_RAM_IMPACT = 0.3;
 /** Screen y the hull bottom reaches at the end of the dive. */
 export const TIEBAO_RAM_BOTTOM = LOGICAL_H;
-
-/** Retired with the rocket volley. The fight does not read these. */
-export const TIEBAO_ROCKET_SPEED = 64;
-export const TIEBAO_ROCKET_Y = -16;
-export const TIEBAO_ROCKET_WARN = 0.45 * TIEBAO_RATE_SCALE;
-export const TIEBAO_ROCKET_START = 0.8 * TIEBAO_RATE_SCALE;
-export const TIEBAO_ROCKET_RADIUS = 6;
 
 export const TIEBAO_CRATE_HP = 6;
 export const TIEBAO_CRATE_SCORE = 300;
@@ -1039,12 +1078,9 @@ export const TIEBAO_CRATE_SCORE = 300;
 export const TIEBAO_CRATE_LAND_Y = 480;
 export const TIEBAO_CRATE_BLAST = 22;
 export const TIEBAO_CRATE_SIZE = 12;
-/** Retired with the crate volley. Overload still uses `TIEBAO_OVERLOAD_CRATE_EVERY`. */
-export const TIEBAO_CRATE_FIRST = 0.5 * TIEBAO_RATE_SCALE;
-export const TIEBAO_CRATE_GAP = 1.2 * TIEBAO_RATE_SCALE;
-export const TIEBAO_CRATE_PER_WINDOW = 2;
 export const TIEBAO_CRATE_FLIGHT = 1.15;
-export const TIEBAO_OVERLOAD_CRATE_EVERY = 2.2 * TIEBAO_RATE_SCALE;
+/** Hard overload extra: one falling crate this often. */
+export const TIEBAO_OVERLOAD_CRATE_EVERY = 1.47;
 
 export const TIEBAO_DEATH_EXPLOSIONS = 8;
 export const TIEBAO_DEATH_DURATION = 2.8;

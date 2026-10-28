@@ -25,6 +25,7 @@ import { createEnemy, type Enemy } from '@/game/entities/enemy';
 import {
   createEnemyBullet,
   spawnEnemyBullet,
+  type BulletFuse,
   type BulletSpawner,
 } from '@/game/entities/enemyBullet';
 import { createItem, type ItemType } from '@/game/entities/item';
@@ -192,10 +193,21 @@ export function createBattle(scene: SceneContext): Battle {
     homingTargets: [],
     enemyGrid: new SpatialGrid<Enemy>(64),
     spawner: {
-      spawnBullet(x, y, vx, vy, type, homing = 0, hitRadius?: number) {
+      spawnBullet(x, y, vx, vy, type, homing = 0, hitRadius?: number, fuse?: BulletFuse) {
         if (enemyBullets.getActiveCount() < ENEMY_BULLET_CAP) {
           const k = runProfile(battle).bulletSpeedScale;
-          spawnEnemyBullet(enemyBullets.acquire(), x, y, vx * k, vy * k, type, homing, hitRadius);
+          const scaled = fuse ? { time: fuse.time, burstSpeed: fuse.burstSpeed * k } : undefined;
+          spawnEnemyBullet(
+            enemyBullets.acquire(),
+            x,
+            y,
+            vx * k,
+            vy * k,
+            type,
+            homing,
+            hitRadius,
+            scaled
+          );
         }
       },
       getBulletCount() {

@@ -1,6 +1,6 @@
 /**
  * Stage 2 boss 铁堡. An armored munitions train on three fixed rails.
- * The rail clock and the eight weapon modes live in `systems/tiebao.ts`.
+ * The rail clock and the six weapon modes live in `systems/tiebao.ts`.
  * Phases only decide which part takes damage. Easy and Medium end when the
  * core dies. Hard revives the core for the overload segment.
  */

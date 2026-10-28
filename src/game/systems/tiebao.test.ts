@@ -10,10 +10,16 @@ import {
   TIEBAO_CORE_HP,
   TIEBAO_CORE_SCORE,
   TIEBAO_ENTER_DURATION,
-  TIEBAO_FAN_FIRST,
-  TIEBAO_FAN_INTERVAL,
+  TIEBAO_BEATS,
   TIEBAO_HULL_H,
-  TIEBAO_MISSILE_GAP,
+  TIEBAO_LAST_SHOT,
+  TIEBAO_MINE_BURST_SPEED,
+  TIEBAO_MINE_DROP,
+  TIEBAO_MINE_FLIGHT,
+  TIEBAO_MINE_FUSE,
+  TIEBAO_MINE_SLIDE,
+  TIEBAO_MISSILE_X,
+  TIEBAO_OVERLOAD_MINE_FUSE,
   TIEBAO_MOVE,
   TIEBAO_MOVE_EXTRA,
   TIEBAO_OVERLOAD_HP,
@@ -33,13 +39,23 @@ import {
   TIEBAO_RAM_BOTTOM,
   TIEBAO_RAM_DIVE,
   TIEBAO_RAM_RETURN,
+  TIEBAO_RAM_RECOIL,
   TIEBAO_RAM_START,
-  TIEBAO_RATE_SCALE,
+  TIEBAO_RAM_WARN,
+  TIEBAO_RAM_WARN_FAST,
+  TIEBAO_RAM_WARN_SLOW,
+  TIEBAO_ROOF_CAR_ROW,
   TIEBAO_ROOF_HP,
   TIEBAO_SIDE_MUZZLE_X,
   TIEBAO_ROOF_SCORE,
   TIEBAO_SWITCH_PERIOD,
   TIEBAO_SWITCH_RUSH,
+  TIEBAO_SWEEP_SPEED,
+  TIEBAO_TELL,
+  TIEBAO_TURRET_GAP,
+  TIEBAO_TURRET_TURN,
+  TIEBAO_TWIN_PAIR_HALF,
+  TIEBAO_VOLLEY_ANGLES,
 } from '@/game/config';
 import { prepareBossConfig } from '@/game/difficulty';
 import { TIEBAO } from '@/game/levels/bosses/tiebao';
@@ -51,6 +67,7 @@ import {
   enabledBossPhases,
   resolveBossBullet,
   updateBoss,
+  type BossBolt,
   type BossRuntime,
   type BossWorld,
 } from '@/game/systems/boss';
@@ -65,14 +82,20 @@ import {
   tiebaoClosureX,
   tiebaoCommittedCars,
   tiebaoFanLocalX,
+  tiebaoGunRows,
   tiebaoHullSegments,
   tiebaoLiveHull,
   tiebaoLocalOnPose,
+  tiebaoMineRails,
   tiebaoMoveTime,
   tiebaoPartMount,
   tiebaoPiecePoses,
   tiebaoPieces,
   tiebaoRailMode,
+  tiebaoRamJitter,
+  tiebaoRamRecoil,
+  tiebaoRowMount,
+  tiebaoSchedule,
   tiebaoSwitchBand,
   tiebaoSwitchSpan,
   tiebaoSwitchX,
@@ -113,34 +136,31 @@ describe('铁堡 config', () => {
     expect(TIEBAO.subtitle).toBe('弹药转运');
     expect(TIEBAO.vulnerableEnter).toBe(true);
     expect(TIEBAO.hullTransfers).toBe(true);
-    expect(TIEBAO_FAN_INTERVAL).toBe(1.4);
-    expect(TIEBAO_FAN_FIRST).toBe(0.4);
-    expect(TIEBAO_RATE_SCALE).toBeCloseTo(2 / 3);
-    expect(TIEBAO_MISSILE_GAP).toBeCloseTo(0.12 * TIEBAO_RATE_SCALE);
     expect(TIEBAO_RAIL_X).toEqual([72, 180, 288]);
     expect(TIEBAO.anchorX).toBe(180);
-    expect([...TIEBAO_MODE_IDS]).toEqual(['fan', 'missiles', 'rain', 'broadside', 'wall', 'ram']);
+    expect([...TIEBAO_MODE_IDS]).toEqual(['sweep', 'volley', 'turret', 'twin', 'mines', 'ram']);
     expect([...TIEBAO_MODE_NAMES]).toEqual([
-      '高射扇',
-      '导弹齐射',
-      '落弹雨',
-      '侧舷扫射',
-      '封轨弹墙',
+      '侧舷扇扫',
+      '舷炮排射',
+      '炮塔追扫',
+      '双联散射 + 追踪导弹',
+      '尾抛轨雷',
       '冲轨撞击',
     ]);
-    expect((TIEBAO_MODE_IDS as readonly string[]).includes('rockets')).toBe(false);
-    expect((TIEBAO_MODE_IDS as readonly string[]).includes('crates')).toBe(false);
-    expect(tiebaoRailMode(0, 1)).toBe('broadside');
-    expect(tiebaoRailMode(0, 2)).toBe('wall');
-    expect(tiebaoRailMode(0, 3)).toBe('broadside');
-    expect(tiebaoRailMode(0, 4)).toBe('wall');
-    expect(tiebaoRailMode(1, 0)).toBe('fan');
-    expect(tiebaoRailMode(1, 1)).toBe('fan');
-    expect(tiebaoRailMode(1, 2)).toBe('missiles');
-    expect(tiebaoRailMode(2, 1)).toBe('rain');
+    for (const old of ['fan', 'missiles', 'rain', 'broadside', 'wall', 'rockets', 'crates']) {
+      expect((TIEBAO_MODE_IDS as readonly string[]).includes(old)).toBe(false);
+    }
+    expect(tiebaoRailMode(0, 1)).toBe('sweep');
+    expect(tiebaoRailMode(0, 2)).toBe('volley');
+    expect(tiebaoRailMode(0, 3)).toBe('sweep');
+    expect(tiebaoRailMode(0, 4)).toBe('volley');
+    expect(tiebaoRailMode(1, 0)).toBe('turret');
+    expect(tiebaoRailMode(1, 1)).toBe('turret');
+    expect(tiebaoRailMode(1, 2)).toBe('twin');
+    expect(tiebaoRailMode(2, 1)).toBe('mines');
     expect(tiebaoRailMode(2, 2)).toBe('ram');
     expect(tiebaoRailMode(2, 4)).toBe('ram');
-    expect([...TIEBAO_OVERLOAD_MODE_IDS]).toEqual(['rain', 'wall', 'missiles']);
+    expect([...TIEBAO_OVERLOAD_MODE_IDS]).toEqual(['mines', 'volley', 'twin']);
     for (const phase of TIEBAO.phases) {
       expect(phase.attacks.some((attack) => attack.kind === 'laser')).toBe(false);
     }
@@ -194,7 +214,7 @@ describe('铁堡 rails', () => {
     }
   });
 
-  it('parks on the center rail in 高射扇 and can be hit on the way in', () => {
+  it('parks on the center rail in 炮塔追扫 and can be hit on the way in', () => {
     const boss = createBoss(TIEBAO);
     expect(boss.invulnerable).toBe(false);
     expect(boss.stage).toBe('enter');
@@ -214,8 +234,8 @@ describe('铁堡 rails', () => {
       rail: 1,
       x: 180,
       phase: 'output',
-      modeId: 'fan',
-      modeName: '高射扇',
+      modeId: 'turret',
+      modeName: '炮塔追扫',
       list: 'main',
     });
     for (const id of ['core', 'roofLoco', 'roofCar'] as const) {
@@ -233,7 +253,7 @@ describe('铁堡 rails', () => {
     const boss = createBoss(TIEBAO);
     const around = world(4);
     park(boss, around);
-    expect(tiebaoView(boss)).toMatchObject({ rail: 1, modeId: 'fan', modeName: '高射扇' });
+    expect(tiebaoView(boss)).toMatchObject({ rail: 1, modeId: 'turret', modeName: '炮塔追扫' });
 
     let guard = 0;
     while (tiebaoView(boss)?.phase !== 'move' && guard < 2000) {
@@ -244,6 +264,7 @@ describe('铁堡 rails', () => {
     const quiet = updateBoss(boss, FIXED_DT, around);
     expect(tiebaoView(boss)?.phase).toBe('move');
     expect(quiet.shots).toHaveLength(0);
+    expect(quiet.bolts).toHaveLength(0);
     expect(boss.invulnerable).toBe(true);
     expect(tiebaoVisual(boss)?.highlight).toBe(-1);
     expect(tiebaoVisual(boss)?.switch).not.toBeNull();
@@ -312,9 +333,9 @@ describe('铁堡 rails', () => {
         }
       }
     }
-    expect(arrivals[0]!.slice(0, 2)).toEqual(['broadside', 'wall']);
-    expect(arrivals[1]![0]).toBe('missiles');
-    expect(arrivals[2]!.slice(0, 2)).toEqual(['rain', 'ram']);
+    expect(arrivals[0]!.slice(0, 2)).toEqual(['sweep', 'volley']);
+    expect(arrivals[1]![0]).toBe('twin');
+    expect(arrivals[2]!.slice(0, 2)).toEqual(['mines', 'ram']);
     expect(checkedPark).toBe(true);
     expect(boss.phase).toBe('main');
   });
@@ -325,7 +346,7 @@ describe('铁堡 rails', () => {
     const around = world(1);
     park(boss, around);
     const depart = tiebaoView(boss);
-    expect(depart).toMatchObject({ rail: 1, phase: 'output', modeId: 'fan' });
+    expect(depart).toMatchObject({ rail: 1, phase: 'output', modeId: 'turret' });
 
     let guard = 0;
     while (tiebaoView(boss)?.phase !== 'move' && guard < 2000) {
@@ -831,7 +852,10 @@ describe('铁堡 rails', () => {
     expect(hinged).toBe(true);
   });
 
-  it('does not ram while more than four cars are still attached', () => {
+  it('rams the full opening consist after a 0.9s warning on the car body', () => {
+    expect(TIEBAO_RAM_START).toBe(0.4);
+    expect(TIEBAO_RAM_WARN).toBe(0.9);
+    expect(TIEBAO_RAM_RECOIL).toBe(6);
     const boss = createBoss(TIEBAO);
     const around = world(2);
     park(boss, around);
@@ -843,11 +867,64 @@ describe('铁堡 rails', () => {
     expect(tiebaoView(boss)?.modeId).toBe('ram');
     expect(tiebaoView(boss)?.rail).toBe(2);
     expect(tiebaoCommittedCars(boss)).toBe(9);
-    for (let i = 0; i < 90; i++) {
-      updateBoss(boss, FIXED_DT, around);
-      expect(boss.y).toBe(TIEBAO_PARK_Y);
-      expect(TIEBAO_RAIL_X).toContain(boss.x);
+    const home = tiebaoRestCenter(9);
+    const diveY = TIEBAO_RAM_BOTTOM - tiebaoHullHeight(9) / 2;
+    const rail = TIEBAO_RAIL_X[2];
+    expect(tiebaoVisual(boss)?.tell).toBeNull();
+
+    let t = 0;
+    let warnStart = -1;
+    let diveStart = -1;
+    let bottom = -1;
+    let jittered = false;
+    let maxRecoil = 0;
+    for (let i = 0; i < 400 && bottom < 0; i++) {
+      const ev = updateBoss(boss, FIXED_DT, around);
+      t += FIXED_DT;
+      expect(ev.bolts).toHaveLength(0);
+      expect(ev.shots).toHaveLength(0);
+      const warn = tiebaoVisual(boss)?.ramWarn ?? null;
+      if (warn !== null) {
+        if (warnStart < 0) warnStart = t;
+        expect(boss.y).toBeLessThanOrEqual(home + 1e-6);
+        maxRecoil = Math.max(maxRecoil, home - boss.y);
+        expect(Math.abs(boss.x - rail)).toBeLessThanOrEqual(1);
+        if (boss.x !== rail) jittered = true;
+        if (warn >= TIEBAO_RAM_WARN_FAST) expect(boss.x).toBe(rail);
+        if (warn < TIEBAO_RAM_WARN_SLOW) expect(boss.x).toBe(rail);
+      } else if (warnStart >= 0 && diveStart < 0) {
+        diveStart = t;
+      }
+      if (warnStart < 0) expect(boss.y).toBe(home);
+      if (boss.y >= diveY - 1) bottom = t;
     }
+    expect(warnStart).toBeGreaterThan(TIEBAO_RAM_START - 2 * FIXED_DT);
+    expect(warnStart).toBeLessThan(TIEBAO_RAM_START + 2 * FIXED_DT);
+    expect(diveStart - warnStart).toBeGreaterThan(TIEBAO_RAM_WARN - 2 * FIXED_DT);
+    expect(diveStart - warnStart).toBeLessThan(TIEBAO_RAM_WARN + 2 * FIXED_DT);
+    expect(maxRecoil).toBeCloseTo(TIEBAO_RAM_RECOIL, 1);
+    expect(jittered).toBe(true);
+    expect(bottom - diveStart).toBeLessThan(TIEBAO_RAM_DIVE + 3 * FIXED_DT);
+    for (let i = 0; i < 30 && !tiebaoVisual(boss)?.ramImpact; i++) {
+      updateBoss(boss, FIXED_DT, around);
+      t += FIXED_DT;
+    }
+    expect(t - diveStart).toBeLessThan(TIEBAO_RAM_DIVE + 3 * FIXED_DT);
+    expect(tiebaoVisual(boss)?.ramImpact).not.toBeNull();
+    expect(tiebaoVisual(boss)?.ramImpact?.y).toBe(TIEBAO_RAM_BOTTOM);
+    expect(boss.invulnerable).toBe(false);
+  });
+
+  it('eases the recoil in over the slow blink and shakes only in the fast blink', () => {
+    expect(tiebaoRamRecoil(0)).toBe(0);
+    expect(tiebaoRamRecoil(TIEBAO_RAM_WARN_SLOW / 2)).toBeGreaterThan(TIEBAO_RAM_RECOIL / 2);
+    expect(tiebaoRamRecoil(TIEBAO_RAM_WARN_SLOW)).toBe(TIEBAO_RAM_RECOIL);
+    expect(tiebaoRamRecoil(TIEBAO_RAM_WARN - 0.01)).toBe(TIEBAO_RAM_RECOIL);
+    expect(tiebaoRamJitter(0.2)).toBe(0);
+    expect(tiebaoRamJitter(TIEBAO_RAM_WARN_FAST + 0.01)).toBe(0);
+    const fast = [0.52, 0.54, 0.56, 0.58].map(tiebaoRamJitter);
+    expect(fast.every((dx) => Math.abs(dx) === 1)).toBe(true);
+    expect(new Set(fast).size).toBe(2);
   });
 
   it('dashes to the bottom edge once the consist is loco+4, then retreats', () => {
@@ -875,12 +952,11 @@ describe('铁堡 rails', () => {
       if (toBottom < 0 && boss.y >= diveY - 1) toBottom = i;
       if (toBottom >= 0 && Math.abs(boss.y - home) < 1) back = i;
     }
-    const lead = Math.ceil(TIEBAO_RAM_START / FIXED_DT);
+    const lead = Math.ceil((TIEBAO_RAM_START + TIEBAO_RAM_WARN) / FIXED_DT);
     expect(toBottom).toBeGreaterThan(lead - 2);
     expect(toBottom).toBeLessThan(lead + Math.ceil(TIEBAO_RAM_DIVE / FIXED_DT) + 3);
     expect(back - toBottom).toBeGreaterThan(Math.floor(TIEBAO_RAM_RETURN / FIXED_DT) - 2);
-    const hold =
-      Math.floor((TIEBAO_SWITCH_PERIOD - TIEBAO_MOVE - TIEBAO_RAM_START) / FIXED_DT) - back;
+    const hold = Math.floor((TIEBAO_SWITCH_PERIOD - TIEBAO_MOVE) / FIXED_DT) - back - lead;
     for (let i = 0; i < hold; i++) {
       updateBoss(boss, FIXED_DT, around);
       expect(boss.y).toBeLessThan(home + 4);
@@ -1023,7 +1099,7 @@ describe('铁堡 phases', () => {
     expect(boss.phase).toBe('core');
     expect(boss.invulnerable).toBe(false);
     expect(bossLook(boss)?.glow?.color).toBe('orange');
-    expect(tiebaoView(boss)?.modeId).toBe('fan');
+    expect(tiebaoView(boss)?.modeId).toBe('turret');
     const core = coreShot(boss);
     expect(core.score).toBe(TIEBAO_CORE_SCORE);
     expect(boss.stage).toBe('death');
@@ -1033,7 +1109,7 @@ describe('铁堡 phases', () => {
     expect(tiebaoCommittedCars(boss)).toBe(2);
   });
 
-  it('opens Hard overload on 落弹雨, then the compressed cycle', () => {
+  it('opens Hard overload on 尾抛轨雷, then 舷炮排射 and 双联散射, never the ram', () => {
     const boss = createBoss(prepareBossConfig(TIEBAO, 'hard'), { gates: ['hard'] });
     openCore(boss);
     const core = coreShot(boss);
@@ -1050,7 +1126,7 @@ describe('铁堡 phases', () => {
     expect(boss.invulnerable).toBe(false);
     expect(bossLook(boss)?.glow?.color).toBe('yellow');
     expect(bossLook(boss)?.smoke).toBe(true);
-    expect(tiebaoView(boss)).toMatchObject({ modeId: 'rain', list: 'overload', phase: 'output' });
+    expect(tiebaoView(boss)).toMatchObject({ modeId: 'mines', list: 'overload', phase: 'output' });
     expect(tiebaoCommittedCars(boss)).toBe(2);
     expect(tiebaoLiveHull(boss).h).toBe(TIEBAO_HULL_H);
     const overloadHp = bossPart(boss, 'core')!.hp;
@@ -1059,7 +1135,7 @@ describe('铁堡 phases', () => {
     expect(tiebaoCommittedCars(boss)).toBe(2);
     expect(boss.phase).toBe('overload');
 
-    const cycle = ['rain', 'wall', 'missiles', 'rain'] as const;
+    const cycle = ['mines', 'volley', 'twin', 'mines'] as const;
     let index = 0;
     let steps = 0;
     let moveBlocked = false;
@@ -1067,8 +1143,7 @@ describe('铁堡 phases', () => {
       const before = tiebaoView(boss)!.modeId;
       const frame = updateBoss(boss, FIXED_DT, around);
       const view = tiebaoView(boss)!;
-      const modeId: string = view.modeId;
-      expect(modeId === 'rockets' || modeId === 'crates').toBe(false);
+      expect(view.modeId).not.toBe('ram');
       expect(cycle).toContain(view.modeId);
       if (view.phase === 'move') {
         expect(boss.invulnerable).toBe(true);
@@ -1118,51 +1193,242 @@ describe('铁堡 phases', () => {
     expect(side.y).toBeCloseTo(pose.y + TIEBAO_SIDE_MUZZLE_X * s, 5);
   });
 
-  it('places 高射扇 on the visible car sides', () => {
+  it('fires the opening 炮塔追扫 from the visible car, turning at a capped rate', () => {
     expect(TIEBAO_SIDE_MUZZLE_X).toBe(18);
     expect(tiebaoFanLocalX(0, Math.PI / 2)).toBe(0);
     expect(tiebaoFanLocalX(0, Math.PI / 2 - 0.3)).toBe(TIEBAO_SIDE_MUZZLE_X);
     expect(tiebaoFanLocalX(0, Math.PI / 2 + 0.3)).toBe(-TIEBAO_SIDE_MUZZLE_X);
     const boss = createBoss(TIEBAO);
-    const around = world();
+    const around: BossWorld = { playerX: 60, playerY: 560, rng: createRng(1) };
     park(boss, around);
-    expect(tiebaoView(boss)?.modeId).toBe('fan');
-    let volley: Array<{ x: number; y: number; vx: number; vy: number }> | undefined;
-    for (let i = 0; i < 40 && !volley; i++) {
-      const ev = updateBoss(boss, FIXED_DT, around);
-      if (ev.bolts.length > 0) volley = ev.bolts;
-    }
-    expect(volley).toHaveLength(5);
-    const rail = boss.x;
-    const xs = volley!.map((bolt) => bolt.x);
-    expect(xs.filter((x) => Math.abs(x - (rail - TIEBAO_SIDE_MUZZLE_X)) < 1e-4)).toHaveLength(2);
-    expect(xs.filter((x) => Math.abs(x - rail) < 1e-4)).toHaveLength(1);
-    expect(xs.filter((x) => Math.abs(x - (rail + TIEBAO_SIDE_MUZZLE_X)) < 1e-4)).toHaveLength(2);
+    expect(tiebaoView(boss)?.modeId).toBe('turret');
+    const rows = tiebaoGunRows(boss);
     const top = boss.y - tiebaoHullHeight(tiebaoCommittedCars(boss)) / 2;
-    const y = top + tiebaoCarCenterRow(tiebaoCommittedCars(boss) - 1);
-    const center = volley!.find((bolt) => Math.abs(bolt.x - rail) < 1e-4)!;
-    expect(center.vx).toBeCloseTo(0, 4);
-    expect(center.vy).toBeGreaterThan(0);
-    for (const bolt of volley!) {
-      expect(bolt.y).toBeCloseTo(y, 4);
-      expect(Math.abs(bolt.x - rail)).toBeLessThanOrEqual(TIEBAO_SIDE_MUZZLE_X + 1e-4);
+    expect(top + TIEBAO_ROOF_CAR_ROW).toBeLessThan(8);
+    expect(rows.turret).toBe(tiebaoCarCenterRow(tiebaoCommittedCars(boss) - 1));
+    const muzzle = tiebaoRowMount(boss, rows.turret, 0);
+
+    const stream: BossBolt[] = [];
+    let finisher: BossBolt[] = [];
+    let t = 0;
+    for (let i = 0; i < 90; i++) {
+      around.playerX = 60 + i * 4;
+      const ev = updateBoss(boss, FIXED_DT, around);
+      t += FIXED_DT;
+      if (t < TIEBAO_TELL) {
+        expect(tiebaoVisual(boss)?.tell?.mode).toBe('turret');
+        expect(ev.bolts).toHaveLength(0);
+      }
+      if (ev.bolts.length === 1) stream.push(ev.bolts[0]!);
+      if (ev.bolts.length === 3) finisher = ev.bolts;
     }
+    expect(stream).toHaveLength(10);
+    for (const bolt of stream) {
+      expect(bolt.x).toBeCloseTo(muzzle.x, 4);
+      expect(bolt.y).toBeCloseTo(muzzle.y, 4);
+    }
+    const cap = TIEBAO_TURRET_TURN * (Math.PI / 180) * TIEBAO_TURRET_GAP + 1e-6;
+    for (let i = 1; i < stream.length; i++) {
+      const a = Math.atan2(stream[i - 1]!.vy, stream[i - 1]!.vx);
+      const b = Math.atan2(stream[i]!.vy, stream[i]!.vx);
+      expect(Math.abs(b - a)).toBeLessThanOrEqual(cap);
+    }
+    expect(finisher).toHaveLength(3);
+    const side = finisher[0]!.x - boss.x;
+    expect(Math.abs(side)).toBeCloseTo(TIEBAO_SIDE_MUZZLE_X, 4);
+    expect(finisher.every((bolt) => bolt.x === finisher[0]!.x)).toBe(true);
   });
 
-  it('fires broadside from the boxcar edges', () => {
+  it('schedules every mode on the shared beat and stops by 4.2s', () => {
+    expect([...TIEBAO_BEATS]).toEqual([0.5, 2.0, 3.5]);
+    expect(TIEBAO_TELL).toBe(0.4);
+    expect(TIEBAO_LAST_SHOT).toBe(4.2);
+    const output = TIEBAO_SWITCH_PERIOD - TIEBAO_MOVE;
+    for (const list of ['main', 'overload'] as const) {
+      for (const mode of TIEBAO_MODE_IDS) {
+        const events = tiebaoSchedule(mode, list);
+        if (mode === 'ram') {
+          expect(events).toHaveLength(0);
+          continue;
+        }
+        expect(events.length).toBeGreaterThan(0);
+        expect(events[0]!.at).toBeGreaterThanOrEqual(TIEBAO_TELL - 1e-9);
+        expect(events[events.length - 1]!.at).toBeLessThanOrEqual(TIEBAO_LAST_SHOT + 1e-9);
+        expect(output - events[events.length - 1]!.at).toBeGreaterThanOrEqual(0.6 - 1e-9);
+        for (let i = 1; i < events.length; i++) {
+          expect(events[i]!.at).toBeGreaterThanOrEqual(events[i - 1]!.at);
+        }
+      }
+    }
+    const count = (mode: (typeof TIEBAO_MODE_IDS)[number], kind: string, list = 'main' as const) =>
+      tiebaoSchedule(mode, list).filter((event) => event.kind === kind).length;
+    expect(count('sweep', 'sweep')).toBe(39);
+    expect(count('volley', 'side')).toBe(27);
+    expect(count('volley', 'tail')).toBe(3);
+    expect(tiebaoSchedule('volley', 'overload').filter((e) => e.kind === 'tail')).toHaveLength(4);
+    expect(count('turret', 'turret')).toBe(30);
+    expect(count('turret', 'finisher')).toBe(3);
+    expect(count('twin', 'twin')).toBe(9);
+    expect(count('twin', 'missile')).toBe(4);
+    expect(tiebaoSchedule('twin', 'overload').filter((e) => e.kind === 'twin')).toHaveLength(12);
+    expect(tiebaoSchedule('twin', 'overload').filter((e) => e.kind === 'missile')).toHaveLength(6);
+    expect(tiebaoSchedule('mines').map((event) => event.at)).toEqual([0.4, 1.7, 3.0]);
+    for (const mode of ['sweep', 'turret'] as const) {
+      const firstOfBeat = tiebaoSchedule(mode).filter((e) => 'shot' in e && e.shot === 0);
+      expect(firstOfBeat.map((e) => e.at)).toEqual([...TIEBAO_BEATS]);
+    }
+    const missiles = tiebaoSchedule('twin').filter((e) => e.kind === 'missile');
+    expect(missiles[0]!.at).toBeCloseTo(1.25, 6);
+    expect(missiles[2]!.at).toBeCloseTo(2.75, 6);
+  });
+
+  it('lobs rail mines: other rails, then its own, then the others again', () => {
+    expect(tiebaoMineRails(2, 0, 'main')).toEqual([0, 1]);
+    expect(tiebaoMineRails(2, 1, 'main')).toEqual([2]);
+    expect(tiebaoMineRails(2, 2, 'main')).toEqual([0, 1]);
+    expect(tiebaoMineRails(0, 1, 'main')).toEqual([0]);
+    expect(tiebaoMineRails(1, 1, 'overload')).toEqual([0, 1, 2]);
+    expect(TIEBAO_MINE_FUSE + TIEBAO_MINE_FLIGHT + 3.0).toBeLessThan(
+      TIEBAO_SWITCH_PERIOD - TIEBAO_MOVE
+    );
+
+    const boss = createBoss(TIEBAO);
+    const around = world(2);
+    park(boss, around);
+    let guard = 0;
+    while (tiebaoView(boss)?.modeId !== 'mines' && guard < 24000) {
+      updateBoss(boss, FIXED_DT, around);
+      guard++;
+    }
+    expect(tiebaoView(boss)).toMatchObject({ modeId: 'mines', rail: 2, phase: 'output' });
+    const landed: Array<{ t: number; bolt: BossBolt }> = [];
+    let sawShell = false;
+    let t = 0;
+    while (tiebaoView(boss)?.phase === 'output' && t < 6) {
+      const ev = updateBoss(boss, FIXED_DT, around);
+      t += FIXED_DT;
+      if ((tiebaoVisual(boss)?.shells.length ?? 0) > 0) sawShell = true;
+      for (const bolt of ev.bolts) landed.push({ t, bolt });
+      expect(ev.hurtPlayer).toBe(false);
+    }
+    expect(sawShell).toBe(true);
+    expect(landed).toHaveLength(10);
+    for (const { bolt } of landed) {
+      expect(bolt.type).toBe('large');
+      expect(bolt.vx).toBe(0);
+      expect(bolt.vy).toBe(TIEBAO_MINE_SLIDE);
+      expect(bolt.fuse).toEqual({ time: TIEBAO_MINE_FUSE, burstSpeed: TIEBAO_MINE_BURST_SPEED });
+      expect(TIEBAO_RAIL_X as readonly number[]).toContain(bolt.x);
+    }
+    const tail = tiebaoTailY(tiebaoCommittedCars(boss));
+    expect(landed[0]!.bolt.y).toBeCloseTo(tail - 4 + TIEBAO_MINE_DROP, 0);
+    expect(landed[0]!.t).toBeCloseTo(0.4 + TIEBAO_MINE_FLIGHT, 1);
+    const own = landed.filter(({ bolt }) => bolt.x === TIEBAO_RAIL_X[2]);
+    expect(own).toHaveLength(2);
+    expect(own.every(({ t: at }) => Math.abs(at - (1.7 + TIEBAO_MINE_FLIGHT)) < 0.05)).toBe(true);
+    expect(TIEBAO_OVERLOAD_MINE_FUSE).toBeLessThan(TIEBAO_MINE_FUSE);
+  });
+
+  it('fires 舷炮排射 down both sides of the visible cars, then one aimed tail round', () => {
+    const boss = createBoss(TIEBAO);
+    const around = world(1);
+    park(boss, around);
+    let guard = 0;
+    while (tiebaoView(boss)?.modeId !== 'volley' && guard < 40000) {
+      updateBoss(boss, FIXED_DT, around);
+      guard++;
+    }
+    expect(tiebaoView(boss)?.modeId).toBe('volley');
+    const cars = tiebaoGunRows(boss).volley;
+    expect(cars.length).toBeGreaterThan(0);
+    expect(cars.length).toBeLessThanOrEqual(3);
+    const first: BossBolt[] = [];
+    for (let t = 0; t < 1.2; t += FIXED_DT) first.push(...updateBoss(boss, FIXED_DT, around).bolts);
+    const sides = first.filter((bolt) => Math.abs(Math.abs(bolt.x - boss.x) - 18) < 1e-4);
+    expect(sides).toHaveLength(cars.length * 2 * 3);
+    const off = (TIEBAO_VOLLEY_ANGLES[0] * Math.PI) / 180;
+    for (const bolt of sides) {
+      const outward = Math.sign(bolt.x - boss.x);
+      expect(Math.sign(bolt.vx)).toBe(outward);
+      expect(Math.atan2(Math.abs(bolt.vx), bolt.vy)).toBeCloseTo(off, 4);
+    }
+    const tail = first.filter((bolt) => !sides.includes(bolt));
+    expect(tail).toHaveLength(1);
+    expect(tail[0]!.x).toBeCloseTo(boss.x, 4);
+  });
+
+  it('fires 双联散射 as side-by-side pairs from one side muzzle', () => {
+    const boss = createBoss(TIEBAO);
+    const around = world(1);
+    park(boss, around);
+    let guard = 0;
+    while (tiebaoView(boss)?.modeId !== 'twin' && guard < 40000) {
+      updateBoss(boss, FIXED_DT, around);
+      guard++;
+    }
+    expect(tiebaoView(boss)?.modeId).toBe('twin');
+    let group: BossBolt[] = [];
+    let missiles = 0;
+    for (let t = 0; t < 4.5; t += FIXED_DT) {
+      const ev = updateBoss(boss, FIXED_DT, around);
+      if (group.length === 0 && ev.bolts.length === 6) group = ev.bolts;
+      missiles += ev.shots.length;
+    }
+    expect(missiles).toBe(4);
+    expect(group).toHaveLength(6);
+    const muzzle = tiebaoRowMount(boss, tiebaoGunRows(boss).muzzle, -TIEBAO_SIDE_MUZZLE_X);
+    for (let lane = 0; lane < 3; lane++) {
+      const a = group[lane * 2]!;
+      const b = group[lane * 2 + 1]!;
+      expect(a.vx).toBeCloseTo(b.vx, 6);
+      expect(a.vy).toBeCloseTo(b.vy, 6);
+      expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeCloseTo(TIEBAO_TWIN_PAIR_HALF * 2, 4);
+      expect((a.x + b.x) / 2).toBeCloseTo(muzzle.x, 4);
+      expect((a.y + b.y) / 2).toBeCloseTo(muzzle.y, 4);
+    }
+    expect(TIEBAO_MISSILE_X).toBe(28);
+  });
+
+  it('spawns every boss round on the car that fires it', () => {
+    const boss = createBoss(prepareBossConfig(TIEBAO, 'hard'), { gates: ['hard'] });
+    const around = world(5);
+    park(boss, around);
+    const seen = new Set<string>();
+    const check = (x: number, y: number) => {
+      const on = tiebaoHullSegments(boss).some(
+        (seg) =>
+          x >= seg.x - 1 && x <= seg.x + seg.w + 1 && y >= seg.y - 1 && y <= seg.y + seg.h + 1
+      );
+      expect(on).toBe(true);
+      expect(y).toBeGreaterThan(0);
+    };
+    for (let i = 0; i < 60 * 70; i++) {
+      around.playerX = 180 + Math.sin(i / 50) * 150;
+      if (i === 60 * 30) setMainHp(boss, (TIEBAO_ROOF_HP * 2 + TIEBAO_CORE_HP) * 0.45);
+      const ev = updateBoss(boss, FIXED_DT, around);
+      const mode = tiebaoView(boss)?.modeId;
+      if (mode) seen.add(mode);
+      for (const bolt of ev.bolts) if (!bolt.fuse) check(bolt.x, bolt.y);
+      for (const shot of ev.shots) check(shot.x, shot.y);
+    }
+    expect(seen.size).toBeGreaterThanOrEqual(5);
+  });
+
+  it('sweeps 侧舷扇扫 from the boxcar edges', () => {
     const boss = createBoss(TIEBAO);
     const around = world(1);
     park(boss, around);
     let seen = false;
     for (let i = 0; i < 20000 && !seen; i++) {
       const ev = updateBoss(boss, FIXED_DT, around);
-      if (tiebaoView(boss)?.modeId !== 'broadside' || ev.bolts.length < 2) continue;
+      if (tiebaoView(boss)?.modeId !== 'sweep' || ev.bolts.length < 2) continue;
       seen = true;
       const xs = [...ev.bolts.map((bolt) => bolt.x)].sort((a, b) => a - b);
       expect(xs[0]).toBeCloseTo(boss.x - TIEBAO_SIDE_MUZZLE_X, 4);
       expect(xs[1]).toBeCloseTo(boss.x + TIEBAO_SIDE_MUZZLE_X, 4);
       expect(Math.abs((xs[0] ?? 0) - (boss.x - 34))).toBeGreaterThan(10);
       expect(ev.bolts[0]!.y).toBeCloseTo(ev.bolts[1]!.y, 4);
+      expect(Math.hypot(ev.bolts[0]!.vx, ev.bolts[0]!.vy)).toBeCloseTo(TIEBAO_SWEEP_SPEED, 4);
     }
     expect(seen).toBe(true);
   });

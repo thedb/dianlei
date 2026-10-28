@@ -25,6 +25,16 @@ export interface EnemyBullet extends Poolable {
   hitRadius: number;
   /** Seconds of homing left. 0 means the shot flies straight. */
   homing: number;
+  /** Seconds until this round bursts. Only read while `burstSpeed` is above 0. */
+  fuse: number;
+  /** Speed of the two horizontal rounds a fused shot (铁堡 rail mine) splits into. 0 = no burst. */
+  burstSpeed: number;
+}
+
+/** A timed split: after `time` seconds the round becomes one small shot left and one right. */
+export interface BulletFuse {
+  time: number;
+  burstSpeed: number;
 }
 
 /** Create enemy bullet factory for pool */
@@ -40,6 +50,8 @@ export function createEnemyBullet(): EnemyBullet {
     type: 'small',
     hitRadius: EB_HIT_RADIUS_SMALL,
     homing: 0,
+    fuse: 0,
+    burstSpeed: 0,
 
     reset() {
       this.x = 0;
@@ -51,6 +63,8 @@ export function createEnemyBullet(): EnemyBullet {
       this.type = 'small';
       this.hitRadius = EB_HIT_RADIUS_SMALL;
       this.homing = 0;
+      this.fuse = 0;
+      this.burstSpeed = 0;
     },
   };
 }
@@ -64,7 +78,8 @@ export function spawnEnemyBullet(
   vy: number,
   type: EnemyBulletType = 'small',
   homing = 0,
-  hitRadius?: number
+  hitRadius?: number,
+  fuse?: BulletFuse
 ): void {
   bullet.x = x;
   bullet.y = y;
@@ -75,6 +90,13 @@ export function spawnEnemyBullet(
   bullet.type = type;
   bullet.hitRadius = hitRadius ?? (type === 'large' ? EB_HIT_RADIUS_LARGE : EB_HIT_RADIUS_SMALL);
   bullet.homing = homing;
+  bullet.fuse = fuse?.time ?? 0;
+  bullet.burstSpeed = fuse?.burstSpeed ?? 0;
+}
+
+/** The fuse has run out. The caller spawns the two burst rounds and releases this one. */
+export function enemyBulletBurstDue(bullet: EnemyBullet): boolean {
+  return bullet.burstSpeed > 0 && bullet.fuse <= 0;
 }
 
 function steerVelocity(
@@ -111,6 +133,8 @@ export function updateEnemyBullet(
     bullet.vy = steered.vy;
   }
 
+  if (bullet.burstSpeed > 0) bullet.fuse -= dt;
+
   bullet.prevX = bullet.x;
   bullet.prevY = bullet.y;
   bullet.x += bullet.vx * dt;
@@ -128,7 +152,8 @@ export interface BulletSpawner {
     vy: number,
     type: EnemyBulletType,
     homing?: number,
-    hitRadius?: number
+    hitRadius?: number,
+    fuse?: BulletFuse
   ): void;
   getBulletCount(): number;
 }

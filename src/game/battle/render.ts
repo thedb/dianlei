@@ -25,6 +25,7 @@ import {
   drawBombShockwave,
   drawBossLaser,
   drawBossWorld,
+  drawTiebaoMine,
   drawBulletGlow,
   drawEnemyFlame,
   drawFittedPlayerFlames,
@@ -255,6 +256,11 @@ export function drawField(renderer: Renderer, b: Battle, assets: GameAssets, alp
       ctx.rotate(Math.atan2(bullet.vy, bullet.vx) + Math.PI / 2);
       ctx.drawImage(frame.canvas, -frame.anchorX, -frame.anchorY);
       ctx.restore();
+      return;
+    }
+    if (bullet.burstSpeed > 0) {
+      drawBulletGlow(ctx, bx, by, 12, BULLET_GLOW_COLORS.enemy);
+      drawTiebaoMine(ctx, bx, by, bullet.fuse);
       return;
     }
     const large = bullet.type === 'large';

@@ -42,7 +42,18 @@ export function applyBossEvents(b: Battle, ev: BossEvents): void {
     });
   }
   for (const bolt of ev.bolts) {
-    if (bolt.hitRadius !== undefined) {
+    if (bolt.fuse !== undefined) {
+      b.spawner.spawnBullet(
+        bolt.x,
+        bolt.y,
+        bolt.vx,
+        bolt.vy,
+        bolt.type,
+        bolt.homing,
+        bolt.hitRadius,
+        bolt.fuse
+      );
+    } else if (bolt.hitRadius !== undefined) {
       b.spawner.spawnBullet(
         bolt.x,
         bolt.y,

@@ -12,11 +12,17 @@ import {
   TIEBAO_BUFFER,
   TIEBAO_HULL_W,
   TIEBAO_LOOK,
+  TIEBAO_MINE_BLINK,
+  TIEBAO_MISSILE_X,
   TIEBAO_RAIL_X,
+  TIEBAO_RAM_WARN_FAST,
+  TIEBAO_RAM_WARN_SLOW,
+  TIEBAO_SIDE_MUZZLE_X,
   TIEBAO_TAIL_LAMP_H,
   TIEBAO_TAIL_LAMP_W,
   TIEBAO_TAIL_LAMP_X,
   TIEBAO_TAIL_LAMP_Y_FROM_BOTTOM,
+  TIEBAO_TELL,
 } from '@/game/config';
 import { PALETTE, COLOR } from '@/game/palette';
 import type { BossHpBarLayout, BossRuntime } from '@/game/systems/boss';
@@ -24,14 +30,17 @@ import { bossActiveLaser, bossLook } from '@/game/systems/boss';
 import {
   tiebaoCarPoses,
   tiebaoClosureX,
+  tiebaoGunRows,
   tiebaoLiveHull,
+  tiebaoLocalOnPose,
   tiebaoPartMount,
+  tiebaoRowMount,
   tiebaoSpanMarks,
   tiebaoVisual,
   type TiebaoCarPose,
   type TiebaoVisual,
 } from '@/game/systems/tiebao';
-import { tiebaoTailLampLocals } from '@/game/systems/tiebaoShed';
+import { tiebaoCarCenterRow, tiebaoTailLampLocals } from '@/game/systems/tiebaoShed';
 import { laserSweepRadians } from '@/game/systems/danmaku';
 import { buildTiebaoHull } from './tiebaoLooks';
 import {
@@ -725,16 +734,12 @@ function drawClosure(ctx: CanvasRenderingContext2D, span: ClosureSpan): void {
   drawStockSteel(ctx, span.y0, span.y1);
 }
 
-/** Turnout, warning circles, and the rail-break sparks under the train. */
+/** Laid turnouts and the rail-break sparks under the train. */
 function drawTiebaoGround(ctx: CanvasRenderingContext2D, boss: BossRuntime, time: number): void {
   const visual = tiebaoVisual(boss);
   ctx.save();
   if (visual) {
     for (const turnout of visual.turnouts) drawClosure(ctx, turnout);
-  }
-  if (visual?.rocketWarn) {
-    ctx.fillStyle = PALETTE[COLOR.EXPLOSION_YELLOW];
-    for (const x of TIEBAO_RAIL_X) ctx.fillRect(x - 1, 4, 3, 3);
   }
   if (visual?.broken) {
     ctx.fillStyle = PALETTE[COLOR.EXPLOSION_ORANGE];
@@ -745,24 +750,10 @@ function drawTiebaoGround(ctx: CanvasRenderingContext2D, boss: BossRuntime, time
       }
     }
   }
-  if (visual) {
-    for (const circle of visual.circles) {
-      ctx.globalAlpha = 0.35 + 0.45 * circle.u;
-      ctx.strokeStyle = PALETTE[COLOR.EXPLOSION_ORANGE];
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(circle.x, circle.y, circle.radius * (0.35 + 0.65 * circle.u), 0, Math.PI * 2);
-      ctx.stroke();
-      const shellY = circle.fromY + (circle.y - circle.fromY) * circle.u;
-      ctx.globalAlpha = 0.9;
-      ctx.fillStyle = PALETTE[COLOR.EXPLOSION_YELLOW];
-      ctx.fillRect(circle.x - 1, shellY - 2, 3, 4);
-    }
-  }
   ctx.restore();
 }
 
-/** Falling crates and overload smoke. Drawn over the hull. */
+/** Crates, lobbed mines, smoke, the park tell, and the ram warning. Drawn over the hull. */
 function drawTiebaoAir(
   ctx: CanvasRenderingContext2D,
   boss: BossRuntime,
@@ -789,35 +780,168 @@ function drawTiebaoAir(
       ctx.fill();
     });
   }
-  drawTiebaoTailBrighten(ctx, boss, time, visual.ramWarn);
+  ctx.globalAlpha = 1;
+  for (const shell of visual.shells) drawMineShell(ctx, shell.x, shell.y);
+  if (visual.tell) drawTiebaoTell(ctx, boss, visual.tell);
+  if (visual.ramWarn !== null) drawTiebaoWheelSparks(ctx, boss, visual.ramWarn);
+  drawTiebaoTailLamps(ctx, boss, visual.ramWarn);
+  if (visual.ramImpact) drawTiebaoImpact(ctx, visual.ramImpact);
   ctx.restore();
 }
 
-/**
- * Ram-warn blink only. The pair itself is the buffer stamp on the last car.
- * A steady second pair, or one shifted by `sin(angle) * along` before the
- * rotate, ghosts beside the beam while the consist is on a turnout.
- */
-export function tiebaoTailLampsFlash(ramWarn: boolean, time: number): boolean {
-  return ramWarn && Math.floor(time * 16) % 2 === 0;
+type PaletteIndex = (typeof COLOR)[keyof typeof COLOR];
+
+function dot(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  c: PaletteIndex
+): void {
+  ctx.fillStyle = PALETTE[c];
+  ctx.fillRect(Math.round(x - w / 2), Math.round(y - h / 2), w, h);
 }
 
-function drawTiebaoTailBrighten(
+function drawMineShell(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+  dot(ctx, x, y, 6, 6, COLOR.BLACK);
+  dot(ctx, x, y, 4, 4, COLOR.DARK_GRAY);
+  dot(ctx, x, y, 2, 2, COLOR.ENEMY_BRIGHT_RED);
+}
+
+/**
+ * Landed rail mine (an enemy bullet with a fuse). Steel shell, red core. The
+ * core blinks white over the last `TIEBAO_MINE_BLINK` seconds of the fuse.
+ */
+export function drawTiebaoMine(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  fuse: number
+): void {
+  const xi = Math.round(x);
+  const yi = Math.round(y);
+  ctx.fillStyle = PALETTE[COLOR.BLACK];
+  ctx.fillRect(xi - 4, yi - 5, 8, 10);
+  ctx.fillRect(xi - 5, yi - 4, 10, 8);
+  ctx.fillStyle = PALETTE[COLOR.DARK_GRAY];
+  ctx.fillRect(xi - 4, yi - 4, 8, 8);
+  ctx.fillStyle = PALETTE[COLOR.MEDIUM_GRAY];
+  ctx.fillRect(xi - 3, yi - 4, 6, 1);
+  ctx.fillStyle = PALETTE[tiebaoMineBlink(fuse) ? COLOR.WHITE : COLOR.ENEMY_BRIGHT_RED];
+  ctx.fillRect(xi - 2, yi - 2, 4, 4);
+}
+
+export function tiebaoMineBlink(fuse: number): boolean {
+  return fuse < TIEBAO_MINE_BLINK && Math.floor(fuse * 16) % 2 === 0;
+}
+
+/**
+ * First `TIEBAO_TELL` seconds of a park: one pixel action on the car that is
+ * about to fire. No text. The ram's tell is its own warning.
+ */
+function drawTiebaoTell(
   ctx: CanvasRenderingContext2D,
   boss: BossRuntime,
-  time: number,
-  ramWarn: boolean
+  tell: NonNullable<TiebaoVisual['tell']>
 ): void {
-  if (!tiebaoTailLampsFlash(ramWarn, time)) return;
+  const rows = tiebaoGunRows(boss);
+  const t = tell.t;
+  const sideX = TIEBAO_SIDE_MUZZLE_X;
+  if (tell.mode === 'sweep') {
+    if (Math.floor(t / 0.1) % 2 !== 0) return;
+    for (const side of [-1, 1]) {
+      const at = tiebaoRowMount(boss, rows.muzzle, side * sideX);
+      dot(ctx, at.x, at.y, 2, 2, COLOR.EXPLOSION_ORANGE);
+      dot(ctx, at.x + side, at.y, 1, 1, COLOR.WHITE);
+    }
+    return;
+  }
+  if (tell.mode === 'volley') {
+    const count = Math.max(1, rows.volley.length);
+    rows.volley.forEach((car, k) => {
+      if (t < (k * TIEBAO_TELL) / count) return;
+      for (const side of [-1, 1]) {
+        const at = tiebaoRowMount(boss, tiebaoCarCenterRow(car), side * sideX);
+        dot(ctx, at.x, at.y, 2, 2, COLOR.EXPLOSION_ORANGE);
+      }
+    });
+    return;
+  }
+  if (tell.mode === 'turret') {
+    const at = tiebaoRowMount(boss, rows.turret, 0);
+    dot(ctx, at.x, at.y, 2, 2, COLOR.ENEMY_BRIGHT_RED);
+    const heat =
+      t < TIEBAO_TELL / 3
+        ? COLOR.ENEMY_DARK_RED
+        : t < (TIEBAO_TELL * 2) / 3
+          ? COLOR.EXPLOSION_RED_ORANGE
+          : COLOR.EXPLOSION_YELLOW;
+    const muzzle = tiebaoRowMount(boss, rows.turret + 9, 0);
+    dot(ctx, muzzle.x, muzzle.y, 2, 2, heat);
+    return;
+  }
+  if (tell.mode === 'twin') {
+    for (const side of [-1, 1]) {
+      const at = tiebaoRowMount(boss, rows.muzzle, side * sideX);
+      dot(ctx, at.x - 2, at.y, 1, 2, COLOR.EXPLOSION_ORANGE_YELLOW);
+      dot(ctx, at.x + 2, at.y, 1, 2, COLOR.EXPLOSION_ORANGE_YELLOW);
+      const tube = tiebaoRowMount(boss, rows.muzzle, side * TIEBAO_MISSILE_X);
+      dot(
+        ctx,
+        tube.x,
+        tube.y,
+        2,
+        2,
+        t < TIEBAO_TELL / 2 ? COLOR.DARK_GRAY : COLOR.EXPLOSION_YELLOW
+      );
+    }
+    return;
+  }
+  if (tell.mode === 'mines') {
+    const at = tiebaoRowMount(boss, rows.tail, 0);
+    dot(ctx, at.x, at.y, 4, 2, COLOR.EXPLOSION_ORANGE);
+    drawMineShell(ctx, at.x, at.y - 3 + 4 * clamp01(t / TIEBAO_TELL));
+  }
+}
+
+function clamp01(u: number): number {
+  return Math.max(0, Math.min(1, u));
+}
+
+/**
+ * Lamp colour while the ram warning runs: 4 Hz yellow/white, then 8 Hz
+ * red/white, then a steady white hold just before the dash. Null otherwise,
+ * which leaves the baked pair alone.
+ */
+export function tiebaoTailLampsFlash(warnSeconds: number | null): PaletteIndex | null {
+  if (warnSeconds === null) return null;
+  if (warnSeconds >= TIEBAO_RAM_WARN_FAST) return COLOR.WHITE;
+  if (warnSeconds >= TIEBAO_RAM_WARN_SLOW) {
+    const fast = Math.floor((warnSeconds - TIEBAO_RAM_WARN_SLOW) * 16) % 2 === 0;
+    return fast ? COLOR.ENEMY_BRIGHT_RED : COLOR.WHITE;
+  }
+  return Math.floor(warnSeconds * 8) % 2 === 0 ? COLOR.EXPLOSION_YELLOW : COLOR.WHITE;
+}
+
+/**
+ * Repaint the one lamp pair (the buffer stamp on the last car) in the warning
+ * colour. A second pair is never drawn beside it.
+ */
+function drawTiebaoTailLamps(
+  ctx: CanvasRenderingContext2D,
+  boss: BossRuntime,
+  warnSeconds: number | null
+): void {
+  const color = tiebaoTailLampsFlash(warnSeconds);
+  if (color === null) return;
   const poses = tiebaoCarPoses(boss);
   const tail = poses.length > 0 ? poses[poses.length - 1] : undefined;
   const anchor = poses[0];
   if (!tail || !anchor) return;
   const straight = poses.every((pose) => pose.angle === 0 && pose.x === anchor.x);
   ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
-  ctx.globalAlpha = 0.9;
-  ctx.fillStyle = PALETTE[COLOR.EXPLOSION_YELLOW];
+  ctx.fillStyle = PALETTE[color];
   ctx.imageSmoothingEnabled = false;
   if (straight) {
     const height = tiebaoLiveHull(boss).h;
@@ -835,6 +959,53 @@ function drawTiebaoTailBrighten(
     }
   }
   ctx.restore();
+}
+
+/**
+ * Wheel sparks on the last two cars while the ram warning runs: 1–2 every
+ * 0.1s in the 4 Hz stage, doubled in the 8 Hz stage, none in the white hold.
+ * Deterministic from the warning clock.
+ */
+function drawTiebaoWheelSparks(
+  ctx: CanvasRenderingContext2D,
+  boss: BossRuntime,
+  warnSeconds: number
+): void {
+  if (warnSeconds >= TIEBAO_RAM_WARN_FAST) return;
+  const poses = tiebaoCarPoses(boss);
+  const cars = poses.slice(Math.max(1, poses.length - 2));
+  if (cars.length === 0) return;
+  const bucket = Math.floor(warnSeconds / 0.1);
+  const age = (warnSeconds - bucket * 0.1) / 0.1;
+  const base = 1 + (bucket % 2);
+  const count = warnSeconds >= TIEBAO_RAM_WARN_SLOW ? base * 2 : base;
+  for (let k = 0; k < count; k++) {
+    const h = (bucket * 73 + k * 37) >>> 0;
+    const pose = cars[h % cars.length];
+    if (!pose) continue;
+    const side = (h >> 2) % 2 === 0 ? -1 : 1;
+    const bogie = (h >> 1) % 2 === 0 ? -1 : 1;
+    const lx = side * (TIEBAO_SIDE_MUZZLE_X + 2 + 6 * age);
+    const ly = bogie * (pose.h / 2 - 12) + ((h % 3) - 1) * 2 + 4 * age;
+    const at = tiebaoLocalOnPose(pose, lx, ly);
+    dot(ctx, at.x, at.y, 2, 2, k % 2 === 0 ? COLOR.EXPLOSION_ORANGE : COLOR.WHITE);
+  }
+}
+
+/** Ring of sparks where the tail beam hit the bottom edge. No hitbox. */
+function drawTiebaoImpact(
+  ctx: CanvasRenderingContext2D,
+  impact: NonNullable<TiebaoVisual['ramImpact']>
+): void {
+  const radius = 4 + 24 * impact.u;
+  ctx.globalAlpha = 1 - impact.u * 0.7;
+  for (let i = 0; i < 10; i++) {
+    const a = Math.PI + (i / 9) * Math.PI;
+    const x = impact.x + Math.cos(a) * radius;
+    const y = impact.y - 4 + Math.sin(a) * radius * 0.6;
+    dot(ctx, x, y, 2, 2, i % 2 === 0 ? COLOR.EXPLOSION_ORANGE : COLOR.WHITE);
+  }
+  ctx.globalAlpha = 1;
 }
 
 /** Code-drawn sparks on a destroyed turret socket. Not baked into the hull. */
