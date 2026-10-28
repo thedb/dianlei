@@ -650,7 +650,43 @@ export const STAGE3_RISK_MID_X = 220;
 export const STAGE3_RISK_RIGHT_X = 312;
 
 /**
- * Cloud shadows over maps that set `cloudShadows` (陆地A / 陆地B / 河流A / 百战要塞).
+ * 海面B (`seaB`) and 黑曜舰空 (`obsidianBoss`). Stage 4's maps.
+ * 9 × 640 px = 5760 px, same length as 陆地B and 河流A. Slots are fixed and
+ * do not mirror. New tiles start at 87 (`carrierDeck`); the enemy deck is 99–101.
+ */
+export const SEA_B_CHUNKS = 9;
+export const SEA_B_SEED = 37;
+export const OBSIDIAN_BOSS_CHUNKS = 2;
+export const OBSIDIAN_BOSS_SEED = 43;
+
+/**
+ * Stage 4 warning. Own constant, not stage 2 or 3's. seaB is 5760 px, so
+ * `118 * 40 + 640 = 5360` keeps the boss origin on seaB's last row.
+ * `OBSIDIAN_ENTER_AT` is five seconds later: about 120 px into the approach.
+ */
+export const STAGE4_WARNING_AT = 118;
+export const OBSIDIAN_ENTER_AT = 123;
+/** Chunk 7 reaches the top of the screen. The wreck line is not on a clock yet. */
+export const STAGE4_WRECK_AT = 96;
+
+/**
+ * Placeholder 黑曜 until the fight PR. One circle, no polyline, no strafe,
+ * no saucer. Killing it still takes the normal explosion clear.
+ */
+export const OBSIDIAN_STUB_HP = 800;
+export const OBSIDIAN_STUB_RADIUS = 26;
+export const OBSIDIAN_STUB_SCORE = 30000;
+export const OBSIDIAN_PARK_Y = 140;
+export const OBSIDIAN_ENTER_Y = -48;
+export const OBSIDIAN_ENTER_DURATION = 1.6;
+export const OBSIDIAN_WARNING = 1.5;
+export const OBSIDIAN_HULL_W = 80;
+export const OBSIDIAN_HULL_H = 96;
+export const OBSIDIAN_STUB_DEATH_DURATION = 2.4;
+export const OBSIDIAN_STUB_DEATH_EXPLOSIONS = 6;
+
+/**
+ * Cloud shadows over maps that set `cloudShadows` (陆地A / 陆地B / 河流A / 百战要塞 / 海面B / 黑曜舰空).
  * Alpha stays low so one silhouette reads without muddying the ground.
  * Scroll is relative to the tiles. `2` moves shadows twice as fast as the
  * ground so they drift ahead instead of sticking to it. Stamps repeat every

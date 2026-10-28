@@ -128,7 +128,7 @@ describe('stage 2 waves', () => {
     expect(stage.name).toBe('工业走廊');
     expect(nextStageId('1')).toBe('2');
     expect(nextStageId('2')).toBe('3');
-    expect(nextStageId('3')).toBeUndefined();
+    expect(nextStageId('3')).toBe('4');
     expect(stage.boss.id).toBe('tiebao');
     expect(stage.maps).toEqual({ run: [{ map: 'landB', at: 0 }], boss: 'factoryBoss' });
     expect(stage.captions).toEqual([

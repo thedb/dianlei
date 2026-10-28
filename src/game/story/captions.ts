@@ -1,7 +1,9 @@
 /**
  * Story subtitles. Lines come from `docs/电雷_故事资产表_v1.md` §2.
  * Stage 1 uses `s1_open` / `s1_end`. Stage 2 uses `s2_open` / `s2_end`.
- * Stage 3 uses `s3_open` / `s3_end`.
+ * Stage 3 uses `s3_open` / `s3_end`. Stage 4 uses `s4_open`.
+ * `s4_wreck` and `s4_ufo` are stored so the lines stay locked; `mid` and
+ * `cutscene` still do not start a clock.
  *
  * `mid` and `cutscene` are extension points for s4_wreck / s4_ufo / s5_end.
  * They are accepted on a stage cue and draw nothing until a later milestone
@@ -28,6 +30,9 @@ export const CAPTION_LINES: Readonly<Record<string, string>> = {
   s2_end: '工厂记录提到「打捞物」。继续追查。',
   s3_open: '突入叛军主基地。电雷，撕开防线。',
   s3_end: '航母坐标已锁定。准备舰载出击。',
+  s4_open: '航母甲板就绪。电雷，出击。',
+  s4_wreck: '不明残骸……弹痕不像地球武器。',
+  s4_ufo: '未知飞行物击毁目标后撤离。追踪。',
 };
 
 export interface ShownCaption {

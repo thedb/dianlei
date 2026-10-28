@@ -18,11 +18,12 @@ function point(rect: { x: number; y: number; w: number; h: number }) {
 }
 
 describe('challenge boss picker', () => {
-  it('lists stages 1–3, then 普通 and 困难, with no medium row', () => {
-    expect(BOSS_CHALLENGE_STAGES.map((stage) => stage.label)).toEqual(['1', '2', '3']);
-    expect(BOSS_STAGE_ROWS.map((row) => row.title)).toEqual(['1', '2', '3', '返回']);
+  it('lists stages 1–4, then 普通 and 困难, with no medium row', () => {
+    expect(BOSS_CHALLENGE_STAGES.map((stage) => stage.label)).toEqual(['1', '2', '3', '4']);
+    expect(BOSS_STAGE_ROWS.map((row) => row.title)).toEqual(['1', '2', '3', '4', '返回']);
     expect(BOSS_STAGE_ROWS[1]?.sub).toBe('铁堡');
     expect(BOSS_STAGE_ROWS[2]?.sub).toBe('炉心');
+    expect(BOSS_STAGE_ROWS[3]?.sub).toBe('黑曜');
     expect(BOSS_DIFFICULTY_ROWS.map((row) => row.title)).toEqual(['普通', '困难', '返回']);
     expect(BOSS_DIFFICULTY_ROWS.some((row) => row.title.includes('中等'))).toBe(false);
     expect(challengeRunDifficulty('normal')).toBe('easy');

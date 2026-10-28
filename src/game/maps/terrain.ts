@@ -35,7 +35,14 @@ const LAND: readonly TileId[] = [
   TileId.harborSlab,
 ];
 
-const WATER: readonly TileId[] = [TileId.water, TileId.waterB, TileId.shallow, TileId.lake];
+const WATER: readonly TileId[] = [
+  TileId.water,
+  TileId.waterB,
+  TileId.shallow,
+  TileId.lake,
+  // Stage 4 gun pad: painted as metal, masked as water so a 2×2 gun can stand on it.
+  TileId.cruiserGunDeck,
+];
 
 /** Terrain per tile id. Anything not listed as land or water is a feature. */
 export const TILE_TERRAIN: readonly Terrain[] = Array.from({ length: TILE_COUNT }, (_, id) => {

@@ -66,6 +66,8 @@ describe('map registry', () => {
       ['landBoss', '百战要塞', 'tiles'],
       ['factoryBoss', '铁堡厂轨', 'tiles'],
       ['furnaceBoss', '炉心浮台', 'tiles'],
+      ['seaB', '海面B', 'tiles'],
+      ['obsidianBoss', '黑曜舰空', 'tiles'],
       ['spaceA', '宇宙A', 'starfield'],
     ]);
   });
@@ -699,6 +701,8 @@ describe('tracks', () => {
       { target: 'map:landBoss', label: '百战要塞' },
       { target: 'map:factoryBoss', label: '铁堡厂轨' },
       { target: 'map:furnaceBoss', label: '炉心浮台' },
+      { target: 'map:seaB', label: '海面B' },
+      { target: 'map:obsidianBoss', label: '黑曜舰空' },
       { target: 'map:spaceA', label: '宇宙A' },
     ]);
     const bossPreview = buildMapTrack('landBoss');

@@ -51,6 +51,7 @@ import {
   buildFurnacePodMark,
   drawFurnaceBoss,
 } from './furnaceLooks';
+import { buildObsidianStubHull } from './obsidianStub';
 import type { SpriteData, SpriteFrame } from './types';
 import { createGrid, fillEllipse, fillPoly, fillRect, outline, plot } from './pixelDraw';
 import { renderSprite } from './spriteRenderer';
@@ -397,6 +398,10 @@ export const BOSS_ART: Readonly<Record<string, () => BossAssets>> = {
       core: renderSprite(buildFurnaceCore()),
     },
   }),
+  obsidian: () => {
+    const hull = renderSprite(buildObsidianStubHull());
+    return { hull, hullOpen: hull, parts: {} };
+  },
 };
 
 /** Bake every registered boss. */

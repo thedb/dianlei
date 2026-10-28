@@ -24,7 +24,11 @@ export type BossChallengeStageId = string;
 
 export type BossChallengeRank = 'normal' | 'hard';
 
-const STAGE_BOSS_SUB: Readonly<Record<string, string>> = { '2': '铁堡', '3': '炉心' };
+const STAGE_BOSS_SUB: Readonly<Record<string, string>> = {
+  '2': '铁堡',
+  '3': '炉心',
+  '4': '黑曜',
+};
 
 export const BOSS_STAGE_ROWS: ReadonlyArray<ChoiceRow<BossChallengeStageId>> = [
   ...BOSS_CHALLENGE_STAGES.map((stage) => ({

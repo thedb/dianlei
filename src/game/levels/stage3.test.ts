@@ -144,9 +144,9 @@ describe('stage 3 data', () => {
       { id: 's3_end', at: 'clear' },
     ]);
     expect(stage.buildingDrops).toBeUndefined();
-    expect(listStages().map((s) => s.id)).toEqual(['1', '2', '3']);
+    expect(listStages().map((s) => s.id)).toEqual(['1', '2', '3', '4']);
     expect(nextStageId('2')).toBe('3');
-    expect(nextStageId('3')).toBeUndefined();
+    expect(nextStageId('3')).toBe('4');
   });
 
   it('labels valley, dock, crossing, scorch in time order and stops before the warning', () => {

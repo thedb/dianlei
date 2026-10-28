@@ -13,7 +13,7 @@
  */
 
 import { MAP_CHUNK_ROWS, MAP_TILES_X } from '@/game/config';
-import { TileId, HOUSE_BROWN, HOUSE_RED, PLANE } from '@/game/art/tiles';
+import { TileId, HOUSE_BROWN, HOUSE_RED, PLANE, CARRIER_PLANE } from '@/game/art/tiles';
 import { createRng, type Rng } from '@/engine/rng';
 import type { TileGrid } from './types';
 
@@ -143,7 +143,7 @@ export function planChunks(spec: ChunkMapSpec): ChunkInstance[] {
 
 /** Tiles that are one quarter of a wider sprite swap with their mirror twin. */
 const MIRROR = new Map<TileId, TileId>();
-for (const [tl, tr, bl, br] of [HOUSE_RED, HOUSE_BROWN, PLANE]) {
+for (const [tl, tr, bl, br] of [HOUSE_RED, HOUSE_BROWN, PLANE, CARRIER_PLANE]) {
   MIRROR.set(tl, tr).set(tr, tl).set(bl, br).set(br, bl);
 }
 
