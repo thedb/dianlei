@@ -3,9 +3,10 @@
  * broken dashes whose screen position lags the map scroll and also drifts
  * with the stage clock, so the surface slides instead of sitting in the tile.
  *
- * Only `ocean` / `oceanB` / the legacy water tiles / `wake` receive a dash.
- * Deck, hull, wreck, and gun-pad cells are skipped, so a crest breaks around
- * a ship instead of painting across it.
+ * Only `ocean` / `oceanB` and the legacy water tiles receive a dash.
+ * Deck, hull, wreck, gun pads, and the enemy deck are skipped. Crests are
+ * broken bands of shallow blue with a foam cap, troughs are deep blue, and
+ * foam specks are 2×2. Spacing stays wide so this is not a scanline field.
  */
 
 import {
@@ -34,7 +35,6 @@ const SWELL_TILES: ReadonlySet<number> = new Set([
   TileId.oceanB,
   TileId.water,
   TileId.waterB,
-  TileId.wake,
 ]);
 
 export function isSwellTile(id: number | null | undefined): boolean {
@@ -94,10 +94,10 @@ function rgba(index: number, alpha: number): string {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-const CREST = rgba(COLOR.WATER_MEDIUM, 0.32);
-const GLINT = rgba(COLOR.WATER_SHALLOW, 0.28);
-const TROUGH = rgba(COLOR.WATER_DEEP, 0.22);
-const SPECK = rgba(COLOR.WATER_FOAM, 0.4);
+const CREST = rgba(COLOR.WATER_SHALLOW, 0.92);
+const GLINT = rgba(COLOR.WATER_FOAM, 0.95);
+const TROUGH = rgba(COLOR.WATER_DEEP, 0.82);
+const SPECK = rgba(COLOR.WATER_FOAM, 1);
 
 function segmentAt(segs: readonly BackdropSegment[], screenY: number): BackdropSegment | null {
   for (const seg of segs) {
@@ -126,29 +126,30 @@ function paintDashes(
     if (!isSwellTile(tile)) continue;
     const n = hash(col + 3, y0 + kind.length * 17);
     if (kind === 'speck') {
-      if (n % 7 !== 0) continue;
+      if (n % 3 !== 0) continue;
     } else if (kind === 'trough') {
-      if (n % 2 === 0) continue;
-    } else if (n % 3 === 0) {
+      if (n % 5 === 0) continue;
+    } else if (n % 4 === 0) {
       continue;
     }
-    const wobble = kind === 'speck' ? 0 : (n % 3) - 1;
+    const wobble = kind === 'speck' ? 0 : (n % 5) - 2;
     const y = Math.min(tileBottom - 1, Math.max(tileTop, y0 + wobble));
     const x0 = col * TILE_SIZE - MAP_CROP_X;
     if (kind === 'speck') {
+      const speck = Math.min(2, tileBottom - y);
       ctx.fillStyle = SPECK;
-      ctx.fillRect(x0 + (n % 12) + 2, y, 1, 1);
+      ctx.fillRect(x0 + (n % 10) + 2, y, 2, speck);
       continue;
     }
-    const inset = 1 + (n % 4);
-    const w = Math.min(kind === 'trough' ? 8 : 5 + (n % 5), TILE_SIZE - inset - 1);
-    const h = kind === 'trough' ? Math.min(2, tileBottom - y) : 1;
+    const inset = 1 + (n % 3);
+    const w = Math.min(kind === 'trough' ? 10 + (n % 4) : 8 + (n % 5), TILE_SIZE - inset);
+    const h = Math.min(kind === 'trough' ? 3 : 2, tileBottom - y);
     ctx.fillStyle = kind === 'trough' ? TROUGH : CREST;
     ctx.fillRect(x0 + inset, y, w, h);
-    const glintY = y + 2;
-    if (kind === 'crest' && n % 5 === 1 && glintY < tileBottom) {
+    const glintY = y + h;
+    if (kind === 'crest' && n % 3 === 0 && glintY < tileBottom) {
       ctx.fillStyle = GLINT;
-      ctx.fillRect(x0 + inset + 1, glintY, 2, 1);
+      ctx.fillRect(x0 + inset, glintY, Math.min(4, w), 1);
     }
   }
 }
@@ -173,6 +174,10 @@ export function drawSeaSwell(
   for (const y of swellCrestScreenYs(scroll, time)) {
     paintDashes(ctx, layer, segs, y, 'crest');
     paintDashes(ctx, layer, segs, y + SEA_SWELL_SPACING / 2, 'trough');
+  }
+  // A second, longer wavelength so the motion is not one evenly spaced rule.
+  for (const y of swellCrestScreenYs(scroll, time, 96, 0.4, 18)) {
+    paintDashes(ctx, layer, segs, y, 'crest');
   }
   for (const y of swellCrestScreenYs(
     scroll,

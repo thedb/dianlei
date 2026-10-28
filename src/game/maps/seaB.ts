@@ -1,8 +1,8 @@
 /**
  * 海面B: Stage 4's run. Nine fixed chunks, seed 37, no mirror.
- * Chunk 0 is our flight deck. Chunk 1 is the stern and the wake, so the deck
- * leaves the bottom of the screen at 25.6s. Chunk 2 is open water with one
- * unarmed sentry. Chunks 3–5 are the escorts and the six gun pads. Chunk 6 is
+ * Chunk 0 is our flight deck. Chunk 1 is the stern, so the deck leaves the
+ * bottom of the screen at 25.6s. The old striped wake rectangles are not
+ * painted. Chunk 2 is open water with one unarmed sentry. Chunks 3–5 are the escorts and the six gun pads. Chunk 6 is
  * swell. Chunks 7–8 are the salvage field and a saucer-rim fragment.
  *
  * Edge rows are painted here. `sealEdges` is not used: it would write lake and
@@ -98,11 +98,10 @@ export function sternDeckSpan(row: number): { c0: number; c1: number } | null {
   return null;
 }
 
-/** Inclusive rects of `wake`. Never an edge row. */
-export const SEA_WAKE: readonly { r0: number; r1: number; c0: number; c1: number }[] = [
-  { r0: 64, r1: 76, c0: 8, c1: 14 },
-  { r0: 81, r1: 86, c0: 9, c1: 13 },
-];
+/**
+ * The two striped wake rectangles (rows 64–76 cols 8–14, and rows 81–86
+ * cols 9–13) are not placed. Those cells stay `ocean` / `oceanB`.
+ */
 
 /** Unarmed sentry on chunk 2. Hull only, no gun pad. */
 export const SEA_SENTRY = { r0: 108, r1: 116, c0: 15, c1: 20 } as const;
@@ -209,14 +208,6 @@ function placePlane(p: ChunkPainter, col: number, row: number, mapRow0: number):
   p.set(col + 1, r + 1, TileId.carrierPlaneTR);
 }
 
-function placeWake(p: ChunkPainter, mapRow0: number, wake: (typeof SEA_WAKE)[number]): void {
-  for (let r = wake.r0; r <= wake.r1; r++) {
-    const local = r - mapRow0;
-    if (local <= 0 || local >= MAP_CHUNK_ROWS - 1) continue;
-    for (let c = wake.c0; c <= wake.c1; c++) p.set(c, local, TileId.wake);
-  }
-}
-
 function paintCatapultMarks(
   p: ChunkPainter,
   local: number,
@@ -237,7 +228,7 @@ function paintCatapult(p: ChunkPainter): void {
 
 function paintStern(p: ChunkPainter): void {
   const origin = row0Of('deckStern');
-  // Row 40 is the deck edge (sealed later). Rows 41–63 step in toward the wake.
+  // Row 40 is the deck edge (sealed later). Rows 41–63 step in toward the sea.
   for (let row = origin + 1; row <= OUR_DECK_LAST_ROW; row++) {
     const span = sternDeckSpan(row);
     if (!span) continue;
@@ -249,12 +240,10 @@ function paintStern(p: ChunkPainter): void {
   for (const group of SEA_PLANE_GROUPS) {
     for (const col of group.cols) placePlane(p, col, group.row, origin);
   }
-  placeWake(p, origin, SEA_WAKE[0]!);
 }
 
 function paintWakeOpen(p: ChunkPainter): void {
   const origin = row0Of('wakeOpen');
-  placeWake(p, origin, SEA_WAKE[1]!);
   for (let r = SEA_SENTRY.r0; r <= SEA_SENTRY.r1; r++) {
     for (let c = SEA_SENTRY.c0; c <= SEA_SENTRY.c1; c++) {
       p.set(c, r - origin, TileId.cruiserHull);

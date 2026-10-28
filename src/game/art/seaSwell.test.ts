@@ -20,14 +20,15 @@ describe('sea swell', () => {
     }
     const scrolled = swellCrestScreenYs(80, 0);
     const slip = Math.abs(scrolled[0]! - still[0]! - 80);
-    expect(slip).toBeGreaterThan(20);
-    expect(swellCrestScreenYs(0, 1)[0]).not.toBe(still[0]);
+    expect(slip).toBeGreaterThan(55);
+    const drifted = swellCrestScreenYs(0, 1)[0]!;
+    expect(Math.abs(drifted - still[0]!)).toBeGreaterThanOrEqual(20);
   });
 
   it('breaks crests on the deck and keeps them on open water', () => {
     expect(isSwellTile(TileId.ocean)).toBe(true);
     expect(isSwellTile(TileId.oceanB)).toBe(true);
-    expect(isSwellTile(TileId.wake)).toBe(true);
+    expect(isSwellTile(TileId.wake)).toBe(false);
     expect(isSwellTile(TileId.carrierDeck)).toBe(false);
     expect(isSwellTile(TileId.cruiserHull)).toBe(false);
     expect(isSwellTile(TileId.cruiserGunDeck)).toBe(false);
@@ -38,16 +39,17 @@ describe('sea swell', () => {
   });
 
   it('draws dashes only on swell tiles', () => {
-    const rects: { x: number; y: number; w: number }[] = [];
+    const rects: { x: number; y: number; w: number; h: number }[] = [];
     const ctx = {
       save: () => undefined,
       restore: () => undefined,
-      fillRect: (x: number, y: number, w: number) => {
-        rects.push({ x, y, w });
+      fillRect: (x: number, y: number, w: number, h: number) => {
+        rects.push({ x, y, w, h });
       },
     } as unknown as CanvasRenderingContext2D;
     drawSeaSwell(ctx, layer, 0, 1.5, 1);
     expect(rects.length).toBeGreaterThan(8);
+    expect(rects.some((rect) => rect.h >= 2)).toBe(true);
     for (const rect of rects) {
       const col = Math.floor((rect.x + MAP_CROP_X) / TILE_SIZE);
       expect(isSwellTile(swellTileAt(layer, 0, col, rect.y)), `${col},${rect.y}`).toBe(true);

@@ -30,7 +30,6 @@ import {
   SEA_SALVAGE,
   SEA_SALVAGE_CARGO,
   SEA_SENTRY,
-  SEA_WAKE,
   SAUCER_RIM_CENTER,
   SAUCER_RIM_RADIUS,
   STERN_TAPER,
@@ -48,7 +47,6 @@ const ALLOWED: ReadonlySet<TileId> = new Set([
   TileId.carrierDeck,
   TileId.carrierMark,
   TileId.carrierIsland,
-  TileId.wake,
   TileId.cruiserHull,
   TileId.cruiserGunDeck,
   TileId.wreckAlloy,
@@ -286,18 +284,17 @@ describe('海面B', () => {
     }
   });
 
-  it('paints wake only inside the stern and the short open-water run', () => {
-    grid.forEach((row, r) => {
-      row.forEach((id, c) => {
-        if (id !== TileId.wake) return;
-        expect(
-          SEA_WAKE.some((wake) => inRect(c, r, wake)),
-          `${c},${r}`
-        ).toBe(true);
-        expect(r % MAP_CHUNK_ROWS).not.toBe(0);
-        expect(r % MAP_CHUNK_ROWS).not.toBe(MAP_CHUNK_ROWS - 1);
-      });
-    });
+  it('leaves the two circled wake rectangles as open sea', () => {
+    expect(grid.some((row) => row.includes(TileId.wake))).toBe(false);
+    const sea = (c0: number, c1: number, r0: number, r1: number) => {
+      for (let r = r0; r <= r1; r++) {
+        for (let c = c0; c <= c1; c++) {
+          expect([TileId.ocean, TileId.oceanB], `${c},${r}`).toContain(cell(grid, c, r));
+        }
+      }
+    };
+    sea(8, 14, 64, 76);
+    sea(9, 13, 81, 86);
   });
 
   it('holds six water-masked gun pads inside the escort hulls', () => {

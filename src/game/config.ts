@@ -658,18 +658,18 @@ export const SEA_B_CHUNKS = 9;
 export const SEA_B_SEED = 37;
 
 /**
- * Open-sea swell drawn over baked `ocean` tiles. Crests are this many pixels
- * apart (the old water tile repeated a bright band every 8px). `SCROLL` is
- * how far a crest moves on screen per pixel of map scroll: 1 would nail it
- * to the tile, 0 would leave it stuck to the camera. `DRIFT` is extra px/s
- * from the stage clock. Specks are a sparser foam family on its own phase.
+ * Open-sea swell drawn over baked `ocean` tiles. Crests stay at least 48px
+ * apart so they are not the old 8px scanlines. `SCROLL` is how far a crest
+ * moves on screen per pixel of map scroll: lower means it slips against the
+ * tiles more. `DRIFT` is extra px/s from the stage clock. Specks are foam
+ * on their own, faster phase.
  */
-export const SEA_SWELL_SPACING = 64;
-export const SEA_SWELL_SCROLL = 0.42;
-export const SEA_SWELL_DRIFT = 14;
-export const SEA_SWELL_SPECK_SPACING = 112;
-export const SEA_SWELL_SPECK_SCROLL = 0.25;
-export const SEA_SWELL_SPECK_DRIFT = 22;
+export const SEA_SWELL_SPACING = 56;
+export const SEA_SWELL_SCROLL = 0.18;
+export const SEA_SWELL_DRIFT = 36;
+export const SEA_SWELL_SPECK_SPACING = 72;
+export const SEA_SWELL_SPECK_SCROLL = 0.08;
+export const SEA_SWELL_SPECK_DRIFT = 48;
 export const OBSIDIAN_BOSS_CHUNKS = 2;
 export const OBSIDIAN_BOSS_SEED = 43;
 
