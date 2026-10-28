@@ -761,11 +761,16 @@ export const OBSIDIAN_BLADE_RADIUS = 14;
 /** Distance from a hinge pivot to that blade's hit circle. */
 export const OBSIDIAN_BLADE_REACH = 38;
 /**
- * Crystal blade and round hinge lock, in pixels. The fight still rotates one
- * sprite around the hinge; these sizes do not move the hit circles.
+ * Swept wing, open cross blade, and round hinge lock, in pixels.
+ * The fight rotates these around the hinge. Sizes do not move the hit circles
+ * (`OBSIDIAN_BLADE_REACH` stays 38, radii stay 14 / 8 / 32). The fuselage
+ * frame stays 80×96 so the saucer gap in §8 stays 48px; the painted body
+ * fills that frame (radar to a single jet) instead of sitting inset.
  */
-export const OBSIDIAN_BLADE_W = 20;
-export const OBSIDIAN_BLADE_H = 64;
+export const OBSIDIAN_BLADE_W = 28;
+export const OBSIDIAN_BLADE_H = 68;
+export const OBSIDIAN_CROSS_W = 18;
+export const OBSIDIAN_CROSS_H = 80;
 export const OBSIDIAN_BLADE_STUB = 18;
 export const OBSIDIAN_HINGE_W = 9;
 export const OBSIDIAN_HINGE_H = 9;

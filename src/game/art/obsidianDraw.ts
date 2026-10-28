@@ -7,15 +7,25 @@ import { OBSIDIAN_HULL_H, OBSIDIAN_WRECK_BANK } from '@/game/config';
 import type { BossRuntime } from '@/game/systems/boss';
 import {
   OBSIDIAN_BLADES,
-  obsidianBladeAngle,
+  obsidianBladeLayers,
   obsidianHingeMarked,
   obsidianJettison,
   obsidianMotion,
 } from '@/game/systems/obsidian';
 import { obsidianSaucerView } from '@/game/systems/obsidianSaucer';
-import { drawEngineFlame, ENEMY_FLAME_CONFIG } from './engineFlame';
+import { drawEngineFlame, type FlameConfig } from './engineFlame';
 import { COLOR, PALETTE } from '@/game/palette';
 import { drawSaucerBeam, drawSaucerCharge, saucerFrame } from './saucerSprite';
+
+/** One large jet. Bigger than the shared enemy flame so the dive reads as a thrust. */
+const JET_FLAME: FlameConfig = {
+  baseLength: 16,
+  baseWidth: 7,
+  flickerAmount: 2,
+  coreColor: PALETTE[COLOR.EXPLOSION_YELLOW],
+  outerColor: PALETTE[COLOR.EXPLOSION_ORANGE],
+  glowColor: 'rgba(255, 120, 32, 0.35)',
+};
 
 interface HullFrame {
   canvas: CanvasImageSource;
@@ -73,23 +83,30 @@ function drawBlade(
   frame: HullFrame,
   x: number,
   y: number,
-  angle: number,
-  mirror: boolean
+  angle: number
 ): void {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(angle);
-  if (mirror) ctx.scale(-1, 1);
   draw.drawImage(frame.canvas, -frame.anchorX, -frame.anchorY);
   ctx.restore();
 }
 
-function drawTail(ctx: CanvasRenderingContext2D, time: number, boost: number): void {
+function layerSpread(angles: readonly number[]): number {
+  let min = Infinity;
+  let max = -Infinity;
+  for (const angle of angles) {
+    min = Math.min(min, angle);
+    max = Math.max(max, angle);
+  }
+  return max - min;
+}
+
+function drawJet(ctx: CanvasRenderingContext2D, time: number, boost: number): void {
   ctx.save();
-  ctx.translate(0, -OBSIDIAN_HULL_H / 2 + 6);
+  ctx.translate(0, -OBSIDIAN_HULL_H / 2 + 8);
   ctx.scale(1, -1);
-  drawEngineFlame(ctx, -8, 0, ENEMY_FLAME_CONFIG, 0, time, boost);
-  drawEngineFlame(ctx, 8, 0, ENEMY_FLAME_CONFIG, 0, time, boost);
+  drawEngineFlame(ctx, 0, 0, JET_FLAME, 0, time, boost);
   ctx.restore();
 }
 
@@ -117,7 +134,30 @@ export function drawObsidianBoss(
       ctx.save();
       ctx.translate(boss.x, boss.y);
       ctx.rotate(bank);
-      if (!wreck) drawTail(ctx, time, boost);
+      const swept = assets.parts.bladeSwept;
+      const cross = assets.parts.bladeCross ?? swept;
+      const stub = assets.parts.bladeStub;
+      const bladeOrder = OBSIDIAN_BLADES.map((spec, index) => ({ spec, index })).sort((a, b) => {
+        if (a.spec.role === b.spec.role) return a.index - b.index;
+        return a.spec.role === 'outer' ? -1 : 1;
+      });
+      for (const { spec, index } of bladeOrder) {
+        const part = boss.parts.find((item) => item.id === spec.id);
+        const angles = obsidianBladeLayers(boss, index);
+        const dead = wreck || !part?.alive;
+        const art = dead ? stub : layerSpread(angles) < 0.12 ? cross : swept;
+        if (!art) continue;
+        if (dead || layerSpread(angles) < 0.12) {
+          drawBlade(ctx, draw, art, spec.x, spec.y, angles[1] ?? angles[0] ?? 0);
+          continue;
+        }
+        const side = spec.x < 0 ? -1 : 1;
+        for (let s = angles.length - 1; s >= 0; s--) {
+          const off = s * 2;
+          drawBlade(ctx, draw, art, spec.x + side * off * 0.5, spec.y - off * 0.45, angles[s] ?? 0);
+        }
+      }
+      if (!wreck) drawJet(ctx, time, boost);
       draw.drawImage(frame.canvas, -frame.anchorX, -frame.anchorY);
       if (boss.hitFlash > 0) {
         ctx.save();
@@ -126,39 +166,14 @@ export function drawObsidianBoss(
         draw.drawImage(frame.canvas, -frame.anchorX, -frame.anchorY);
         ctx.restore();
       }
+      for (const spec of OBSIDIAN_BLADES) {
+        const lock = boss.parts.find((item) => item.id === spec.hinge);
+        const art = lock?.alive ? assets.parts.hinge : assets.parts.hingeDead;
+        if (!art) continue;
+        draw.drawImage(art.canvas, spec.x - art.anchorX, spec.y - art.anchorY);
+        if (lock && obsidianHingeMarked(boss, lock.id)) drawMark(ctx, spec.x, spec.y);
+      }
       ctx.restore();
-    }
-    const stub = assets.parts.bladeStub;
-    const bladeOrder = OBSIDIAN_BLADES.map((spec, index) => ({ spec, index })).sort((a, b) => {
-      if (a.spec.role === b.spec.role) return a.index - b.index;
-      return a.spec.role === 'outer' ? -1 : 1;
-    });
-    for (const { spec, index } of bladeOrder) {
-      const part = boss.parts.find((item) => item.id === spec.id);
-      const art =
-        wreck || !part?.alive
-          ? stub
-          : spec.role === 'outer'
-            ? (assets.parts.bladeOuter ?? assets.parts.bladeInner)
-            : assets.parts.bladeInner;
-      if (!art) continue;
-      drawBlade(
-        ctx,
-        draw,
-        art,
-        boss.x + spec.x,
-        boss.y + spec.y,
-        obsidianBladeAngle(boss, index),
-        spec.x > 0
-      );
-    }
-    for (const spec of OBSIDIAN_BLADES) {
-      const lock = boss.parts.find((item) => item.id === spec.hinge);
-      const art = lock?.alive ? assets.parts.hinge : assets.parts.hingeDead;
-      if (!art) continue;
-      draw.drawImage(art.canvas, boss.x + spec.x - art.anchorX, boss.y + spec.y - art.anchorY);
-      if (lock && obsidianHingeMarked(boss, lock.id))
-        drawMark(ctx, boss.x + spec.x, boss.y + spec.y);
     }
     drawJettison(ctx, boss);
   }

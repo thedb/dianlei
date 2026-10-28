@@ -12,6 +12,8 @@ import {
   OBSIDIAN_BEAM,
   OBSIDIAN_BLADE_H,
   OBSIDIAN_BLADE_W,
+  OBSIDIAN_CROSS_H,
+  OBSIDIAN_CROSS_W,
   OBSIDIAN_BREAK_AT,
   OBSIDIAN_BREAK_EXPLOSIONS,
   OBSIDIAN_CENTER_X,
@@ -53,6 +55,8 @@ import {
   OBSIDIAN_SLICE,
   OBSIDIAN_STRAFE_DIVE,
   OBSIDIAN_STRAFE_DIVE_Y,
+  OBSIDIAN_STRAFE_END,
+  OBSIDIAN_STRAFE_TELL,
   OBSIDIAN_STRAFE_Y_MAX,
   OBSIDIAN_WRECK_X,
   OBSIDIAN_WRECK_Y,
@@ -62,7 +66,7 @@ import { FIRE_PRESETS } from '@/game/systems/danmaku';
 import { prepareBossConfig } from '@/game/difficulty';
 import { OBSIDIAN } from '@/game/levels/bosses/obsidian';
 import {
-  OBSIDIAN_BLADE_PIVOT_X,
+  OBSIDIAN_BLADE_PIVOT_Y,
   buildObsidianBlade,
   buildObsidianHinge,
   buildObsidianHull,
@@ -81,7 +85,13 @@ import {
   type BossRuntime,
   type BossWorld,
 } from './boss';
-import { OBSIDIAN_BLADES, obsidianBladeAngle, obsidianJettison, obsidianMotion } from './obsidian';
+import {
+  OBSIDIAN_BLADES,
+  obsidianBladeAngle,
+  obsidianBladeLayers,
+  obsidianJettison,
+  obsidianMotion,
+} from './obsidian';
 import { obsidianSaucerCenterY, obsidianSaucerView } from './obsidianSaucer';
 import { createVictoryExit, stepVictoryExit } from './victoryExit';
 
@@ -208,8 +218,8 @@ describe('黑曜 constants', () => {
     const warm = buildObsidianHull('warm');
     const warn = buildObsidianHull('warn');
     const wreck = buildObsidianHull('wreck');
-    const inner = buildObsidianBlade('inner');
-    const outer = buildObsidianBlade('outer');
+    const swept = buildObsidianBlade('swept');
+    const cross = buildObsidianBlade('cross');
     const hinge = buildObsidianHinge('live');
     const hingeDead = buildObsidianHinge('dead');
     for (const grid of [warm, warn, wreck, hinge, hingeDead]) {
@@ -220,31 +230,32 @@ describe('黑曜 constants', () => {
     expect(colorsOf(warm)).not.toContain(COLOR.EXPLOSION_YELLOW);
     expect(colorsOf(warn)).toContain(COLOR.EXPLOSION_YELLOW);
     expect(colorsOf(wreck)).not.toContain(COLOR.EXPLOSION_YELLOW);
-    expect(colorsOf(inner)).toContain(COLOR.PLAYER_CYAN);
-    expect(colorsOf(inner)).toContain(COLOR.PLAYER_DARK_CYAN);
-    expect(colorsOf(inner)).toContain(COLOR.EXPLOSION_ORANGE);
-    expect(colorsOf(outer)).toContain(COLOR.PLAYER_CYAN);
+    expect(colorsOf(swept)).toContain(COLOR.PLAYER_CYAN);
+    expect(colorsOf(swept)).toContain(COLOR.PLAYER_DARK_CYAN);
+    expect(colorsOf(swept)).toContain(COLOR.PLAYER_PALE_CYAN);
+    expect(colorsOf(swept)).toContain(COLOR.EXPLOSION_ORANGE);
+    expect(colorsOf(swept)).toContain(COLOR.MEDIUM_GRAY);
+    expect(colorsOf(swept)).toContain(COLOR.ENEMY_RED);
+    expect(colorsOf(cross)).toContain(COLOR.PLAYER_CYAN);
+    expect(colorsOf(cross)).not.toContain(COLOR.ENEMY_RED);
     expect(colorsOf(hinge)).toContain(COLOR.EXPLOSION_ORANGE);
     expect(colorsOf(hingeDead)).not.toContain(COLOR.EXPLOSION_ORANGE);
-    expect(inner.flat().join(',')).not.toBe(outer.flat().join(','));
+    expect(swept.flat().join(',')).not.toBe(cross.flat().join(','));
     const span = (grid: number[][], y: number) => {
       const xs = grid[y]!.flatMap((cell, x) => (cell >= 0 ? [x] : []));
       return xs.length ? xs[xs.length - 1]! - xs[0]! : 0;
     };
-    expect(span(outer, 40)).toBeGreaterThan(span(inner, 40));
-    let outboard = 0;
-    let inboard = 0;
-    for (let y = 0; y < inner.length; y++) {
-      for (let x = 0; x < (inner[y]?.length ?? 0); x++) {
-        if (inner[y]![x]! < 0) continue;
-        if (x < OBSIDIAN_BLADE_PIVOT_X) outboard++;
-        else if (x > OBSIDIAN_BLADE_PIVOT_X) inboard++;
-      }
-    }
-    expect(outboard).toBeGreaterThan(inboard);
-    expect(inner.length).toBe(OBSIDIAN_BLADE_H);
-    expect(inner[0]?.length).toBe(OBSIDIAN_BLADE_W);
-    expect(inner.length).toBeGreaterThan(OBSIDIAN_BLADE_W * 3);
+    expect(span(swept, 28)).toBeGreaterThanOrEqual(10);
+    expect(span(cross, 40)).toBeLessThan(span(swept, 28));
+    const root = swept[OBSIDIAN_BLADE_PIVOT_Y + 6] ?? [];
+    const tip = swept[swept.length - 3] ?? [];
+    expect(root).toContain(COLOR.PLAYER_DARK_CYAN);
+    expect(tip.some((cell) => cell === COLOR.PLAYER_PALE_CYAN || cell === COLOR.WHITE)).toBe(true);
+    expect(swept.length).toBe(OBSIDIAN_BLADE_H);
+    expect(swept[0]?.length).toBe(OBSIDIAN_BLADE_W);
+    expect(cross.length).toBe(OBSIDIAN_CROSS_H);
+    expect(cross[0]?.length).toBe(OBSIDIAN_CROSS_W);
+    expect(cross.length).toBeGreaterThan(swept.length);
 
     let minX = 80;
     let maxX = 0;
@@ -263,12 +274,17 @@ describe('黑曜 constants', () => {
     expect(nose).toBeGreaterThan(0);
     expect(warm[40]?.[0]).toBeLessThan(0);
     expect(warm[40]?.[79]).toBeLessThan(0);
-    const engines = warm[11] ?? [];
-    const clusters = engines
-      .join(',')
-      .split('-1')
-      .filter((run) => run.includes(','));
-    expect(clusters.length).toBeGreaterThanOrEqual(2);
+    const clusters = (row: number[] | undefined) => {
+      let count = 0;
+      let on = false;
+      for (const cell of row ?? []) {
+        const opaque = cell >= 0;
+        if (opaque && !on) count += 1;
+        on = opaque;
+      }
+      return count;
+    };
+    for (const y of [4, 6, 8]) expect(clusters(warm[y])).toBe(1);
   });
 });
 
@@ -410,6 +426,61 @@ describe('黑曜 blade phases', () => {
     expect(boss.y).toBe(OBSIDIAN_STRAFE_DIVE_Y);
     expect(boss.x).toBe(OBSIDIAN_CENTER_X);
     expect(boss.y).toBeLessThanOrEqual(OBSIDIAN_STRAFE_Y_MAX);
+  });
+
+  it('keeps swept wings on their own side and dives only on the open strafe', () => {
+    const lateral = (angle: number) => Math.abs(Math.sin(angle));
+    const outer = OBSIDIAN_BLADES[1];
+    const inner = OBSIDIAN_BLADES[0];
+    expect(lateral(outer.fold)).toBeGreaterThan(0.6);
+    expect(lateral(outer.half)).toBeGreaterThan(lateral(outer.fold));
+    expect(Math.cos(outer.open)).toBeLessThan(-0.5);
+    expect(Math.cos(inner.open)).toBeGreaterThan(0.5);
+    expect(Math.abs(outer.layers.fold[0] - outer.layers.fold[2])).toBeCloseTo(0.32, 5);
+
+    const parked = make();
+    park(parked);
+    const spread =
+      Math.max(...obsidianBladeLayers(parked, 1)) - Math.min(...obsidianBladeLayers(parked, 1));
+    expect(spread).toBeGreaterThan(0.25);
+    for (let i = 0; i < 180; i++) go(parked, FIXED_DT);
+    expect(parked.x).toBe(OBSIDIAN_CENTER_X);
+    expect(parked.y).toBe(OBSIDIAN_PARK_Y);
+    expect(parked.phase).toBe('folded');
+
+    const half = make();
+    park(half);
+    reach(half, 'half');
+    const fan = go(half, OBSIDIAN_HALF_CYCLE);
+    expect(fan.bolts.length).toBeGreaterThan(0);
+    expect(fan.bolts.every((bolt) => bolt.vy > 0)).toBe(true);
+
+    const boss = make();
+    park(boss);
+    reach(boss, 'open');
+    go(boss, OBSIDIAN_SLICE * 2 + OBSIDIAN_STRAFE_TELL);
+    expect(boss.y).toBe(OBSIDIAN_PARK_Y);
+    expect(obsidianMotion(boss).flameBoost).toBeGreaterThan(0);
+    let maxY = boss.y;
+    let sawSmall = false;
+    let smallOffBottom = false;
+    const frames = Math.ceil((OBSIDIAN_STRAFE_END - OBSIDIAN_STRAFE_TELL) / FIXED_DT) + 2;
+    for (let i = 0; i < frames; i++) {
+      const ev = go(boss, FIXED_DT);
+      maxY = Math.max(maxY, boss.y);
+      expect(boss.x).toBe(OBSIDIAN_CENTER_X);
+      expect(boss.y).toBeLessThanOrEqual(OBSIDIAN_STRAFE_Y_MAX);
+      if (ev.bolts.some((bolt) => bolt.type === 'small')) {
+        sawSmall = true;
+        if (boss.y < OBSIDIAN_STRAFE_DIVE_Y - 1) smallOffBottom = true;
+      }
+    }
+    expect(maxY).toBe(OBSIDIAN_STRAFE_DIVE_Y);
+    expect(sawSmall).toBe(true);
+    expect(smallOffBottom).toBe(false);
+    go(boss, OBSIDIAN_SLICE);
+    expect(boss.y).toBe(OBSIDIAN_PARK_Y);
+    expect(boss.x).toBe(OBSIDIAN_CENTER_X);
   });
 });
 
