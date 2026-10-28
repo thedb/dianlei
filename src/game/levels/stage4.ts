@@ -1,7 +1,7 @@
 /**
  * Stage 4 map shell. Waves, guns, floaters, and the obsidian fight are not
- * in this pass. The run scrolls 海面B from t = 0. 挑战 Boss seeks
- * `OBSIDIAN_ENTER_AT` and loops the empty enemy deck.
+ * in this pass. A stage-start entry plays the carrier launch, then scrolls
+ * 海面B. 挑战 Boss seeks `OBSIDIAN_ENTER_AT` and loops the empty enemy deck.
  *
  * `s4_wreck` and `s4_ufo` are in the caption catalog. Their clocks are not
  * wired yet (`mid` / `cutscene` still draw nothing).

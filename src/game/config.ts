@@ -670,6 +670,27 @@ export const OBSIDIAN_ENTER_AT = 123;
 export const STAGE4_WRECK_AT = 96;
 
 /**
+ * Stage 4 carrier launch. Draft timings from the 2026-10-28 deck playtest.
+ * Only a stage-start entry plays this (关卡选择 / stage handoff). 挑战 Boss
+ * and 地图预览 do not. The stage clock stays at 0 through the lamps, so the
+ * warning and the boss stay on `scroll = BG_SCROLL_SPEED * t`.
+ * Five lamps light every `CARRIER_LIGHT_STEP`, then hold until
+ * `CARRIER_LIGHTS_TIME`. The rush eases the ship from `CARRIER_PARK_Y` up to
+ * `PLAYER_SPAWN_Y` while the tail flame ramps and the map starts scrolling.
+ */
+export const CARRIER_LIGHTS_TIME = 2;
+export const CARRIER_LIGHT_COUNT = 5;
+export const CARRIER_LIGHT_STEP = 0.32;
+export const CARRIER_RUSH_TIME = 0.8;
+/** Parked on the deck, fully on screen (sprite is 32px, anchor at center). */
+export const CARRIER_PARK_Y = 608;
+/** Left-side lamp gantry, logical pixels. Integer cells, palette colors. */
+export const CARRIER_LIGHT_X = 20;
+export const CARRIER_LIGHT_Y = 188;
+export const CARRIER_LIGHT_SIZE = 10;
+export const CARRIER_LIGHT_GAP = 6;
+
+/**
  * Placeholder 黑曜 until the fight PR. One circle, no polyline, no strafe,
  * no saucer. Killing it still takes the normal explosion clear.
  */

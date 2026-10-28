@@ -51,16 +51,51 @@ export const SEA_CHUNK_EDGES: Readonly<Record<SeaChunkId, readonly [SeaEdge, Sea
   wreckFar: ['sea', 'sea'],
 };
 
-/** 2×2 friendly fighters. `row` is the tail row; the nose is the next row up. */
+/**
+ * Catapult lane. Columns 10 and 12 are the white guide lines. Columns 9–13
+ * stay clear of parked fighters on both deck chunks. The player launches
+ * down the gap (column 11).
+ */
+export const CATAPULT_MARK_COLS = [10, 12] as const;
+export const CATAPULT_LANE = { c0: 9, c1: 13 } as const;
+
+/**
+ * 2×2 friendly fighters. `row` is the tail row; the nose is the next row up.
+ * Both groups sit on the full-width stern deck, off the catapult lane:
+ * two to port, one to starboard beside the island.
+ */
 export const SEA_PLANE_GROUPS: readonly { row: number; cols: readonly number[] }[] = [
-  { row: 46, cols: [4, 7, 10] },
-  { row: 56, cols: [4, 7, 10] },
+  { row: 46, cols: [3, 6, 14] },
+  { row: 50, cols: [3, 6, 14] },
 ];
 
 export const SEA_ISLANDS: readonly { r0: number; r1: number; c0: number; c1: number }[] = [
   { r0: 8, r1: 30, c0: 16, c1: 19 },
-  { r0: 44, r1: 58, c0: 16, c1: 19 },
+  { r0: 42, r1: 52, c0: 16, c1: 19 },
 ];
+
+/**
+ * Stern deck, wide end first. Each step after the full deck insets 2 columns
+ * per side, the same language as 黑曜舰空's bow (tip is columns 10–12).
+ * The island and the fighters end on the full-width step. Row 40 is the
+ * chunk edge and stays a full-width deck seal; it is not in this table.
+ */
+export const STERN_TAPER: readonly { r1: number; c0: number; c1: number }[] = [
+  { r1: 52, c0: 2, c1: 20 },
+  { r1: 55, c0: 4, c1: 18 },
+  { r1: 58, c0: 6, c1: 16 },
+  { r1: 61, c0: 8, c1: 14 },
+  { r1: 63, c0: 10, c1: 12 },
+];
+
+/** Inclusive deck span for a stern map row, or null on the edge and past the tip. */
+export function sternDeckSpan(row: number): { c0: number; c1: number } | null {
+  if (row <= MAP_CHUNK_ROWS || row > OUR_DECK_LAST_ROW) return null;
+  for (const step of STERN_TAPER) {
+    if (row <= step.r1) return { c0: step.c0, c1: step.c1 };
+  }
+  return null;
+}
 
 /** Inclusive rects of `wake`. Never an edge row. */
 export const SEA_WAKE: readonly { r0: number; r1: number; c0: number; c1: number }[] = [
@@ -177,19 +212,34 @@ function placeWake(p: ChunkPainter, mapRow0: number, wake: (typeof SEA_WAKE)[num
   }
 }
 
+function paintCatapultMarks(
+  p: ChunkPainter,
+  local: number,
+  span: { c0: number; c1: number }
+): void {
+  for (const col of CATAPULT_MARK_COLS) {
+    if (col >= span.c0 && col <= span.c1) p.set(col, local, TileId.carrierMark);
+  }
+}
+
 function paintCatapult(p: ChunkPainter): void {
+  const full = { c0: 2, c1: 20 };
   deckBlock(p, 1, MAP_CHUNK_ROWS - 2);
   placeIsland(p, 0, SEA_ISLANDS[0]!);
-  for (let r = 8; r <= 30; r++) {
-    p.set(10, r, TileId.carrierMark);
-    p.set(12, r, TileId.carrierMark);
-  }
+  // Edge rows stay plain deck. The lines run the rest of the opening deck.
+  for (let r = 1; r <= MAP_CHUNK_ROWS - 2; r++) paintCatapultMarks(p, r, full);
 }
 
 function paintStern(p: ChunkPainter): void {
   const origin = row0Of('deckStern');
-  // Local 1–23 is map rows 41–63: deck through the stern. Row 40 is the deck edge.
-  deckBlock(p, 1, OUR_DECK_LAST_ROW - origin);
+  // Row 40 is the deck edge (sealed later). Rows 41–63 step in toward the wake.
+  for (let row = origin + 1; row <= OUR_DECK_LAST_ROW; row++) {
+    const span = sternDeckSpan(row);
+    if (!span) continue;
+    const local = row - origin;
+    for (let c = span.c0; c <= span.c1; c++) p.set(c, local, TileId.carrierDeck);
+    paintCatapultMarks(p, local, span);
+  }
   placeIsland(p, origin, SEA_ISLANDS[1]!);
   for (const group of SEA_PLANE_GROUPS) {
     for (const col of group.cols) placePlane(p, col, group.row, origin);

@@ -28,6 +28,7 @@ import { activeCaption, captionBarY } from '@/game/story/captions';
 import { tiebaoReadout } from '@/game/systems/tiebao';
 import { drawControls, drawPauseButton } from '@/game/ui/controlsOverlay';
 import { drawText } from '@/game/ui/widgets';
+import { drawCarrierLights } from './carrierTakeoff';
 import { runProfile, type Battle } from './context';
 import { drawRangeHud } from './range';
 
@@ -149,6 +150,7 @@ function drawStageHud(renderer: Renderer, b: Battle, assets: GameAssets): void {
     const line = activeCaption(stage.captions, gameTime, b.finishedAt);
     if (line) drawCaption(ctx, line.text, b.scene.safeArea.bottom);
   }
+  drawCarrierLights(ctx, b.takeoff);
 }
 
 /** Bottom subtitle bar. Chinese uses the UI font; the rest of the HUD is monospace. */

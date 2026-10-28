@@ -15,6 +15,8 @@ import { composeChunks, planChunks } from './chunks';
 import { getMapGrid, getTileMap } from './registry';
 import {
   isSaucerRim,
+  CATAPULT_LANE,
+  CATAPULT_MARK_COLS,
   OUR_DECK_LAST_ROW,
   SEA_B_LIBRARY,
   SEA_B_SPEC,
@@ -31,7 +33,9 @@ import {
   SEA_WAKE,
   SAUCER_RIM_CENTER,
   SAUCER_RIM_RADIUS,
+  STERN_TAPER,
   seaBTopRow,
+  sternDeckSpan,
   type SeaChunkId,
 } from './seaB';
 import { tileTerrain } from './terrain';
@@ -189,7 +193,75 @@ describe('海面B', () => {
       });
     });
     expect(seen).toBe(24);
-    expect(SEA_PLANE_GROUPS.map((group) => group.row)).toEqual([46, 56]);
+    expect(SEA_PLANE_GROUPS.map((group) => group.row)).toEqual([46, 50]);
+    grid.forEach((row, r) => {
+      row.forEach((id, c) => {
+        if (!PLANES.has(id)) return;
+        const offLane = c < CATAPULT_LANE.c0 || c > CATAPULT_LANE.c1;
+        expect(offLane, `${c},${r} is on the catapult`).toBe(true);
+      });
+    });
+  });
+
+  it('keeps the catapult lane clear and lined from the opening deck through the stern', () => {
+    for (let r = 1; r <= MAP_CHUNK_ROWS - 2; r++) {
+      for (const col of CATAPULT_MARK_COLS) {
+        expect(cell(grid, col, r), `${col},${r}`).toBe(TileId.carrierMark);
+      }
+      for (let c = CATAPULT_LANE.c0; c <= CATAPULT_LANE.c1; c++) {
+        const id = cell(grid, c, r);
+        expect(id === TileId.carrierMark || id === TileId.carrierDeck, `${c},${r}`).toBe(true);
+      }
+    }
+    for (let r = MAP_CHUNK_ROWS + 1; r <= OUR_DECK_LAST_ROW; r++) {
+      const span = sternDeckSpan(r);
+      expect(span, `row ${r}`).not.toBeNull();
+      for (const col of CATAPULT_MARK_COLS) {
+        if (col < span!.c0 || col > span!.c1) continue;
+        expect(cell(grid, col, r), `${col},${r}`).toBe(TileId.carrierMark);
+      }
+      for (let c = CATAPULT_LANE.c0; c <= CATAPULT_LANE.c1; c++) {
+        const id = cell(grid, c, r);
+        expect(PLANES.has(id), `${c},${r}`).toBe(false);
+        if (c >= span!.c0 && c <= span!.c1) {
+          expect(id === TileId.carrierMark || id === TileId.carrierDeck, `${c},${r}`).toBe(true);
+        }
+      }
+    }
+  });
+
+  it('tapers the stern the way the obsidian bow narrows into the sea', () => {
+    expect(STERN_TAPER.map((step) => [step.c0, step.c1])).toEqual([
+      [2, 20],
+      [4, 18],
+      [6, 16],
+      [8, 14],
+      [10, 12],
+    ]);
+    for (let i = 1; i < STERN_TAPER.length; i++) {
+      const prev = STERN_TAPER[i - 1]!;
+      const step = STERN_TAPER[i]!;
+      expect(step.c0 - prev.c0).toBe(2);
+      expect(prev.c1 - step.c1).toBe(2);
+    }
+    const island = SEA_ISLANDS[1]!;
+    expect(island.r1).toBeLessThanOrEqual(STERN_TAPER[0]!.r1);
+    expect(island.c1).toBeLessThanOrEqual(STERN_TAPER[0]!.c1);
+    for (let r = MAP_CHUNK_ROWS + 1; r <= OUR_DECK_LAST_ROW; r++) {
+      const span = sternDeckSpan(r)!;
+      for (let c = 0; c < MAP_TILES_X; c++) {
+        const id = cell(grid, c, r);
+        const onDeck = c >= span.c0 && c <= span.c1;
+        if (!onDeck) {
+          expect([TileId.water, TileId.waterB]).toContain(id);
+        }
+      }
+    }
+    expect(cell(grid, 2, 52)).toBe(TileId.carrierDeck);
+    expect(cell(grid, 2, 53)).not.toBe(TileId.carrierDeck);
+    expect(cell(grid, 11, OUR_DECK_LAST_ROW)).toBe(TileId.carrierDeck);
+    expect(cell(grid, 8, OUR_DECK_LAST_ROW)).not.toBe(TileId.carrierDeck);
+    expect(cell(grid, 2, OUR_DECK_LAST_ROW)).not.toBe(TileId.carrierDeck);
   });
 
   it('keeps both islands on the starboard side', () => {
