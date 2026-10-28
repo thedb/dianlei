@@ -51,7 +51,8 @@ import {
   buildFurnacePodMark,
   drawFurnaceBoss,
 } from './furnaceLooks';
-import { buildObsidianStubHull } from './obsidianStub';
+import { drawObsidianBoss } from './obsidianDraw';
+import { buildObsidianHull } from './obsidianLooks';
 import type { SpriteData, SpriteFrame } from './types';
 import { createGrid, fillEllipse, fillPoly, fillRect, outline, plot } from './pixelDraw';
 import { renderSprite } from './spriteRenderer';
@@ -398,10 +399,11 @@ export const BOSS_ART: Readonly<Record<string, () => BossAssets>> = {
       core: renderSprite(buildFurnaceCore()),
     },
   }),
-  obsidian: () => {
-    const hull = renderSprite(buildObsidianStubHull());
-    return { hull, hullOpen: hull, parts: {} };
-  },
+  obsidian: () => ({
+    hull: renderSprite(buildObsidianHull('warm')),
+    hullOpen: renderSprite(buildObsidianHull('warn')),
+    parts: { wreck: renderSprite(buildObsidianHull('wreck')) },
+  }),
 };
 
 /** Bake every registered boss. */
@@ -432,6 +434,10 @@ export function drawBossWorld(
   const look = bossLook(boss);
   const assets = bosses[boss.def.art];
   if (!look || !assets) return;
+  if (boss.def.art === 'obsidian') {
+    drawObsidianBoss(ctx, draw, boss, assets, time);
+    return;
+  }
   if (boss.def.art === 'furnace') {
     drawFurnaceBoss(ctx, draw, boss, assets, time);
     return;

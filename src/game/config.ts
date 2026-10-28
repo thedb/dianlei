@@ -728,20 +728,120 @@ export const CARRIER_LIGHT_SIZE = 10;
 export const CARRIER_LIGHT_GAP = 6;
 
 /**
- * Placeholder 黑曜 until the fight PR. One circle, no polyline, no strafe,
- * no saucer. Killing it still takes the normal explosion clear.
+ * Stage 4 boss 黑曜 (docs/电雷_第四关_黑曜Boss设计_v1.md).
+ *
+ * Speeds below are final pixels/second (already past ENEMY_BULLET_SPEED_SCALE).
+ * The boss clock ignores fireRateScale and bulletSpeedScale. No laser.
+ *
+ * HP is still a draft. The lock is "about 40 seconds", not these integers.
+ * Measure vulcan Lv3 + one wingman, no homing, target at y=140 radius 32,
+ * player at y=480, then rewrite `OBSIDIAN_FRAME_HP` / `OBSIDIAN_OVERLOAD_HP`
+ * and §6 of the design doc from that DPS.
  */
-export const OBSIDIAN_STUB_HP = 800;
-export const OBSIDIAN_STUB_RADIUS = 26;
-export const OBSIDIAN_STUB_SCORE = 30000;
+export const OBSIDIAN_CENTER_X = 180;
+export const OBSIDIAN_PERCH_X = [96, 180, 264] as const;
 export const OBSIDIAN_PARK_Y = 140;
-export const OBSIDIAN_ENTER_Y = -48;
+/** Slide-in from above the screen. Can take damage. Does not fire. */
+export const OBSIDIAN_ENTER_Y = -70;
 export const OBSIDIAN_ENTER_DURATION = 1.6;
 export const OBSIDIAN_WARNING = 1.5;
 export const OBSIDIAN_HULL_W = 80;
 export const OBSIDIAN_HULL_H = 96;
-export const OBSIDIAN_STUB_DEATH_DURATION = 2.4;
-export const OBSIDIAN_STUB_DEATH_EXPLOSIONS = 6;
+/** Draft hit circle. The only body that stops a player shot. */
+export const OBSIDIAN_RADIUS = 32;
+/**
+ * Draft main HP and the one score paid when the last segment dies.
+ * Easy / Medium pay it as `frame` empties. Hard holds it for the overload.
+ */
+export const OBSIDIAN_FRAME_HP = 800;
+export const OBSIDIAN_FRAME_SCORE = 40000;
+/** Draft Hard overload HP, before the 1.30 scale. Same `frame`. */
+export const OBSIDIAN_OVERLOAD_HP = 240;
+/** Invulnerable, no fire, bombs do not resolve. Bullets already in flight stay. */
+export const OBSIDIAN_PHASE_INVULN = 1.2;
+
+/** One weapon lap. Three modes, equal slices, missiles first. */
+export const OBSIDIAN_SLICE = 1.6;
+export const OBSIDIAN_CYCLE = OBSIDIAN_SLICE * 3;
+export const OBSIDIAN_OVERLOAD_SLICE = 1.2;
+export const OBSIDIAN_OVERLOAD_CYCLE = OBSIDIAN_OVERLOAD_SLICE * 3;
+/** Polyline duration. Locked floor: do not go under these. */
+export const OBSIDIAN_POLY_TIME = 0.45;
+export const OBSIDIAN_OVERLOAD_POLY_TIME = 0.32;
+/** After the perch is reached, before the fan. Floor is 0.12; this draft is 0.15. */
+export const OBSIDIAN_FAN_SETTLE = 0.15;
+/** Visual bank while the polyline is in the air, radians. */
+export const OBSIDIAN_BANK = 0.4;
+/** Paralysis lean. Holds until the beam breaks the hull. */
+export const OBSIDIAN_WRECK_BANK = 0.28;
+
+export const OBSIDIAN_MISSILE_COUNT = 5;
+export const OBSIDIAN_OVERLOAD_MISSILE_COUNT = 6;
+export const OBSIDIAN_MISSILE_FIRST = 0.25;
+export const OBSIDIAN_MISSILE_GAP = 0.08;
+export const OBSIDIAN_MISSILE_SPEED = 96;
+export const OBSIDIAN_MISSILE_HOMING = 0.45;
+/** Wing-root offset from the hull center. Left fires first. */
+export const OBSIDIAN_WING_X = 22;
+export const OBSIDIAN_WING_Y = 4;
+
+export const OBSIDIAN_FAN_COUNT = 5;
+export const OBSIDIAN_FAN_SPREAD = 48;
+export const OBSIDIAN_OVERLOAD_FAN_COUNT = 7;
+export const OBSIDIAN_OVERLOAD_FAN_SPREAD = 64;
+export const OBSIDIAN_FAN_SPEED = 100;
+
+/**
+ * Strafe windows, seconds from the start of that mode.
+ * Main 1.6s: tell 0.30, dive until 0.75, bottom until 1.05, pull until 1.60.
+ * Overload 1.2s: 0.20 / 0.50 / 0.75 / 1.20.
+ */
+export const OBSIDIAN_STRAFE_TELL = 0.3;
+export const OBSIDIAN_STRAFE_DIVE = 0.75;
+export const OBSIDIAN_STRAFE_BOTTOM = 1.05;
+export const OBSIDIAN_STRAFE_END = 1.6;
+export const OBSIDIAN_OVERLOAD_STRAFE_TELL = 0.2;
+export const OBSIDIAN_OVERLOAD_STRAFE_DIVE = 0.5;
+export const OBSIDIAN_OVERLOAD_STRAFE_BOTTOM = 0.75;
+export const OBSIDIAN_OVERLOAD_STRAFE_END = 1.2;
+/** Draft bottom of the dive. The lock is y ≤ OBSIDIAN_STRAFE_Y_MAX. */
+export const OBSIDIAN_STRAFE_DIVE_Y = 280;
+export const OBSIDIAN_STRAFE_Y_MAX = 320;
+export const OBSIDIAN_STRAFE_SPEED = 130;
+export const OBSIDIAN_STRAFE_ROUND_GAP = 0.1;
+export const OBSIDIAN_STRAFE_LANES = 2;
+export const OBSIDIAN_STRAFE_LANE_GAP = 22;
+export const OBSIDIAN_STRAFE_ROUNDS = 4;
+export const OBSIDIAN_OVERLOAD_STRAFE_LANES = 3;
+export const OBSIDIAN_OVERLOAD_STRAFE_LANE_GAP = 20;
+export const OBSIDIAN_OVERLOAD_STRAFE_ROUNDS = 5;
+/** Nose offset for the bottom volley. */
+export const OBSIDIAN_GUN_Y = 36;
+/** Tail flame lengthening while the polyline or the strafe is flying. */
+export const OBSIDIAN_FLAME_BOOST = 0.5;
+
+/** Saucer show, seconds from the frame HP hits zero. Then the shared fly-off. */
+export const OBSIDIAN_SAUCER_SLIDE = 1.6;
+export const OBSIDIAN_WRECK_X = 180;
+export const OBSIDIAN_WRECK_Y = 300;
+export const OBSIDIAN_SAUCER_FROM_Y = -120;
+export const OBSIDIAN_SAUCER_TRAVEL = 1.6;
+export const OBSIDIAN_SAUCER_HOLD = 0.4;
+export const OBSIDIAN_SAUCER_X = 180;
+export const OBSIDIAN_SAUCER_Y = 100;
+export const OBSIDIAN_SAUCER_DIAMETER = 208;
+export const OBSIDIAN_CHARGE = 0.25;
+export const OBSIDIAN_BEAM = 0.55;
+export const OBSIDIAN_BEAM_WIDTH = 18;
+/** Beam ends, the hull breaks, `s4_ufo` starts, the saucer begins to leave. */
+export const OBSIDIAN_BREAK_AT = 4.4;
+export const OBSIDIAN_BREAK_SPAN = 1.2;
+export const OBSIDIAN_BREAK_EXPLOSIONS = 6;
+export const OBSIDIAN_SAUCER_EXIT = 2.4;
+export const OBSIDIAN_SAUCER_EXIT_Y = -140;
+export const OBSIDIAN_SAUCER_TOTAL = 6.8;
+/** Hit flash when the beam lands. Two frames at 60Hz, not the usual 0.05s. */
+export const OBSIDIAN_BEAM_FLASH = 2 / 60;
 
 /**
  * Cloud shadows over maps that set `cloudShadows` (陆地A / 陆地B / 河流A / 百战要塞 / 海面B / 黑曜舰空).

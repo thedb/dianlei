@@ -6,7 +6,8 @@
  *
  * Lifecycle: enter → (transition →) fight, per enabled phase → death → clear
  * → done. `boss.phase` names the current step: `enter`, a phase id, a
- * transition id, `death`, `clear`, or `done`.
+ * transition id, `death`, `clear`, or `done`. 黑曜 skips `death`: empty HP
+ * enters `saucer` and only then `clear`.
  */
 
 import type { Rng } from '@/engine/rng';
@@ -73,8 +74,15 @@ import {
   furnaceSyncMounts,
   stepFurnace,
 } from '@/game/systems/furnace';
+import {
+  obsidianOnFight,
+  obsidianOnTransition,
+  stepObsidian,
+  stepObsidianHold,
+} from '@/game/systems/obsidian';
+import { obsidianBeginSaucer, stepObsidianSaucer } from '@/game/systems/obsidianSaucer';
 
-export type BossStage = 'enter' | 'transition' | 'fight' | 'death' | 'clear' | 'done';
+export type BossStage = 'enter' | 'transition' | 'fight' | 'death' | 'saucer' | 'clear' | 'done';
 
 export interface BossPartRuntime {
   id: string;
@@ -209,6 +217,11 @@ export interface BossEvents {
   enterResult: boolean;
   consumedBullet: boolean;
   /**
+   * 黑曜 sets this once, on the frame the beam ends, so the battle can stamp
+   * `cutsceneAt` for `s4_ufo`. Other bosses leave it unset.
+   */
+  cutscene?: boolean;
+  /**
    * Player exhaust boost, 0–1, while 铁堡 holds a shed. Shot events omit it
    * so they do not clear a boost `updateBoss` already published.
    */
@@ -318,7 +331,14 @@ export interface BossHpBarLayout {
 }
 
 function extraLive(boss: BossRuntime): boolean {
-  if (boss.stage === 'death' || boss.stage === 'clear' || boss.stage === 'done') return true;
+  if (
+    boss.stage === 'death' ||
+    boss.stage === 'saucer' ||
+    boss.stage === 'clear' ||
+    boss.stage === 'done'
+  ) {
+    return true;
+  }
   if (boss.stage !== 'transition' && boss.stage !== 'fight') return false;
   return boss.phases[boss.phaseIndex]?.bar === 'extra';
 }
@@ -524,6 +544,7 @@ export function updateBoss(boss: BossRuntime, dt: number, world?: BossWorld): Bo
   const def = boss.def;
   const scripted = def.script === 'tiebao';
   const furnace = def.script === 'furnace';
+  const obsidian = def.script === 'obsidian';
   if (scripted) tiebaoSyncScroll(boss, world?.scroll);
 
   boss.prevX = boss.x;
@@ -552,8 +573,8 @@ export function updateBoss(boss: BossRuntime, dt: number, world?: BossWorld): Bo
     boss.phaseTime += dt;
     boss.driftTime += dt;
     if (scripted) scriptDt = dt;
-    else drift(boss);
-    if (furnace) scriptDt = dt;
+    else if (!obsidian) drift(boss);
+    if (furnace || obsidian) scriptDt = dt;
     attackDt = dt;
   } else if (boss.stage === 'transition') {
     boss.phaseTime += dt;
@@ -567,16 +588,23 @@ export function updateBoss(boss: BossRuntime, dt: number, world?: BossWorld): Bo
         drift(boss);
         if (held > 0) stepFurnace(boss, held, world, ev);
       }
+      if (obsidian && held > 0) stepObsidianHold(boss);
       startFight(boss);
       boss.phaseTime = leftover;
       attackDt = leftover;
       scriptDt = leftover;
     } else if (scripted) {
       scriptDt = dt;
+    } else if (obsidian) {
+      stepObsidianHold(boss);
     } else {
       drift(boss);
       if (furnace) scriptDt = dt;
     }
+  } else if (boss.stage === 'saucer') {
+    boss.phaseTime += dt;
+    stepObsidianSaucer(boss, dt, ev);
+    syncParts(boss);
   } else if (boss.stage === 'death') {
     boss.phaseTime += dt;
     spawnDueDeathExplosions(boss, ev);
@@ -598,6 +626,10 @@ export function updateBoss(boss: BossRuntime, dt: number, world?: BossWorld): Bo
     syncParts(boss);
   }
   if (scriptDt > 0 && furnace) stepFurnace(boss, scriptDt, world, ev);
+  if (scriptDt > 0 && obsidian && boss.stage === 'fight') {
+    stepObsidian(boss, scriptDt, world, ev);
+    syncParts(boss);
+  }
   if (attackDt > 0 && boss.stage === 'fight') tickAttacks(boss, attackDt, ev);
   if (scripted) ev.chaseBoost = tiebaoChaseBoost(boss);
   return ev;
@@ -644,6 +676,27 @@ export function resolveBossBullet(
   const ev = emptyBossEvents();
   if (!bossBlocksShots(boss)) return ev;
   if (boss.def.script === 'tiebao' && tiebaoTryShot(boss, bullet, damage, ev)) return ev;
+
+  if (boss.def.script === 'obsidian') {
+    const frame = boss.parts.find((part) => part.id === 'frame');
+    const hit =
+      frame !== undefined &&
+      frame.alive &&
+      !frame.falling &&
+      checkBulletEnemyCollision(
+        bullet.x,
+        bullet.y,
+        bullet.w,
+        bullet.h,
+        frame.worldX,
+        frame.worldY,
+        frame.radius
+      );
+    if (!hit || !frame) return ev;
+    ev.consumedBullet = true;
+    if (!boss.invulnerable) hurtPart(boss, frame, damage, ev);
+    return ev;
+  }
 
   const hittable = damageableParts(boss);
 
@@ -723,6 +776,14 @@ function hullOverlapsBullet(
 
 export function bossHitsPlayer(boss: BossRuntime, px: number, py: number): boolean {
   if (!bossBlocksShots(boss)) return false;
+  if (boss.def.script === 'obsidian') {
+    const frame = boss.parts.find((part) => part.id === 'frame' && part.alive && !part.falling);
+    if (!frame) return false;
+    const dx = px - frame.worldX;
+    const dy = py - frame.worldY;
+    const reach = HITBOX_RADIUS + frame.radius;
+    return dx * dx + dy * dy < reach * reach;
+  }
   if (boss.def.script === 'tiebao') {
     for (const seg of tiebaoHullSegments(boss)) {
       if (circleRect(px, py, HITBOX_RADIUS, seg.x, seg.y, seg.w, seg.h)) return true;
@@ -796,6 +857,7 @@ function startFight(boss: BossRuntime): void {
   resetLaserSweep(boss.laser);
   if (boss.def.script === 'tiebao') tiebaoOnFight(boss);
   if (boss.def.script === 'furnace') furnaceOnFight(boss);
+  if (boss.def.script === 'obsidian') obsidianOnFight(boss);
 }
 
 function drift(boss: BossRuntime): void {
@@ -946,6 +1008,7 @@ function killPart(boss: BossRuntime, part: BossPartRuntime, ev: BossEvents): voi
 /** Next phase: revive its targets on their segment HP and go invulnerable. */
 function beginTransition(boss: BossRuntime, _ev: BossEvents): void {
   if (boss.def.script === 'furnace') furnaceOnHold(boss);
+  if (boss.def.script === 'obsidian') obsidianOnTransition(boss);
   boss.phaseIndex++;
   const next = boss.phases[boss.phaseIndex]!;
   for (const id of next.targets) {
@@ -967,6 +1030,11 @@ function beginTransition(boss: BossRuntime, _ev: BossEvents): void {
 
 function beginDeath(boss: BossRuntime, ev: BossEvents): void {
   if (boss.stage === 'death' || boss.stage === 'clear' || boss.stage === 'done') return;
+  if (boss.stage === 'saucer') return;
+  if (boss.def.script === 'obsidian') {
+    obsidianBeginSaucer(boss);
+    return;
+  }
   if (boss.def.script === 'furnace') furnaceOnHold(boss);
   setStage(boss, 'death');
   boss.phaseTime = 0;

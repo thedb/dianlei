@@ -44,6 +44,7 @@ import {
   weaponLevel,
   type EquippedWeapon,
 } from '@/game/systems/playerWeapons';
+import { obsidianCutsceneActive } from '@/game/systems/obsidianSaucer';
 import { victoryExitBlocksInput } from '@/game/systems/victoryExit';
 import { carrierBlocksInput } from './carrierTakeoff';
 import {
@@ -164,7 +165,8 @@ export function isPlayerVulnerable(b: Battle): boolean {
   return (
     isVulnerable(b.state) &&
     !victoryExitBlocksInput(b.victory.phase) &&
-    !carrierBlocksInput(b.takeoff.phase)
+    !carrierBlocksInput(b.takeoff.phase) &&
+    !obsidianCutsceneActive(b.boss)
   );
 }
 
@@ -277,6 +279,9 @@ export function steerPlayer(b: Battle, dt: number, input: InputState): void {
     }
   }
   player.lastBankFrame = newBankFrame;
+
+  // The saucer show keeps the stick. Guns, wingmen, and the bomb do not.
+  if (obsidianCutsceneActive(b.boss)) return;
 
   // Main and sub fire together while A is held, each on its own clock
   const held = b.controls.fireHeld;

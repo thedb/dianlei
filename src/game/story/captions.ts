@@ -1,14 +1,13 @@
 /**
  * Story subtitles. Lines come from `docs/电雷_故事资产表_v1.md` §2.
  * Stage 1 uses `s1_open` / `s1_end`. Stage 2 uses `s2_open` / `s2_end`.
- * Stage 3 uses `s3_open` / `s3_end`. Stage 4 uses `s4_open`.
- * `s4_wreck` and `s4_ufo` are stored so the lines stay locked; `mid` and
- * `cutscene` still do not start a clock.
+ * Stage 3 uses `s3_open` / `s3_end`. Stage 4 uses `s4_open` and `s4_ufo`.
+ * The three stage-4 sentences stay as written. `s4_wreck` is stored and
+ * still has no clock (the stage-4 waves own that). `s4_ufo` starts at
+ * `cutsceneAt`, stamped when the saucer beam ends.
  *
- * `mid` and `cutscene` are extension points for s4_wreck / s4_ufo / s5_end.
- * They are accepted on a stage cue and draw nothing until a later milestone
- * supplies a clock. A later cue in the list replaces an earlier one while
- * both windows are open, so the next beat dismisses the line.
+ * `mid` draws nothing until a later milestone supplies a clock. A later cue
+ * in the list replaces an earlier one while both windows are open.
  */
 
 import {
@@ -40,15 +39,20 @@ export interface ShownCaption {
   text: string;
 }
 
-function triggerAt(at: CaptionAt, finishedAt: number | null): number | null {
+function triggerAt(
+  at: CaptionAt,
+  finishedAt: number | null,
+  cutsceneAt: number | null
+): number | null {
   switch (at) {
     case 'open':
       return CAPTION_OPEN_AT;
     case 'clear':
       return finishedAt;
     case 'mid':
-    case 'cutscene':
       return null;
+    case 'cutscene':
+      return cutsceneAt;
     default: {
       const _never: never = at;
       return _never;
@@ -58,17 +62,19 @@ function triggerAt(at: CaptionAt, finishedAt: number | null): number | null {
 
 /**
  * The line to draw now, or null. `finishedAt` is the clock when the boss
- * entered `clear` (null until then). Game over and pause are the caller's.
+ * entered `clear` (null until then). `cutsceneAt` is the beam-end clock for
+ * `s4_ufo` (null until then). Game over and pause are the caller's.
  */
 export function activeCaption(
   cues: readonly StageCaption[] | undefined,
   gameTime: number,
-  finishedAt: number | null
+  finishedAt: number | null,
+  cutsceneAt: number | null = null
 ): ShownCaption | null {
   if (!cues) return null;
   let shown: ShownCaption | null = null;
   for (const cue of cues) {
-    const start = triggerAt(cue.at, finishedAt);
+    const start = triggerAt(cue.at, finishedAt, cutsceneAt);
     if (start === null) continue;
     const age = gameTime - start;
     if (age < 0 || age >= CAPTION_HOLD) continue;

@@ -24,6 +24,7 @@ import {
   type BossHpBarLayout,
 } from '@/game/systems/boss';
 import { introBanner } from '@/game/systems/score';
+import { obsidianShowName } from '@/game/systems/obsidianSaucer';
 import { activeCaption, captionBarY } from '@/game/story/captions';
 import { tiebaoReadout } from '@/game/systems/tiebao';
 import { drawControls, drawPauseButton } from '@/game/ui/controlsOverlay';
@@ -103,7 +104,11 @@ function drawStageHud(renderer: Renderer, b: Battle, assets: GameAssets): void {
   if (
     boss &&
     boss.def.title &&
-    (boss.stage === 'enter' || boss.stage === 'fight' || boss.stage === 'transition')
+    (boss.stage === 'enter' ||
+      boss.stage === 'fight' ||
+      boss.stage === 'transition' ||
+      boss.stage === 'saucer') &&
+    (boss.def.script !== 'obsidian' || obsidianShowName(boss))
   ) {
     drawText(ctx, boss.def.title, LOGICAL_W / 2, 48, 13, '#fff', 'center');
     if (boss.def.subtitle) {
@@ -147,7 +152,7 @@ function drawStageHud(renderer: Renderer, b: Battle, assets: GameAssets): void {
   }
 
   if (!state.gameOver && !b.pause.isOpen()) {
-    const line = activeCaption(stage.captions, gameTime, b.finishedAt);
+    const line = activeCaption(stage.captions, gameTime, b.finishedAt, b.cutsceneAt);
     if (line) drawCaption(ctx, line.text, b.scene.safeArea.bottom);
   }
   drawCarrierLights(ctx, b.takeoff);

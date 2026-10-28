@@ -182,8 +182,8 @@ export interface StageMaps {
 
 /**
  * When a story line is shown.
- * `mid` and `cutscene` are reserved for later beats (s4_wreck, s4_ufo, s5)
- * and are not fired yet — `activeCaption` draws nothing for them.
+ * `cutscene` starts at the battle's `cutsceneAt` (黑曜 beam end, `s4_ufo`).
+ * `mid` is still not on a clock (`s4_wreck` waits for the stage-4 waves).
  */
 export type CaptionAt = 'open' | 'clear' | 'mid' | 'cutscene';
 
@@ -322,9 +322,11 @@ export interface BossDef {
   /**
    * Scripted motion on top of the phase table. `tiebao` rides fixed rails and
    * runs its own weapon cycle. `furnace` keeps the sine drift and adds orbiting
-   * pods, the petal iris, and its three weapons. Omit it for the plain drift.
+   * pods, the petal iris, and its three weapons. `obsidian` flies the three
+   * perches and, at empty HP, the saucer show instead of the normal death.
+   * Omit it for the plain drift.
    */
-  script?: 'tiebao' | 'furnace';
+  script?: 'tiebao' | 'furnace' | 'obsidian';
   /** Two-line name plate. Omitted bosses draw none. */
   title?: string;
   subtitle?: string;
