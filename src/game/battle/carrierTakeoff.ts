@@ -1,8 +1,8 @@
 /**
  * Stage 4 carrier launch. A stage-start entry parks the ship on the deck,
  * holds the stage clock, counts down with left-side lamps, then ramps the
- * tail flame and rushes forward as the map starts to scroll. Control returns
- * when the rush ends. 挑战 Boss and 地图预览 never arm it.
+ * tail flame and rushes up to `CARRIER_RELEASE_Y` as the map starts to scroll.
+ * Control returns when the rush ends. 挑战 Boss and 地图预览 never arm it.
  *
  * The clock stays at 0 through the lamps, so scroll, waves, and the boss
  * warning stay on `BG_SCROLL_SPEED * gameTime` once the rush begins.
@@ -18,9 +18,9 @@ import {
   CARRIER_LIGHT_Y,
   CARRIER_LIGHTS_TIME,
   CARRIER_PARK_Y,
+  CARRIER_RELEASE_Y,
   CARRIER_RUSH_TIME,
   LOGICAL_W,
-  PLAYER_SPAWN_Y,
 } from '@/game/config';
 import { COLOR, PALETTE } from '@/game/palette';
 
@@ -139,7 +139,7 @@ export function stepCarrierTakeoff(takeoff: CarrierTakeoff, player: TakeoffShip,
     player.y = CARRIER_PARK_Y;
     player.velocityY = 0;
     takeoff.flame = 0;
-    // 120 frames of 1/60 land a few ulps under 2s.
+    // An integer number of 1/60 frames lands a few ulps under the nominal second.
     if (takeoff.t + 1e-6 >= CARRIER_LIGHTS_TIME) {
       takeoff.phase = 'rush';
       takeoff.t = 0;
@@ -148,12 +148,12 @@ export function stepCarrierTakeoff(takeoff: CarrierTakeoff, player: TakeoffShip,
   }
   const u = Math.min(1, takeoff.t / CARRIER_RUSH_TIME);
   player.x = LOGICAL_W / 2;
-  player.y = CARRIER_PARK_Y + (PLAYER_SPAWN_Y - CARRIER_PARK_Y) * rushEase(u);
+  player.y = CARRIER_PARK_Y + (CARRIER_RELEASE_Y - CARRIER_PARK_Y) * rushEase(u);
   // Negative y lengthens the tail flame in drawEngineFlame.
   player.velocityY = -u;
   takeoff.flame = u;
   if (takeoff.t + 1e-6 >= CARRIER_RUSH_TIME) {
-    player.y = PLAYER_SPAWN_Y;
+    player.y = CARRIER_RELEASE_Y;
     player.velocityY = 0;
     takeoff.flame = 0;
     takeoff.phase = 'done';

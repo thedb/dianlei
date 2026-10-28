@@ -5,6 +5,7 @@ import {
   CARRIER_LIGHT_STEP,
   CARRIER_LIGHTS_TIME,
   CARRIER_PARK_Y,
+  CARRIER_RELEASE_Y,
   CARRIER_RUSH_TIME,
   LOGICAL_H,
   LOGICAL_W,
@@ -38,13 +39,17 @@ function ship(y = 0): TakeoffShip {
 }
 
 describe('carrier takeoff', () => {
-  it('keeps the draft countdown and rush inside the locked windows', () => {
-    expect(CARRIER_LIGHTS_TIME).toBeGreaterThanOrEqual(1.5);
-    expect(CARRIER_LIGHTS_TIME).toBeLessThanOrEqual(2.5);
-    expect(CARRIER_RUSH_TIME).toBeGreaterThanOrEqual(0.6);
-    expect(CARRIER_RUSH_TIME).toBeLessThanOrEqual(1);
+  it('runs 1.5× the first cut and releases in the lower middle', () => {
+    expect(CARRIER_LIGHTS_TIME).toBeCloseTo(3, 5);
+    expect(CARRIER_RUSH_TIME).toBeCloseTo(1.2, 5);
+    expect(CARRIER_LIGHTS_TIME + CARRIER_RUSH_TIME).toBeCloseTo(4.2, 5);
     expect(CARRIER_LIGHT_COUNT * CARRIER_LIGHT_STEP).toBeLessThan(CARRIER_LIGHTS_TIME);
-    expect(CARRIER_PARK_Y).toBeGreaterThan(PLAYER_SPAWN_Y);
+    expect(CARRIER_RELEASE_Y).toBeGreaterThanOrEqual(380);
+    expect(CARRIER_RELEASE_Y).toBeLessThanOrEqual(450);
+    expect(CARRIER_RELEASE_Y).toBeLessThan(PLAYER_SPAWN_Y);
+    expect(CARRIER_PARK_Y - CARRIER_RELEASE_Y).toBeGreaterThanOrEqual(
+      2 * (CARRIER_PARK_Y - PLAYER_SPAWN_Y)
+    );
     expect(CARRIER_PARK_Y + PLAYER_SPRITE_H / 2).toBeLessThan(LOGICAL_H);
   });
 
@@ -66,7 +71,7 @@ describe('carrier takeoff', () => {
     expect(carrierTakeoffApplies('4', 'stage', { hud: 'none', spawns: true })).toBe(false);
   });
 
-  it('parks on the deck, ramps the flame, then hands over at the spawn', () => {
+  it('parks on the deck, ramps the flame, then hands over at the release height', () => {
     const takeoff = createCarrierTakeoff();
     const player = ship(LOGICAL_H + 40);
     const flying = { isFlying: true };
@@ -100,7 +105,7 @@ describe('carrier takeoff', () => {
 
     while (takeoff.phase === 'rush') stepCarrierTakeoff(takeoff, player, DT);
     expect(takeoff.phase).toBe('done');
-    expect(player.y).toBe(PLAYER_SPAWN_Y);
+    expect(player.y).toBe(CARRIER_RELEASE_Y);
     expect(player.x).toBe(LOGICAL_W / 2);
     expect(carrierBlocksInput(takeoff.phase)).toBe(false);
     expect(carrierHoldsClock(takeoff.phase)).toBe(false);

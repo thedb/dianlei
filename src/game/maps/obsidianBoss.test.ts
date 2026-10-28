@@ -29,8 +29,8 @@ import { buildMapTrack, buildStageTrack } from './track';
 type Grid = readonly (readonly TileId[])[];
 
 const ALLOWED: ReadonlySet<TileId> = new Set([
-  TileId.water,
-  TileId.waterB,
+  TileId.ocean,
+  TileId.oceanB,
   TileId.enemyDeck,
   TileId.enemyMark,
   TileId.deckSpot,
@@ -78,10 +78,10 @@ describe('黑曜舰空', () => {
     expect(seaBTopRow()).toEqual(sea[sea.length - 1]);
     const seam = obsidianDeckSeam();
     expect(seam.filter((id) => id === TileId.enemyDeck)).toHaveLength(19);
-    expect(seam[0]).toBe(TileId.water);
-    expect(seam[1]).toBe(TileId.water);
-    expect(seam[21]).toBe(TileId.water);
-    expect(seam[22]).toBe(TileId.water);
+    expect(seam[0]).toBe(TileId.ocean);
+    expect(seam[1]).toBe(TileId.ocean);
+    expect(seam[21]).toBe(TileId.ocean);
+    expect(seam[22]).toBe(TileId.ocean);
     expect(grid[loop - 1]).toEqual(seam);
     expect(grid[loop]).toEqual(seam);
     expect(grid[grid.length - 1]).toEqual(seam);

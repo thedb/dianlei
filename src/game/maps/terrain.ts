@@ -38,6 +38,8 @@ const LAND: readonly TileId[] = [
 const WATER: readonly TileId[] = [
   TileId.water,
   TileId.waterB,
+  TileId.ocean,
+  TileId.oceanB,
   TileId.shallow,
   TileId.lake,
   // Stage 4 gun pad: painted as metal, masked as water so a 2×2 gun can stand on it.

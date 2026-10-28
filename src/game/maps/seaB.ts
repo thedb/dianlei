@@ -7,7 +7,8 @@
  *
  * Edge rows are painted here. `sealEdges` is not used: it would write lake and
  * meadow. The planner still joins every chunk on stream side `none`.
- * Open water is `water` / `waterB`. The last row is entirely `water`.
+ * Open water is `ocean` / `oceanB` (calm mounds). The last row is entirely
+ * `ocean`, so the boss approach can copy it. `water` / `waterB` are not used.
  */
 
 import { MAP_CHUNK_ROWS, SEA_B_SEED } from '@/game/config';
@@ -175,11 +176,15 @@ function row0Of(id: SeaChunkId): number {
   return chunkIndex(id) * MAP_CHUNK_ROWS;
 }
 
-function fillSwell(p: ChunkPainter): void {
+/**
+ * Open sea. About one cell in five is the second mound, scattered by hash,
+ * not a row stripe. Edge rows are sealed to plain `ocean` afterwards.
+ */
+export function paintSeaSurface(p: ChunkPainter): void {
   for (let r = 0; r < p.rows; r++) {
     for (let c = 0; c < p.cols; c++) {
-      const stripe = r % 8 === 5 && r !== 0 && r !== p.rows - 1;
-      p.set(c, r, stripe ? TileId.waterB : TileId.water);
+      const patch = hash(c * 3 + 11, r * 7 + 5) % 5 === 0;
+      p.set(c, r, patch ? TileId.oceanB : TileId.ocean);
     }
   }
 }
@@ -322,19 +327,19 @@ function pinAnchors(p: ChunkPainter, origin: number): void {
   for (const anchor of SEA_FLOAT_ANCHORS) {
     const local = anchor.row - origin;
     if (local <= 0 || local >= p.rows - 1) continue;
-    p.set(anchor.col, local, TileId.water);
+    p.set(anchor.col, local, TileId.ocean);
   }
 }
 
 function sealRow(p: ChunkPainter, row: number, edge: SeaEdge): void {
   for (let c = 0; c < p.cols; c++) {
     const deck = edge === 'deck' && c >= 2 && c <= 20;
-    p.set(c, row, deck ? TileId.carrierDeck : TileId.water);
+    p.set(c, row, deck ? TileId.carrierDeck : TileId.ocean);
   }
 }
 
 function paintSeaChunk(p: ChunkPainter, id: SeaChunkId): void {
-  fillSwell(p);
+  paintSeaSurface(p);
   if (id === 'deckCatapult') paintCatapult(p);
   else if (id === 'deckStern') paintStern(p);
   else if (id === 'wakeOpen') paintWakeOpen(p);

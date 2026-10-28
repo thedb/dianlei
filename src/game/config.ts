@@ -656,6 +656,20 @@ export const STAGE3_RISK_RIGHT_X = 312;
  */
 export const SEA_B_CHUNKS = 9;
 export const SEA_B_SEED = 37;
+
+/**
+ * Open-sea swell drawn over baked `ocean` tiles. Crests are this many pixels
+ * apart (the old water tile repeated a bright band every 8px). `SCROLL` is
+ * how far a crest moves on screen per pixel of map scroll: 1 would nail it
+ * to the tile, 0 would leave it stuck to the camera. `DRIFT` is extra px/s
+ * from the stage clock. Specks are a sparser foam family on its own phase.
+ */
+export const SEA_SWELL_SPACING = 64;
+export const SEA_SWELL_SCROLL = 0.42;
+export const SEA_SWELL_DRIFT = 14;
+export const SEA_SWELL_SPECK_SPACING = 112;
+export const SEA_SWELL_SPECK_SCROLL = 0.25;
+export const SEA_SWELL_SPECK_DRIFT = 22;
 export const OBSIDIAN_BOSS_CHUNKS = 2;
 export const OBSIDIAN_BOSS_SEED = 43;
 
@@ -670,20 +684,32 @@ export const OBSIDIAN_ENTER_AT = 123;
 export const STAGE4_WRECK_AT = 96;
 
 /**
- * Stage 4 carrier launch. Draft timings from the 2026-10-28 deck playtest.
- * Only a stage-start entry plays this (关卡选择 / stage handoff). 挑战 Boss
- * and 地图预览 do not. The stage clock stays at 0 through the lamps, so the
- * warning and the boss stay on `scroll = BG_SCROLL_SPEED * t`.
+ * Stage 4 carrier launch. Only a stage-start entry plays this (关卡选择 /
+ * stage handoff). 挑战 Boss and 地图预览 do not. The stage clock stays at 0
+ * through the lamps, so the warning and the boss stay on
+ * `scroll = BG_SCROLL_SPEED * t`.
  * Five lamps light every `CARRIER_LIGHT_STEP`, then hold until
  * `CARRIER_LIGHTS_TIME`. The rush eases the ship from `CARRIER_PARK_Y` up to
- * `PLAYER_SPAWN_Y` while the tail flame ramps and the map starts scrolling.
+ * `CARRIER_RELEASE_Y` while the tail flame ramps and the map starts scrolling.
+ * Control returns there, not at `PLAYER_SPAWN_Y` (respawn still uses that).
+ *
+ * 2026-10-28 playtest: the first cut was 2.0s + 0.8s and stopped at y=560,
+ * 48px above the deck. This cut is 1.5× that clock (3.0s + 1.2s). A literal
+ * 2× of the 48px hop would stop at y=512, still beside the normal spawn.
+ * Release is the lower-middle of the 640 frame instead.
  */
-export const CARRIER_LIGHTS_TIME = 2;
+export const CARRIER_LIGHTS_TIME = 3;
 export const CARRIER_LIGHT_COUNT = 5;
-export const CARRIER_LIGHT_STEP = 0.32;
-export const CARRIER_RUSH_TIME = 0.8;
+export const CARRIER_LIGHT_STEP = 0.48;
+export const CARRIER_RUSH_TIME = 1.2;
 /** Parked on the deck, fully on screen (sprite is 32px, anchor at center). */
 export const CARRIER_PARK_Y = 608;
+/**
+ * Control unlocks here. 416 is the middle of the 380–450 lower-middle band
+ * (screen center is 320, the normal spawn is 560). Travel from the park is
+ * 192px, four times the old hop and more than double it.
+ */
+export const CARRIER_RELEASE_Y = 416;
 /** Left-side lamp gantry, logical pixels. Integer cells, palette colors. */
 export const CARRIER_LIGHT_X = 20;
 export const CARRIER_LIGHT_Y = 188;

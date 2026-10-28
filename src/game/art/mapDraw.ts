@@ -31,6 +31,7 @@ import {
   type StripPixels,
 } from './mapRaster';
 import { createPlanetLayer, drawPlanets, type BakedPlanet } from './planets';
+import { drawSeaSwell } from './seaSwell';
 import { buildStars, type Star } from './tiles';
 
 export type MapCanvas = OffscreenCanvas | HTMLCanvasElement;
@@ -198,7 +199,8 @@ function drawLayer(
   layer: TrackLayer,
   scroll: number,
   alpha: number,
-  prefetch: boolean
+  prefetch: boolean,
+  time: number
 ): void {
   // Negative local keeps the layer above the view so its first row enters
   // from the top. Clamping to 0 would pop the whole first screen on.
@@ -209,6 +211,7 @@ function drawLayer(
   for (const seg of segs) {
     blitSegment(ctx, art, layer, seg.local, seg.y0, seg.y1, alpha);
   }
+  if (alpha > 0.2) drawSeaSwell(ctx, layer, scroll, time, alpha);
   if (prefetch) {
     const top = segs[segs.length - 1];
     if (top) {
@@ -238,7 +241,7 @@ export function drawBackground(
   track.layers.forEach((layer, i) => {
     const alpha = fade.layers[i] ?? 0;
     if (alpha <= 0.01) return;
-    drawLayer(ctx, art, layer, frame.scroll, alpha, alpha > 0.2);
+    drawLayer(ctx, art, layer, frame.scroll, alpha, alpha > 0.2, time);
     if (layer.map.cloudShadows) shadowAlpha = Math.max(shadowAlpha, alpha);
   });
   // One shadow pass. Drawing it per layer stacks the stamps into a dark blob

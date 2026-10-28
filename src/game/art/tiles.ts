@@ -14,6 +14,8 @@
  * burn mark. Ids 87–101 are the stage-4 sea set: our flight deck, wake,
  * escort hull and gun pad, cold wreckage, a 2×2 friendly fighter, and the
  * enemy carrier's steel deck, red line, and empty parking spot.
+ * Ids 102–103 are the open-sea mounds (`ocean` / `oceanB`). `water` /
+ * `waterB` stay the river and lake tiles.
  * Planes, wheels, and huts are map decoration only.
  */
 
@@ -42,6 +44,7 @@ import {
   deckSpotTile,
   enemyDeckTile,
   enemyMarkTile,
+  oceanTile,
   wakeTile,
   wreckAlloyTile,
   wreckBurnTile,
@@ -174,11 +177,13 @@ export const TileId = {
   enemyDeck: 99,
   enemyMark: 100,
   deckSpot: 101,
+  ocean: 102,
+  oceanB: 103,
 } as const;
 
 export type TileId = (typeof TileId)[keyof typeof TileId];
 
-export const TILE_COUNT = 102;
+export const TILE_COUNT = 104;
 
 /** Screen quadrants of a 2×2 parked plane: top-left, top-right, bottom-left, bottom-right. */
 export const PLANE = [TileId.planeTL, TileId.planeTR, TileId.planeBL, TileId.planeBR] as const;
@@ -924,6 +929,8 @@ function paintSeaTiles(tiles: SpriteData[], tall: Array<boolean[][] | null>): vo
     [TileId.enemyDeck, flatSea(enemyDeckTile())],
     [TileId.enemyMark, flatSea(enemyMarkTile())],
     [TileId.deckSpot, flatSea(deckSpotTile())],
+    [TileId.ocean, flatSea(oceanTile(0))],
+    [TileId.oceanB, flatSea(oceanTile(1))],
   ];
   for (const [id, art] of placed) {
     tiles[id] = art.pixels;

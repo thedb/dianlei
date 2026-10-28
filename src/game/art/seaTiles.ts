@@ -1,6 +1,7 @@
 /**
  * 海面B / 黑曜舰空 tiles (ids 87–101).
- * Open water stays the existing `water` / `waterB` tiles. These cells are the
+ * Open water is `ocean` / `oceanB` (low-contrast mounds, not scanlines).
+ * `water` / `waterB` stay the river tiles. These cells are also the
  * flight deck, the escort hulls, the cold wreckage, and the enemy carrier.
  * No palette 0 or 1 as a fill. Player cyan 10–13 is not a body colour:
  * wreckage uses grays 3–5, pale gray 6, white 7, and pale cyan 9 as a speck.
@@ -25,6 +26,7 @@ const CC = COLOR.TERRAIN_CONCRETE;
 const ER = COLOR.ENEMY_RED;
 const WO = COLOR.WATER_OCEAN;
 const WM = COLOR.WATER_MEDIUM;
+const WS = COLOR.WATER_SHALLOW;
 const WF = COLOR.WATER_FOAM;
 const WD = COLOR.WATER_DEEP;
 
@@ -40,6 +42,38 @@ function solidTall(pixels: SpriteData): SeaTileArt {
       Array.from({ length: pixels[0]!.length }, () => true)
     ),
   };
+}
+
+/**
+ * Open sea. Wide mounds of deep / medium blue on ocean blue, two salts so
+ * neighbours do not line up into a screen-wide stripe. No foam row: the
+ * moving specks are drawn later, in `seaSwell.ts`.
+ */
+export function oceanTile(salt: number): SpriteData {
+  const g = createGrid(N, N, WO);
+  const blobs =
+    salt === 0
+      ? [
+          { x: 0, y: 1, w: 6, h: 4, c: WD },
+          { x: 9, y: 5, w: 7, h: 5, c: WM },
+          { x: 2, y: 11, w: 5, h: 4, c: WD },
+          { x: 12, y: 0, w: 3, h: 2, c: WM },
+        ]
+      : [
+          { x: 10, y: 0, w: 6, h: 4, c: WD },
+          { x: 0, y: 4, w: 8, h: 5, c: WM },
+          { x: 8, y: 11, w: 6, h: 4, c: WM },
+          { x: 1, y: 13, w: 4, h: 3, c: WD },
+        ];
+  for (const blob of blobs) fillRect(g, blob.x, blob.y, blob.w, blob.h, blob.c);
+  if (salt === 0) {
+    plot(g, 14, 9, WS);
+    plot(g, 4, 8, WS);
+  } else {
+    plot(g, 6, 2, WS);
+    plot(g, 13, 7, WS);
+  }
+  return g;
 }
 
 /** Our flight deck: concrete with a pale seam. Brighter than the day sea. */

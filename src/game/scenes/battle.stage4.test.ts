@@ -11,11 +11,11 @@ import {
   BG_SCROLL_SPEED,
   CARRIER_LIGHTS_TIME,
   CARRIER_PARK_Y,
+  CARRIER_RELEASE_Y,
   CARRIER_RUSH_TIME,
   LOGICAL_H,
   LOGICAL_W,
   OBSIDIAN_ENTER_AT,
-  PLAYER_SPAWN_Y,
 } from '@/game/config';
 import type { CarriedRun, SceneContext } from './types';
 import { createBattleScene } from './battle';
@@ -125,7 +125,7 @@ describe('stage 4 map entry', () => {
     const rushing = scene.getBattleView().player;
     expect(rushing.x).toBe(LOGICAL_W / 2);
     expect(rushing.y).toBeLessThan(CARRIER_PARK_Y);
-    expect(rushing.y).toBeGreaterThan(PLAYER_SPAWN_Y);
+    expect(rushing.y).toBeGreaterThan(CARRIER_RELEASE_Y);
     info = scene.getDebugInfo!();
     expect(info.bulletCount).toBe(0);
     expect(info.bombs).toBe(bombs);
@@ -134,7 +134,7 @@ describe('stage 4 map entry', () => {
     scene.update(DT, held);
     const live = scene.getBattleView().player;
     info = scene.getDebugInfo!();
-    expect(live.y).toBeCloseTo(PLAYER_SPAWN_Y, 5);
+    expect(live.y).toBeCloseTo(CARRIER_RELEASE_Y, 5);
     expect(live.x).toBeGreaterThan(LOGICAL_W / 2);
     expect(info.bulletCount).toBeGreaterThan(0);
     expect(info.bombs).toBe(bombs);

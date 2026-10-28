@@ -43,8 +43,8 @@ import { tileTerrain } from './terrain';
 type Grid = readonly (readonly TileId[])[];
 
 const ALLOWED: ReadonlySet<TileId> = new Set([
-  TileId.water,
-  TileId.waterB,
+  TileId.ocean,
+  TileId.oceanB,
   TileId.carrierDeck,
   TileId.carrierMark,
   TileId.carrierIsland,
@@ -121,7 +121,11 @@ describe('海面B', () => {
     expect(TileId.harborBurn).toBe(86);
     expect(TileId.carrierDeck).toBe(87);
     expect(TileId.deckSpot).toBe(101);
-    expect(TILE_COUNT).toBe(102);
+    expect(TileId.ocean).toBe(102);
+    expect(TileId.oceanB).toBe(103);
+    expect(TILE_COUNT).toBe(104);
+    expect(tileTerrain(TileId.ocean)).toBe('water');
+    expect(tileTerrain(TileId.oceanB)).toBe('water');
     expect(tileTerrain(TileId.cruiserGunDeck)).toBe('water');
     expect(tileTerrain(TileId.cruiserHull)).toBe('feature');
     expect(tileTerrain(TileId.carrierDeck)).toBe('feature');
@@ -148,7 +152,7 @@ describe('海面B', () => {
       expectEdge(grid, index * MAP_CHUNK_ROWS + MAP_CHUNK_ROWS - 1, top, id);
     }
     const last = grid[grid.length - 1]!;
-    expect(last.every((id) => id === TileId.water)).toBe(true);
+    expect(last.every((id) => id === TileId.ocean)).toBe(true);
     expect(seaBTopRow()).toEqual(last);
   });
 
@@ -253,7 +257,7 @@ describe('海面B', () => {
         const id = cell(grid, c, r);
         const onDeck = c >= span.c0 && c <= span.c1;
         if (!onDeck) {
-          expect([TileId.water, TileId.waterB]).toContain(id);
+          expect([TileId.ocean, TileId.oceanB]).toContain(id);
         }
       }
     }
@@ -340,7 +344,7 @@ describe('海面B', () => {
   it('leaves eight water anchors and an unarmed sentry', () => {
     expect(SEA_FLOAT_ANCHORS).toHaveLength(8);
     for (const anchor of SEA_FLOAT_ANCHORS) {
-      expect([TileId.water, TileId.waterB]).toContain(cell(grid, anchor.col, anchor.row));
+      expect(cell(grid, anchor.col, anchor.row)).toBe(TileId.ocean);
       expect(anchor.row % MAP_CHUNK_ROWS).not.toBe(0);
       expect(anchor.row % MAP_CHUNK_ROWS).not.toBe(MAP_CHUNK_ROWS - 1);
     }
@@ -399,6 +403,31 @@ describe('海面B', () => {
     expect(rim).toBeGreaterThan(12);
   });
 
+  it('paints open water as scattered mounds, not the river scanline tiles', () => {
+    expect(grid.some((row) => row.includes(TileId.water) || row.includes(TileId.waterB))).toBe(
+      false
+    );
+    const open = grid.slice(6 * MAP_CHUNK_ROWS + 1, 7 * MAP_CHUNK_ROWS - 1);
+    const oceanB = open.reduce((n, row) => n + row.filter((id) => id === TileId.oceanB).length, 0);
+    expect(oceanB).toBeGreaterThan(20);
+    expect(oceanB).toBeLessThan(open.length * MAP_TILES_X * 0.4);
+    for (const id of [TileId.ocean, TileId.oceanB]) {
+      const pixels = getTilePixels()[id]!;
+      let brightBands = 0;
+      let foam = 0;
+      for (const row of pixels) {
+        const bright = row.filter((v) => v === 38 || v === 39).length;
+        foam += row.filter((v) => v === 39).length;
+        if (bright >= 14) brightBands++;
+      }
+      expect(brightBands, `tile ${id}`).toBe(0);
+      expect(foam, `tile ${id}`).toBe(0);
+    }
+    const river = getTilePixels()[TileId.water]!;
+    const riverBands = river.filter((row) => row.every((v) => v === row[0])).length;
+    expect(riverBands).toBeGreaterThan(8);
+  });
+
   it('stays at least as bright as the existing water tile', () => {
     const water = meanLum([Array.from({ length: MAP_TILES_X }, () => TileId.water)], 0, 1);
     const chunk = (index: number) => meanLum(grid, index * MAP_CHUNK_ROWS, MAP_CHUNK_ROWS);
@@ -414,7 +443,7 @@ describe('海面B', () => {
   });
 
   it('keeps palette 0, 1, and player cyan out of the new sea tiles', () => {
-    for (let id = TileId.carrierDeck; id <= TileId.deckSpot; id++) {
+    for (let id = TileId.carrierDeck; id <= TileId.oceanB; id++) {
       const colors = indicesOf(id as TileId);
       expect(colors.has(0), `tile ${id}`).toBe(false);
       expect(colors.has(1), `tile ${id}`).toBe(false);
@@ -455,14 +484,14 @@ function expectEdge(grid: Grid, row: number, edge: 'deck' | 'sea', id: SeaChunkI
   const line = grid[row]!;
   if (edge === 'sea') {
     expect(
-      line.every((cellId) => cellId === TileId.water),
+      line.every((cellId) => cellId === TileId.ocean),
       `${id} row ${row}`
     ).toBe(true);
     return;
   }
   line.forEach((cellId, col) => {
     const deck = col >= 2 && col <= 20;
-    expect(cellId, `${id} ${col},${row}`).toBe(deck ? TileId.carrierDeck : TileId.water);
+    expect(cellId, `${id} ${col},${row}`).toBe(deck ? TileId.carrierDeck : TileId.ocean);
   });
 }
 
