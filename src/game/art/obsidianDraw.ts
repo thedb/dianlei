@@ -73,11 +73,13 @@ function drawBlade(
   frame: HullFrame,
   x: number,
   y: number,
-  angle: number
+  angle: number,
+  mirror: boolean
 ): void {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(angle);
+  if (mirror) ctx.scale(-1, 1);
   draw.drawImage(frame.canvas, -frame.anchorX, -frame.anchorY);
   ctx.restore();
 }
@@ -108,18 +110,6 @@ export function drawObsidianBoss(
 
   if (!cut.broken) {
     const wreck = cut.active;
-    const bladeArt = wreck ? assets.parts.bladeStub : assets.parts.blade;
-    const stub = assets.parts.bladeStub ?? bladeArt;
-    const bladeOrder = OBSIDIAN_BLADES.map((spec, index) => ({ spec, index })).sort((a, b) => {
-      if (a.spec.role === b.spec.role) return a.index - b.index;
-      return a.spec.role === 'outer' ? -1 : 1;
-    });
-    for (const { spec, index } of bladeOrder) {
-      const part = boss.parts.find((item) => item.id === spec.id);
-      const art = part?.alive ? bladeArt : stub;
-      if (!art) continue;
-      drawBlade(ctx, draw, art, boss.x + spec.x, boss.y + spec.y, obsidianBladeAngle(boss, index));
-    }
     const frame = wreck ? assets.parts.wreck : motion.warn ? assets.hullOpen : assets.hull;
     const bank = wreck ? OBSIDIAN_WRECK_BANK * Math.min(1, cut.t / 0.45) : motion.bank;
     const boost = wreck ? 0 : motion.flameBoost;
@@ -137,6 +127,30 @@ export function drawObsidianBoss(
         ctx.restore();
       }
       ctx.restore();
+    }
+    const stub = assets.parts.bladeStub;
+    const bladeOrder = OBSIDIAN_BLADES.map((spec, index) => ({ spec, index })).sort((a, b) => {
+      if (a.spec.role === b.spec.role) return a.index - b.index;
+      return a.spec.role === 'outer' ? -1 : 1;
+    });
+    for (const { spec, index } of bladeOrder) {
+      const part = boss.parts.find((item) => item.id === spec.id);
+      const art =
+        wreck || !part?.alive
+          ? stub
+          : spec.role === 'outer'
+            ? (assets.parts.bladeOuter ?? assets.parts.bladeInner)
+            : assets.parts.bladeInner;
+      if (!art) continue;
+      drawBlade(
+        ctx,
+        draw,
+        art,
+        boss.x + spec.x,
+        boss.y + spec.y,
+        obsidianBladeAngle(boss, index),
+        spec.x > 0
+      );
     }
     for (const spec of OBSIDIAN_BLADES) {
       const lock = boss.parts.find((item) => item.id === spec.hinge);

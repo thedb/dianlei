@@ -62,6 +62,7 @@ import { FIRE_PRESETS } from '@/game/systems/danmaku';
 import { prepareBossConfig } from '@/game/difficulty';
 import { OBSIDIAN } from '@/game/levels/bosses/obsidian';
 import {
+  OBSIDIAN_BLADE_PIVOT_X,
   buildObsidianBlade,
   buildObsidianHinge,
   buildObsidianHull,
@@ -200,26 +201,50 @@ describe('黑曜 constants', () => {
     expect(AIMED_MIN_DIST).toBe(48);
   });
 
-  it('keeps player cyan off the fuselage, the blades, and the disc', () => {
+  it('keeps player cyan off the fuselage and the disc, and paints crystal blades', () => {
     for (const cell of colorsOf(buildSaucerDisc())) {
       expect(PLAYER_CYAN).not.toContain(cell);
     }
     const warm = buildObsidianHull('warm');
     const warn = buildObsidianHull('warn');
     const wreck = buildObsidianHull('wreck');
-    const blade = buildObsidianBlade('live');
+    const inner = buildObsidianBlade('inner');
+    const outer = buildObsidianBlade('outer');
     const hinge = buildObsidianHinge('live');
-    for (const grid of [warm, warn, wreck, blade, hinge, buildObsidianHinge('dead')]) {
+    const hingeDead = buildObsidianHinge('dead');
+    for (const grid of [warm, warn, wreck, hinge, hingeDead]) {
       for (const cell of colorsOf(grid)) expect(PLAYER_CYAN).not.toContain(cell);
     }
-    expect(colorsOf(warm)).toContain(COLOR.GROUND_TAN);
+    expect(colorsOf(warm)).toContain(COLOR.EXPLOSION_ORANGE);
+    expect(colorsOf(warm)).toContain(COLOR.ENEMY_RED);
     expect(colorsOf(warm)).not.toContain(COLOR.EXPLOSION_YELLOW);
     expect(colorsOf(warn)).toContain(COLOR.EXPLOSION_YELLOW);
-    expect(colorsOf(blade)).toContain(COLOR.ENEMY_RED);
-    expect(colorsOf(hinge)).toContain(COLOR.ENEMY_BRIGHT_RED);
-    expect(blade.length).toBe(OBSIDIAN_BLADE_H);
-    expect(blade[0]?.length).toBe(OBSIDIAN_BLADE_W);
-    expect(blade.length).toBeGreaterThan(OBSIDIAN_BLADE_W * 3);
+    expect(colorsOf(wreck)).not.toContain(COLOR.EXPLOSION_YELLOW);
+    expect(colorsOf(inner)).toContain(COLOR.PLAYER_CYAN);
+    expect(colorsOf(inner)).toContain(COLOR.PLAYER_DARK_CYAN);
+    expect(colorsOf(inner)).toContain(COLOR.EXPLOSION_ORANGE);
+    expect(colorsOf(outer)).toContain(COLOR.PLAYER_CYAN);
+    expect(colorsOf(hinge)).toContain(COLOR.EXPLOSION_ORANGE);
+    expect(colorsOf(hingeDead)).not.toContain(COLOR.EXPLOSION_ORANGE);
+    expect(inner.flat().join(',')).not.toBe(outer.flat().join(','));
+    const span = (grid: number[][], y: number) => {
+      const xs = grid[y]!.flatMap((cell, x) => (cell >= 0 ? [x] : []));
+      return xs.length ? xs[xs.length - 1]! - xs[0]! : 0;
+    };
+    expect(span(outer, 40)).toBeGreaterThan(span(inner, 40));
+    let outboard = 0;
+    let inboard = 0;
+    for (let y = 0; y < inner.length; y++) {
+      for (let x = 0; x < (inner[y]?.length ?? 0); x++) {
+        if (inner[y]![x]! < 0) continue;
+        if (x < OBSIDIAN_BLADE_PIVOT_X) outboard++;
+        else if (x > OBSIDIAN_BLADE_PIVOT_X) inboard++;
+      }
+    }
+    expect(outboard).toBeGreaterThan(inboard);
+    expect(inner.length).toBe(OBSIDIAN_BLADE_H);
+    expect(inner[0]?.length).toBe(OBSIDIAN_BLADE_W);
+    expect(inner.length).toBeGreaterThan(OBSIDIAN_BLADE_W * 3);
 
     let minX = 80;
     let maxX = 0;

@@ -760,11 +760,15 @@ export const OBSIDIAN_HINGE_RADIUS = 8;
 export const OBSIDIAN_BLADE_RADIUS = 14;
 /** Distance from a hinge pivot to that blade's hit circle. */
 export const OBSIDIAN_BLADE_REACH = 38;
-export const OBSIDIAN_BLADE_W = 14;
-export const OBSIDIAN_BLADE_H = 58;
-export const OBSIDIAN_BLADE_STUB = 16;
-export const OBSIDIAN_HINGE_W = 12;
-export const OBSIDIAN_HINGE_H = 14;
+/**
+ * Crystal blade and round hinge lock, in pixels. The fight still rotates one
+ * sprite around the hinge; these sizes do not move the hit circles.
+ */
+export const OBSIDIAN_BLADE_W = 20;
+export const OBSIDIAN_BLADE_H = 64;
+export const OBSIDIAN_BLADE_STUB = 18;
+export const OBSIDIAN_HINGE_W = 9;
+export const OBSIDIAN_HINGE_H = 9;
 /**
  * Main-bar split before the difficulty scale. 4×70 + 2×170 + 2×140 + 300 = 1200.
  * Sub-parts score 0. The 40000 is paid when `frame` dies for good.

@@ -52,7 +52,13 @@ import {
   drawFurnaceBoss,
 } from './furnaceLooks';
 import { drawObsidianBoss } from './obsidianDraw';
-import { buildObsidianBlade, buildObsidianHinge, buildObsidianHull } from './obsidianLooks';
+import {
+  OBSIDIAN_BLADE_PIVOT_X,
+  OBSIDIAN_BLADE_PIVOT_Y,
+  buildObsidianBlade,
+  buildObsidianHinge,
+  buildObsidianHull,
+} from './obsidianLooks';
 import type { SpriteData, SpriteFrame } from './types';
 import { createGrid, fillEllipse, fillPoly, fillRect, outline, plot } from './pixelDraw';
 import { renderSprite } from './spriteRenderer';
@@ -373,6 +379,13 @@ export function buildTiebaoAa(broken: boolean): SpriteData {
   return g;
 }
 
+function bladeFrame(kind: 'inner' | 'outer' | 'stub'): SpriteFrame {
+  const frame = renderSprite(buildObsidianBlade(kind), 0, 0);
+  frame.anchorX = OBSIDIAN_BLADE_PIVOT_X;
+  frame.anchorY = OBSIDIAN_BLADE_PIVOT_Y;
+  return frame;
+}
+
 export const BOSS_ART: Readonly<Record<string, () => BossAssets>> = {
   orbital: () => ({
     hull: renderSprite(buildBossHull(false)),
@@ -404,8 +417,9 @@ export const BOSS_ART: Readonly<Record<string, () => BossAssets>> = {
     hullOpen: renderSprite(buildObsidianHull('warn')),
     parts: {
       wreck: renderSprite(buildObsidianHull('wreck')),
-      blade: renderSprite(buildObsidianBlade('live'), 0.5, 0),
-      bladeStub: renderSprite(buildObsidianBlade('stub'), 0.5, 0),
+      bladeInner: bladeFrame('inner'),
+      bladeOuter: bladeFrame('outer'),
+      bladeStub: bladeFrame('stub'),
       hinge: renderSprite(buildObsidianHinge('live')),
       hingeDead: renderSprite(buildObsidianHinge('dead')),
     },
