@@ -45,6 +45,7 @@ import {
   type EquippedWeapon,
 } from '@/game/systems/playerWeapons';
 import { victoryExitBlocksInput } from '@/game/systems/victoryExit';
+import { carrierBlocksInput } from './carrierTakeoff';
 import {
   emitWithDamage,
   weaponTestVolleyDamage,
@@ -151,11 +152,20 @@ function fireVolley(b: Battle, weapon: EquippedWeapon): void {
 }
 
 export function isPlayerControllable(b: Battle): boolean {
-  return !b.state.isDead && !b.state.isFlying && !victoryExitBlocksInput(b.victory.phase);
+  return (
+    !b.state.isDead &&
+    !b.state.isFlying &&
+    !victoryExitBlocksInput(b.victory.phase) &&
+    !carrierBlocksInput(b.takeoff.phase)
+  );
 }
 
 export function isPlayerVulnerable(b: Battle): boolean {
-  return isVulnerable(b.state) && !victoryExitBlocksInput(b.victory.phase);
+  return (
+    isVulnerable(b.state) &&
+    !victoryExitBlocksInput(b.victory.phase) &&
+    !carrierBlocksInput(b.takeoff.phase)
+  );
 }
 
 export function stepPlayerTimers(b: Battle, dt: number): void {

@@ -14,6 +14,13 @@ import { resolvePlacementDrops } from '@/game/systems/dropRules';
 import { WaveScheduler } from '@/game/systems/waveScheduler';
 import { maxOut } from '@/game/systems/playerWeapons';
 import { resetVictoryExit, victoryExitBlocksInput } from '@/game/systems/victoryExit';
+import {
+  beginCarrierTakeoff,
+  carrierBlocksInput,
+  carrierHoldsClock,
+  carrierTakeoffApplies,
+  stepCarrierTakeoff,
+} from '@/game/battle/carrierTakeoff';
 import { BuildingScheduler, placeBuildings } from '@/game/entities/building';
 import { Scroller, backgroundFade } from '@/game/systems/background';
 import { buildStageTrack, trackFinished } from '@/game/maps/track';
@@ -73,6 +80,8 @@ export interface BattleView {
 export interface BattleScene extends Scene {
   /** Live positions. The title demo reads this to steer; a real run does not. */
   getBattleView(): BattleView;
+  /** World scroll in pixels. */
+  getScroll(): number;
   /** Apply a pickup as if the ship had touched it. Used by tests. */
   grantItem(type: ItemType): void;
   /** Null outside weapon test. */
@@ -113,8 +122,9 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       b.scroller = new Scroller(b.track);
 
       resetPlayer(b);
-      // A stage-clear handoff keeps score and the loadout. The ship still
-      // flies in from below, and the new stage clock stays at 0.
+      // A stage-clear handoff keeps score and the loadout. Stages 1–3 still
+      // fly in from below. Stage 4 parks for the catapult, below. The new
+      // stage clock stays at 0.
       if (sceneCtx.battleEntry === 'stage' && sceneCtx.carriedRun) {
         applyCarriedRun(state, sceneCtx.carriedRun);
         delete sceneCtx.carriedRun;
@@ -157,6 +167,14 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
         maxOut(state.main);
         jumpTo(b, stage.boss.enterAt);
       }
+      // Stage 4 from t = 0 parks on the catapult. Boss practice already sought
+      // the enemy deck; map preview and the other stages leave this off.
+      beginCarrierTakeoff(
+        b.takeoff,
+        player,
+        state,
+        carrierTakeoffApplies(stage.id, sceneCtx.battleEntry, b.rules())
+      );
 
       initAudio(b);
     },
@@ -188,14 +206,16 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       if (requestPause(b, input)) return null;
       if (rules.range) rangeTaps(b, input);
 
-      b.gameTime += dt;
+      // Capture before the launch script or the stick moves the ship.
+      player.prevX = player.x;
+      player.prevY = player.y;
+
+      // Carrier lamps hold the stage clock so the rush starts at t = 0.
+      stepCarrierTakeoff(b.takeoff, player, dt);
+      if (!carrierHoldsClock(b.takeoff.phase)) b.gameTime += dt;
       stepShake(b.fx, dt);
       stepPlayerTimers(b, dt);
       readButtons(b, input);
-
-      // Every step, so swept collision and interpolation never reach back too far
-      player.prevX = player.x;
-      player.prevY = player.y;
 
       if (state.isDead) {
         // The title demo keeps the wreck; the title fades and restarts it.
@@ -210,6 +230,8 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
             spawnNewShip(b);
           }
         }
+      } else if (carrierBlocksInput(b.takeoff.phase)) {
+        // The launch script already placed the ship this frame.
       } else if (victoryExitBlocksInput(b.victory.phase)) {
         neutralizePlayerPose(player);
         player.velocityY = 0;
@@ -222,7 +244,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
 
       const { pastWarning, warningWindow } = stageWindow(b);
       stepPlayerBullets(b, dt);
-      if (rules.scroll) stepScroll(b, dt);
+      if (rules.scroll && !carrierHoldsClock(b.takeoff.phase)) stepScroll(b, dt);
       if (rules.spawns) stepSpawns(b, dt, pastWarning);
       stepEnemies(b, dt, pastWarning);
       updateBombHits(b, dt);
@@ -244,6 +266,11 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
 
     grantItem(type: ItemType): void {
       collectItem(b, type);
+    },
+
+    /** World scroll in pixels. Stays 0 while the carrier lamps are up. */
+    getScroll(): number {
+      return b.scrollFrame.scroll;
     },
 
     getBattleView(): BattleView {

@@ -11,7 +11,11 @@
  * screen X 72 / 180 / 288 after the 4px crop. Ids 76–86 are the 炉心浮台
  * look C 淹水船坞废港 set: mud flat, rusted pad, quay wall, dry-dock pit,
  * barge deck, two crane-boom diagonals, crane foot, pilings, scrap, and a
- * burn mark.
+ * burn mark. Ids 87–101 are the stage-4 sea set: our flight deck, wake,
+ * escort hull and gun pad, cold wreckage, a 2×2 friendly fighter, and the
+ * enemy carrier's steel deck, red line, and empty parking spot.
+ * Ids 102–103 are the open-sea mounds (`ocean` / `oceanB`). `water` /
+ * `waterB` stay the river and lake tiles.
  * Planes, wheels, and huts are map decoration only.
  */
 
@@ -30,6 +34,21 @@ import {
   harborScrapTile,
   harborSlabTile,
 } from './harborTiles';
+import {
+  carrierDeckTile,
+  carrierIslandTile,
+  carrierMarkTile,
+  carrierPlaneQuads,
+  cruiserGunDeckTile,
+  cruiserHullTile,
+  deckSpotTile,
+  enemyDeckTile,
+  enemyMarkTile,
+  oceanTile,
+  wakeTile,
+  wreckAlloyTile,
+  wreckBurnTile,
+} from './seaTiles';
 import { createGrid, fillEllipse, fillPoly, fillRect, plot } from './pixelDraw';
 import type { SpriteData } from './types';
 
@@ -143,14 +162,39 @@ export const TileId = {
   harborPiles: 84,
   harborScrap: 85,
   harborBurn: 86,
+  carrierDeck: 87,
+  carrierMark: 88,
+  carrierIsland: 89,
+  wake: 90,
+  cruiserHull: 91,
+  cruiserGunDeck: 92,
+  wreckAlloy: 93,
+  wreckBurn: 94,
+  carrierPlaneTL: 95,
+  carrierPlaneTR: 96,
+  carrierPlaneBL: 97,
+  carrierPlaneBR: 98,
+  enemyDeck: 99,
+  enemyMark: 100,
+  deckSpot: 101,
+  ocean: 102,
+  oceanB: 103,
 } as const;
 
 export type TileId = (typeof TileId)[keyof typeof TileId];
 
-export const TILE_COUNT = 87;
+export const TILE_COUNT = 104;
 
 /** Screen quadrants of a 2×2 parked plane: top-left, top-right, bottom-left, bottom-right. */
 export const PLANE = [TileId.planeTL, TileId.planeTR, TileId.planeBL, TileId.planeBR] as const;
+
+/** Stage-4 friendly fighter, nose on the top pair (higher map row). */
+export const CARRIER_PLANE = [
+  TileId.carrierPlaneTL,
+  TileId.carrierPlaneTR,
+  TileId.carrierPlaneBL,
+  TileId.carrierPlaneBR,
+] as const;
 
 function grassTile(base: number, light: number, dark: number, phase: number): SpriteData {
   const g = createGrid(TILE_SIZE, TILE_SIZE, base);
@@ -454,6 +498,7 @@ function paintTiles(
   paintLandTiles(tiles, tall);
   paintFactoryTiles(tiles);
   paintHarborTiles(tiles, overlays);
+  paintSeaTiles(tiles, tall);
   return tiles;
 }
 
@@ -869,6 +914,39 @@ function paintFactoryTiles(tiles: SpriteData[]): void {
   tiles[TileId.factoryRailW] = look.railW;
   tiles[TileId.factoryRailC] = look.railC;
   tiles[TileId.factoryRailE] = look.railE;
+}
+
+function paintSeaTiles(tiles: SpriteData[], tall: Array<boolean[][] | null>): void {
+  const placed: Array<[TileId, SeaArt]> = [
+    [TileId.carrierDeck, flatSea(carrierDeckTile())],
+    [TileId.carrierMark, flatSea(carrierMarkTile())],
+    [TileId.carrierIsland, carrierIslandTile()],
+    [TileId.wake, flatSea(wakeTile())],
+    [TileId.cruiserHull, cruiserHullTile()],
+    [TileId.cruiserGunDeck, flatSea(cruiserGunDeckTile())],
+    [TileId.wreckAlloy, wreckAlloyTile()],
+    [TileId.wreckBurn, flatSea(wreckBurnTile())],
+    [TileId.enemyDeck, flatSea(enemyDeckTile())],
+    [TileId.enemyMark, flatSea(enemyMarkTile())],
+    [TileId.deckSpot, flatSea(deckSpotTile())],
+    [TileId.ocean, flatSea(oceanTile(0))],
+    [TileId.oceanB, flatSea(oceanTile(1))],
+  ];
+  for (const [id, art] of placed) {
+    tiles[id] = art.pixels;
+    tall[id] = art.tall;
+  }
+  carrierPlaneQuads().forEach((art, q) => {
+    const id = CARRIER_PLANE[q]!;
+    tiles[id] = art.pixels;
+    tall[id] = art.tall;
+  });
+}
+
+type SeaArt = { pixels: SpriteData; tall: boolean[][] | null };
+
+function flatSea(pixels: SpriteData): SeaArt {
+  return { pixels, tall: null };
 }
 
 /**

@@ -50,6 +50,7 @@ import { bombWaveRadius } from '@/game/systems/bomb';
 import { warningBulletAlpha } from '@/game/systems/background';
 import type { Battle } from './context';
 import { shakeOffset } from './fx';
+import { carrierExhaustBoost } from './carrierTakeoff';
 import { isPlayerVulnerable } from './player';
 import { drawRangeField } from './range';
 
@@ -113,13 +114,21 @@ function drawEnemy(
 }
 
 /** Same bank frame as the player, scaled, stuck to the player center. No hitbox. */
+/** Shared exhaust. Null while the carrier launch is still on cold engines. */
+function exhaustBoost(b: Battle): number | null {
+  const launch = carrierExhaustBoost(b.takeoff);
+  if (launch === null) return null;
+  return Math.max(b.victory.flame, b.chaseBoost, launch);
+}
+
 function drawMates(
   renderer: Renderer,
   ctx: CanvasRenderingContext2D,
   b: Battle,
   frame: BankFrame,
   renderX: number,
-  renderY: number
+  renderY: number,
+  boost: number | null
 ): void {
   const places = matePlacements(b.state.mate);
   if (places.length === 0) return;
@@ -133,16 +142,18 @@ function drawMates(
     // drawImage floors the top-left. The flame has to use that same origin
     // or it drifts across the snapped ship while the player moves.
     const at = flooredSpriteCenter(x, y, ax, ay);
-    drawFittedPlayerFlames(
-      ctx,
-      at.x,
-      at.y,
-      frame,
-      { width: w, height: h, anchorX: ax, anchorY: ay },
-      b.player.velocityY,
-      b.gameTime,
-      Math.max(b.victory.flame, b.chaseBoost)
-    );
+    if (boost !== null) {
+      drawFittedPlayerFlames(
+        ctx,
+        at.x,
+        at.y,
+        frame,
+        { width: w, height: h, anchorX: ax, anchorY: ay },
+        b.player.velocityY,
+        b.gameTime,
+        boost
+      );
+    }
     renderer.drawImage(frame.canvas, x - ax, y - ay, w, h);
   }
 }
@@ -162,17 +173,12 @@ function drawShip(renderer: Renderer, b: Battle, assets: GameAssets, alpha: numb
   }
 
   const bankFrame = assets.player.bankFrames[player.lastBankFrame]!;
+  const boost = exhaustBoost(b);
   ctx.globalAlpha = playerAlpha;
-  drawMates(renderer, ctx, b, bankFrame, renderX, renderY);
-  drawPlayerFlames(
-    ctx,
-    renderX,
-    renderY,
-    bankFrame.nozzles,
-    player.velocityY,
-    gameTime,
-    Math.max(b.victory.flame, b.chaseBoost)
-  );
+  drawMates(renderer, ctx, b, bankFrame, renderX, renderY, boost);
+  if (boost !== null) {
+    drawPlayerFlames(ctx, renderX, renderY, bankFrame.nozzles, player.velocityY, gameTime, boost);
+  }
   renderer.drawImage(bankFrame.canvas, renderX - bankFrame.anchorX, renderY - bankFrame.anchorY);
   ctx.globalAlpha = 1;
 

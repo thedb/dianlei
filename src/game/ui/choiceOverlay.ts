@@ -18,8 +18,9 @@ export interface ChoiceRow<T extends string> {
 const BUTTON_W = 248;
 const BUTTON_H = 58;
 const BUTTON_GAP = 12;
-const COMPACT_H = 44;
-const COMPACT_GAP = 8;
+/** Ten compact rows (nine maps plus 返回) stay inside the 640-tall screen. */
+const COMPACT_H = 36;
+const COMPACT_GAP = 6;
 const BUTTON_TOP = 196;
 const PANEL_X = 28;
 const PANEL_Y = 132;

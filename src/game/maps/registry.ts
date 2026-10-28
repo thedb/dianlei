@@ -16,7 +16,9 @@ import { FACTORY_BOSS_LOOP_ROW, FACTORY_BOSS_SPEC } from './factoryBoss';
 import { FURNACE_BOSS_LOOP_ROW, FURNACE_BOSS_SPEC } from './furnaceBoss';
 import { LAND_BOSS_LOOP_ROW, LAND_BOSS_SPEC } from './landBoss';
 import { LAND_B_SPEC } from './landB';
+import { OBSIDIAN_BOSS_LOOP_ROW, OBSIDIAN_BOSS_SPEC } from './obsidianBoss';
 import { RIVER_A_SPEC } from './riverA';
+import { SEA_B_SPEC } from './seaB';
 import type { MapDef, StarfieldMapDef, TileGrid, TileMapDef } from './types';
 
 export const LAND_A: TileMapDef = {
@@ -95,6 +97,34 @@ export const FURNACE_BOSS: TileMapDef = {
   loopFrom: FURNACE_BOSS_LOOP_ROW,
 };
 
+/**
+ * Stage 4 run (海面B). Nine sea chunks: a short friendly deck, open water,
+ * escorts, swell, then wreckage. Not a river. Cloud shadows on, no loop.
+ */
+export const SEA_B: TileMapDef = {
+  id: 'seaB',
+  label: '海面B',
+  kind: 'tiles',
+  rows: SEA_B_SPEC.slots.length * MAP_CHUNK_ROWS,
+  build: () => composeChunks(SEA_B_SPEC),
+  cloudShadows: true,
+};
+
+/**
+ * Stage 4 boss arena (黑曜舰空). Row 0 is 海面B's last row. The loop is an
+ * empty enemy carrier deck, island on the port side. Cloud shadows on.
+ * The warning band stays off because the handoff is tiles, not stars.
+ */
+export const OBSIDIAN_BOSS: TileMapDef = {
+  id: 'obsidianBoss',
+  label: '黑曜舰空',
+  kind: 'tiles',
+  rows: OBSIDIAN_BOSS_SPEC.slots.length * MAP_CHUNK_ROWS,
+  build: () => composeChunks(OBSIDIAN_BOSS_SPEC),
+  cloudShadows: true,
+  loopFrom: OBSIDIAN_BOSS_LOOP_ROW,
+};
+
 /** Starfield for a real space stage and for 地图预览. Stage 1's boss does not use it. */
 export const SPACE_A: StarfieldMapDef = {
   id: 'spaceA',
@@ -110,6 +140,8 @@ const MAPS: readonly MapDef[] = [
   LAND_BOSS,
   FACTORY_BOSS,
   FURNACE_BOSS,
+  SEA_B,
+  OBSIDIAN_BOSS,
   SPACE_A,
 ];
 

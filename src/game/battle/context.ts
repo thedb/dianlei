@@ -42,6 +42,7 @@ import type { Loadout, WeaponEmitter } from '@/game/systems/playerWeapons';
 import type { BossRuntime } from '@/game/systems/boss';
 import type { RunReport } from '@/game/systems/score';
 import { createVictoryExit, type VictoryExit } from '@/game/systems/victoryExit';
+import { createCarrierTakeoff, type CarrierTakeoff } from './carrierTakeoff';
 import { Scroller, backgroundFade, type ScrollFrame } from '@/game/systems/background';
 import { buildStageTrack, type BackgroundTrack } from '@/game/maps/track';
 import { createPauseMenu, type PauseMenu } from '@/game/ui/pauseMenu';
@@ -112,6 +113,8 @@ export interface Battle {
   readonly spawner: BulletSpawner;
   readonly emitter: WeaponEmitter;
   readonly victory: VictoryExit;
+  /** Stage 4 deck launch. `off` on every other entry. */
+  readonly takeoff: CarrierTakeoff;
   /** 0–1 exhaust swell while 铁堡 holds a shed. Victory flame still wins. */
   chaseBoost: number;
   readonly tune: WeaponTestTune;
@@ -230,6 +233,7 @@ export function createBattle(scene: SceneContext): Battle {
       },
     },
     victory: createVictoryExit(),
+    takeoff: createCarrierTakeoff(),
     chaseBoost: 0,
     tune: createWeaponTestTune(),
     meter: createDamageMeter(),

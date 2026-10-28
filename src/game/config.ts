@@ -650,7 +650,101 @@ export const STAGE3_RISK_MID_X = 220;
 export const STAGE3_RISK_RIGHT_X = 312;
 
 /**
- * Cloud shadows over maps that set `cloudShadows` (陆地A / 陆地B / 河流A / 百战要塞).
+ * 海面B (`seaB`) and 黑曜舰空 (`obsidianBoss`). Stage 4's maps.
+ * 9 × 640 px = 5760 px, same length as 陆地B and 河流A. Slots are fixed and
+ * do not mirror. New tiles start at 87 (`carrierDeck`); the enemy deck is 99–101.
+ */
+export const SEA_B_CHUNKS = 9;
+export const SEA_B_SEED = 37;
+
+/**
+ * Open-sea swell drawn over baked `ocean` tiles. Each family has its own
+ * base spacing. A wave then jitters ±`SEA_SWELL_JITTER` and about one index
+ * in five is left out, so the screen is not one ruler. `SCROLL` is how far
+ * a wave moves on screen per pixel of map scroll. `DRIFT` is extra px/s
+ * from the stage clock. Colors stay at the signed-off contrast.
+ */
+export const SEA_SWELL_SPACING = 56;
+export const SEA_SWELL_SCROLL = 0.18;
+export const SEA_SWELL_DRIFT = 36;
+/** Second crest family. Its lag is not the primary's, so the two slip apart. */
+export const SEA_SWELL_LONG_SPACING = 88;
+export const SEA_SWELL_LONG_SCROLL = 0.31;
+export const SEA_SWELL_LONG_DRIFT = 22;
+/** Troughs are their own family, not the midpoint of every crest. */
+export const SEA_SWELL_TROUGH_SPACING = 74;
+export const SEA_SWELL_TROUGH_SCROLL = 0.12;
+export const SEA_SWELL_TROUGH_DRIFT = 28;
+export const SEA_SWELL_SPECK_SPACING = 72;
+export const SEA_SWELL_SPECK_SCROLL = 0.08;
+export const SEA_SWELL_SPECK_DRIFT = 48;
+/** Half-width of the per-wave phase jitter, in px. Min crest gap stays above 32. */
+export const SEA_SWELL_JITTER = 10;
+export const OBSIDIAN_BOSS_CHUNKS = 2;
+export const OBSIDIAN_BOSS_SEED = 43;
+
+/**
+ * Stage 4 warning. Own constant, not stage 2 or 3's. seaB is 5760 px, so
+ * `118 * 40 + 640 = 5360` keeps the boss origin on seaB's last row.
+ * `OBSIDIAN_ENTER_AT` is five seconds later: about 120 px into the approach.
+ */
+export const STAGE4_WARNING_AT = 118;
+export const OBSIDIAN_ENTER_AT = 123;
+/** Chunk 7 reaches the top of the screen. The wreck line is not on a clock yet. */
+export const STAGE4_WRECK_AT = 96;
+
+/**
+ * Stage 4 carrier launch. Only a stage-start entry plays this (关卡选择 /
+ * stage handoff). 挑战 Boss and 地图预览 do not. The stage clock stays at 0
+ * through the lamps, so the warning and the boss stay on
+ * `scroll = BG_SCROLL_SPEED * t`.
+ * Five lamps light every `CARRIER_LIGHT_STEP`, then hold until
+ * `CARRIER_LIGHTS_TIME`. The rush eases the ship from `CARRIER_PARK_Y` up to
+ * `CARRIER_RELEASE_Y` while the tail flame ramps and the map starts scrolling.
+ * Control returns there, not at `PLAYER_SPAWN_Y` (respawn still uses that).
+ *
+ * 2026-10-28 playtest, third cut. Total is 6.2s: lamps stay 3.0s, and the
+ * extra 2.0s (on top of the previous 4.2s) is all on the rush, now 3.2s.
+ * Travel is 384px, twice the previous 192px hop from y=608 to y=416.
+ * Release is y=224. The 32px ship then spans 208–240, still on the 640
+ * frame and clear of the top HUD (score line is y=4). Screen center is 320,
+ * so this is the upper middle, not the old lower-middle stop.
+ */
+export const CARRIER_LIGHTS_TIME = 3;
+export const CARRIER_LIGHT_COUNT = 5;
+export const CARRIER_LIGHT_STEP = 0.48;
+export const CARRIER_RUSH_TIME = 3.2;
+/** Parked on the deck, fully on screen (sprite is 32px, anchor at center). */
+export const CARRIER_PARK_Y = 608;
+/**
+ * Control unlocks here. 608 − 384 = 224. Twice the previous 192px run.
+ * Respawn still uses `PLAYER_SPAWN_Y` (560).
+ */
+export const CARRIER_RELEASE_Y = 224;
+/** Left-side lamp gantry, logical pixels. Integer cells, palette colors. */
+export const CARRIER_LIGHT_X = 20;
+export const CARRIER_LIGHT_Y = 188;
+export const CARRIER_LIGHT_SIZE = 10;
+export const CARRIER_LIGHT_GAP = 6;
+
+/**
+ * Placeholder 黑曜 until the fight PR. One circle, no polyline, no strafe,
+ * no saucer. Killing it still takes the normal explosion clear.
+ */
+export const OBSIDIAN_STUB_HP = 800;
+export const OBSIDIAN_STUB_RADIUS = 26;
+export const OBSIDIAN_STUB_SCORE = 30000;
+export const OBSIDIAN_PARK_Y = 140;
+export const OBSIDIAN_ENTER_Y = -48;
+export const OBSIDIAN_ENTER_DURATION = 1.6;
+export const OBSIDIAN_WARNING = 1.5;
+export const OBSIDIAN_HULL_W = 80;
+export const OBSIDIAN_HULL_H = 96;
+export const OBSIDIAN_STUB_DEATH_DURATION = 2.4;
+export const OBSIDIAN_STUB_DEATH_EXPLOSIONS = 6;
+
+/**
+ * Cloud shadows over maps that set `cloudShadows` (陆地A / 陆地B / 河流A / 百战要塞 / 海面B / 黑曜舰空).
  * Alpha stays low so one silhouette reads without muddying the ground.
  * Scroll is relative to the tiles. `2` moves shadows twice as fast as the
  * ground so they drift ahead instead of sticking to it. Stamps repeat every

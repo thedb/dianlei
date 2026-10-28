@@ -30,6 +30,7 @@ import {
 } from '@/game/entities/building';
 import { updateEnemyWeapons } from '@/game/systems/weapons';
 import { resetVictoryExit } from '@/game/systems/victoryExit';
+import { resetCarrierTakeoff } from './carrierTakeoff';
 import { warningBulletAlpha } from '@/game/systems/background';
 import { releaseAllPools, runDifficulty, runProfile, type Battle } from './context';
 import { clearFx, resetShake } from './fx';
@@ -212,6 +213,7 @@ export function jumpTo(b: Battle, time: number): void {
   clearFx(b.fx);
   b.boss = time >= stage.boss.enterAt ? spawnBoss(b) : null;
   resetVictoryExit(b.victory);
+  resetCarrierTakeoff(b.takeoff);
   b.warningPlayed = time >= stage.warningAt + WARNING_BANNER_DELAY;
   b.scrollFrame = b.scroller.seek(time);
   b.finishedAt = null;
