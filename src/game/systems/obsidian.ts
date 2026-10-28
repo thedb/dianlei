@@ -1,8 +1,15 @@
 /**
- * 黑曜 fight script. The fuselage stays put. Four blades rotate around
- * hinge pivots: folded, half open, then the cross. The generic runner
- * owns part HP. This module owns the angles, which circle a shot hits,
- * and the weapon lap for the live phase.
+ * 黑曜 fight script. The fuselage stays on x = 180. Four blades rotate
+ * around hinge pivots: stacked swept wings, a wider peel, then the cross.
+ * The generic runner owns part HP. This module owns the angles, which
+ * circle a shot hits, and the weapon lap for the live phase.
+ *
+ * v3 wings trail aft, so an along-blade volley would leave upward. The
+ * edge fan keeps that lateral bearing and mirrors it nose-ward. Hit
+ * circles stay on the visible wing and are not mirrored.
+ *
+ * The only translation is the phase-3 / overload strafe (俯冲前刺):
+ * y 140 → 280 → 140, x stays 180. Perch slides were retired with 3A.
  *
  * State lives in a WeakMap. Only types come from `systems/boss.ts`.
  * Nothing here clears bullets that are already flying.
@@ -83,49 +90,98 @@ import { checkBulletEnemyCollision } from './collision';
 /**
  * Canvas radians. 0 points the blade down the nose. Positive swings the
  * tip to the left. Right-hand blades store the negated angle.
- * Fold is stacked on the fuselage, half is the weapon rail, open is the X.
+ *
+ * v3 magnitudes are measured from aft (π). Each hinge carries three visual
+ * layers. `fold` / `half` / `open` are the middle layer, which owns the
+ * hit circle. Fold is a stacked sweep with lateral span. Half peels the
+ * outer layer wider. Open is the X: inners nose-ward at ±0.95, outers
+ * aft at ±(π−0.95). Roots stay on their own side so the wing you shoot
+ * is the part that breaks.
  */
-export const OBSIDIAN_BLADES = [
+const AFT = Math.PI;
+
+function aftAngle(side: 1 | -1, mag: number): number {
+  return side * (AFT - mag);
+}
+
+function aftTriple(
+  side: 1 | -1,
+  mags: readonly [number, number, number]
+): readonly [number, number, number] {
+  return [aftAngle(side, mags[0]), aftAngle(side, mags[1]), aftAngle(side, mags[2])];
+}
+
+function noseTriple(side: 1 | -1, mag: number): readonly [number, number, number] {
+  const angle = side * mag;
+  return [angle, angle, angle];
+}
+
+const BLADE_LAYOUT = [
   {
     id: 'innerL',
     hinge: 'hinge0',
     role: 'inner' as const,
-    x: -6,
-    y: -16,
-    fold: 0.1,
-    half: 0.62,
-    open: 0.95,
+    x: -16,
+    y: 10,
+    layers: {
+      fold: aftTriple(1, [0.82, 0.66, 0.5]),
+      half: aftTriple(1, [1.07, 0.77, 0.53]),
+      open: noseTriple(1, 0.95),
+    },
   },
   {
     id: 'outerL',
     hinge: 'hinge1',
     role: 'outer' as const,
-    x: -11,
-    y: -26,
-    fold: 0.24,
-    half: 1.08,
-    open: 2.16,
+    x: -14,
+    y: -12,
+    layers: {
+      fold: aftTriple(1, [0.88, 0.72, 0.56]),
+      half: aftTriple(1, [1.12, 0.82, 0.58]),
+      open: aftTriple(1, [0.95, 0.95, 0.95]),
+    },
   },
   {
     id: 'innerR',
     hinge: 'hinge2',
     role: 'inner' as const,
-    x: 6,
-    y: -16,
-    fold: -0.1,
-    half: -0.62,
-    open: -0.95,
+    x: 16,
+    y: 10,
+    layers: {
+      fold: aftTriple(-1, [0.82, 0.66, 0.5]),
+      half: aftTriple(-1, [1.07, 0.77, 0.53]),
+      open: noseTriple(-1, 0.95),
+    },
   },
   {
     id: 'outerR',
     hinge: 'hinge3',
     role: 'outer' as const,
-    x: 11,
-    y: -26,
-    fold: -0.24,
-    half: -1.08,
-    open: -2.16,
+    x: 14,
+    y: -12,
+    layers: {
+      fold: aftTriple(-1, [0.88, 0.72, 0.56]),
+      half: aftTriple(-1, [1.12, 0.82, 0.58]),
+      open: aftTriple(-1, [0.95, 0.95, 0.95]),
+    },
   },
+] as const;
+
+type PoseName = 'fold' | 'half' | 'open';
+
+const bladeRows = BLADE_LAYOUT.map((blade) => ({
+  ...blade,
+  fold: blade.layers.fold[1],
+  half: blade.layers.half[1],
+  open: blade.layers.open[1],
+}));
+
+/** Middle layer is the gameplay angle. The array stays a tuple so callers can index it. */
+export const OBSIDIAN_BLADES = [
+  bladeRows[0]!,
+  bladeRows[1]!,
+  bladeRows[2]!,
+  bladeRows[3]!,
 ] as const;
 
 const ARMOR_DIST = [14, 28, 46] as const;
@@ -138,13 +194,11 @@ const HALF_SHARD = [0.3, 0.96] as const;
 const HALF_NOSE = 0.72;
 const SWEEP_AT = [0.1, 0.32, 0.54, 0.76, 0.98, 1.2] as const;
 
-type PoseName = 'fold' | 'half' | 'open';
-
 interface FightState {
   clock: number;
-  from: number[];
-  to: number[];
-  shown: number[];
+  from: number[][];
+  to: number[][];
+  layers: number[][];
   holdFromX: number;
   holdFromY: number;
 }
@@ -191,23 +245,31 @@ const OVER_STRAFE: StrafePlan = {
   shots: OBSIDIAN_OVERLOAD_STRAFE_SHOTS,
 };
 
-function poseAngles(name: PoseName): number[] {
-  return OBSIDIAN_BLADES.map((blade) => blade[name]);
+function cloneLayers(rows: readonly (readonly number[])[]): number[][] {
+  return rows.map((row) => [...row]);
 }
 
-function anglesForPhase(id: string | undefined): number[] {
-  if (id === 'half') return poseAngles('half');
-  if (id === 'open' || id === 'overload') return poseAngles('open');
-  return poseAngles('fold');
+function poseLayers(name: PoseName): number[][] {
+  return OBSIDIAN_BLADES.map((blade) => [...blade.layers[name]]);
+}
+
+function anglesForPhase(id: string | undefined): number[][] {
+  if (id === 'half') return poseLayers('half');
+  if (id === 'open' || id === 'overload') return poseLayers('open');
+  return poseLayers('fold');
+}
+
+function midAngle(row: readonly number[] | undefined, fallback = 0): number {
+  return row?.[1] ?? row?.[0] ?? fallback;
 }
 
 function fresh(): FightState {
-  const shown = poseAngles('fold');
+  const layers = poseLayers('fold');
   return {
     clock: 0,
-    from: shown.slice(),
-    to: shown.slice(),
-    shown,
+    from: cloneLayers(layers),
+    to: cloneLayers(layers),
+    layers,
     holdFromX: OBSIDIAN_CENTER_X,
     holdFromY: OBSIDIAN_PARK_Y,
   };
@@ -242,9 +304,14 @@ export function obsidianBladeOffset(index: number, pose: PoseName): { x: number;
   return { x: blade.x + v.x, y: blade.y + v.y };
 }
 
-/** Current canvas angle for blade `index`. Folded until the fight script runs. */
+/** Three visual layers for blade `index`. The middle layer owns the hit circle. */
+export function obsidianBladeLayers(boss: BossRuntime, index: number): readonly number[] {
+  return ensure(boss).layers[index] ?? OBSIDIAN_BLADES[index]?.layers.fold ?? [0, 0, 0];
+}
+
+/** Middle canvas angle for blade `index`. Folded until the fight script runs. */
 export function obsidianBladeAngle(boss: BossRuntime, index: number): number {
-  return ensure(boss).shown[index] ?? 0;
+  return midAngle(obsidianBladeLayers(boss, index));
 }
 
 function living(boss: BossRuntime, id: string): boolean {
@@ -275,7 +342,7 @@ export function obsidianSyncOffsets(boss: BossRuntime): void {
     }
     const wing = boss.parts.find((part) => part.id === blade.id);
     if (!wing || wing.falling) return;
-    const v = bladeVector(state.shown[index] ?? blade.fold, OBSIDIAN_BLADE_REACH);
+    const v = bladeVector(midAngle(state.layers[index], blade.fold), OBSIDIAN_BLADE_REACH);
     wing.offsetX = blade.x + v.x;
     wing.offsetY = blade.y + v.y;
   });
@@ -330,12 +397,12 @@ export function obsidianShotPlan(
     if (hits(bullet, boss.x, boss.y, OBSIDIAN_RADIUS)) {
       return { consumed: true, id: null, amount: 0 };
     }
-    const shown = ensure(boss).shown;
+    const layers = ensure(boss).layers;
     for (let i = 0; i < OBSIDIAN_BLADES.length; i++) {
       const blade = OBSIDIAN_BLADES[i]!;
       if (!living(boss, blade.id)) continue;
       for (const dist of ARMOR_DIST) {
-        const v = bladeVector(shown[i] ?? blade.fold, dist);
+        const v = bladeVector(midAngle(layers[i], blade.fold), dist);
         if (hits(bullet, boss.x + blade.x + v.x, boss.y + blade.y + v.y, ARMOR_RADIUS)) {
           return { consumed: true, id: null, amount: 0 };
         }
@@ -393,12 +460,12 @@ export function obsidianTouches(boss: BossRuntime, px: number, py: number): bool
     if (!part.alive || part.falling || part.id === 'frame') continue;
     if (near(part.worldX, part.worldY, part.radius)) return true;
   }
-  const shown = ensure(boss).shown;
+  const layers = ensure(boss).layers;
   for (let i = 0; i < OBSIDIAN_BLADES.length; i++) {
     const blade = OBSIDIAN_BLADES[i]!;
     if (!living(boss, blade.id)) continue;
     for (const dist of ARMOR_DIST) {
-      const v = bladeVector(shown[i] ?? blade.fold, dist);
+      const v = bladeVector(midAngle(layers[i], blade.fold), dist);
       if (near(boss.x + blade.x + v.x, boss.y + blade.y + v.y, ARMOR_RADIUS)) return true;
     }
   }
@@ -409,9 +476,9 @@ export function obsidianTouches(boss: BossRuntime, px: number, py: number): bool
 export function obsidianOnFight(boss: BossRuntime): void {
   const state = ensure(boss);
   state.clock = 0;
-  state.shown = anglesForPhase(boss.phase);
-  state.from = state.shown.slice();
-  state.to = state.shown.slice();
+  state.layers = anglesForPhase(boss.phase);
+  state.from = cloneLayers(state.layers);
+  state.to = cloneLayers(state.layers);
   boss.x = OBSIDIAN_CENTER_X;
   boss.y = OBSIDIAN_PARK_Y;
 }
@@ -419,7 +486,7 @@ export function obsidianOnFight(boss: BossRuntime): void {
 /** Remember the pose so the deploy beat can rotate the blades and ease home. */
 export function obsidianOnTransition(boss: BossRuntime): void {
   const state = ensure(boss);
-  state.from = state.shown.slice();
+  state.from = cloneLayers(state.layers);
   const next = boss.phases[boss.phaseIndex + 1]?.id;
   state.to = anglesForPhase(next);
   state.holdFromX = boss.x;
@@ -430,7 +497,9 @@ export function stepObsidianHold(boss: BossRuntime): void {
   const state = ensure(boss);
   const duration = boss.phases[boss.phaseIndex]?.transition?.duration ?? OBSIDIAN_DEPLOY_TIME;
   const u = smoothstep(Math.min(1, boss.phaseTime / Math.max(0.0001, duration)));
-  state.shown = state.from.map((angle, index) => lerp(angle, state.to[index] ?? angle, u));
+  state.layers = state.from.map((row, index) =>
+    row.map((angle, layer) => lerp(angle, state.to[index]?.[layer] ?? angle, u))
+  );
   boss.x = lerp(state.holdFromX, OBSIDIAN_CENTER_X, u);
   boss.y = lerp(state.holdFromY, OBSIDIAN_PARK_Y, u);
 }
@@ -509,11 +578,12 @@ function edgeFan(
 ): void {
   const blade = OBSIDIAN_BLADES[index];
   if (!blade) return;
-  const angle = ensure(boss).shown[index] ?? blade.fold;
-  const v = bladeVector(angle, OBSIDIAN_BLADE_REACH);
-  const x = boss.x + blade.x + v.x;
-  const y = boss.y + blade.y + v.y;
-  const dir = Math.atan2(v.y, v.x);
+  const angle = midAngle(ensure(boss).layers[index], blade.fold);
+  const along = bladeVector(angle, OBSIDIAN_BLADE_REACH);
+  const x = boss.x + blade.x + along.x;
+  const y = boss.y + blade.y + along.y;
+  // Swept wings trail aft. Keep the lateral bearing and send the fan nose-ward.
+  const dir = Math.atan2(along.y < 0 ? -along.y : along.y, along.x);
   const step = count > 1 ? (spreadDeg * Math.PI) / 180 / (count - 1) : 0;
   for (let i = 0; i < count; i++) {
     const a = dir + (i - (count - 1) / 2) * step;
@@ -731,28 +801,29 @@ function fireOver(
   }
 }
 
+function strafeWindow(phase: string, clock: number): { local: number; plan: StrafePlan } | null {
+  if (phase === 'open') {
+    const index = Math.floor((clock + 1e-8) / OBSIDIAN_SLICE);
+    if (index % 3 !== 2) return null;
+    return { local: clock - index * OBSIDIAN_SLICE, plan: MAIN_STRAFE };
+  }
+  if (phase === 'overload') {
+    const into =
+      clock -
+      Math.floor(clock / OBSIDIAN_OVERLOAD_SPAN) * OBSIDIAN_OVERLOAD_SPAN -
+      OBSIDIAN_OVERLOAD_STRAFE_AT;
+    if (into < 0 || into > OVER_STRAFE.end) return null;
+    return { local: into, plan: OVER_STRAFE };
+  }
+  return null;
+}
+
 function place(boss: BossRuntime, state: FightState): void {
   boss.x = OBSIDIAN_CENTER_X;
-  if (boss.phase === 'open') {
-    const index = Math.floor((state.clock + 1e-8) / OBSIDIAN_SLICE);
-    const local = state.clock - index * OBSIDIAN_SLICE;
-    boss.y =
-      index % 3 === 2
-        ? Math.min(OBSIDIAN_STRAFE_Y_MAX, strafeY(local, MAIN_STRAFE))
-        : OBSIDIAN_PARK_Y;
-    return;
-  }
-  if (boss.phase === 'overload') {
-    const local =
-      state.clock - Math.floor(state.clock / OBSIDIAN_OVERLOAD_SPAN) * OBSIDIAN_OVERLOAD_SPAN;
-    const into = local - OBSIDIAN_OVERLOAD_STRAFE_AT;
-    boss.y =
-      into >= 0 && into <= OVER_STRAFE.end
-        ? Math.min(OBSIDIAN_STRAFE_Y_MAX, strafeY(into, OVER_STRAFE))
-        : OBSIDIAN_PARK_Y;
-    return;
-  }
-  boss.y = OBSIDIAN_PARK_Y;
+  const window = strafeWindow(boss.phase, state.clock);
+  boss.y = window
+    ? Math.min(OBSIDIAN_STRAFE_Y_MAX, strafeY(window.local, window.plan))
+    : OBSIDIAN_PARK_Y;
 }
 
 /** Advance the live phase. Called only while the boss is actually fighting. */
@@ -782,7 +853,9 @@ export interface ObsidianMotion {
 export function obsidianMotion(boss: BossRuntime): ObsidianMotion {
   const warn = boss.phase === 'overload';
   if (boss.stage !== 'fight') return { bank: 0, flameBoost: 0, warn };
-  if (boss.y > OBSIDIAN_PARK_Y + 1) return { bank: 0, flameBoost: OBSIDIAN_FLAME_BOOST, warn };
+  if (strafeWindow(boss.phase, ensure(boss).clock)) {
+    return { bank: 0, flameBoost: OBSIDIAN_FLAME_BOOST, warn };
+  }
   if (warn) return { bank: 0, flameBoost: OBSIDIAN_OVERLOAD_CRUISE_FLAME, warn };
   return { bank: 0, flameBoost: 0, warn };
 }

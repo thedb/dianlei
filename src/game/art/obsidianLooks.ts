@@ -1,17 +1,19 @@
 /**
- * 黑曜 layered art, Yoan 定稿 3A (sheet_free_gen / gamepal).
- * The fuselage is 80×96 and stays fixed: dark armor, orange canopy, red lamps.
- * Four crystal blades and four hinge locks are separate sprites. A blade is
- * drawn for the left side, pivot on the inboard root, crystal outboard; the
- * right side mirrors it and the fight rotates both. Overload only recolors
- * the canopy to warning yellow. The fuselage does not use player cyan.
- * Wings are not baked into the hull.
+ * 黑曜 layered art, v3 parts sheet (Yoan confirmed).
+ * Fuselage stays on the 80×96 frame: longer slim body, nose radar, orange
+ * canopy, one centered jet. Wings are separate sprites. Swept pose is a
+ * solid cyan gradient (root dark, tip bright) over a dark metal plate.
+ * The open cross uses a longer, narrower blade. Right side is the same
+ * sprite rotated, not a mirrored crystal. The fuselage does not use player
+ * cyan. Overload only recolors the canopy to warning yellow.
  */
 
 import {
   OBSIDIAN_BLADE_H,
   OBSIDIAN_BLADE_STUB,
   OBSIDIAN_BLADE_W,
+  OBSIDIAN_CROSS_H,
+  OBSIDIAN_CROSS_W,
   OBSIDIAN_HINGE_H,
   OBSIDIAN_HINGE_W,
   OBSIDIAN_HULL_H,
@@ -22,11 +24,13 @@ import { createGrid, fillEllipse, fillPoly, fillRect, plot, rim } from './pixelD
 import type { SpriteData } from './types';
 
 export type ObsidianHullKind = 'warm' | 'warn' | 'wreck';
-export type ObsidianBladeKind = 'inner' | 'outer' | 'stub';
+export type ObsidianBladeKind = 'swept' | 'cross' | 'stub';
 
-/** Hinge pixel inside the blade sprite. The bake copies this onto the frame anchor. */
-export const OBSIDIAN_BLADE_PIVOT_X = 16;
-export const OBSIDIAN_BLADE_PIVOT_Y = 3;
+/** Root pixel of the swept wing. The bake copies this onto the frame anchor. */
+export const OBSIDIAN_BLADE_PIVOT_X = 14;
+export const OBSIDIAN_BLADE_PIVOT_Y = 4;
+export const OBSIDIAN_CROSS_PIVOT_X = 9;
+export const OBSIDIAN_CROSS_PIVOT_Y = 3;
 
 const K = COLOR.BLACK;
 const S = COLOR.SHADOW;
@@ -40,7 +44,6 @@ const CY = COLOR.PLAYER_CYAN;
 const CM = COLOR.PLAYER_MED_CYAN;
 const CD = COLOR.PLAYER_DARK_CYAN;
 const CP = COLOR.PLAYER_PALE_CYAN;
-const CB = COLOR.PLAYER_BLUE;
 const OR = COLOR.EXPLOSION_ORANGE;
 const OY = COLOR.EXPLOSION_ORANGE_YELLOW;
 const YE = COLOR.EXPLOSION_YELLOW;
@@ -51,334 +54,260 @@ const EC = COLOR.ENEMY_CRIMSON;
 
 type Pt = readonly [number, number];
 
-function mirrorX(x: number): number {
-  return OBSIDIAN_HULL_W - 1 - x;
+const CX = (OBSIDIAN_HULL_W - 1) / 2;
+
+function crystal(t: number): number {
+  if (t < 0.22) return CD;
+  if (t < 0.48) return CM;
+  if (t < 0.72) return CY;
+  if (t < 0.9) return CP;
+  return W;
 }
 
-function polyPair(g: SpriteData, pts: Pt[], color: number): void {
-  fillPoly(g, pts, color);
-  fillPoly(
+function paintWing(
+  g: SpriteData,
+  y0: number,
+  y1: number,
+  halfAt: (t: number) => number,
+  colorAt: (t: number, edge: boolean, core: boolean) => number
+): void {
+  const span = Math.max(1, y1 - y0);
+  const cx = ((g[0]?.length ?? 1) - 1) / 2;
+  for (let y = y0; y <= y1; y++) {
+    const t = (y - y0) / span;
+    const half = halfAt(t);
+    const left = Math.round(cx - half);
+    const right = Math.round(cx + half);
+    for (let x = left; x <= right; x++) {
+      const edge = x === left || x === right;
+      const core = Math.abs(x - cx) < 1.2;
+      plot(g, x, y, colorAt(t, edge, core));
+    }
+  }
+}
+
+/** Dark plate under the crystal so the swept pose reads as a wing. */
+function paintPlate(g: SpriteData): void {
+  const y0 = OBSIDIAN_BLADE_PIVOT_Y + 1;
+  const y1 = y0 + Math.round((OBSIDIAN_BLADE_H - y0) * 0.74);
+  paintWing(
     g,
-    pts.map(([x, y]) => [mirrorX(x), y] as const),
-    color
+    y0,
+    y1,
+    (t) => OBSIDIAN_BLADE_W * 0.46 * (1 - 0.42 * t),
+    (t, edge) => {
+      if (edge) return S;
+      if (t > 0.16 && t < 0.24) return ER;
+      return t < 0.5 ? D : M;
+    }
   );
 }
 
-/** Aft is small y (engines and tails). The nose is the bottom of the sprite. */
-function bodyHalf(y: number): number {
-  if (y < 18 || y > 94) return -1;
-  if (y < 32) return 8 + ((y - 18) / 14) * 3;
-  if (y < 58) return 11 + ((y - 32) / 26) * 2;
-  if (y < 72) return 13 - ((y - 58) / 14) * 4;
-  if (y < 86) return 9 - ((y - 72) / 14) * 5;
-  return Math.max(0.8, 4 - (y - 86) * 0.4);
-}
-
-function paintFuselage(g: SpriteData): void {
-  const cx = (OBSIDIAN_HULL_W - 1) / 2;
-  for (let y = 0; y < OBSIDIAN_HULL_H; y++) {
-    const half = bodyHalf(y);
-    if (half < 0) continue;
-    for (let x = 0; x < OBSIDIAN_HULL_W; x++) {
-      const dx = Math.abs(x + 0.5 - cx);
-      if (dx > half) continue;
-      const plate = Math.floor(y / 5) % 2 === 0;
-      let color: number = plate ? D : M;
-      if (dx > half - 1.15) color = S;
-      else if (dx < 1.05) color = G;
-      else if (dx < 2.4) color = plate ? M : G;
-      plot(g, x, y, color);
-    }
-  }
-}
-
-function paintTails(g: SpriteData): void {
-  const tail: Pt[] = [
-    [27, 2],
-    [36, 1],
-    [35, 18],
-    [28, 20],
-  ];
-  polyPair(g, tail, D);
-  const face: Pt[] = [
-    [29, 4],
-    [34, 3],
-    [33, 15],
-    [30, 17],
-  ];
-  polyPair(g, face, M);
-  plot(g, 31, 6, L);
-  plot(g, 32, 7, G);
-  plot(g, mirrorX(31), 6, L);
-  plot(g, mirrorX(32), 7, G);
-}
-
-function paintWings(g: SpriteData): void {
-  const wing: Pt[] = [
-    [33, 60],
-    [22, 50],
-    [15, 34],
-    [21, 26],
-    [33, 38],
-  ];
-  polyPair(g, wing, D);
-  const face: Pt[] = [
-    [31, 54],
-    [23, 46],
-    [18, 36],
-    [23, 30],
-    [31, 42],
-  ];
-  polyPair(g, face, M);
-  for (let i = 0; i < 8; i++) {
-    plot(g, 20 + i, 34 + Math.floor(i / 2), S);
-    plot(g, mirrorX(20 + i), 34 + Math.floor(i / 2), S);
-  }
-}
-
-function paintCanards(g: SpriteData): void {
-  const fin: Pt[] = [
-    [34, 80],
-    [26, 72],
-    [25, 76],
-    [32, 84],
-  ];
-  polyPair(g, fin, D);
-  polyPair(
+function paintCrystal(g: SpriteData, y0: number, y1: number, wide: number): void {
+  paintWing(
     g,
-    [
-      [32, 79],
-      [28, 74],
-      [27, 76],
-      [31, 82],
-    ],
-    M
+    y0,
+    y1,
+    (t) => {
+      let half = wide * (0.62 - 0.34 * t);
+      if (t > 0.86) half *= Math.max(0, (1 - t) / 0.14);
+      return half;
+    },
+    (t, edge, core) => {
+      if (edge) return t > 0.75 ? W : CP;
+      if (core && t > 0.4) return t > 0.85 ? W : CP;
+      return crystal(t);
+    }
   );
 }
 
-function paintEngines(g: SpriteData, kind: ObsidianHullKind): void {
-  const dead = kind === 'wreck';
-  for (const cx of [31, mirrorX(31)]) {
-    fillEllipse(g, cx, 10, 5.2, 6.3, dead ? S : D);
-    fillEllipse(g, cx, 10.4, 3.3, 4.3, dead ? K : S);
-    if (!dead) {
-      fillEllipse(g, cx, 11, 1.4, 2.1, P);
-      plot(g, cx, 11, W);
-    }
+function paintRoot(g: SpriteData, pivotX: number, pivotY: number, half: number): void {
+  fillRect(g, pivotX - half, pivotY - 2, half * 2 + 1, 7, M);
+  fillRect(g, pivotX - half + 1, pivotY - 1, half * 2 - 1, 4, D);
+  fillRect(g, pivotX - Math.max(2, half - 2), pivotY, Math.max(4, half * 2 - 3), 2, OR);
+  plot(g, pivotX, pivotY, S);
+}
+
+/** Stacked swept wing. Tip hangs in +y so angle 0 points down the nose. */
+export function buildObsidianBlade(kind: ObsidianBladeKind): SpriteData {
+  if (kind === 'stub') {
+    const g = createGrid(OBSIDIAN_BLADE_W, OBSIDIAN_BLADE_STUB, -1);
+    paintRoot(g, OBSIDIAN_BLADE_PIVOT_X, OBSIDIAN_BLADE_PIVOT_Y, 5);
+    paintCrystal(g, 8, 15, 5);
+    plot(g, 12, 14, K);
+    plot(g, 16, 13, K);
+    rim(g, K);
+    return g;
+  }
+  if (kind === 'cross') {
+    const g = createGrid(OBSIDIAN_CROSS_W, OBSIDIAN_CROSS_H, -1);
+    paintRoot(g, OBSIDIAN_CROSS_PIVOT_X, OBSIDIAN_CROSS_PIVOT_Y, 4);
+    paintCrystal(g, OBSIDIAN_CROSS_PIVOT_Y + 2, OBSIDIAN_CROSS_H - 2, OBSIDIAN_CROSS_W * 0.42);
+    rim(g, K);
+    paintTip(g, OBSIDIAN_CROSS_PIVOT_X);
+    return g;
+  }
+  const g = createGrid(OBSIDIAN_BLADE_W, OBSIDIAN_BLADE_H, -1);
+  paintPlate(g);
+  paintRoot(g, OBSIDIAN_BLADE_PIVOT_X, OBSIDIAN_BLADE_PIVOT_Y, 6);
+  paintCrystal(g, OBSIDIAN_BLADE_PIVOT_Y + 2, OBSIDIAN_BLADE_H - 2, OBSIDIAN_BLADE_W * 0.34);
+  rim(g, K);
+  paintTip(g, OBSIDIAN_BLADE_PIVOT_X);
+  return g;
+}
+
+/** The last rows are a few pixels wide, so the black outline would hide the gradient. */
+function paintTip(g: SpriteData, pivotX: number): void {
+  const height = g.length;
+  const y0 = height - 8;
+  const y1 = height - 2;
+  const cx = pivotX + 0.5;
+  for (let y = y0; y <= y1; y++) {
+    const t = (y - y0) / Math.max(1, y1 - y0);
+    const half = Math.max(1.1, 3.2 * (1 - t));
+    const color = t > 0.5 ? W : CP;
+    const left = Math.round(cx - half);
+    const right = Math.round(cx + half);
+    for (let x = left; x <= right; x++) plot(g, x, y, color);
   }
 }
 
-function paintIntakes(g: SpriteData): void {
-  for (const x0 of [30, mirrorX(34)]) {
-    for (let y = 46; y <= 53; y++) {
-      for (let x = x0; x < x0 + 5; x++) plot(g, x, y, S);
+function fuselage(): Pt[] {
+  const r: Pt[] = [
+    [CX, 93],
+    [CX + 4, 84],
+    [CX + 8, 70],
+    [CX + 11, 54],
+    [CX + 12, 38],
+    [CX + 10, 24],
+    [CX + 6, 14],
+    [CX + 3, 9],
+    [CX - 3, 9],
+    [CX - 6, 14],
+    [CX - 10, 24],
+    [CX - 12, 38],
+    [CX - 11, 54],
+    [CX - 8, 70],
+    [CX - 4, 84],
+  ];
+  return r;
+}
+
+function paintBody(g: SpriteData): void {
+  fillPoly(g, fuselage(), D);
+  const inner: Pt[] = [
+    [CX, 88],
+    [CX + 5, 72],
+    [CX + 7, 52],
+    [CX + 6, 32],
+    [CX + 3, 16],
+    [CX - 3, 16],
+    [CX - 6, 32],
+    [CX - 7, 52],
+    [CX - 5, 72],
+  ];
+  fillPoly(g, inner, M);
+  for (let y = 18; y <= 86; y += 2) {
+    plot(g, Math.round(CX), y, G);
+  }
+}
+
+function paintSeams(g: SpriteData): void {
+  for (const y of [28, 42, 58, 74]) {
+    for (let x = 30; x <= 49; x++) {
+      if ((g[y]?.[x] ?? -1) < 0) continue;
+      if (g[y]![x] === L || g[y]![x] === W) continue;
+      plot(g, x, y, S);
     }
-    for (let x = x0; x < x0 + 5; x++) plot(g, x, 54, L);
+  }
+  for (let y = 30; y <= 80; y++) {
+    plot(g, Math.round(CX - 6), y, S);
+    plot(g, Math.round(CX + 6), y, S);
   }
 }
 
 function paintCanopy(g: SpriteData, kind: ObsidianHullKind): void {
-  const cx = (OBSIDIAN_HULL_W - 1) / 2;
-  const cy = 68;
+  const cy = 66;
   if (kind === 'wreck') {
-    fillEllipse(g, cx, cy, 6.4, 11.2, D);
-    fillEllipse(g, cx, cy, 4.6, 9.2, S);
-    fillEllipse(g, cx, cy - 1, 2.2, 4.4, K);
-    for (let i = 0; i < 8; i++) plot(g, 36 + i, 64 + i, K);
+    fillEllipse(g, CX, cy, 5.2, 9, D);
+    fillEllipse(g, CX, cy, 3.4, 6.4, S);
+    fillEllipse(g, CX, cy, 1.6, 3, K);
+    for (let i = 0; i < 7; i++) plot(g, Math.round(CX - 3 + i), cy - 4 + i, K);
     return;
   }
   const glass = kind === 'warn' ? YE : OR;
   const core = kind === 'warn' ? W : OY;
-  fillEllipse(g, cx, cy, 6.6, 11.4, D);
-  fillEllipse(g, cx, cy, 5.4, 10, RO);
-  fillEllipse(g, cx, cy + 0.4, 4.2, 8.4, glass);
-  fillEllipse(g, cx, cy - 1, 2, 4.2, core);
-  plot(g, 37, 62, P);
-  plot(g, 38, 63, W);
-  plot(g, 39, 63, W);
+  fillEllipse(g, CX, cy, 5.6, 10, D);
+  fillEllipse(g, CX, cy, 4.4, 8.4, RO);
+  fillEllipse(g, CX, cy + 0.4, 3.2, 6.6, glass);
+  fillEllipse(g, CX, cy - 1, 1.6, 3.2, core);
+  plot(g, Math.round(CX - 2), cy - 5, P);
 }
 
-function paintSeams(g: SpriteData): void {
-  const cx = (OBSIDIAN_HULL_W - 1) / 2;
-  for (const y of [26, 36, 48, 58, 80]) {
-    const row = g[y];
-    if (!row) continue;
-    for (let x = 0; x < OBSIDIAN_HULL_W; x++) {
-      if ((row[x] ?? -1) < 0) continue;
-      if (Math.abs(x + 0.5 - cx) > 16) continue;
-      if (row[x] === L || row[x] === W) continue;
-      plot(g, x, y, D);
-    }
+function paintRadar(g: SpriteData): void {
+  fillRect(g, CX - 2, 90, 5, 5, G);
+  fillEllipse(g, CX, 94, 2.4, 2.2, P);
+  fillEllipse(g, CX, 94, 1.1, 1.1, L);
+}
+
+function paintNozzle(g: SpriteData, kind: ObsidianHullKind): void {
+  const nozzle: Pt[] = [
+    [CX - 7, 2],
+    [CX + 7, 2],
+    [CX + 9, 11],
+    [CX - 9, 11],
+  ];
+  fillPoly(g, nozzle, kind === 'wreck' ? S : K);
+  fillRect(g, CX - 5, 4, 11, 6, kind === 'wreck' ? K : S);
+  if (kind !== 'wreck') {
+    fillEllipse(g, CX, 8, 3.2, 2.4, OR);
+    fillEllipse(g, CX, 8, 1.3, 1.1, OY);
   }
 }
 
-function paintHoles(g: SpriteData): void {
-  for (let y = 42; y < 52; y++) {
-    for (let x = 34; x < 43; x++) {
-      const edge = x === 34 || y === 42 || x === 42 || y === 51;
-      plot(g, x, y, edge ? S : K);
-    }
-  }
-  for (let i = 0; i < 5; i++) {
-    plot(g, 16 + i, 32 + (i % 2), -1);
-    plot(g, 17 + i, 33, -1);
-  }
-}
-
-/** Nose-facing rim stays light so the sweep reads against the deck. */
-function leadingEdge(g: SpriteData): void {
-  const h = g.length;
-  const w = g[0]?.length ?? 0;
-  for (let y = 20; y < h - 1; y++) {
-    for (let x = 0; x < w; x++) {
-      if ((g[y]?.[x] ?? -1) < 0) continue;
-      if ((g[y + 1]?.[x] ?? -1) >= 0) continue;
-      plot(g, x, y, L);
-    }
-  }
-}
-
-function lamp(g: SpriteData, x: number, y: number, color: number): void {
-  if ((g[y]?.[x] ?? -1) < 0) return;
-  plot(g, x, y, color);
+function paintCheeks(g: SpriteData): void {
+  fillRect(g, CX - 16, 40, 7, 16, M);
+  fillRect(g, CX + 10, 40, 7, 16, M);
+  fillRect(g, CX - 15, 41, 5, 14, D);
+  fillRect(g, CX + 11, 41, 5, 14, D);
 }
 
 function paintLamps(g: SpriteData, kind: ObsidianHullKind): void {
   const hot = kind === 'wreck' ? EC : EB;
   const dim = kind === 'wreck' ? S : ER;
-  for (const y of [24, 32, 40, 50, 82, 88]) {
-    lamp(g, 39, y, hot);
-    lamp(g, 40, y, dim);
+  for (const y of [34, 48, 62, 78]) {
+    plot(g, Math.round(CX - 8), y, hot);
+    plot(g, Math.round(CX + 8), y, dim);
   }
-  if (kind !== 'wreck') {
-    lamp(g, 28, 10, ER);
-    lamp(g, mirrorX(28), 10, ER);
-    lamp(g, 26, 14, EB);
-    lamp(g, mirrorX(26), 14, EB);
+}
+
+function paintHoles(g: SpriteData): void {
+  for (let y = 46; y <= 54; y++) {
+    for (let x = 34; x <= 40; x++) {
+      const edge = x === 34 || y === 46 || x === 40 || y === 54;
+      plot(g, x, y, edge ? S : K);
+    }
   }
-  lamp(g, 16, 34, hot);
-  lamp(g, mirrorX(16), 34, hot);
-  lamp(g, 30, 46, dim);
-  lamp(g, mirrorX(30), 46, dim);
 }
 
 function paint(kind: ObsidianHullKind): SpriteData {
   const g = createGrid(OBSIDIAN_HULL_W, OBSIDIAN_HULL_H, -1);
-  paintTails(g);
-  paintWings(g);
-  paintFuselage(g);
-  paintCanards(g);
-  paintEngines(g, kind);
-  paintIntakes(g);
+  paintCheeks(g);
+  paintBody(g);
   paintSeams(g);
+  paintNozzle(g, kind);
   paintCanopy(g, kind);
+  paintRadar(g);
   if (kind === 'wreck') paintHoles(g);
   rim(g, K);
-  if (kind !== 'wreck') leadingEdge(g);
   paintLamps(g, kind);
+  paintRadar(g);
+  if (kind !== 'wreck') paintNozzle(g, kind);
   return g;
 }
 
 export function buildObsidianHull(kind: ObsidianHullKind): SpriteData {
   return paint(kind);
-}
-
-interface CrystalSpec {
-  y0: number;
-  y1: number;
-  half0: number;
-  half1: number;
-  cx0: number;
-  cx1: number;
-}
-
-const CRYSTAL: Record<'inner' | 'outer', CrystalSpec> = {
-  inner: { y0: 13, y1: 57, half0: 4.3, half1: 1.4, cx0: 11, cx1: 8.2 },
-  outer: { y0: 13, y1: 62, half0: 6.1, half1: 1.8, cx0: 9.4, cx1: 6.4 },
-};
-
-function paintCrystal(g: SpriteData, spec: CrystalSpec): void {
-  const span = Math.max(1, spec.y1 - spec.y0);
-  for (let y = spec.y0; y <= spec.y1; y++) {
-    const t = (y - spec.y0) / span;
-    const half = spec.half0 + (spec.half1 - spec.half0) * t;
-    const cx = spec.cx0 + (spec.cx1 - spec.cx0) * t;
-    const left = Math.round(cx - half);
-    const right = Math.round(cx + half);
-    for (let x = left; x <= right; x++) {
-      let color: number = y % 5 === 0 ? CD : CM;
-      if (x === left) color = CP;
-      else if (x === left + 1) color = y % 3 === 0 ? W : CY;
-      else if (x === right) color = CB;
-      else if (x >= right - 1) color = CD;
-      else if (Math.abs(x + 0.5 - cx) < 1.15) color = y % 4 === 0 ? W : CY;
-      plot(g, x, y, color);
-    }
-  }
-}
-
-function paintCollar(g: SpriteData, live: boolean): void {
-  const x0 = OBSIDIAN_BLADE_PIVOT_X - 4;
-  fillRect(g, x0, 0, 8, 11, D);
-  fillRect(g, x0 + 1, 1, 6, 7, M);
-  fillRect(g, x0 + 1, 1, 1, 7, L);
-  plot(g, x0 + 2, 3, K);
-  plot(g, x0 + 5, 3, K);
-  plot(g, OBSIDIAN_BLADE_PIVOT_X, OBSIDIAN_BLADE_PIVOT_Y, S);
-  if (!live) {
-    plot(g, x0 + 2, 8, S);
-    plot(g, x0 + 3, 9, K);
-  }
-}
-
-/** Orange nozzle just under the lock, on collar pixels the rim does not own. */
-function paintRootGlow(g: SpriteData): void {
-  const x = OBSIDIAN_BLADE_PIVOT_X - 2;
-  plot(g, x, 8, OR);
-  plot(g, x + 1, 8, OY);
-  plot(g, x + 1, 9, OR);
-}
-
-function restoreCrystalEdge(g: SpriteData, y0: number, y1: number): void {
-  const w = g[0]?.length ?? 0;
-  for (let y = y0; y <= y1; y++) {
-    let left = -1;
-    for (let x = 0; x < w; x++) {
-      if ((g[y]?.[x] ?? -1) >= 0) {
-        left = x;
-        break;
-      }
-    }
-    if (left < 0) continue;
-    plot(g, left, y, CP);
-    if ((g[y]?.[left + 1] ?? -1) >= 0) plot(g, left + 1, y, y % 3 === 0 ? W : CY);
-  }
-}
-
-/** Left-side blade. The root is the pivot; the crystal hangs outboard and down. */
-export function buildObsidianBlade(kind: ObsidianBladeKind): SpriteData {
-  const h = kind === 'stub' ? OBSIDIAN_BLADE_STUB : OBSIDIAN_BLADE_H;
-  const g = createGrid(OBSIDIAN_BLADE_W, h, -1);
-  if (kind === 'stub') {
-    paintCrystal(g, { y0: 12, y1: 16, half0: 3.2, half1: 1.6, cx0: 11, cx1: 10 });
-    for (const [x, y] of [
-      [8, 16],
-      [9, 15],
-      [13, 16],
-    ] as const) {
-      plot(g, x, y, -1);
-    }
-    paintCollar(g, false);
-    rim(g, K);
-    return g;
-  }
-  const spec = CRYSTAL[kind];
-  paintCrystal(g, spec);
-  paintCollar(g, true);
-  rim(g, K);
-  restoreCrystalEdge(g, spec.y0, spec.y1);
-  paintRootGlow(g);
-  return g;
 }
 
 /** Round lock on the hinge. Live locks carry the orange ring the player shoots. */
