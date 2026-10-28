@@ -56,6 +56,7 @@ import {
   updateBombHits,
 } from '@/game/battle/combat';
 import { armBoss, stepBoss } from '@/game/battle/bossFight';
+import { obsidianCutsceneActive } from '@/game/systems/obsidianSaucer';
 import {
   jumpTo,
   stageWindow,
@@ -239,7 +240,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
         stepFlyIn(b, dt);
       } else {
         steerPlayer(b, dt, input);
-        if (b.controls.bombPressed) activateBomb(b);
+        if (b.controls.bombPressed && !obsidianCutsceneActive(b.boss)) activateBomb(b);
       }
 
       const { pastWarning, warningWindow } = stageWindow(b);

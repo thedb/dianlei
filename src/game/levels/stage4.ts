@@ -1,10 +1,8 @@
 /**
- * Stage 4 map shell. Waves, guns, floaters, and the obsidian fight are not
- * in this pass. A stage-start entry plays the carrier launch, then scrolls
- * 海面B. 挑战 Boss seeks `OBSIDIAN_ENTER_AT` and loops the empty enemy deck.
- *
- * `s4_wreck` and `s4_ufo` are in the caption catalog. Their clocks are not
- * wired yet (`mid` / `cutscene` still draw nothing).
+ * Stage 4. Waves, guns, and floaters stay empty (P35). The obsidian fight
+ * and the saucer show are live. A stage-start entry plays the carrier launch,
+ * then scrolls 海面B. 挑战 Boss seeks `OBSIDIAN_ENTER_AT` and does not play
+ * the launch. `s4_ufo` starts at the beam. `s4_wreck` waits for the waves.
  */
 
 import { BG_SCROLL_SPEED, STAGE4_WARNING_AT } from '@/game/config';
@@ -19,7 +17,10 @@ export const stage4: StageData = {
   scrollSpeed: BG_SCROLL_SPEED,
   warningAt: STAGE4_WARNING_AT,
   maps: { run: [{ map: 'seaB', at: 0 }], boss: 'obsidianBoss' },
-  captions: [{ id: 's4_open', at: 'open' }],
+  captions: [
+    { id: 's4_open', at: 'open' },
+    { id: 's4_ufo', at: 'cutscene' },
+  ],
   waves: [],
   buildings: [],
   boss: OBSIDIAN,

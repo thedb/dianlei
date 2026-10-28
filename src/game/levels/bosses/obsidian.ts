@@ -1,36 +1,69 @@
 /**
- * Stage 4 boss 黑曜, stub. The ship can enter and be shot. It does not fly
- * the polyline, the strafe, or the saucer sequence. Those stay in the design
- * docs until the next PR. Dying here still uses the normal explosion clear.
+ * Stage 4 boss 黑曜, look 3A 刃翼十字.
+ * Folded locks, then the outer blades, then the inner blades plus the
+ * fuselage. Hard adds the yellow overload on the fuselage alone.
+ * Empty HP does not take the generic explosion clear.
+ *
+ * HP is a draft aimed at about 40 seconds. The main bar sums to
+ * OBSIDIAN_MAIN_HP. Measure before locking the split.
  */
 
 import {
+  OBSIDIAN_BLADE_RADIUS,
+  OBSIDIAN_BREAK_EXPLOSIONS,
+  OBSIDIAN_BREAK_SPAN,
+  OBSIDIAN_CENTER_X,
+  OBSIDIAN_DEPLOY_TIME,
   OBSIDIAN_ENTER_AT,
   OBSIDIAN_ENTER_DURATION,
   OBSIDIAN_ENTER_Y,
+  OBSIDIAN_FRAME_HP,
+  OBSIDIAN_FRAME_SCORE,
+  OBSIDIAN_HINGE_HP,
+  OBSIDIAN_HINGE_RADIUS,
   OBSIDIAN_HULL_H,
   OBSIDIAN_HULL_W,
+  OBSIDIAN_INNER_HP,
+  OBSIDIAN_OUTER_HP,
+  OBSIDIAN_OVERLOAD_HP,
   OBSIDIAN_PARK_Y,
-  OBSIDIAN_STUB_DEATH_DURATION,
-  OBSIDIAN_STUB_DEATH_EXPLOSIONS,
-  OBSIDIAN_STUB_HP,
-  OBSIDIAN_STUB_RADIUS,
-  OBSIDIAN_STUB_SCORE,
+  OBSIDIAN_PHASE_INVULN,
+  OBSIDIAN_RADIUS,
   OBSIDIAN_WARNING,
-  LOGICAL_W,
 } from '@/game/config';
-import type { BossDef } from '../types';
+import { HARD_PHASE_GATE } from '@/game/difficulty';
+import { OBSIDIAN_BLADES, obsidianBladeOffset } from '@/game/systems/obsidian';
+import type { BossDef, BossPartDef } from '../types';
+
+const hinges: BossPartDef[] = OBSIDIAN_BLADES.map((blade) => ({
+  id: blade.hinge,
+  offset: { x: blade.x, y: blade.y },
+  radius: OBSIDIAN_HINGE_RADIUS,
+  hp: OBSIDIAN_HINGE_HP,
+  score: 0,
+  onDestroy: 'burst',
+}));
+
+const wings: BossPartDef[] = OBSIDIAN_BLADES.map((blade, index) => ({
+  id: blade.id,
+  offset: obsidianBladeOffset(index, 'fold'),
+  radius: OBSIDIAN_BLADE_RADIUS,
+  hp: blade.role === 'outer' ? OBSIDIAN_OUTER_HP : OBSIDIAN_INNER_HP,
+  score: 0,
+  onDestroy: 'burst',
+}));
 
 export const OBSIDIAN: BossDef = {
   id: 'obsidian',
   art: 'obsidian',
+  script: 'obsidian',
   title: '黑曜',
   subtitle: '舰载王牌',
   fightWarning: OBSIDIAN_WARNING,
   vulnerableEnter: true,
   enterAt: OBSIDIAN_ENTER_AT,
   enterDuration: OBSIDIAN_ENTER_DURATION,
-  anchorX: LOGICAL_W / 2,
+  anchorX: OBSIDIAN_CENTER_X,
   enterY: OBSIDIAN_ENTER_Y,
   parkY: OBSIDIAN_PARK_Y,
   drift: { amp: 0, period: 8 },
@@ -39,29 +72,61 @@ export const OBSIDIAN: BossDef = {
     {
       id: 'frame',
       offset: { x: 0, y: 0 },
-      radius: OBSIDIAN_STUB_RADIUS,
-      hp: OBSIDIAN_STUB_HP,
-      score: OBSIDIAN_STUB_SCORE,
+      radius: OBSIDIAN_RADIUS,
+      hp: OBSIDIAN_FRAME_HP,
+      score: OBSIDIAN_FRAME_SCORE,
     },
+    ...hinges,
+    ...wings,
   ],
   phases: [
     {
-      id: 'fight',
-      targets: ['frame'],
+      id: 'folded',
+      targets: OBSIDIAN_BLADES.map((blade) => blade.hinge),
       attacks: [],
       look: { hull: 'closed' },
       bar: 'main',
     },
+    {
+      id: 'half',
+      targets: ['outerL', 'outerR'],
+      transition: { id: 'half', duration: OBSIDIAN_DEPLOY_TIME },
+      attacks: [],
+      look: { hull: 'closed' },
+      bar: 'main',
+    },
+    {
+      id: 'open',
+      targets: ['innerL', 'innerR', 'frame'],
+      transition: { id: 'open', duration: OBSIDIAN_DEPLOY_TIME },
+      attacks: [],
+      look: { hull: 'closed' },
+      bar: 'main',
+    },
+    {
+      id: 'overload',
+      targets: ['frame'],
+      segmentHp: OBSIDIAN_OVERLOAD_HP,
+      transition: { id: 'overload', duration: OBSIDIAN_PHASE_INVULN },
+      gate: HARD_PHASE_GATE,
+      attacks: [],
+      look: { hull: 'open', smoke: true },
+      bar: 'extra',
+    },
   ],
   bulletsToScore: 0,
+  // The saucer plays these blasts at t=4.40. The runner must not start them
+  // on the frame HP hits zero.
   death: {
-    duration: OBSIDIAN_STUB_DEATH_DURATION,
-    explosions: OBSIDIAN_STUB_DEATH_EXPLOSIONS,
+    duration: OBSIDIAN_BREAK_SPAN,
+    explosions: OBSIDIAN_BREAK_EXPLOSIONS,
     offsets: [
       [0, 0],
-      [-20, 16],
-      [18, -12],
-      [0, 28],
+      [-22, 14],
+      [20, -16],
+      [0, 26],
+      [-18, -22],
+      [16, 8],
     ],
   },
 };

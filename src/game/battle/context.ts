@@ -136,6 +136,8 @@ export interface Battle {
   gameTime: number;
   warningPlayed: boolean;
   finishedAt: number | null;
+  /** Game clock when a `cutscene` caption starts. Null until then. */
+  cutsceneAt: number | null;
   assets: GameAssets | null;
 }
 
@@ -259,6 +261,7 @@ export function createBattle(scene: SceneContext): Battle {
     gameTime: 0,
     warningPlayed: false,
     finishedAt: null,
+    cutsceneAt: null,
     assets: null,
   };
   return battle;

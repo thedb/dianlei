@@ -51,7 +51,14 @@ import {
   buildFurnacePodMark,
   drawFurnaceBoss,
 } from './furnaceLooks';
-import { buildObsidianStubHull } from './obsidianStub';
+import { drawObsidianBoss } from './obsidianDraw';
+import {
+  OBSIDIAN_BLADE_PIVOT_X,
+  OBSIDIAN_BLADE_PIVOT_Y,
+  buildObsidianBlade,
+  buildObsidianHinge,
+  buildObsidianHull,
+} from './obsidianLooks';
 import type { SpriteData, SpriteFrame } from './types';
 import { createGrid, fillEllipse, fillPoly, fillRect, outline, plot } from './pixelDraw';
 import { renderSprite } from './spriteRenderer';
@@ -372,6 +379,13 @@ export function buildTiebaoAa(broken: boolean): SpriteData {
   return g;
 }
 
+function bladeFrame(kind: 'inner' | 'outer' | 'stub'): SpriteFrame {
+  const frame = renderSprite(buildObsidianBlade(kind), 0, 0);
+  frame.anchorX = OBSIDIAN_BLADE_PIVOT_X;
+  frame.anchorY = OBSIDIAN_BLADE_PIVOT_Y;
+  return frame;
+}
+
 export const BOSS_ART: Readonly<Record<string, () => BossAssets>> = {
   orbital: () => ({
     hull: renderSprite(buildBossHull(false)),
@@ -398,10 +412,18 @@ export const BOSS_ART: Readonly<Record<string, () => BossAssets>> = {
       core: renderSprite(buildFurnaceCore()),
     },
   }),
-  obsidian: () => {
-    const hull = renderSprite(buildObsidianStubHull());
-    return { hull, hullOpen: hull, parts: {} };
-  },
+  obsidian: () => ({
+    hull: renderSprite(buildObsidianHull('warm')),
+    hullOpen: renderSprite(buildObsidianHull('warn')),
+    parts: {
+      wreck: renderSprite(buildObsidianHull('wreck')),
+      bladeInner: bladeFrame('inner'),
+      bladeOuter: bladeFrame('outer'),
+      bladeStub: bladeFrame('stub'),
+      hinge: renderSprite(buildObsidianHinge('live')),
+      hingeDead: renderSprite(buildObsidianHinge('dead')),
+    },
+  }),
 };
 
 /** Bake every registered boss. */
@@ -432,6 +454,10 @@ export function drawBossWorld(
   const look = bossLook(boss);
   const assets = bosses[boss.def.art];
   if (!look || !assets) return;
+  if (boss.def.art === 'obsidian') {
+    drawObsidianBoss(ctx, draw, boss, assets, time);
+    return;
+  }
   if (boss.def.art === 'furnace') {
     drawFurnaceBoss(ctx, draw, boss, assets, time);
     return;

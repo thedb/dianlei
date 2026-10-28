@@ -1,6 +1,6 @@
 /**
- * Stage 4 map smoke. Waves are empty and the boss is a parked stub, so this
- * only checks that both entries bake, scroll, and draw.
+ * Stage 4 map smoke. Waves stay empty. 挑战 Boss 4 reaches the live obsidian
+ * fight. The catapult launch stays on a stage start.
  */
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -92,6 +92,23 @@ describe('stage 4 map entry', () => {
     expect(scene.getDebugInfo!().enemyCount).toBe(0);
     expect(scene.getBattleView().player.x).not.toBe(LOGICAL_W / 2);
     expect(scene.getDebugInfo!().gameTime).toBeGreaterThan(OBSIDIAN_ENTER_AT);
+    scene.exit?.();
+  });
+
+  it('reaches the obsidian fight from 挑战 Boss 4 with an empty wave table', () => {
+    const scene = createBattleScene(challenge());
+    scene.enter();
+    let phase = scene.getDebugInfo!().bossPhase;
+    for (let i = 0; i < 200 && phase !== 'folded'; i++) {
+      scene.update(DT, held);
+      phase = scene.getDebugInfo!().bossPhase;
+    }
+    expect(phase).toBe('folded');
+    for (let i = 0; i < 40; i++) scene.update(DT, held);
+    const info = scene.getDebugInfo!();
+    expect(info.enemyCount).toBe(0);
+    expect(info.bulletCount).toBeGreaterThan(0);
+    expect(() => scene.render(fakeRenderer(), 0)).not.toThrow();
     scene.exit?.();
   });
 

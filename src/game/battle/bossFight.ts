@@ -86,6 +86,7 @@ export function stepBoss(b: Battle, dt: number): 'result' | null {
     scroll: b.scrollFrame.scroll,
   });
   applyBossEvents(b, ev);
+  if (ev.cutscene && b.cutsceneAt === null) b.cutsceneAt = b.gameTime;
   if (ev.hurtPlayer && isPlayerVulnerable(b)) killPlayer(b);
   const warnFor = boss.def.fightWarning;
   if (

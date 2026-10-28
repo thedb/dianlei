@@ -47,6 +47,10 @@ describe('story captions', () => {
     ).toBe('s1_end');
     expect(activeCaption([{ id: 's1_open', at: 'mid' }], 1, null)).toBeNull();
     expect(activeCaption([{ id: 's4_ufo', at: 'cutscene' }], 1, 1)).toBeNull();
+    expect(activeCaption([{ id: 's4_ufo', at: 'cutscene' }], 10, null, 10)?.id).toBe('s4_ufo');
+    expect(
+      activeCaption([{ id: 's4_ufo', at: 'cutscene' }], 10 + CAPTION_HOLD, null, 10)
+    ).toBeNull();
     expect(activeCaption([{ id: 'missing', at: 'open' }], 1, null)).toBeNull();
   });
 
