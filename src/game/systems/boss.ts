@@ -19,6 +19,7 @@ import {
   HIT_FLASH_TIME,
   HITBOX_RADIUS,
   LOGICAL_H,
+  OBSIDIAN_HALF_RATIO,
   SHAKE_BIG_INTENSITY,
   SHAKE_SMALL_DURATION,
   SHAKE_SMALL_INTENSITY,
@@ -77,6 +78,9 @@ import {
 import {
   obsidianOnFight,
   obsidianOnTransition,
+  obsidianShotPlan,
+  obsidianSyncOffsets,
+  obsidianTouches,
   stepObsidian,
   stepObsidianHold,
 } from '@/game/systems/obsidian';
@@ -678,23 +682,14 @@ export function resolveBossBullet(
   if (boss.def.script === 'tiebao' && tiebaoTryShot(boss, bullet, damage, ev)) return ev;
 
   if (boss.def.script === 'obsidian') {
-    const frame = boss.parts.find((part) => part.id === 'frame');
-    const hit =
-      frame !== undefined &&
-      frame.alive &&
-      !frame.falling &&
-      checkBulletEnemyCollision(
-        bullet.x,
-        bullet.y,
-        bullet.w,
-        bullet.h,
-        frame.worldX,
-        frame.worldY,
-        frame.radius
-      );
-    if (!hit || !frame) return ev;
+    const plan = obsidianShotPlan(boss, bullet, damage);
+    if (!plan.consumed) return ev;
     ev.consumedBullet = true;
-    if (!boss.invulnerable) hurtPart(boss, frame, damage, ev);
+    if (plan.id && plan.amount > 0 && !boss.invulnerable) {
+      const part = bossPart(boss, plan.id);
+      if (part) hurtPart(boss, part, plan.amount, ev);
+    }
+    settleObsidianHalf(boss, ev);
     return ev;
   }
 
@@ -776,14 +771,7 @@ function hullOverlapsBullet(
 
 export function bossHitsPlayer(boss: BossRuntime, px: number, py: number): boolean {
   if (!bossBlocksShots(boss)) return false;
-  if (boss.def.script === 'obsidian') {
-    const frame = boss.parts.find((part) => part.id === 'frame' && part.alive && !part.falling);
-    if (!frame) return false;
-    const dx = px - frame.worldX;
-    const dy = py - frame.worldY;
-    const reach = HITBOX_RADIUS + frame.radius;
-    return dx * dx + dy * dy < reach * reach;
-  }
+  if (boss.def.script === 'obsidian') return obsidianTouches(boss, px, py);
   if (boss.def.script === 'tiebao') {
     for (const seg of tiebaoHullSegments(boss)) {
       if (circleRect(px, py, HITBOX_RADIUS, seg.x, seg.y, seg.w, seg.h)) return true;
@@ -1123,6 +1111,18 @@ function fallDebris(boss: BossRuntime, dt: number): void {
   }
 }
 
+function settleObsidianHalf(boss: BossRuntime, ev: BossEvents): void {
+  if (boss.def.script !== 'obsidian' || boss.stage !== 'fight') return;
+  const phase = boss.phases[boss.phaseIndex];
+  if (phase?.id !== 'half') return;
+  const frame = bossPart(boss, 'frame');
+  if (!frame || frame.hp > frame.maxHp * (1 - OBSIDIAN_HALF_RATIO) + 1e-6) return;
+  for (const id of phase.targets) {
+    const part = bossPart(boss, id);
+    if (part?.alive) killPart(boss, part, ev);
+  }
+}
+
 function syncParts(boss: BossRuntime): void {
   if (boss.def.script === 'tiebao') {
     tiebaoSyncMounts(boss);
@@ -1132,6 +1132,7 @@ function syncParts(boss: BossRuntime): void {
     furnaceSyncMounts(boss);
     return;
   }
+  if (boss.def.script === 'obsidian') obsidianSyncOffsets(boss);
   for (const part of boss.parts) {
     if (part.falling) continue;
     part.worldX = boss.x + part.offsetX;

@@ -99,12 +99,13 @@ describe('stage 4 map entry', () => {
     const scene = createBattleScene(challenge());
     scene.enter();
     let phase = scene.getDebugInfo!().bossPhase;
-    for (let i = 0; i < 140 && phase !== 'fight'; i++) {
+    for (let i = 0; i < 200 && phase !== 'folded'; i++) {
       scene.update(DT, held);
       phase = scene.getDebugInfo!().bossPhase;
     }
+    expect(phase).toBe('folded');
+    for (let i = 0; i < 40; i++) scene.update(DT, held);
     const info = scene.getDebugInfo!();
-    expect(phase).toBe('fight');
     expect(info.enemyCount).toBe(0);
     expect(info.bulletCount).toBeGreaterThan(0);
     expect(() => scene.render(fakeRenderer(), 0)).not.toThrow();

@@ -1,23 +1,30 @@
 /**
- * Stage 4 boss 黑曜. One `frame` circle. The polyline, the three weapons,
- * and the saucer show live in `systems/obsidian.ts` and `obsidianSaucer.ts`.
+ * Stage 4 boss 黑曜, look 3A 刃翼十字.
+ * Folded locks, then the outer blades, then the inner blades plus the
+ * fuselage. Hard adds the yellow overload on the fuselage alone.
  * Empty HP does not take the generic explosion clear.
  *
- * HP is a draft aimed at about 40 seconds. Measure vulcan Lv3 + M1, no T,
- * in the weapon range and write §6 back before locking 1200 / 360.
+ * HP is a draft aimed at about 40 seconds. The main bar sums to
+ * OBSIDIAN_MAIN_HP. Measure before locking the split.
  */
 
 import {
+  OBSIDIAN_BLADE_RADIUS,
   OBSIDIAN_BREAK_EXPLOSIONS,
   OBSIDIAN_BREAK_SPAN,
   OBSIDIAN_CENTER_X,
+  OBSIDIAN_DEPLOY_TIME,
   OBSIDIAN_ENTER_AT,
   OBSIDIAN_ENTER_DURATION,
   OBSIDIAN_ENTER_Y,
   OBSIDIAN_FRAME_HP,
   OBSIDIAN_FRAME_SCORE,
+  OBSIDIAN_HINGE_HP,
+  OBSIDIAN_HINGE_RADIUS,
   OBSIDIAN_HULL_H,
   OBSIDIAN_HULL_W,
+  OBSIDIAN_INNER_HP,
+  OBSIDIAN_OUTER_HP,
   OBSIDIAN_OVERLOAD_HP,
   OBSIDIAN_PARK_Y,
   OBSIDIAN_PHASE_INVULN,
@@ -25,7 +32,26 @@ import {
   OBSIDIAN_WARNING,
 } from '@/game/config';
 import { HARD_PHASE_GATE } from '@/game/difficulty';
-import type { BossDef } from '../types';
+import { OBSIDIAN_BLADES, obsidianBladeOffset } from '@/game/systems/obsidian';
+import type { BossDef, BossPartDef } from '../types';
+
+const hinges: BossPartDef[] = OBSIDIAN_BLADES.map((blade) => ({
+  id: blade.hinge,
+  offset: { x: blade.x, y: blade.y },
+  radius: OBSIDIAN_HINGE_RADIUS,
+  hp: OBSIDIAN_HINGE_HP,
+  score: 0,
+  onDestroy: 'burst',
+}));
+
+const wings: BossPartDef[] = OBSIDIAN_BLADES.map((blade, index) => ({
+  id: blade.id,
+  offset: obsidianBladeOffset(index, 'fold'),
+  radius: OBSIDIAN_BLADE_RADIUS,
+  hp: blade.role === 'outer' ? OBSIDIAN_OUTER_HP : OBSIDIAN_INNER_HP,
+  score: 0,
+  onDestroy: 'burst',
+}));
 
 export const OBSIDIAN: BossDef = {
   id: 'obsidian',
@@ -50,11 +76,29 @@ export const OBSIDIAN: BossDef = {
       hp: OBSIDIAN_FRAME_HP,
       score: OBSIDIAN_FRAME_SCORE,
     },
+    ...hinges,
+    ...wings,
   ],
   phases: [
     {
-      id: 'fight',
-      targets: ['frame'],
+      id: 'folded',
+      targets: OBSIDIAN_BLADES.map((blade) => blade.hinge),
+      attacks: [],
+      look: { hull: 'closed' },
+      bar: 'main',
+    },
+    {
+      id: 'half',
+      targets: ['outerL', 'outerR'],
+      transition: { id: 'half', duration: OBSIDIAN_DEPLOY_TIME },
+      attacks: [],
+      look: { hull: 'closed' },
+      bar: 'main',
+    },
+    {
+      id: 'open',
+      targets: ['innerL', 'innerR', 'frame'],
+      transition: { id: 'open', duration: OBSIDIAN_DEPLOY_TIME },
       attacks: [],
       look: { hull: 'closed' },
       bar: 'main',
@@ -66,7 +110,7 @@ export const OBSIDIAN: BossDef = {
       transition: { id: 'overload', duration: OBSIDIAN_PHASE_INVULN },
       gate: HARD_PHASE_GATE,
       attacks: [],
-      look: { hull: 'open' },
+      look: { hull: 'open', smoke: true },
       bar: 'extra',
     },
   ],

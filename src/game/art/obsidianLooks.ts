@@ -1,12 +1,19 @@
 /**
- * 黑曜 hull, 80×96, nose down. A swept carrier fighter: twin tails, twin
- * nozzles, intakes, a layered canopy, and wing-root rails. Dark metal so
- * the silhouette reads on the bright deck. Overload only recolors the
- * canopy to warning yellow. The wreck keeps the outline, kills the nozzles,
- * and opens interior holes. No player cyan.
+ * 黑曜 layered art. The fuselage is 80×96 and stays fixed. The four blades
+ * and the hinge locks are separate sprites so the fight can rotate them.
+ * Overload only recolors the canopy to warning yellow. No player cyan.
+ * Wings are not baked into the hull.
  */
 
-import { OBSIDIAN_HULL_H, OBSIDIAN_HULL_W } from '@/game/config';
+import {
+  OBSIDIAN_BLADE_H,
+  OBSIDIAN_BLADE_STUB,
+  OBSIDIAN_BLADE_W,
+  OBSIDIAN_HINGE_H,
+  OBSIDIAN_HINGE_W,
+  OBSIDIAN_HULL_H,
+  OBSIDIAN_HULL_W,
+} from '@/game/config';
 import { COLOR } from '@/game/palette';
 import { createGrid, fillEllipse, fillPoly, plot, rim } from './pixelDraw';
 import type { SpriteData } from './types';
@@ -39,13 +46,12 @@ function polyPair(g: SpriteData, pts: Pt[], color: number): void {
 
 /** Aft is small y (engines). The nose is the bottom of the sprite. */
 function fuselageHalf(y: number): number {
-  if (y < 10 || y > 93) return -1;
-  if (y < 18) return 3.6;
-  if (y < 28) return 4.2 + ((y - 18) / 10) * 2.4;
-  if (y < 58) return 6.6 + ((y - 28) / 30) * 1.6;
-  if (y < 74) return 8.2 - ((y - 58) / 16) * 2.4;
-  if (y < 86) return 5.8 - ((y - 74) / 12) * 3.2;
-  return Math.max(0.45, 2.6 - (y - 86) * 0.32);
+  if (y < 14 || y > 93) return -1;
+  if (y < 26) return 8.4;
+  if (y < 40) return 8.4 - ((y - 26) / 14) * 1.2;
+  if (y < 62) return 7.2;
+  if (y < 78) return 7.2 - ((y - 62) / 16) * 3.4;
+  return Math.max(0.6, 3.8 - (y - 78) * 0.28);
 }
 
 function paintFuselage(g: SpriteData): void {
@@ -65,62 +71,37 @@ function paintFuselage(g: SpriteData): void {
   }
 }
 
-function paintWings(g: SpriteData): void {
-  const wing: Pt[] = [
-    [29, 56],
-    [5, 46],
-    [2, 36],
-    [7, 29],
-    [31, 40],
-  ];
-  polyPair(g, wing, D);
-  const inner: Pt[] = [
-    [28, 54],
-    [10, 46],
-    [8, 36],
-    [12, 32],
-    [30, 42],
-  ];
-  polyPair(g, inner, M);
-  const strake: Pt[] = [
-    [27, 54],
-    [18, 66],
-    [22, 70],
-    [31, 58],
-  ];
-  polyPair(g, strake, D);
-  const fin: Pt[] = [
-    [14, 18],
-    [22, 16],
-    [20, 32],
-  ];
-  polyPair(g, fin, G);
-}
-
 function paintTails(g: SpriteData): void {
   const tail: Pt[] = [
-    [11, 1],
-    [23, 1],
-    [21, 13],
-    [9, 16],
+    [27, 2],
+    [36, 1],
+    [35, 20],
+    [29, 22],
   ];
   polyPair(g, tail, D);
   const tailFace: Pt[] = [
-    [13, 3],
-    [21, 3],
-    [19, 12],
-    [12, 13],
+    [29, 4],
+    [34, 3],
+    [33, 16],
+    [30, 18],
   ];
   polyPair(g, tailFace, M);
-  for (let y = 4; y <= 11; y++) {
-    plot(g, 16, y, L);
-    plot(g, mirrorX(16), y, L);
+  for (let y = 5; y <= 16; y++) {
+    plot(g, 32, y, L);
+    plot(g, mirrorX(32), y, L);
   }
+}
+
+function paintRoots(g: SpriteData): void {
+  fillEllipse(g, 30, 24, 5, 4, D);
+  fillEllipse(g, mirrorX(30), 24, 5, 4, D);
+  fillEllipse(g, 34, 32, 4, 3.2, M);
+  fillEllipse(g, mirrorX(34), 32, 4, 3.2, M);
 }
 
 function paintEngines(g: SpriteData, kind: ObsidianHullKind): void {
   const dead = kind === 'wreck';
-  for (const cx of [23.5, 55.5]) {
+  for (const cx of [32.5, 46.5]) {
     fillEllipse(g, cx, 11, 5.2, 6.2, dead ? S : D);
     fillEllipse(g, cx, 11.5, 3.1, 4.2, dead ? K : S);
     if (!dead) {
@@ -131,7 +112,7 @@ function paintEngines(g: SpriteData, kind: ObsidianHullKind): void {
 }
 
 function paintIntakes(g: SpriteData): void {
-  for (const x0 of [28, 47]) {
+  for (const x0 of [33, 42]) {
     for (let y = 48; y <= 55; y++) {
       for (let x = x0; x < x0 + 5; x++) plot(g, x, y, S);
     }
@@ -160,19 +141,6 @@ function paintCanopy(g: SpriteData, kind: ObsidianHullKind): void {
   }
 }
 
-function paintRails(g: SpriteData): void {
-  for (const x0 of [16, 60]) {
-    for (let y = 52; y <= 60; y++) {
-      plot(g, x0, y, D);
-      plot(g, x0 + 1, y, M);
-      plot(g, x0 + 2, y, D);
-    }
-    plot(g, x0, 61, P);
-    plot(g, x0 + 1, 61, P);
-    plot(g, x0 + 2, 61, P);
-  }
-}
-
 function paintPanels(g: SpriteData): void {
   const cx = (OBSIDIAN_HULL_W - 1) / 2;
   for (const y of [24, 36, 46, 78]) {
@@ -186,11 +154,7 @@ function paintPanels(g: SpriteData): void {
 }
 
 function paintHoles(g: SpriteData): void {
-  const holes: Array<readonly [number, number, number, number]> = [
-    [14, 38, 6, 5],
-    [60, 37, 6, 5],
-    [37, 48, 6, 8],
-  ];
+  const holes: Array<readonly [number, number, number, number]> = [[36, 50, 8, 10]];
   for (const [x0, y0, w, h] of holes) {
     for (let y = y0; y < y0 + h; y++) {
       for (let x = x0; x < x0 + w; x++) {
@@ -215,15 +179,24 @@ function leadingEdge(g: SpriteData): void {
   }
 }
 
+function paintSpine(g: SpriteData, kind: ObsidianHullKind): void {
+  if (kind === 'wreck') return;
+  const lamp = kind === 'warn' ? COLOR.EXPLOSION_ORANGE : COLOR.ENEMY_RED;
+  for (let y = 30; y <= 84; y += 4) {
+    plot(g, 39, y, lamp);
+    plot(g, 40, y, lamp);
+  }
+}
+
 function paint(kind: ObsidianHullKind): SpriteData {
   const g = createGrid(OBSIDIAN_HULL_W, OBSIDIAN_HULL_H, -1);
-  paintWings(g);
   paintTails(g);
   paintFuselage(g);
+  paintRoots(g);
   paintEngines(g, kind);
   paintIntakes(g);
-  paintRails(g);
   paintCanopy(g, kind);
+  paintSpine(g, kind);
   paintPanels(g);
   if (kind === 'wreck') paintHoles(g);
   rim(g, K);
@@ -233,4 +206,85 @@ function paint(kind: ObsidianHullKind): SpriteData {
 
 export function buildObsidianHull(kind: ObsidianHullKind): SpriteData {
   return paint(kind);
+}
+
+/** Blade pointing down. The root is the top row, which the draw pass pivots on. */
+export function buildObsidianBlade(kind: 'live' | 'stub'): SpriteData {
+  const h = kind === 'stub' ? OBSIDIAN_BLADE_STUB : OBSIDIAN_BLADE_H;
+  const w = OBSIDIAN_BLADE_W;
+  const g = createGrid(w, h, -1);
+  const tip = h - 1;
+  fillPoly(
+    g,
+    [
+      [1, 1],
+      [w - 2, 1],
+      [w - 4, Math.max(4, tip - 2)],
+      [6, tip],
+      [3, Math.max(4, tip - 2)],
+    ],
+    D
+  );
+  fillPoly(
+    g,
+    [
+      [3, 3],
+      [w - 4, 3],
+      [8, Math.max(6, tip - 4)],
+      [6, Math.max(5, tip - 2)],
+      [4, Math.max(6, tip - 4)],
+    ],
+    M
+  );
+  for (let y = 4; y < tip - 1; y++) {
+    plot(g, 6, y, y % 3 === 0 ? COLOR.ENEMY_BRIGHT_RED : COLOR.ENEMY_RED);
+    plot(g, 5, y, S);
+  }
+  for (let y = 6; y < tip - 2; y += 2) {
+    plot(g, 3, y, L);
+    plot(g, 9, y, P);
+  }
+  fillEllipse(g, 6, 3, 2, 2, K);
+  plot(g, 6, 3, COLOR.ENEMY_VIVID_RED);
+  return g;
+}
+
+/** Latch that sits on a hinge. Live locks carry the red lamp the player shoots. */
+export function buildObsidianHinge(kind: 'live' | 'dead'): SpriteData {
+  const g = createGrid(OBSIDIAN_HINGE_W, OBSIDIAN_HINGE_H, -1);
+  fillPoly(
+    g,
+    [
+      [2, 1],
+      [9, 1],
+      [11, 4],
+      [11, 10],
+      [9, 13],
+      [2, 13],
+      [0, 10],
+      [0, 4],
+    ],
+    D
+  );
+  fillPoly(
+    g,
+    [
+      [3, 3],
+      [8, 3],
+      [9, 5],
+      [9, 9],
+      [8, 11],
+      [3, 11],
+      [2, 9],
+      [2, 5],
+    ],
+    M
+  );
+  const lamp = kind === 'live' ? COLOR.ENEMY_VIVID_RED : S;
+  fillEllipse(g, 5.5, 6.5, 2.1, 2.1, lamp);
+  plot(g, 5, 6, kind === 'live' ? COLOR.ENEMY_BRIGHT_RED : K);
+  plot(g, 6, 6, kind === 'live' ? COLOR.ENEMY_BRIGHT_RED : K);
+  plot(g, 3, 3, L);
+  plot(g, 8, 3, L);
+  return g;
 }

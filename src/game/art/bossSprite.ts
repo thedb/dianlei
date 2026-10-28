@@ -52,7 +52,7 @@ import {
   drawFurnaceBoss,
 } from './furnaceLooks';
 import { drawObsidianBoss } from './obsidianDraw';
-import { buildObsidianHull } from './obsidianLooks';
+import { buildObsidianBlade, buildObsidianHinge, buildObsidianHull } from './obsidianLooks';
 import type { SpriteData, SpriteFrame } from './types';
 import { createGrid, fillEllipse, fillPoly, fillRect, outline, plot } from './pixelDraw';
 import { renderSprite } from './spriteRenderer';
@@ -402,7 +402,13 @@ export const BOSS_ART: Readonly<Record<string, () => BossAssets>> = {
   obsidian: () => ({
     hull: renderSprite(buildObsidianHull('warm')),
     hullOpen: renderSprite(buildObsidianHull('warn')),
-    parts: { wreck: renderSprite(buildObsidianHull('wreck')) },
+    parts: {
+      wreck: renderSprite(buildObsidianHull('wreck')),
+      blade: renderSprite(buildObsidianBlade('live'), 0.5, 0),
+      bladeStub: renderSprite(buildObsidianBlade('stub'), 0.5, 0),
+      hinge: renderSprite(buildObsidianHinge('live')),
+      hingeDead: renderSprite(buildObsidianHinge('dead')),
+    },
   }),
 };
 
