@@ -658,18 +658,28 @@ export const SEA_B_CHUNKS = 9;
 export const SEA_B_SEED = 37;
 
 /**
- * Open-sea swell drawn over baked `ocean` tiles. Crests stay at least 48px
- * apart so they are not the old 8px scanlines. `SCROLL` is how far a crest
- * moves on screen per pixel of map scroll: lower means it slips against the
- * tiles more. `DRIFT` is extra px/s from the stage clock. Specks are foam
- * on their own, faster phase.
+ * Open-sea swell drawn over baked `ocean` tiles. Each family has its own
+ * base spacing. A wave then jitters ±`SEA_SWELL_JITTER` and about one index
+ * in five is left out, so the screen is not one ruler. `SCROLL` is how far
+ * a wave moves on screen per pixel of map scroll. `DRIFT` is extra px/s
+ * from the stage clock. Colors stay at the signed-off contrast.
  */
 export const SEA_SWELL_SPACING = 56;
 export const SEA_SWELL_SCROLL = 0.18;
 export const SEA_SWELL_DRIFT = 36;
+/** Second crest family. Its lag is not the primary's, so the two slip apart. */
+export const SEA_SWELL_LONG_SPACING = 88;
+export const SEA_SWELL_LONG_SCROLL = 0.31;
+export const SEA_SWELL_LONG_DRIFT = 22;
+/** Troughs are their own family, not the midpoint of every crest. */
+export const SEA_SWELL_TROUGH_SPACING = 74;
+export const SEA_SWELL_TROUGH_SCROLL = 0.12;
+export const SEA_SWELL_TROUGH_DRIFT = 28;
 export const SEA_SWELL_SPECK_SPACING = 72;
 export const SEA_SWELL_SPECK_SCROLL = 0.08;
 export const SEA_SWELL_SPECK_DRIFT = 48;
+/** Half-width of the per-wave phase jitter, in px. Min crest gap stays above 32. */
+export const SEA_SWELL_JITTER = 10;
 export const OBSIDIAN_BOSS_CHUNKS = 2;
 export const OBSIDIAN_BOSS_SEED = 43;
 
