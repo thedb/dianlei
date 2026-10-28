@@ -1,7 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { EB_SPEED_MISSILE, ENEMY_BULLET_SPEED_SCALE, MISSILE_HOMING_TIME } from '@/game/config';
+import {
+  EB_HIT_RADIUS_LARGE,
+  EB_SPEED_MISSILE,
+  ENEMY_BULLET_SPEED_SCALE,
+  MISSILE_HOMING_TIME,
+} from '@/game/config';
 import { createEnemy, spawnEnemy, updateEnemy } from './enemy';
-import { executeFirePattern, updateEnemyBullet, type BulletSpawner } from './enemyBullet';
+import {
+  createEnemyBullet,
+  enemyBulletBurstDue,
+  executeFirePattern,
+  spawnEnemyBullet,
+  updateEnemyBullet,
+  type BulletSpawner,
+} from './enemyBullet';
 import { updateEnemyWeapons } from '@/game/systems/weapons';
 
 interface Shot {
@@ -135,6 +147,8 @@ describe('enemy fire patterns', () => {
       type: 'missile' as const,
       hitRadius: 3,
       homing: 0.05,
+      fuse: 0,
+      burstSpeed: 0,
       reset() {
         /* unused */
       },
@@ -254,5 +268,26 @@ describe('enemy fire patterns', () => {
       expect(shot.vx).toBeCloseTo(0, 4);
       expect(shot.vy).toBeGreaterThan(0);
     }
+  });
+
+  it('counts a fused round down and reports the burst only once the fuse is out', () => {
+    const mine = createEnemyBullet();
+    mine.active = true;
+    spawnEnemyBullet(mine, 72, 200, 0, 80, 'large', 0, undefined, { time: 0.1, burstSpeed: 72 });
+    expect(mine.hitRadius).toBe(EB_HIT_RADIUS_LARGE);
+    expect(enemyBulletBurstDue(mine)).toBe(false);
+    expect(updateEnemyBullet(mine, 0.05)).toBe(false);
+    expect(mine.y).toBeCloseTo(204, 6);
+    expect(enemyBulletBurstDue(mine)).toBe(false);
+    updateEnemyBullet(mine, 0.06);
+    expect(enemyBulletBurstDue(mine)).toBe(true);
+
+    const plain = createEnemyBullet();
+    spawnEnemyBullet(plain, 0, 0, 0, 10, 'small');
+    updateEnemyBullet(plain, 5);
+    expect(enemyBulletBurstDue(plain)).toBe(false);
+    mine.reset();
+    expect(mine.burstSpeed).toBe(0);
+    expect(enemyBulletBurstDue(mine)).toBe(false);
   });
 });

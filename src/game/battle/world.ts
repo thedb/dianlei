@@ -6,6 +6,7 @@
 
 import {
   BUILDING_HP,
+  ENEMY_BULLET_CAP,
   LOGICAL_W,
   PLAYER_BULLET_SPEED,
   PLAYER_SPAWN_Y,
@@ -14,7 +15,11 @@ import {
 import { scaleHp } from '@/game/difficulty';
 import { terrainBlocksTank } from '@/game/maps/track';
 import { spawnEnemy, scaledEnemyVitals, updateEnemy } from '@/game/entities/enemy';
-import { updateEnemyBullet } from '@/game/entities/enemyBullet';
+import {
+  enemyBulletBurstDue,
+  spawnEnemyBullet,
+  updateEnemyBullet,
+} from '@/game/entities/enemyBullet';
 import { updateItem } from '@/game/entities/item';
 import { pickHomingTarget, updateHomingMissile } from '@/game/entities/homingMissile';
 import {
@@ -169,9 +174,23 @@ export function stepShotsAndItems(b: Battle, dt: number, warningWindow: boolean)
     b.enemyBullets.releaseAll();
   }
   const target = { x: b.player.x, y: b.player.y };
+  const bursts: Array<{ x: number; y: number; speed: number }> = [];
   b.enemyBullets.forEach((bullet) => {
-    if (updateEnemyBullet(bullet, dt, target)) b.enemyBullets.release(bullet);
+    const gone = updateEnemyBullet(bullet, dt, target);
+    if (enemyBulletBurstDue(bullet)) {
+      bursts.push({ x: bullet.x, y: bullet.y, speed: bullet.burstSpeed });
+      b.enemyBullets.release(bullet);
+    } else if (gone) {
+      b.enemyBullets.release(bullet);
+    }
   });
+  // The split rounds already carry the run's speed scale, so they skip the spawner.
+  for (const burst of bursts) {
+    for (const dir of [-1, 1]) {
+      if (b.enemyBullets.getActiveCount() >= ENEMY_BULLET_CAP) break;
+      spawnEnemyBullet(b.enemyBullets.acquire(), burst.x, burst.y, dir * burst.speed, 0, 'small');
+    }
+  }
   b.items.forEach((item) => {
     if (updateItem(item, dt)) b.items.release(item);
   });
