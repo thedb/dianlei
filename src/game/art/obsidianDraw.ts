@@ -5,7 +5,7 @@
 
 import { OBSIDIAN_HULL_H, OBSIDIAN_WRECK_BANK } from '@/game/config';
 import type { BossRuntime } from '@/game/systems/boss';
-import { obsidianMotion } from '@/game/systems/obsidian';
+import { obsidianJettison, obsidianMotion } from '@/game/systems/obsidian';
 import { obsidianSaucerView } from '@/game/systems/obsidianSaucer';
 import { drawEngineFlame, ENEMY_FLAME_CONFIG } from './engineFlame';
 import { COLOR, PALETTE } from '@/game/palette';
@@ -25,6 +25,18 @@ interface ObsidianAssets {
 
 interface ObsidianDraw {
   drawImage(image: CanvasImageSource, x: number, y: number, w?: number, h?: number): void;
+}
+
+function drawJettison(ctx: CanvasRenderingContext2D, boss: BossRuntime): void {
+  const pods = obsidianJettison(boss);
+  for (const pod of pods) {
+    const x = Math.round(pod.x) - 1;
+    const y = Math.round(pod.y);
+    ctx.fillStyle = PALETTE[COLOR.DARK_GRAY];
+    ctx.fillRect(x, y, 3, 5);
+    ctx.fillStyle = PALETTE[COLOR.MEDIUM_GRAY];
+    ctx.fillRect(x, y, 3, 2);
+  }
 }
 
 function drawSmoke(ctx: CanvasRenderingContext2D, x: number, y: number, time: number): void {
@@ -83,6 +95,7 @@ export function drawObsidianBoss(
       }
       ctx.restore();
     }
+    drawJettison(ctx, boss);
   }
 
   if (cut.smoke) drawSmoke(ctx, boss.x, boss.y, time);

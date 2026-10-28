@@ -753,10 +753,10 @@ export const OBSIDIAN_RADIUS = 32;
  * Draft main HP and the one score paid when the last segment dies.
  * Easy / Medium pay it as `frame` empties. Hard holds it for the overload.
  */
-export const OBSIDIAN_FRAME_HP = 800;
+export const OBSIDIAN_FRAME_HP = 1200;
 export const OBSIDIAN_FRAME_SCORE = 40000;
 /** Draft Hard overload HP, before the 1.30 scale. Same `frame`. */
-export const OBSIDIAN_OVERLOAD_HP = 240;
+export const OBSIDIAN_OVERLOAD_HP = 360;
 /** Invulnerable, no fire, bombs do not resolve. Bullets already in flight stay. */
 export const OBSIDIAN_PHASE_INVULN = 1.2;
 
@@ -775,20 +775,38 @@ export const OBSIDIAN_BANK = 0.4;
 /** Paralysis lean. Holds until the beam breaks the hull. */
 export const OBSIDIAN_WRECK_BANK = 0.28;
 
-export const OBSIDIAN_MISSILE_COUNT = 5;
-export const OBSIDIAN_OVERLOAD_MISSILE_COUNT = 6;
+/** Wing-root wave. Left fires first. The centerline wave follows. */
+export const OBSIDIAN_MISSILE_COUNT = 4;
 export const OBSIDIAN_MISSILE_FIRST = 0.25;
 export const OBSIDIAN_MISSILE_GAP = 0.08;
+export const OBSIDIAN_MISSILE_HOMING = 0.55;
+/** Seconds after the last wing-root shot before the centerline pair. */
+export const OBSIDIAN_MISSILE_B_DELAY = 0.35;
+export const OBSIDIAN_MISSILE_B_COUNT = 2;
+export const OBSIDIAN_MISSILE_B_GAP = 0.08;
+export const OBSIDIAN_MISSILE_B_HOMING = 0.22;
+export const OBSIDIAN_OVERLOAD_MISSILE_COUNT = 6;
+export const OBSIDIAN_OVERLOAD_MISSILE_FIRST = 0.18;
+export const OBSIDIAN_OVERLOAD_MISSILE_GAP = 0.06;
+export const OBSIDIAN_OVERLOAD_MISSILE_B_DELAY = 0.28;
+export const OBSIDIAN_OVERLOAD_MISSILE_B_COUNT = 2;
+export const OBSIDIAN_OVERLOAD_MISSILE_B_GAP = 0.06;
 export const OBSIDIAN_MISSILE_SPEED = 96;
-export const OBSIDIAN_MISSILE_HOMING = 0.45;
 /** Wing-root offset from the hull center. Left fires first. */
 export const OBSIDIAN_WING_X = 22;
 export const OBSIDIAN_WING_Y = 4;
 
 export const OBSIDIAN_FAN_COUNT = 5;
-export const OBSIDIAN_FAN_SPREAD = 48;
+export const OBSIDIAN_FAN_SPREAD = 44;
+export const OBSIDIAN_FAN_B_COUNT = 3;
+export const OBSIDIAN_FAN_B_SPREAD = 22;
+/** Seconds after the wide fan. Still inside the polyline mode. */
+export const OBSIDIAN_FAN_B_GAP = 0.35;
 export const OBSIDIAN_OVERLOAD_FAN_COUNT = 7;
 export const OBSIDIAN_OVERLOAD_FAN_SPREAD = 64;
+export const OBSIDIAN_OVERLOAD_FAN_B_COUNT = 5;
+export const OBSIDIAN_OVERLOAD_FAN_B_SPREAD = 40;
+export const OBSIDIAN_OVERLOAD_FAN_B_GAP = 0.28;
 export const OBSIDIAN_FAN_SPEED = 100;
 
 /**
@@ -807,18 +825,42 @@ export const OBSIDIAN_OVERLOAD_STRAFE_END = 1.2;
 /** Draft bottom of the dive. The lock is y ≤ OBSIDIAN_STRAFE_Y_MAX. */
 export const OBSIDIAN_STRAFE_DIVE_Y = 280;
 export const OBSIDIAN_STRAFE_Y_MAX = 320;
-export const OBSIDIAN_STRAFE_SPEED = 130;
+export const OBSIDIAN_STRAFE_SPEED = 140;
 export const OBSIDIAN_STRAFE_ROUND_GAP = 0.1;
-export const OBSIDIAN_STRAFE_LANES = 2;
-export const OBSIDIAN_STRAFE_LANE_GAP = 22;
 export const OBSIDIAN_STRAFE_ROUNDS = 4;
-export const OBSIDIAN_OVERLOAD_STRAFE_LANES = 3;
-export const OBSIDIAN_OVERLOAD_STRAFE_LANE_GAP = 20;
 export const OBSIDIAN_OVERLOAD_STRAFE_ROUNDS = 5;
+/** Outward speed of the splayed pair. The inner pair stays straight down. */
+export const OBSIDIAN_STRAFE_SPLAY = 36;
+/**
+ * One bottom volley. Main: inner pair plus a splayed outer pair.
+ * Overload adds a center round so the short window still reads as a wall.
+ * Rounds that fall past the bottom window are not fired.
+ */
+export const OBSIDIAN_STRAFE_SHOTS = [
+  { dx: -28, vx: -OBSIDIAN_STRAFE_SPLAY },
+  { dx: -5, vx: 0 },
+  { dx: 5, vx: 0 },
+  { dx: 28, vx: OBSIDIAN_STRAFE_SPLAY },
+] as const;
+export const OBSIDIAN_OVERLOAD_STRAFE_SHOTS = [
+  { dx: -24, vx: -OBSIDIAN_STRAFE_SPLAY },
+  { dx: -8, vx: 0 },
+  { dx: 0, vx: 0 },
+  { dx: 8, vx: 0 },
+  { dx: 24, vx: OBSIDIAN_STRAFE_SPLAY },
+] as const;
 /** Nose offset for the bottom volley. */
 export const OBSIDIAN_GUN_Y = 36;
 /** Tail flame lengthening while the polyline or the strafe is flying. */
 export const OBSIDIAN_FLAME_BOOST = 0.5;
+/**
+ * After the overload jettison, the cruise flame stays a little long.
+ * Polyline and strafe still use `OBSIDIAN_FLAME_BOOST`.
+ */
+export const OBSIDIAN_OVERLOAD_CRUISE_FLAME = 0.22;
+/** Two code pods fall from the wing roots during the 1.2s overload beat. */
+export const OBSIDIAN_JETTISON_TIME = 0.7;
+export const OBSIDIAN_JETTISON_DROP = 42;
 
 /** Saucer show, seconds from the frame HP hits zero. Then the shared fly-off. */
 export const OBSIDIAN_SAUCER_SLIDE = 1.6;

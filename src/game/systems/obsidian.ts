@@ -11,7 +11,7 @@
  *
  * HP numbers are a draft aimed at about 40 seconds. Measure in the weapon
  * range (vulcan Lv3 + M1, no T, target y=140 r=32, player y=480) and write
- * the constants back before treating 800 / 240 as final.
+ * the constants back before treating 1200 / 360 as final.
  */
 
 import type { Rng } from '@/engine/rng';
@@ -21,28 +21,45 @@ import {
   LOGICAL_W,
   OBSIDIAN_BANK,
   OBSIDIAN_CENTER_X,
+  OBSIDIAN_FAN_B_COUNT,
+  OBSIDIAN_FAN_B_GAP,
+  OBSIDIAN_FAN_B_SPREAD,
   OBSIDIAN_FAN_COUNT,
   OBSIDIAN_FAN_SETTLE,
   OBSIDIAN_FAN_SPEED,
   OBSIDIAN_FAN_SPREAD,
   OBSIDIAN_FLAME_BOOST,
   OBSIDIAN_GUN_Y,
+  OBSIDIAN_JETTISON_DROP,
+  OBSIDIAN_JETTISON_TIME,
+  OBSIDIAN_MISSILE_B_COUNT,
+  OBSIDIAN_MISSILE_B_DELAY,
+  OBSIDIAN_MISSILE_B_GAP,
+  OBSIDIAN_MISSILE_B_HOMING,
   OBSIDIAN_MISSILE_COUNT,
   OBSIDIAN_MISSILE_FIRST,
   OBSIDIAN_MISSILE_GAP,
   OBSIDIAN_MISSILE_HOMING,
   OBSIDIAN_MISSILE_SPEED,
+  OBSIDIAN_OVERLOAD_CRUISE_FLAME,
+  OBSIDIAN_OVERLOAD_FAN_B_COUNT,
+  OBSIDIAN_OVERLOAD_FAN_B_GAP,
+  OBSIDIAN_OVERLOAD_FAN_B_SPREAD,
   OBSIDIAN_OVERLOAD_FAN_COUNT,
   OBSIDIAN_OVERLOAD_FAN_SPREAD,
+  OBSIDIAN_OVERLOAD_MISSILE_B_COUNT,
+  OBSIDIAN_OVERLOAD_MISSILE_B_DELAY,
+  OBSIDIAN_OVERLOAD_MISSILE_B_GAP,
   OBSIDIAN_OVERLOAD_MISSILE_COUNT,
+  OBSIDIAN_OVERLOAD_MISSILE_FIRST,
+  OBSIDIAN_OVERLOAD_MISSILE_GAP,
   OBSIDIAN_OVERLOAD_POLY_TIME,
   OBSIDIAN_OVERLOAD_SLICE,
   OBSIDIAN_OVERLOAD_STRAFE_BOTTOM,
   OBSIDIAN_OVERLOAD_STRAFE_DIVE,
   OBSIDIAN_OVERLOAD_STRAFE_END,
-  OBSIDIAN_OVERLOAD_STRAFE_LANE_GAP,
-  OBSIDIAN_OVERLOAD_STRAFE_LANES,
   OBSIDIAN_OVERLOAD_STRAFE_ROUNDS,
+  OBSIDIAN_OVERLOAD_STRAFE_SHOTS,
   OBSIDIAN_OVERLOAD_STRAFE_TELL,
   OBSIDIAN_PARK_Y,
   OBSIDIAN_PERCH_X,
@@ -53,10 +70,9 @@ import {
   OBSIDIAN_STRAFE_DIVE,
   OBSIDIAN_STRAFE_DIVE_Y,
   OBSIDIAN_STRAFE_END,
-  OBSIDIAN_STRAFE_LANE_GAP,
-  OBSIDIAN_STRAFE_LANES,
   OBSIDIAN_STRAFE_ROUND_GAP,
   OBSIDIAN_STRAFE_ROUNDS,
+  OBSIDIAN_STRAFE_SHOTS,
   OBSIDIAN_STRAFE_SPEED,
   OBSIDIAN_STRAFE_TELL,
   OBSIDIAN_STRAFE_Y_MAX,
@@ -67,14 +83,32 @@ import type { BossEvents, BossRuntime, BossWorld } from '@/game/systems/boss';
 
 type List = 'main' | 'overload';
 
+interface StrafeShot {
+  dx: number;
+  vx: number;
+}
+
+interface MissileWave {
+  count: number;
+  first: number;
+  gap: number;
+  homing: number;
+  center: boolean;
+}
+
+interface FanBeat {
+  at: number;
+  count: number;
+  spread: number;
+}
+
 interface StrafePlan {
   tell: number;
   dive: number;
   bottom: number;
   end: number;
-  lanes: number;
-  gap: number;
   rounds: number;
+  shots: readonly StrafeShot[];
 }
 
 interface Move {
@@ -104,9 +138,8 @@ const MAIN_STRAFE: StrafePlan = {
   dive: OBSIDIAN_STRAFE_DIVE,
   bottom: OBSIDIAN_STRAFE_BOTTOM,
   end: OBSIDIAN_STRAFE_END,
-  lanes: OBSIDIAN_STRAFE_LANES,
-  gap: OBSIDIAN_STRAFE_LANE_GAP,
   rounds: OBSIDIAN_STRAFE_ROUNDS,
+  shots: OBSIDIAN_STRAFE_SHOTS,
 };
 
 const OVER_STRAFE: StrafePlan = {
@@ -114,10 +147,76 @@ const OVER_STRAFE: StrafePlan = {
   dive: OBSIDIAN_OVERLOAD_STRAFE_DIVE,
   bottom: OBSIDIAN_OVERLOAD_STRAFE_BOTTOM,
   end: OBSIDIAN_OVERLOAD_STRAFE_END,
-  lanes: OBSIDIAN_OVERLOAD_STRAFE_LANES,
-  gap: OBSIDIAN_OVERLOAD_STRAFE_LANE_GAP,
   rounds: OBSIDIAN_OVERLOAD_STRAFE_ROUNDS,
+  shots: OBSIDIAN_OVERLOAD_STRAFE_SHOTS,
 };
+
+function missileWaves(list: List): MissileWave[] {
+  if (list === 'overload') {
+    const wingLast =
+      OBSIDIAN_OVERLOAD_MISSILE_FIRST +
+      (OBSIDIAN_OVERLOAD_MISSILE_COUNT - 1) * OBSIDIAN_OVERLOAD_MISSILE_GAP;
+    return [
+      {
+        count: OBSIDIAN_OVERLOAD_MISSILE_COUNT,
+        first: OBSIDIAN_OVERLOAD_MISSILE_FIRST,
+        gap: OBSIDIAN_OVERLOAD_MISSILE_GAP,
+        homing: OBSIDIAN_MISSILE_HOMING,
+        center: false,
+      },
+      {
+        count: OBSIDIAN_OVERLOAD_MISSILE_B_COUNT,
+        first: wingLast + OBSIDIAN_OVERLOAD_MISSILE_B_DELAY,
+        gap: OBSIDIAN_OVERLOAD_MISSILE_B_GAP,
+        homing: OBSIDIAN_MISSILE_B_HOMING,
+        center: true,
+      },
+    ];
+  }
+  const wingLast = OBSIDIAN_MISSILE_FIRST + (OBSIDIAN_MISSILE_COUNT - 1) * OBSIDIAN_MISSILE_GAP;
+  return [
+    {
+      count: OBSIDIAN_MISSILE_COUNT,
+      first: OBSIDIAN_MISSILE_FIRST,
+      gap: OBSIDIAN_MISSILE_GAP,
+      homing: OBSIDIAN_MISSILE_HOMING,
+      center: false,
+    },
+    {
+      count: OBSIDIAN_MISSILE_B_COUNT,
+      first: wingLast + OBSIDIAN_MISSILE_B_DELAY,
+      gap: OBSIDIAN_MISSILE_B_GAP,
+      homing: OBSIDIAN_MISSILE_B_HOMING,
+      center: true,
+    },
+  ];
+}
+
+function fanBeats(list: List): FanBeat[] {
+  const poly = polyTime(list);
+  if (list === 'overload') {
+    return [
+      {
+        at: poly + OBSIDIAN_FAN_SETTLE,
+        count: OBSIDIAN_OVERLOAD_FAN_COUNT,
+        spread: OBSIDIAN_OVERLOAD_FAN_SPREAD,
+      },
+      {
+        at: poly + OBSIDIAN_FAN_SETTLE + OBSIDIAN_OVERLOAD_FAN_B_GAP,
+        count: OBSIDIAN_OVERLOAD_FAN_B_COUNT,
+        spread: OBSIDIAN_OVERLOAD_FAN_B_SPREAD,
+      },
+    ];
+  }
+  return [
+    { at: poly + OBSIDIAN_FAN_SETTLE, count: OBSIDIAN_FAN_COUNT, spread: OBSIDIAN_FAN_SPREAD },
+    {
+      at: poly + OBSIDIAN_FAN_SETTLE + OBSIDIAN_FAN_B_GAP,
+      count: OBSIDIAN_FAN_B_COUNT,
+      spread: OBSIDIAN_FAN_B_SPREAD,
+    },
+  ];
+}
 
 function fresh(): FightState {
   return {
@@ -262,7 +361,13 @@ function due(prev: number, now: number, at: number): boolean {
   return at > prev && at <= now + 1e-9;
 }
 
-function missile(x: number, y: number, world: BossWorld | undefined, ev: BossEvents): void {
+function missile(
+  x: number,
+  y: number,
+  world: BossWorld | undefined,
+  ev: BossEvents,
+  homing: number
+): void {
   const p = playerOf(world);
   const dx = p.x - x;
   const dy = p.y - y;
@@ -274,7 +379,7 @@ function missile(x: number, y: number, world: BossWorld | undefined, ev: BossEve
     vx: (dx / dist) * OBSIDIAN_MISSILE_SPEED,
     vy: (dy / dist) * OBSIDIAN_MISSILE_SPEED,
     type: 'missile',
-    homing: OBSIDIAN_MISSILE_HOMING,
+    homing,
   });
 }
 
@@ -312,12 +417,11 @@ function fanAt(
 
 function strafeVolley(boss: BossRuntime, plan: StrafePlan, ev: BossEvents): void {
   const y = boss.y + OBSIDIAN_GUN_Y;
-  for (let lane = 0; lane < plan.lanes; lane++) {
-    const dx = (lane - (plan.lanes - 1) / 2) * plan.gap;
+  for (const shot of plan.shots) {
     ev.bolts.push({
-      x: boss.x + dx,
+      x: boss.x + shot.dx,
       y,
-      vx: 0,
+      vx: shot.vx,
       vy: OBSIDIAN_STRAFE_SPEED,
       type: 'small',
       homing: 0,
@@ -335,25 +439,34 @@ function fireWindow(
 ): void {
   const slice = sliceOf(state.list);
   const plan = strafeOf(state.list);
-  const missiles =
-    state.list === 'overload' ? OBSIDIAN_OVERLOAD_MISSILE_COUNT : OBSIDIAN_MISSILE_COUNT;
-  const fanCount = state.list === 'overload' ? OBSIDIAN_OVERLOAD_FAN_COUNT : OBSIDIAN_FAN_COUNT;
-  const fanSpread = state.list === 'overload' ? OBSIDIAN_OVERLOAD_FAN_SPREAD : OBSIDIAN_FAN_SPREAD;
+  const waves = missileWaves(state.list);
+  const beats = fanBeats(state.list);
   const first = modeIndex(prev, slice);
   const last = modeIndex(now, slice);
   for (let index = first; index <= last; index++) {
     const start = index * slice;
     const mode = index % 3;
     if (mode === 0) {
-      for (let i = 0; i < missiles; i++) {
-        const at = start + OBSIDIAN_MISSILE_FIRST + i * OBSIDIAN_MISSILE_GAP;
-        if (!due(prev, now, at)) continue;
-        const side = i % 2 === 0 ? -1 : 1;
-        missile(boss.x + side * OBSIDIAN_WING_X, boss.y + OBSIDIAN_WING_Y, world, ev);
+      for (const wave of waves) {
+        for (let i = 0; i < wave.count; i++) {
+          const at = start + wave.first + i * wave.gap;
+          if (!due(prev, now, at)) continue;
+          const side = wave.center ? 0 : i % 2 === 0 ? -1 : 1;
+          missile(
+            boss.x + side * OBSIDIAN_WING_X,
+            boss.y + OBSIDIAN_WING_Y,
+            world,
+            ev,
+            wave.homing
+          );
+        }
       }
     } else if (mode === 1) {
-      const at = start + polyTime(state.list) + OBSIDIAN_FAN_SETTLE;
-      if (due(prev, now, at)) fanAt(boss.x, boss.y, world, fanCount, fanSpread, ev);
+      for (const beat of beats) {
+        if (due(prev, now, start + beat.at)) {
+          fanAt(boss.x, boss.y, world, beat.count, beat.spread, ev);
+        }
+      }
     } else {
       for (let i = 0; i < plan.rounds; i++) {
         const at = start + plan.dive + i * OBSIDIAN_STRAFE_ROUND_GAP;
@@ -401,6 +514,7 @@ export interface ObsidianMotion {
 export function obsidianMotion(boss: BossRuntime): ObsidianMotion {
   const state = states.get(boss);
   const warn = boss.phase === 'overload';
+  const cruise = warn ? OBSIDIAN_OVERLOAD_CRUISE_FLAME : 0;
   if (!state || boss.stage !== 'fight') return { bank: 0, flameBoost: 0, warn };
   const slice = sliceOf(state.list);
   const mode = modeIndex(state.clock, slice) % 3;
@@ -417,5 +531,19 @@ export function obsidianMotion(boss: BossRuntime): ObsidianMotion {
     }
   }
   if (mode === 2) return { bank: 0, flameBoost: OBSIDIAN_FLAME_BOOST, warn };
-  return { bank: 0, flameBoost: 0, warn };
+  return { bank: 0, flameBoost: cruise, warn };
+}
+
+/**
+ * Two pods under the wing roots while the overload beat is still young.
+ * Screen points. They are not hitboxes and they are not bullets.
+ */
+export function obsidianJettison(boss: BossRuntime): { x: number; y: number }[] {
+  if (boss.stage !== 'transition' || boss.def.script !== 'obsidian') return [];
+  if (boss.phaseTime < 0 || boss.phaseTime >= OBSIDIAN_JETTISON_TIME) return [];
+  const drop = (boss.phaseTime / OBSIDIAN_JETTISON_TIME) * OBSIDIAN_JETTISON_DROP;
+  return [-1, 1].map((side) => ({
+    x: boss.x + side * OBSIDIAN_WING_X,
+    y: boss.y + 10 + drop,
+  }));
 }

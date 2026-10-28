@@ -4,7 +4,7 @@
  * Empty HP does not take the generic explosion clear.
  *
  * HP is a draft aimed at about 40 seconds. Measure vulcan Lv3 + M1, no T,
- * in the weapon range and write §6 back before locking 800 / 240.
+ * in the weapon range and write §6 back before locking 1200 / 360.
  */
 
 import {
