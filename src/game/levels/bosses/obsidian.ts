@@ -1,7 +1,8 @@
 /**
  * Stage 4 boss 黑曜, look 3A 刃翼十字.
- * Folded locks, then the outer blades, then the inner blades plus the
- * fuselage. Hard adds the yellow overload on the fuselage alone.
+ * Nose locks, then the outer blades, then the inner blades plus the
+ * fuselage. Tail locks stay visible and take no damage in phase 1.
+ * Hard adds the yellow overload on the fuselage alone.
  * Empty HP does not take the generic explosion clear.
  *
  * HP is a draft aimed at about 40 seconds. The main bar sums to
@@ -19,7 +20,7 @@ import {
   OBSIDIAN_ENTER_Y,
   OBSIDIAN_FRAME_HP,
   OBSIDIAN_FRAME_SCORE,
-  OBSIDIAN_HINGE_HP,
+  OBSIDIAN_HINGE_NOSE_HP,
   OBSIDIAN_HINGE_RADIUS,
   OBSIDIAN_HULL_H,
   OBSIDIAN_HULL_W,
@@ -32,14 +33,18 @@ import {
   OBSIDIAN_WARNING,
 } from '@/game/config';
 import { HARD_PHASE_GATE } from '@/game/difficulty';
-import { OBSIDIAN_BLADES, obsidianBladeOffset } from '@/game/systems/obsidian';
+import {
+  OBSIDIAN_BLADES,
+  obsidianBladeOffset,
+  obsidianVulnerableHinge,
+} from '@/game/systems/obsidian';
 import type { BossDef, BossPartDef } from '../types';
 
 const hinges: BossPartDef[] = OBSIDIAN_BLADES.map((blade) => ({
   id: blade.hinge,
   offset: { x: blade.x, y: blade.y },
   radius: OBSIDIAN_HINGE_RADIUS,
-  hp: OBSIDIAN_HINGE_HP,
+  hp: obsidianVulnerableHinge(blade.hinge) ? OBSIDIAN_HINGE_NOSE_HP : 0,
   score: 0,
   onDestroy: 'burst',
 }));
@@ -83,7 +88,9 @@ export const OBSIDIAN: BossDef = {
   phases: [
     {
       id: 'folded',
-      targets: OBSIDIAN_BLADES.map((blade) => blade.hinge),
+      targets: OBSIDIAN_BLADES.filter((blade) => obsidianVulnerableHinge(blade.hinge)).map(
+        (blade) => blade.hinge
+      ),
       attacks: [],
       look: { hull: 'closed' },
       bar: 'main',

@@ -351,9 +351,18 @@ function living(boss: BossRuntime, id: string): boolean {
   return part !== undefined && part.alive && !part.falling;
 }
 
+/**
+ * Phase-1 locks the player can break: the nose pair, local y > 0
+ * (`hinge0` / `hinge2`). The tail pair stays on the sprite and does not count.
+ */
+export function obsidianVulnerableHinge(id: string): boolean {
+  const blade = OBSIDIAN_BLADES.find((item) => item.hinge === id);
+  return blade !== undefined && blade.y > 0;
+}
+
 /** Orange ticks on a lock the folded phase will actually damage. */
 export function obsidianHingeMarked(boss: BossRuntime, id: string): boolean {
-  if (!living(boss, id)) return false;
+  if (!obsidianVulnerableHinge(id) || !living(boss, id)) return false;
   if (boss.stage === 'enter') return true;
   return boss.stage === 'fight' && boss.phase === 'folded';
 }
@@ -404,8 +413,10 @@ function blocked(boss: BossRuntime, bullet: BulletBox): boolean {
 
 /**
  * What a player bullet touches. `amount` is already chipped and clamped.
- * Phase 1 armor consumes the bullet and deals nothing. Phase 2 cannot
- * empty the fuselage.
+ * Phase 1: the nose locks take the hit. Tail locks, the fuselage circle,
+ * and the blade samples consume the bullet and deal nothing. Nose circles
+ * are tested first so a shared overlap still damages the real target.
+ * Phase 2 cannot empty the fuselage.
  */
 export function obsidianShotPlan(
   boss: BossRuntime,
@@ -420,10 +431,19 @@ export function obsidianShotPlan(
 
   if (kind === 'folded') {
     for (const blade of OBSIDIAN_BLADES) {
+      if (!obsidianVulnerableHinge(blade.hinge)) continue;
       const lock = boss.parts.find((part) => part.id === blade.hinge);
       if (!lock?.alive) continue;
       if (hits(bullet, lock.worldX, lock.worldY, lock.radius)) {
         return { consumed: true, id: lock.id, amount: damage };
+      }
+    }
+    for (const blade of OBSIDIAN_BLADES) {
+      if (obsidianVulnerableHinge(blade.hinge)) continue;
+      const lock = boss.parts.find((part) => part.id === blade.hinge);
+      if (!lock?.alive) continue;
+      if (hits(bullet, lock.worldX, lock.worldY, lock.radius)) {
+        return { consumed: true, id: null, amount: 0 };
       }
     }
     if (hits(bullet, boss.x, boss.y, OBSIDIAN_RADIUS)) {

@@ -34,6 +34,8 @@ import {
   OBSIDIAN_HALF_TWIN_AT,
   OBSIDIAN_HALF_TWIN_COUNT,
   OBSIDIAN_HALF_TWIN_GAP,
+  OBSIDIAN_HINGE_HP,
+  OBSIDIAN_HINGE_NOSE_HP,
   OBSIDIAN_HINGE_RADIUS,
   OBSIDIAN_FRAME_SCORE,
   OBSIDIAN_HALF_CYCLE,
@@ -108,8 +110,10 @@ import {
   obsidianBladeAngle,
   obsidianBladeLayers,
   obsidianCruisePoint,
+  obsidianHingeMarked,
   obsidianJettison,
   obsidianMotion,
+  obsidianVulnerableHinge,
 } from './obsidian';
 import { obsidianSaucerCenterY, obsidianSaucerView } from './obsidianSaucer';
 import { createVictoryExit, stepVictoryExit } from './victoryExit';
@@ -194,6 +198,11 @@ describe('黑曜 constants', () => {
     expect(OBSIDIAN_HINGE_RADIUS).toBe(19);
     expect(OBSIDIAN_HINGE_RADIUS).toBeGreaterThanOrEqual(18);
     expect(OBSIDIAN_HINGE_RADIUS).toBeLessThanOrEqual(20);
+    expect(OBSIDIAN_HINGE_NOSE_HP).toBe(OBSIDIAN_HINGE_HP * 2);
+    expect(OBSIDIAN.parts.find((part) => part.id === 'hinge0')?.hp).toBe(OBSIDIAN_HINGE_NOSE_HP);
+    expect(OBSIDIAN.parts.find((part) => part.id === 'hinge2')?.hp).toBe(OBSIDIAN_HINGE_NOSE_HP);
+    expect(OBSIDIAN.parts.find((part) => part.id === 'hinge1')?.hp).toBe(0);
+    expect(OBSIDIAN.parts.find((part) => part.id === 'hinge3')?.hp).toBe(0);
     expect(OBSIDIAN.parts.find((part) => part.id === 'hinge0')?.radius).toBe(OBSIDIAN_HINGE_RADIUS);
     expect(OBSIDIAN_CRUISE_RAGE_SCALE).toBe(2);
     expect(OBSIDIAN_STRAFE_TELL * 2).toBeCloseTo(0.3, 8);
@@ -216,7 +225,16 @@ describe('黑曜 constants', () => {
       'open',
       'overload',
     ]);
-    expect(OBSIDIAN.phases[0]?.targets).toEqual(['hinge0', 'hinge1', 'hinge2', 'hinge3']);
+    expect(OBSIDIAN.phases[0]?.targets).toEqual(
+      OBSIDIAN_BLADES.filter((blade) => obsidianVulnerableHinge(blade.hinge)).map(
+        (blade) => blade.hinge
+      )
+    );
+    expect(OBSIDIAN.phases[0]?.targets).toEqual(['hinge0', 'hinge2']);
+    expect(OBSIDIAN_BLADES.filter((blade) => blade.y > 0).map((blade) => blade.hinge)).toEqual([
+      'hinge0',
+      'hinge2',
+    ]);
     expect(OBSIDIAN.phases[1]?.targets).toEqual(['outerL', 'outerR']);
     expect(OBSIDIAN.phases[2]?.targets).toEqual(['innerL', 'innerR', 'frame']);
     expect(OBSIDIAN_DEPLOY_TIME).toBeGreaterThanOrEqual(1);
@@ -335,7 +353,11 @@ describe('黑曜 blade phases', () => {
       bossMissileTargets(boss)
         .map((item) => item.id)
         .sort()
-    ).toEqual(['hinge0', 'hinge1', 'hinge2', 'hinge3']);
+    ).toEqual(['hinge0', 'hinge2']);
+    expect(obsidianHingeMarked(boss, 'hinge0')).toBe(true);
+    expect(obsidianHingeMarked(boss, 'hinge2')).toBe(true);
+    expect(obsidianHingeMarked(boss, 'hinge1')).toBe(false);
+    expect(obsidianHingeMarked(boss, 'hinge3')).toBe(false);
 
     const frame = bossPart(boss, 'frame')!;
     const lock = bossPart(boss, 'hinge0')!;
@@ -373,7 +395,7 @@ describe('黑曜 blade phases', () => {
     expect(lap.clearBullets).toBe(false);
   });
 
-  it('opens the blades only after every lock is gone, without clearing shots', () => {
+  it('opens the blades after both nose locks are gone, without clearing shots', () => {
     const boss = make();
     park(boss);
     const last = clearTargets(boss);
@@ -381,6 +403,10 @@ describe('黑曜 blade phases', () => {
     expect(last.convertBullets).toBe(false);
     expect(boss.stage).toBe('transition');
     expect(boss.phase).toBe('half');
+    expect(bossPart(boss, 'hinge0')?.alive).toBe(false);
+    expect(bossPart(boss, 'hinge2')?.alive).toBe(false);
+    expect(bossPart(boss, 'hinge1')?.alive).toBe(true);
+    expect(bossPart(boss, 'hinge3')?.alive).toBe(true);
     expect(boss.invulnerable).toBe(true);
     expect(obsidianJettison(boss)).toEqual([]);
     expect(go(boss, 0.2).bolts).toEqual([]);
@@ -395,6 +421,49 @@ describe('黑曜 blade phases', () => {
     expect(boss.invulnerable).toBe(false);
     expect(obsidianBladeAngle(boss, 0)).toBeCloseTo(OBSIDIAN_BLADES[0].half, 5);
     expect(obsidianBladeAngle(boss, 2)).toBeCloseTo(OBSIDIAN_BLADES[2].half, 5);
+  });
+
+  it('enters half when both nose locks break and leaves the tail locks unbroken', () => {
+    const boss = make();
+    park(boss);
+    const noses = ['hinge0', 'hinge2'].map((id) => bossPart(boss, id)!);
+    const tails = ['hinge1', 'hinge3'].map((id) => bossPart(boss, id)!);
+    expect(noses.map((part) => part.maxHp)).toEqual([
+      OBSIDIAN_HINGE_NOSE_HP,
+      OBSIDIAN_HINGE_NOSE_HP,
+    ]);
+    expect(tails.every((part) => part.alive && part.hp === 0)).toBe(true);
+
+    for (const tail of tails) {
+      const before = noses.map((part) => part.hp);
+      // Aft of the pivot: radius 19 overlaps the nose lock at the pivot itself.
+      const aft = shot(boss, tail.worldX, tail.worldY - 10, 80);
+      expect(aft.consumedBullet).toBe(true);
+      expect(aft.clearBullets).toBe(false);
+      expect(tail.alive).toBe(true);
+      expect(tail.hp).toBe(0);
+      expect(noses.map((part) => part.hp)).toEqual(before);
+      expect(boss.stage).toBe('fight');
+      expect(boss.phase).toBe('folded');
+    }
+
+    const first = noses[0]!;
+    const one = shot(boss, first.worldX, first.worldY, first.hp + 5);
+    expect(one.clearBullets).toBe(false);
+    expect(first.alive).toBe(false);
+    expect(boss.stage).toBe('fight');
+    expect(boss.phase).toBe('folded');
+    expect(obsidianHingeMarked(boss, first.id)).toBe(false);
+    expect(obsidianHingeMarked(boss, 'hinge2')).toBe(true);
+    expect(tails.every((part) => part.alive)).toBe(true);
+
+    const second = noses[1]!;
+    const both = shot(boss, second.worldX, second.worldY, second.hp + 5);
+    expect(both.clearBullets).toBe(false);
+    expect(second.alive).toBe(false);
+    expect(tails.every((part) => part.alive && part.hp === 0)).toBe(true);
+    expect(boss.stage).toBe('transition');
+    expect(boss.phase).toBe('half');
   });
 
   it('strips a side when that outer blade dies, and half the fuselage forces the cross', () => {

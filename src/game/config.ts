@@ -765,14 +765,16 @@ export const OBSIDIAN_HULL_W = 80;
 export const OBSIDIAN_HULL_H = 96;
 /**
  * Fuselage hit circle. Hinge locks and blade segments have their own radii.
- * In the folded phase this circle is armor: shots stop, and only the locks
- * lose HP.
+ * In the folded phase this circle is armor: shots stop, and only the two
+ * nose locks lose HP.
  */
 export const OBSIDIAN_RADIUS = 32;
 /**
  * Folded locks. 19 is the playtest size (about 18–20): big enough to hit
- * on purpose. The fuselage circle stays armor in this phase (radius 32,
- * shots stop, no HP). The live mark's outer ring uses this radius.
+ * on purpose. Only the nose pair (local y > 0) loses HP. The tail pair
+ * uses this same radius as armor: shots stop, no HP, and they do not
+ * gate the phase. The fuselage circle stays armor too (radius 32).
+ * The live mark's outer ring uses this radius and is drawn on the nose pair.
  */
 export const OBSIDIAN_HINGE_RADIUS = 19;
 export const OBSIDIAN_BLADE_RADIUS = 14;
@@ -793,15 +795,20 @@ export const OBSIDIAN_BLADE_STUB = 18;
 export const OBSIDIAN_HINGE_W = 9;
 export const OBSIDIAN_HINGE_H = 9;
 /**
- * Main-bar split before the difficulty scale. 4×70 + 2×170 + 2×140 + 300 = 1200.
+ * Main-bar split before the difficulty scale.
+ * 2×140 nose locks + 2×170 + 2×140 + 300 = 1200.
+ * The old four-lock budget (4×70) sits on the two hittable nose locks.
+ * Tail locks stay painted at 0 HP and are not in the bar.
  * Sub-parts score 0. The 40000 is paid when `frame` dies for good.
  */
 export const OBSIDIAN_HINGE_HP = 70;
+/** Each phase-1 nose lock (`hinge0`, `hinge2`). */
+export const OBSIDIAN_HINGE_NOSE_HP = OBSIDIAN_HINGE_HP * 2;
 export const OBSIDIAN_OUTER_HP = 170;
 export const OBSIDIAN_INNER_HP = 140;
 export const OBSIDIAN_FRAME_HP = 300;
 export const OBSIDIAN_MAIN_HP =
-  OBSIDIAN_HINGE_HP * 4 + OBSIDIAN_OUTER_HP * 2 + OBSIDIAN_INNER_HP * 2 + OBSIDIAN_FRAME_HP;
+  OBSIDIAN_HINGE_NOSE_HP * 2 + OBSIDIAN_OUTER_HP * 2 + OBSIDIAN_INNER_HP * 2 + OBSIDIAN_FRAME_HP;
 export const OBSIDIAN_FRAME_SCORE = 40000;
 /**
  * Phase 2: once the fuselage has lost this share of its (scaled) max HP,
