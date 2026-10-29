@@ -3,8 +3,10 @@ import { makeInput } from '@/test/fakes';
 import { createMemoryStorage, createSettingsStore } from '@/game/settings';
 import { computeControlLayout } from '@/game/controls';
 import {
+  BOMB_COOLDOWN,
   BOMB_WAVE_TIME,
   BOMBS_START,
+  RESPAWN_FLYIN_TIME,
   HOMING_FIRE_RATE,
   LOGICAL_H,
   M_OVERFLOW_SCORE,
@@ -253,5 +255,28 @@ describe('battle bomb', () => {
     const after = scene.getDebugInfo!();
     expect(after.score ?? 0).toBeGreaterThan(before.score ?? 0);
     expect(after.enemyCount ?? 0).toBeLessThan(before.enemyCount ?? 0);
+  });
+
+  it('keeps the bomb stock in 挑战 Boss and still spends one on a stage run', () => {
+    const flyIn = Math.ceil(RESPAWN_FLYIN_TIME / DT) + 2;
+    const stage = setup();
+    expect(stage.getDebugInfo!().bombs).toBe(BOMBS_START);
+    for (let i = 0; i < flyIn; i++) stage.update(DT, makeInput());
+    stage.update(DT, makeInput({ buttonB: true, keyBomb: true }));
+    expect(stage.getDebugInfo!().bombs).toBe(BOMBS_START - 1);
+
+    const practice = setup('play', 'boss');
+    expect(practice.getDebugInfo!().bombs).toBe(BOMBS_START);
+    for (let i = 0; i < flyIn; i++) practice.update(DT, makeInput());
+    practice.update(DT, makeInput({ buttonB: true, keyBomb: true }));
+    expect(practice.getDebugInfo!().bombs).toBe(BOMBS_START);
+    expect(practice.getDebugInfo!().bombCooldown).toBe(BOMB_COOLDOWN);
+
+    for (let i = 0; i < Math.ceil(BOMB_COOLDOWN / DT) + 2; i++) practice.update(DT, makeInput());
+    expect(practice.getDebugInfo!().bombs).toBe(BOMBS_START);
+    expect(practice.getDebugInfo!().bombCooldown).toBe(0);
+    practice.update(DT, makeInput({ buttonB: true, keyBomb: true }));
+    expect(practice.getDebugInfo!().bombs).toBe(BOMBS_START);
+    expect(practice.getDebugInfo!().bombCooldown).toBe(BOMB_COOLDOWN);
   });
 });

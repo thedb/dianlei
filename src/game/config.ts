@@ -739,11 +739,24 @@ export const CARRIER_LIGHT_GAP = 6;
  */
 export const OBSIDIAN_CENTER_X = 180;
 /**
- * Old perch columns. The blade-cross fight holds `OBSIDIAN_CENTER_X`.
- * Strafe is the only move that changes y.
+ * Old perch columns. The fight does not visit them. Cruise is a lemniscate
+ * around (`OBSIDIAN_CENTER_X`, `OBSIDIAN_PARK_Y`). Strafe pins x here.
  */
 export const OBSIDIAN_PERCH_X = [96, 180, 264] as const;
 export const OBSIDIAN_PARK_Y = 140;
+/**
+ * Figure-8 cruise (Lissajous). θ = 2π t / period, x = sin θ, y = sin 2θ.
+ * Folded and half use `OBSIDIAN_CRUISE_PERIOD`. Open and overload multiply
+ * angular speed by `OBSIDIAN_CRUISE_RAGE_SCALE`. Amplitudes keep the 80×96
+ * hull and the open blades inside the 360×640 frame.
+ * After a strafe window, `OBSIDIAN_CRUISE_REJOIN` eases from (180, 140)
+ * back onto that track.
+ */
+export const OBSIDIAN_CRUISE_AMP_X = 48;
+export const OBSIDIAN_CRUISE_AMP_Y = 20;
+export const OBSIDIAN_CRUISE_PERIOD = 8;
+export const OBSIDIAN_CRUISE_RAGE_SCALE = 2;
+export const OBSIDIAN_CRUISE_REJOIN = 0.16;
 /** Slide-in from above the screen. Can take damage. Does not fire. */
 export const OBSIDIAN_ENTER_Y = -70;
 export const OBSIDIAN_ENTER_DURATION = 1.6;
@@ -752,18 +765,25 @@ export const OBSIDIAN_HULL_W = 80;
 export const OBSIDIAN_HULL_H = 96;
 /**
  * Fuselage hit circle. Hinge locks and blade segments have their own radii.
- * In the folded phase this circle is armor: shots stop, and only the locks
- * lose HP.
+ * In the folded phase this circle is armor: shots stop, and only the two
+ * nose locks lose HP.
  */
 export const OBSIDIAN_RADIUS = 32;
-export const OBSIDIAN_HINGE_RADIUS = 8;
+/**
+ * Folded locks. 19 is the playtest size (about 18–20): big enough to hit
+ * on purpose. Only the nose pair (local y > 0) loses HP. The tail pair
+ * uses this same radius as armor: shots stop, no HP, and they do not
+ * gate the phase. The fuselage circle stays armor too (radius 32).
+ * The live mark's outer ring uses this radius and is drawn on the nose pair.
+ */
+export const OBSIDIAN_HINGE_RADIUS = 19;
 export const OBSIDIAN_BLADE_RADIUS = 14;
 /** Distance from a hinge pivot to that blade's hit circle. */
 export const OBSIDIAN_BLADE_REACH = 38;
 /**
  * Swept wing, open cross blade, and round hinge lock, in pixels.
  * The fight rotates these around the hinge. Sizes do not move the hit circles
- * (`OBSIDIAN_BLADE_REACH` stays 38, radii stay 14 / 8 / 32). The fuselage
+ * (`OBSIDIAN_BLADE_REACH` stays 38, radii stay 14 / 19 / 32). The fuselage
  * frame stays 80×96 so the saucer gap in §8 stays 48px; the painted body
  * fills that frame (radar to a single jet) instead of sitting inset.
  */
@@ -775,15 +795,20 @@ export const OBSIDIAN_BLADE_STUB = 18;
 export const OBSIDIAN_HINGE_W = 9;
 export const OBSIDIAN_HINGE_H = 9;
 /**
- * Main-bar split before the difficulty scale. 4×70 + 2×170 + 2×140 + 300 = 1200.
+ * Main-bar split before the difficulty scale.
+ * 2×140 nose locks + 2×170 + 2×140 + 300 = 1200.
+ * The old four-lock budget (4×70) sits on the two hittable nose locks.
+ * Tail locks stay painted at 0 HP and are not in the bar.
  * Sub-parts score 0. The 40000 is paid when `frame` dies for good.
  */
 export const OBSIDIAN_HINGE_HP = 70;
+/** Each phase-1 nose lock (`hinge0`, `hinge2`). */
+export const OBSIDIAN_HINGE_NOSE_HP = OBSIDIAN_HINGE_HP * 2;
 export const OBSIDIAN_OUTER_HP = 170;
 export const OBSIDIAN_INNER_HP = 140;
 export const OBSIDIAN_FRAME_HP = 300;
 export const OBSIDIAN_MAIN_HP =
-  OBSIDIAN_HINGE_HP * 4 + OBSIDIAN_OUTER_HP * 2 + OBSIDIAN_INNER_HP * 2 + OBSIDIAN_FRAME_HP;
+  OBSIDIAN_HINGE_NOSE_HP * 2 + OBSIDIAN_OUTER_HP * 2 + OBSIDIAN_INNER_HP * 2 + OBSIDIAN_FRAME_HP;
 export const OBSIDIAN_FRAME_SCORE = 40000;
 /**
  * Phase 2: once the fuselage has lost this share of its (scaled) max HP,
@@ -801,7 +826,10 @@ export const OBSIDIAN_DEPLOY_TIME = 1.1;
 export const OBSIDIAN_PHASE_INVULN = 1.2;
 /** Folded weapon lap. Narrow nose fans and one missile pair. No strafe. */
 export const OBSIDIAN_FOLD_CYCLE = 2;
-/** Half-open weapon lap. Edge fans and shards from each living outer blade. */
+/**
+ * Half-open weapon lap. Edge fans and shards from each living outer blade,
+ * plus a nose fan, a twin nose scatter, and wing-root homing missiles.
+ */
 export const OBSIDIAN_HALF_CYCLE = 1.6;
 export const OBSIDIAN_EDGE_COUNT = 5;
 export const OBSIDIAN_EDGE_HARD = 7;
@@ -811,6 +839,13 @@ export const OBSIDIAN_SHARD_HARD = 6;
 export const OBSIDIAN_SHARD_SPEED = 168;
 export const OBSIDIAN_NOSE_COUNT = 3;
 export const OBSIDIAN_NOSE_SPREAD = 14;
+/** Second nose beat in the half lap. Two short fans, left and right of the nose. */
+export const OBSIDIAN_HALF_TWIN_AT = 1.04;
+export const OBSIDIAN_HALF_TWIN_COUNT = 3;
+export const OBSIDIAN_HALF_TWIN_SPREAD = 18;
+export const OBSIDIAN_HALF_TWIN_GAP = 11;
+/** Wing-root homing pair, twice per half lap. Same missile as the folded phase. */
+export const OBSIDIAN_HALF_MISSILE_AT = [1.28, 1.36] as const;
 /** Hard overload lap. Dense sweeps, then the 5-wide strafe. No missile waves. */
 export const OBSIDIAN_OVERLOAD_SPAN = 3.2;
 export const OBSIDIAN_OVERLOAD_STRAFE_AT = 1.5;
@@ -867,22 +902,28 @@ export const OBSIDIAN_FAN_SPEED = 100;
 
 /**
  * Strafe windows, seconds from the start of that mode.
- * Main 1.6s: tell 0.30, dive until 0.75, bottom until 1.05, pull until 1.60.
- * Overload 1.2s: 0.20 / 0.50 / 0.75 / 1.20.
+ * Open and overload are the rage cut: tell → dive → bottom → end is half
+ * the previous draft, and `OBSIDIAN_STRAFE_ROUND_GAP` is half so the volley
+ * that used to land on the nose still lands while y is 280.
+ * Open 0.80s inside the 1.6s slice: tell 0.15, dive until 0.375,
+ * bottom until 0.525, pull until 0.80. The rest of the slice is the figure-8.
+ * Overload 0.60s: 0.10 / 0.25 / 0.375 / 0.60, starting at
+ * `OBSIDIAN_OVERLOAD_STRAFE_AT` inside the 3.2s lap.
  */
-export const OBSIDIAN_STRAFE_TELL = 0.3;
-export const OBSIDIAN_STRAFE_DIVE = 0.75;
-export const OBSIDIAN_STRAFE_BOTTOM = 1.05;
-export const OBSIDIAN_STRAFE_END = 1.6;
-export const OBSIDIAN_OVERLOAD_STRAFE_TELL = 0.2;
-export const OBSIDIAN_OVERLOAD_STRAFE_DIVE = 0.5;
-export const OBSIDIAN_OVERLOAD_STRAFE_BOTTOM = 0.75;
-export const OBSIDIAN_OVERLOAD_STRAFE_END = 1.2;
+export const OBSIDIAN_STRAFE_TELL = 0.15;
+export const OBSIDIAN_STRAFE_DIVE = 0.375;
+export const OBSIDIAN_STRAFE_BOTTOM = 0.525;
+export const OBSIDIAN_STRAFE_END = 0.8;
+export const OBSIDIAN_OVERLOAD_STRAFE_TELL = 0.1;
+export const OBSIDIAN_OVERLOAD_STRAFE_DIVE = 0.25;
+export const OBSIDIAN_OVERLOAD_STRAFE_BOTTOM = 0.375;
+export const OBSIDIAN_OVERLOAD_STRAFE_END = 0.6;
 /** Draft bottom of the dive. The lock is y ≤ OBSIDIAN_STRAFE_Y_MAX. */
 export const OBSIDIAN_STRAFE_DIVE_Y = 280;
 export const OBSIDIAN_STRAFE_Y_MAX = 320;
 export const OBSIDIAN_STRAFE_SPEED = 140;
-export const OBSIDIAN_STRAFE_ROUND_GAP = 0.1;
+/** Gap inside the bottom window. Half of the pre-rage 0.1s, matching the shorter dive. */
+export const OBSIDIAN_STRAFE_ROUND_GAP = 0.05;
 export const OBSIDIAN_STRAFE_ROUNDS = 4;
 export const OBSIDIAN_OVERLOAD_STRAFE_ROUNDS = 5;
 /** Outward speed of the splayed pair. The inner pair stays straight down. */

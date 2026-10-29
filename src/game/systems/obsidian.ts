@@ -1,15 +1,19 @@
 /**
- * 黑曜 fight script. The fuselage stays on x = 180. Four blades rotate
- * around hinge pivots: stacked swept wings, a wider peel, then the cross.
- * The generic runner owns part HP. This module owns the angles, which
- * circle a shot hits, and the weapon lap for the live phase.
+ * 黑曜 fight script. During a fight the fuselage cruises a lemniscate
+ * around (180, 140). Four blades rotate around hinge pivots: stacked
+ * swept wings, a wider peel, then the cross. The generic runner owns
+ * part HP. This module owns the angles, which circle a shot hits, the
+ * cruise, and the weapon lap for the live phase.
  *
  * v3 wings trail aft, so an along-blade volley would leave upward. The
  * edge fan keeps that lateral bearing and mirrors it nose-ward. Hit
  * circles stay on the visible wing and are not mirrored.
  *
- * The only translation is the phase-3 / overload strafe (俯冲前刺):
- * y 140 → 280 → 140, x stays 180. Perch slides were retired with 3A.
+ * Open and overload run the same figure-8 at twice the angular speed.
+ * Their strafe (俯冲前刺) interrupts it: tell eases to (180, 140), then
+ * y 140 → 280 → 140 with x pinned, then a short ease back onto the
+ * track. The path keeps its clock through the dive. Perch slides stay
+ * retired. Enter and deploy still ease toward the path center.
  *
  * State lives in a WeakMap. Only types come from `systems/boss.ts`.
  * Nothing here clears bullets that are already flying.
@@ -25,6 +29,11 @@ import {
   OBSIDIAN_BLADE_REACH,
   OBSIDIAN_BODY_CHIP,
   OBSIDIAN_CENTER_X,
+  OBSIDIAN_CRUISE_AMP_X,
+  OBSIDIAN_CRUISE_AMP_Y,
+  OBSIDIAN_CRUISE_PERIOD,
+  OBSIDIAN_CRUISE_RAGE_SCALE,
+  OBSIDIAN_CRUISE_REJOIN,
   OBSIDIAN_DEPLOY_TIME,
   OBSIDIAN_EDGE_COUNT,
   OBSIDIAN_EDGE_HARD,
@@ -40,6 +49,11 @@ import {
   OBSIDIAN_FOLD_CYCLE,
   OBSIDIAN_GUN_Y,
   OBSIDIAN_HALF_CYCLE,
+  OBSIDIAN_HALF_MISSILE_AT,
+  OBSIDIAN_HALF_TWIN_AT,
+  OBSIDIAN_HALF_TWIN_COUNT,
+  OBSIDIAN_HALF_TWIN_GAP,
+  OBSIDIAN_HALF_TWIN_SPREAD,
   OBSIDIAN_JETTISON_DROP,
   OBSIDIAN_JETTISON_TIME,
   OBSIDIAN_MISSILE_B_COUNT,
@@ -263,6 +277,24 @@ function midAngle(row: readonly number[] | undefined, fallback = 0): number {
   return row?.[1] ?? row?.[0] ?? fallback;
 }
 
+function ragePhase(phase: string): boolean {
+  return phase === 'open' || phase === 'overload';
+}
+
+/**
+ * Lissajous figure-8. θ advances with the fight clock. Open and overload
+ * use twice the angular speed. t = 0 sits on the path center.
+ */
+export function obsidianCruisePoint(clock: number, phase: string): { x: number; y: number } {
+  const scale = ragePhase(phase) ? OBSIDIAN_CRUISE_RAGE_SCALE : 1;
+  const theta =
+    (Math.PI * 2 * Math.max(0, clock) * scale) / Math.max(0.0001, OBSIDIAN_CRUISE_PERIOD);
+  return {
+    x: OBSIDIAN_CENTER_X + OBSIDIAN_CRUISE_AMP_X * Math.sin(theta),
+    y: OBSIDIAN_PARK_Y + OBSIDIAN_CRUISE_AMP_Y * Math.sin(2 * theta),
+  };
+}
+
 function fresh(): FightState {
   const layers = poseLayers('fold');
   return {
@@ -319,9 +351,18 @@ function living(boss: BossRuntime, id: string): boolean {
   return part !== undefined && part.alive && !part.falling;
 }
 
+/**
+ * Phase-1 locks the player can break: the nose pair, local y > 0
+ * (`hinge0` / `hinge2`). The tail pair stays on the sprite and does not count.
+ */
+export function obsidianVulnerableHinge(id: string): boolean {
+  const blade = OBSIDIAN_BLADES.find((item) => item.hinge === id);
+  return blade !== undefined && blade.y > 0;
+}
+
 /** Orange ticks on a lock the folded phase will actually damage. */
 export function obsidianHingeMarked(boss: BossRuntime, id: string): boolean {
-  if (!living(boss, id)) return false;
+  if (!obsidianVulnerableHinge(id) || !living(boss, id)) return false;
   if (boss.stage === 'enter') return true;
   return boss.stage === 'fight' && boss.phase === 'folded';
 }
@@ -372,8 +413,10 @@ function blocked(boss: BossRuntime, bullet: BulletBox): boolean {
 
 /**
  * What a player bullet touches. `amount` is already chipped and clamped.
- * Phase 1 armor consumes the bullet and deals nothing. Phase 2 cannot
- * empty the fuselage.
+ * Phase 1: the nose locks take the hit. Tail locks, the fuselage circle,
+ * and the blade samples consume the bullet and deal nothing. Nose circles
+ * are tested first so a shared overlap still damages the real target.
+ * Phase 2 cannot empty the fuselage.
  */
 export function obsidianShotPlan(
   boss: BossRuntime,
@@ -388,10 +431,19 @@ export function obsidianShotPlan(
 
   if (kind === 'folded') {
     for (const blade of OBSIDIAN_BLADES) {
+      if (!obsidianVulnerableHinge(blade.hinge)) continue;
       const lock = boss.parts.find((part) => part.id === blade.hinge);
       if (!lock?.alive) continue;
       if (hits(bullet, lock.worldX, lock.worldY, lock.radius)) {
         return { consumed: true, id: lock.id, amount: damage };
+      }
+    }
+    for (const blade of OBSIDIAN_BLADES) {
+      if (obsidianVulnerableHinge(blade.hinge)) continue;
+      const lock = boss.parts.find((part) => part.id === blade.hinge);
+      if (!lock?.alive) continue;
+      if (hits(bullet, lock.worldX, lock.worldY, lock.radius)) {
+        return { consumed: true, id: null, amount: 0 };
       }
     }
     if (hits(bullet, boss.x, boss.y, OBSIDIAN_RADIUS)) {
@@ -657,6 +709,36 @@ function fireFold(
   });
 }
 
+function wingMissiles(
+  boss: BossRuntime,
+  world: BossWorld | undefined,
+  ev: BossEvents,
+  homing: number
+): void {
+  missile(boss.x - OBSIDIAN_WING_X, boss.y + OBSIDIAN_WING_Y, world, ev, homing);
+  missile(boss.x + OBSIDIAN_WING_X, boss.y + OBSIDIAN_WING_Y, world, ev, homing);
+}
+
+function twinNose(boss: BossRuntime, world: BossWorld | undefined, ev: BossEvents): void {
+  const y = boss.y + OBSIDIAN_GUN_Y;
+  fanAt(
+    boss.x - OBSIDIAN_HALF_TWIN_GAP,
+    y,
+    world,
+    OBSIDIAN_HALF_TWIN_COUNT,
+    OBSIDIAN_HALF_TWIN_SPREAD,
+    ev
+  );
+  fanAt(
+    boss.x + OBSIDIAN_HALF_TWIN_GAP,
+    y,
+    world,
+    OBSIDIAN_HALF_TWIN_COUNT,
+    OBSIDIAN_HALF_TWIN_SPREAD,
+    ev
+  );
+}
+
 function fireHalf(
   boss: BossRuntime,
   prev: number,
@@ -682,6 +764,12 @@ function fireHalf(
   });
   onCycle(prev, now, OBSIDIAN_HALF_CYCLE, HALF_NOSE, () => {
     fanAt(boss.x, boss.y + OBSIDIAN_GUN_Y, world, OBSIDIAN_NOSE_COUNT, OBSIDIAN_NOSE_SPREAD, ev);
+  });
+  onCycle(prev, now, OBSIDIAN_HALF_CYCLE, OBSIDIAN_HALF_TWIN_AT, () => {
+    twinNose(boss, world, ev);
+  });
+  onCycle(prev, now, OBSIDIAN_HALF_CYCLE, OBSIDIAN_HALF_MISSILE_AT, () => {
+    wingMissiles(boss, world, ev, OBSIDIAN_MISSILE_HOMING);
   });
 }
 
@@ -801,7 +889,8 @@ function fireOver(
   }
 }
 
-function strafeWindow(phase: string, clock: number): { local: number; plan: StrafePlan } | null {
+/** Local time on the open slice or the overload lap, including the rejoin tail. */
+function strafeLocal(phase: string, clock: number): { local: number; plan: StrafePlan } | null {
   if (phase === 'open') {
     const index = Math.floor((clock + 1e-8) / OBSIDIAN_SLICE);
     if (index % 3 !== 2) return null;
@@ -812,18 +901,48 @@ function strafeWindow(phase: string, clock: number): { local: number; plan: Stra
       clock -
       Math.floor(clock / OBSIDIAN_OVERLOAD_SPAN) * OBSIDIAN_OVERLOAD_SPAN -
       OBSIDIAN_OVERLOAD_STRAFE_AT;
-    if (into < 0 || into > OVER_STRAFE.end) return null;
+    if (into < 0 || into > OVER_STRAFE.end + OBSIDIAN_CRUISE_REJOIN) return null;
     return { local: into, plan: OVER_STRAFE };
   }
   return null;
 }
 
+/** Active dive, tell through the pull-up. The rejoin tail is not part of it. */
+function strafeWindow(phase: string, clock: number): { local: number; plan: StrafePlan } | null {
+  const hit = strafeLocal(phase, clock);
+  if (!hit || hit.local > hit.plan.end) return null;
+  return hit;
+}
+
 function place(boss: BossRuntime, state: FightState): void {
-  boss.x = OBSIDIAN_CENTER_X;
-  const window = strafeWindow(boss.phase, state.clock);
-  boss.y = window
-    ? Math.min(OBSIDIAN_STRAFE_Y_MAX, strafeY(window.local, window.plan))
-    : OBSIDIAN_PARK_Y;
+  const cruise = obsidianCruisePoint(state.clock, boss.phase);
+  const hit = strafeLocal(boss.phase, state.clock);
+  if (!hit) {
+    boss.x = cruise.x;
+    boss.y = cruise.y;
+    return;
+  }
+  const { local, plan } = hit;
+  if (local <= plan.tell) {
+    const u = plan.tell <= 0 ? 1 : smoothstep(local / plan.tell);
+    const origin = obsidianCruisePoint(state.clock - local, boss.phase);
+    boss.x = lerp(origin.x, OBSIDIAN_CENTER_X, u);
+    boss.y = lerp(origin.y, OBSIDIAN_PARK_Y, u);
+    return;
+  }
+  if (local <= plan.end) {
+    boss.x = OBSIDIAN_CENTER_X;
+    boss.y = Math.min(OBSIDIAN_STRAFE_Y_MAX, strafeY(local, plan));
+    return;
+  }
+  if (local <= plan.end + OBSIDIAN_CRUISE_REJOIN) {
+    const u = smoothstep((local - plan.end) / OBSIDIAN_CRUISE_REJOIN);
+    boss.x = lerp(OBSIDIAN_CENTER_X, cruise.x, u);
+    boss.y = lerp(OBSIDIAN_PARK_Y, cruise.y, u);
+    return;
+  }
+  boss.x = cruise.x;
+  boss.y = cruise.y;
 }
 
 /** Advance the live phase. Called only while the boss is actually fighting. */
@@ -849,7 +968,7 @@ export interface ObsidianMotion {
   warn: boolean;
 }
 
-/** Draw hints. The fuselage does not bank; the blades carry the motion. */
+/** Draw hints. The fuselage does not bank; the blades and the cruise carry the motion. */
 export function obsidianMotion(boss: BossRuntime): ObsidianMotion {
   const warn = boss.phase === 'overload';
   if (boss.stage !== 'fight') return { bank: 0, flameBoost: 0, warn };
