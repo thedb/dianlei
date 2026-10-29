@@ -6,9 +6,9 @@
  */
 
 import type { Poolable } from '@/engine/pool';
-import type { BuildingPlacement, BuildingType, Fire } from '@/game/levels/types';
+import type { BuildingPlacement, BuildingType, Fire, WaveDifficulty } from '@/game/levels/types';
 import type { BulletSpawner } from '@/game/entities/enemyBullet';
-import { executeFirePattern, fireInterval } from '@/game/systems/danmaku';
+import { executeFirePattern, fireAimsDown, fireInterval } from '@/game/systems/danmaku';
 import { footprintOn } from '@/game/maps/terrain';
 import { layerIndexOf, type BackgroundTrack } from '@/game/maps/track';
 import type { TileGrid } from '@/game/maps/types';
@@ -20,6 +20,10 @@ import {
   TURRET_TURN_RATE,
   SCORE_BUILDING,
   BUILDING_HP,
+  CRUISER_GUN_BULLET_SPEED,
+  CRUISER_GUN_FIRE_INTERVAL,
+  CRUISER_GUN_GAP,
+  CRUISER_GUN_HP,
   SEA_GUN_FIRE_INTERVAL,
   BUILDING_FIRE_MIN_Y,
   BUILDING_HIT_INSET,
@@ -34,8 +38,31 @@ export interface BuildingSpec {
   cols: number;
   rows: number;
   terrain: BuildingTerrain;
-  /** Gun on the roof. Barrel patterns track the player at TURRET_TURN_RATE. */
+  /**
+   * Body HP before `scaleHp`. Omit to use `BUILDING_HP`.
+   * Cruiser guns set this so the global building HP stays put.
+   */
+  hp?: number;
+  /** Gun on the roof. A pattern that aims down does not track the player. */
   fire?: Fire;
+}
+
+/** Authored body HP for this building, before the difficulty scale. */
+export function buildingMaxHp(type: BuildingType): number {
+  return BUILDING_SPECS[type].hp ?? BUILDING_HP;
+}
+
+/**
+ * Placements this difficulty actually fields. Omit `difficulty` and every
+ * placement is kept (stage tests that do not filter). A written
+ * `difficulties` list is exclusive. Call this before the scheduler.
+ */
+export function placementsForDifficulty(
+  placements: readonly BuildingPlacement[],
+  difficulty?: WaveDifficulty
+): BuildingPlacement[] {
+  if (!difficulty) return [...placements];
+  return placements.filter((p) => !p.difficulties || p.difficulties.includes(difficulty));
 }
 
 export const BUILDING_SPECS: Record<BuildingType, BuildingSpec> = {
@@ -47,6 +74,25 @@ export const BUILDING_SPECS: Record<BuildingType, BuildingSpec> = {
     rows: 2,
     terrain: 'water',
     fire: { kind: 'fixed2', interval: SEA_GUN_FIRE_INTERVAL },
+  },
+  /** Stage-4 cruiser secondary. Twin barrels locked down; the deck tile draws no barrel. */
+  cruiser_gun: {
+    cols: 2,
+    rows: 2,
+    terrain: 'water',
+    hp: CRUISER_GUN_HP,
+    fire: {
+      kind: 'pattern',
+      pattern: {
+        shape: 'parallel',
+        count: 2,
+        gap: CRUISER_GUN_GAP,
+        aim: 'down',
+        bullet: 'small',
+        speed: CRUISER_GUN_BULLET_SPEED,
+      },
+      interval: CRUISER_GUN_FIRE_INTERVAL,
+    },
   },
 };
 
@@ -261,10 +307,14 @@ export function updateBuilding(
 
   const fire = BUILDING_SPECS[b.type].fire;
   if (!b.wrecked && fire) {
-    const desired = Math.atan2(playerY - b.y, playerX - b.x);
-    const maxStep = ((TURRET_TURN_RATE * Math.PI) / 180) * dt;
-    const diff = wrapPi(desired - b.aimAngle);
-    b.aimAngle = wrapPi(b.aimAngle + Math.max(-maxStep, Math.min(maxStep, diff)));
+    if (fireAimsDown(fire)) {
+      b.aimAngle = Math.PI / 2;
+    } else {
+      const desired = Math.atan2(playerY - b.y, playerX - b.x);
+      const maxStep = ((TURRET_TURN_RATE * Math.PI) / 180) * dt;
+      const diff = wrapPi(desired - b.aimAngle);
+      b.aimAngle = wrapPi(b.aimAngle + Math.max(-maxStep, Math.min(maxStep, diff)));
+    }
 
     const top = b.y - b.height / 2;
     if (fireEnabled && top >= BUILDING_FIRE_MIN_Y && b.y <= LOGICAL_H) {

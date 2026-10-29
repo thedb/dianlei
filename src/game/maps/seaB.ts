@@ -128,7 +128,7 @@ export const SEA_GUN_PADS: readonly { id: string; row: number; col: number }[] =
   { id: 'B06', row: 226, col: 17 },
 ];
 
-/** Single water cells reserved for later floaters. This round spawns nothing there. */
+/** Single water cells. Stage 4 spawns one `wreck_float` on each. */
 export const SEA_FLOAT_ANCHORS: readonly { id: string; row: number; col: number }[] = [
   { id: 'F01', row: 288, col: 5 },
   { id: 'F02', row: 294, col: 16 },

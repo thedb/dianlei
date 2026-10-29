@@ -2,7 +2,8 @@
  * Destructible building sprites (owner-approved concept sheet, P6).
  * Top-down palette art like the tank and turret: intact frames carry the 1px
  * red attackable rim, wrecks a black rim. The sea gun's twin barrels are code-drawn
- * so they can track the player, same as the ground turret.
+ * so they can track the player, same as the ground turret. The cruiser gun's
+ * twin barrels are code-drawn too, and they stay aimed down.
  */
 
 import { COLOR } from '@/game/palette';
@@ -390,8 +391,12 @@ export interface BuildingBarrel {
 }
 
 /** Code-drawn gun barrels on intact buildings, rotated to `aimAngle`. */
+/** Cruiser barrels sit on the mount and stay aimed down (no tracking pivot). */
+export const CRUISER_GUN_PIVOT = { x: 0, y: 4 } as const;
+
 export const BUILDING_BARRELS: Partial<Record<BuildingType, BuildingBarrel>> = {
   sea_gun: { style: 'twin', pivot: SEA_GUN_PIVOT },
+  cruiser_gun: { style: 'twin', pivot: CRUISER_GUN_PIVOT },
 };
 
 const TURRET_PARTS: ReadonlySet<number> = new Set([OI, OM, OL, OD, DG, G, K]);
@@ -445,11 +450,30 @@ function seaGun(dead: boolean): SpriteData {
   return g;
 }
 
+/** Steel deck mount. The twin barrels are code-drawn and locked downward. */
+function cruiserGun(dead: boolean): SpriteData {
+  const g = createGrid(32, 32);
+  rect(g, 4, 6, 24, 20, dead ? DG : MG);
+  rect(g, 8, 10, 16, 12, dead ? S : G);
+  rect(g, 11, 13, 3, 8, dead ? K : DG);
+  rect(g, 18, 13, 3, 8, dead ? K : DG);
+  if (dead) {
+    for (let i = 0; i < 14; i++) set(g, 8 + (i % 7), 16 + Math.floor(i / 7), K);
+    rect(g, 12, 11, 8, 6, -1);
+  } else {
+    set(g, 15, 15, COLOR.PLAYER_PALE_CYAN);
+    set(g, 16, 15, COLOR.PLAYER_PALE_CYAN);
+  }
+  rimSolid(g, dead ? K : ER);
+  return g;
+}
+
 const BUILDERS: Record<BuildingType, (dead: boolean) => SpriteData> = {
   pillbox,
   fuel_depot: fuelDepot,
   radar_station: radarStation,
   sea_gun: seaGun,
+  cruiser_gun: cruiserGun,
 };
 
 export interface BuildingArt {

@@ -11,6 +11,7 @@ const TYPES: EnemyType[] = [
   'medium',
   'interceptor',
   'bomber',
+  'carrier_bomber',
   'drone',
   'tank',
   'turret2',
@@ -66,7 +67,7 @@ describe('enemy sprites', () => {
   });
 
   it('keeps a readable silhouette, red rim, and rear nozzles', () => {
-    const air: EnemyType[] = ['small', 'medium', 'interceptor', 'bomber'];
+    const air: EnemyType[] = ['small', 'medium', 'interceptor', 'bomber', 'carrier_bomber'];
     const ground: EnemyType[] = ['tank', 'turret2', 'factory_aa', 'missile_car'];
     const reds = new Set([
       COLOR.ENEMY_BLACK,
@@ -105,6 +106,17 @@ describe('enemy sprites', () => {
     expect(bomber.some((row) => (row[3] ?? -1) >= 0)).toBe(true);
     expect(bomber.some((row) => (row[52] ?? -1) >= 0)).toBe(true);
     expect(buildEnemyArt('bomber').nozzles).toHaveLength(4);
+    const carrier = buildEnemyArt('carrier_bomber');
+    expect(carrier.nozzles).toHaveLength(2);
+    expect(carrier.pixels).toHaveLength(48);
+    expect(carrier.pixels[0]).toHaveLength(56);
+    let differ = 0;
+    carrier.pixels.forEach((row, y) =>
+      row.forEach((cell, x) => {
+        if (cell !== bomber[y]![x]) differ++;
+      })
+    );
+    expect(differ).toBeGreaterThan(200);
 
     const drone = buildEnemyArt('drone');
     expect(drone.nozzles).toHaveLength(0);

@@ -8,11 +8,13 @@
  */
 
 import {
+  CARRIER_BOMBER_HP,
   FACTORY_AA_HP,
   PARKED_FIGHTER_HP,
   RISK_CRATE_HP,
   RISK_CRATE_SHIELD,
   SCORE_BOMBER,
+  SCORE_CARRIER_BOMBER,
   SCORE_DRONE,
   SCORE_DUAL_TURRET,
   SCORE_FACTORY_AA,
@@ -33,6 +35,7 @@ export type EnemyType =
   | 'medium'
   | 'interceptor'
   | 'bomber'
+  | 'carrier_bomber'
   | 'drone'
   | 'tank'
   | 'turret2'
@@ -114,6 +117,20 @@ export const ENEMY_DEFS: Readonly<Record<EnemyType, EnemyDef>> = {
     width: 56,
     height: 48,
     hitRadius: 24,
+    size: 'medium',
+    category: 'air',
+    deathBursts: [
+      [-16, -6, 0.06],
+      [14, 8, 0.12],
+    ],
+  },
+  /** Stage-4 carrier bomber. Own 56×48 sheet; not a scaled fighter and not the heavy bomber. */
+  carrier_bomber: {
+    hp: CARRIER_BOMBER_HP,
+    score: SCORE_CARRIER_BOMBER,
+    width: 56,
+    height: 48,
+    hitRadius: 22,
     size: 'medium',
     category: 'air',
     deathBursts: [

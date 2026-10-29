@@ -5,12 +5,13 @@
  */
 
 import {
-  BUILDING_HP,
   ENEMY_BULLET_CAP,
   LOGICAL_W,
   PLAYER_BULLET_SPEED,
   PLAYER_SPAWN_Y,
+  SCORE_WRECK_FLOAT,
   WARNING_BANNER_DELAY,
+  WRECK_FLOAT_HP,
 } from '@/game/config';
 import { scaleHp } from '@/game/difficulty';
 import { terrainBlocksTank } from '@/game/maps/track';
@@ -24,10 +25,12 @@ import { updateItem } from '@/game/entities/item';
 import { pickHomingTarget, updateHomingMissile } from '@/game/entities/homingMissile';
 import {
   buildingBlocksTank,
+  buildingMaxHp,
   spawnBuilding,
   updateBuilding,
   validateBuildingFootprint,
 } from '@/game/entities/building';
+import { spawnWreckFloat, updateWreckFloat } from '@/game/entities/wreckFloat';
 import { updateEnemyWeapons } from '@/game/systems/weapons';
 import { resetVictoryExit } from '@/game/systems/victoryExit';
 import { resetCarrierTakeoff } from './carrierTakeoff';
@@ -116,7 +119,16 @@ export function stepSpawns(b: Battle, dt: number, pastWarning: boolean): void {
       b.buildings.acquire(),
       placement,
       b.scrollFrame.scroll,
-      scaleHp(BUILDING_HP, difficulty)
+      scaleHp(buildingMaxHp(placement.type), difficulty)
+    );
+  }
+  for (const anchor of b.wreckFloatScheduler.update(b.scrollFrame.scroll, b.gameTime)) {
+    spawnWreckFloat(
+      b.wreckFloats.acquire(),
+      anchor,
+      b.scrollFrame.scroll,
+      scaleHp(WRECK_FLOAT_HP, difficulty),
+      SCORE_WRECK_FLOAT
     );
   }
   const { player } = b;
@@ -132,6 +144,12 @@ export function stepSpawns(b: Battle, dt: number, pastWarning: boolean): void {
     );
     if (gone || (b.scrollFrame.fade.layers[building.layer] ?? 0) <= 0.01) {
       b.buildings.release(building);
+    }
+  });
+  b.wreckFloats.forEach((floater) => {
+    const gone = updateWreckFloat(floater, dt, b.scrollFrame.scroll);
+    if (gone || (b.scrollFrame.fade.layers[floater.layer] ?? 0) <= 0.01) {
+      b.wreckFloats.release(floater);
     }
   });
 }
@@ -210,6 +228,7 @@ export function jumpTo(b: Battle, time: number): void {
   releaseAllPools(b);
   b.bombWave.active = false;
   b.buildingScheduler.reset();
+  b.wreckFloatScheduler.reset();
   clearFx(b.fx);
   b.boss = time >= stage.boss.enterAt ? spawnBoss(b) : null;
   resetVictoryExit(b.victory);

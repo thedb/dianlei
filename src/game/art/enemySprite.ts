@@ -295,6 +295,36 @@ function drawBomber(): EnemyArt {
   return art(g, nozzles);
 }
 
+/**
+ * Stage-4 carrier bomber. Same footprint as the heavy bomber, a different
+ * airframe: twin engines, steel hull, pale canopy. Nose is the high rows.
+ */
+function drawCarrierBomber(): EnemyArt {
+  const w = 56;
+  const h = 48;
+  const g = createGrid(w, h);
+  const paint = (x: number, y: number, c: number) => {
+    plot(g, x, y, c);
+    plot(g, w - 1 - x, y, c);
+  };
+  for (let y = 14; y <= 26; y++) {
+    const inset = Math.floor(Math.abs(y - 20) / 2);
+    for (let x = 1 + inset; x <= 27; x++) paint(x, y, x < 8 ? DG : G);
+  }
+  for (let y = 6; y <= 45; y++) {
+    const half = y < 16 ? 4 : y < 36 ? 6 : Math.max(2, 6 - Math.floor((y - 36) / 2));
+    for (let x = 28 - half; x <= 27; x++) {
+      const canopy = y >= 30 && y <= 36 && x >= 24;
+      paint(x, y, canopy ? COLOR.PLAYER_PALE_CYAN : LG);
+    }
+  }
+  for (let y = 2; y <= 8; y++) {
+    for (let x = 8; x <= 14; x++) paint(x, y, y <= 3 ? K : MG);
+  }
+  rim(g, ER);
+  return art(g, twinNozzles(g, 6));
+}
+
 /** X-quad. The battle scene spins the whole sprite, so the blades read as rotors. */
 function drawDrone(): EnemyArt {
   const w = 20;
@@ -593,6 +623,7 @@ const BUILDERS: Record<EnemyType, () => EnemyArt> = {
   medium: drawMedium,
   interceptor: drawInterceptor,
   bomber: drawBomber,
+  carrier_bomber: drawCarrierBomber,
   drone: drawDrone,
   tank: drawTank,
   turret2: drawTurret,

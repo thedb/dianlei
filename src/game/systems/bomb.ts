@@ -17,6 +17,7 @@ import {
 } from '@/game/config';
 import { damageEnemy, type Enemy } from '@/game/entities/enemy';
 import { damageBuilding, type Building } from '@/game/entities/building';
+import { damageWreckFloat, type WreckFloat } from '@/game/entities/wreckFloat';
 import { buildingClass, enemyClass, type SizeClass } from '@/game/entities/objectClass';
 
 export interface BombBox {
@@ -108,4 +109,9 @@ export function bombHitEnemy(enemy: Enemy): boolean {
 export function bombHitBuilding(b: Building): boolean {
   if (b.wrecked) return false;
   return damageBuilding(b, bombDamage(buildingClass(b.type).size, b.hp, BUILDING_HP));
+}
+
+/** A wreck floater is small: the ring destroys whatever HP it has left. */
+export function bombHitWreckFloat(floater: WreckFloat): boolean {
+  return damageWreckFloat(floater, bombDamage('small', floater.hp, floater.maxHp));
 }

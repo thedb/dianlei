@@ -28,6 +28,7 @@ export const BUILDING_CLASS: Record<BuildingType, ObjectClass> = {
   fuel_depot: { size: 'small', category: 'building' },
   radar_station: { size: 'small', category: 'building' },
   sea_gun: { size: 'small', category: 'building' },
+  cruiser_gun: { size: 'small', category: 'building' },
 };
 
 export const BOSS_CLASS: ObjectClass = { size: 'large', category: 'boss' };

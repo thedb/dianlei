@@ -148,6 +148,7 @@ export interface SpawnGroup {
  * Wave-table section a wave belongs to. A label only; scenery comes from `StageData.maps`.
  * Stage 1 uses `ground` / `coast` / `base`. Stage 2 uses `outskirts` / `runway` / `woods`.
  * Stage 3 uses `valley` / `dock` / `crossing` / `scorch`.
+ * Stage 4 uses `deck` / `fleet` / `swell` / `wreck`. A label only; it does not pick a map.
  */
 export type StageSection =
   | 'ground'
@@ -159,7 +160,11 @@ export type StageSection =
   | 'valley'
   | 'dock'
   | 'crossing'
-  | 'scorch';
+  | 'scorch'
+  | 'deck'
+  | 'fleet'
+  | 'swell'
+  | 'wreck';
 
 /** One map in a stage's pre-boss run. */
 export interface StageMapEntry {
@@ -183,7 +188,7 @@ export interface StageMaps {
 /**
  * When a story line is shown.
  * `cutscene` starts at the battle's `cutsceneAt` (黑曜 beam end, `s4_ufo`).
- * `mid` is still not on a clock (`s4_wreck` waits for the stage-4 waves).
+ * `mid` draws when `t` is set (`s4_wreck` at `STAGE4_WRECK_AT`). Without `t` it draws nothing.
  */
 export type CaptionAt = 'open' | 'clear' | 'mid' | 'cutscene';
 
@@ -191,6 +196,8 @@ export type CaptionAt = 'open' | 'clear' | 'mid' | 'cutscene';
 export interface StageCaption {
   id: string;
   at: CaptionAt;
+  /** Stage-clock seconds for a `mid` cue. Omit and `mid` draws nothing. */
+  t?: number;
 }
 
 export interface Wave {
@@ -341,7 +348,7 @@ export interface BossDef {
   hullTransfers?: boolean;
 }
 
-export type BuildingType = 'pillbox' | 'fuel_depot' | 'radar_station' | 'sea_gun';
+export type BuildingType = 'pillbox' | 'fuel_depot' | 'radar_station' | 'sea_gun' | 'cruiser_gun';
 
 /**
  * A destructible building fixed to the tile map (wave table §4.7).
@@ -362,6 +369,24 @@ export interface BuildingPlacement {
    * stage's default building-drop rules.
    */
   drop?: PlacementDrop;
+  /**
+   * Omit to spawn on every difficulty. Same rule as `Wave.difficulties`:
+   * a written list is the only difficulties that spawn this placement.
+   * Filtered before the building scheduler, not inside it.
+   */
+  difficulties?: readonly WaveDifficulty[];
+}
+
+/**
+ * One wreck floater anchored to a map cell (stage 4 §6). A prop pool, not an
+ * `EnemyType`: no guns, no drop, not in the kill rate. `row` / `col` match a
+ * building's footprint origin. The sprite center is the cell center.
+ */
+export interface WreckFloatAnchor {
+  id: string;
+  map: string;
+  row: number;
+  col: number;
 }
 
 /**
@@ -389,6 +414,8 @@ export interface StageData {
   /** Shielded floaters. Omitted stages spawn none. Not part of the ship count. */
   riskCrates?: readonly RiskCrateSpawn[];
   buildings: BuildingPlacement[];
+  /** Scroll-anchored debris. Omitted stages spawn none. Not part of the ship count. */
+  wreckFloats?: readonly WreckFloatAnchor[];
   boss: BossDef;
   /** Building drop rules. Omit for `BUILDING_DROP_RULES`. */
   buildingDrops?: readonly DropRule[];

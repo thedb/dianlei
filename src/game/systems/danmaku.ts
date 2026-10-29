@@ -142,6 +142,12 @@ export function fireUsesBarrel(fire: Fire): boolean {
   return firePattern(fire).aim === 'barrel';
 }
 
+/** True when the volley points straight down and ignores the player and the barrel. */
+export function fireAimsDown(fire: Fire): boolean {
+  if (fire.kind === 'none') return false;
+  return firePattern(fire).aim === 'down';
+}
+
 /** Offset a ship's first shot so a formation doesn't fire on one frame. Rings keep their clock. */
 export function withFireStagger(fire: Fire, extra: number): Fire {
   if (extra === 0 || fire.kind === 'none') return fire;
@@ -255,9 +261,11 @@ export function executeFirePattern(
     case 'parallel': {
       const count = spec.count ?? 2;
       const angle =
-        spec.aim === 'barrel' && options.aimAngle !== undefined
-          ? options.aimAngle
-          : Math.atan2(playerY - y, playerX - x);
+        spec.aim === 'down'
+          ? Math.PI / 2
+          : spec.aim === 'barrel' && options.aimAngle !== undefined
+            ? options.aimAngle
+            : Math.atan2(playerY - y, playerX - x);
       const lane = count > 1 ? (spec.gap ?? 0) / (count - 1) : 0;
       const vx = Math.cos(angle) * speed;
       const vy = Math.sin(angle) * speed;

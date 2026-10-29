@@ -353,6 +353,12 @@ export const SCORE_PARKED_FIGHTER = 400;
 export const STRIKE_HP = 36;
 export const SCORE_STRIKE = 900;
 export const SCORE_BOMBER = 2000;
+/** Stage-4 carrier bomber. Own HP; do not reuse the heavy bomber's 60. */
+export const CARRIER_BOMBER_HP = 48;
+export const SCORE_CARRIER_BOMBER = 1000;
+/** `slow_push` stop. Speeds stay the global `SLOW_PUSH_*` constants. */
+export const CARRIER_BOMBER_STOP_Y = 180;
+export const CARRIER_BOMBER_HOLD = 2;
 export const SCORE_BOSS_PART = 5000;
 export const SCORE_BOSS_CORE = 30000;
 /** Any destroyed building (pillbox, fuel depot, radar station, sea gun) */
@@ -476,8 +482,23 @@ export const MISSILE_TURN_RATE = 240;
 // Destructible buildings (design §6.1.1, wave table §4.7)
 // ============================================================================
 
-/** Building HP. Same as a small fighter (wave table §2). */
+/** Building HP. Same as a small fighter (wave table §2). Do not use this for cruiser guns. */
 export const BUILDING_HP = 3;
+
+/** Stage-4 cruiser secondary. Own HP so the global building HP stays 3. */
+export const CRUISER_GUN_HP = 16;
+/** Parallel pair, straight down. Not the sea gun's tracking `fixed2`. */
+export const CRUISER_GUN_FIRE_INTERVAL = 1.8;
+export const CRUISER_GUN_GAP = 14;
+export const CRUISER_GUN_BULLET_SPEED = 110;
+
+/** Stage-4 wreck floater. A prop, not an enemy. HP scales; score does not. */
+export const WRECK_FLOAT_HP = 4;
+export const SCORE_WRECK_FLOAT = 200;
+export const WRECK_FLOAT_HIT_RADIUS = 8;
+export const WRECK_FLOAT_SIZE = 16;
+/** Pool slots allocated when a battle is created. Stage 4 uses all eight. */
+export const WRECK_FLOAT_POOL = 8;
 
 /**
  * Share of default building drops that are P while main power is below
@@ -690,8 +711,21 @@ export const OBSIDIAN_BOSS_SEED = 43;
  */
 export const STAGE4_WARNING_AT = 118;
 export const OBSIDIAN_ENTER_AT = 123;
-/** Chunk 7 reaches the top of the screen. The wreck line is not on a clock yet. */
+/** Chunk 7 reaches the top of the screen. `s4_wreck` uses this clock. */
 export const STAGE4_WRECK_AT = 96;
+
+/**
+ * Stage-4 risk crates. Own clocks, not stage 1–3's.
+ * Easy: early center. Medium: early left and late right. Hard adds the mid one.
+ * The late crate is 4s before the wreck line and must stay before 96.
+ */
+export const STAGE4_RISK_EARLY_T = 42;
+export const STAGE4_RISK_MID_T = 68;
+export const STAGE4_RISK_LATE_T = 92;
+export const STAGE4_RISK_CENTER_X = 180;
+export const STAGE4_RISK_LEFT_X = 48;
+export const STAGE4_RISK_MID_X = 220;
+export const STAGE4_RISK_RIGHT_X = 312;
 
 /**
  * Stage 4 carrier launch. Only a stage-start entry plays this (关卡选择 /

@@ -1,6 +1,6 @@
 /**
- * Stage 4 map smoke. Waves stay empty. 挑战 Boss 4 reaches the live obsidian
- * fight. The catapult launch stays on a stage start.
+ * Stage 4 map smoke. 挑战 Boss 4 seeks past the waves and reaches the live
+ * obsidian fight. The catapult launch stays on a stage start.
  */
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -95,7 +95,7 @@ describe('stage 4 map entry', () => {
     scene.exit?.();
   });
 
-  it('reaches the obsidian fight from 挑战 Boss 4 with an empty wave table', () => {
+  it('reaches the obsidian fight from 挑战 Boss 4 without the mid-stage ships', () => {
     const scene = createBattleScene(challenge());
     scene.enter();
     let phase = scene.getDebugInfo!().bossPhase;

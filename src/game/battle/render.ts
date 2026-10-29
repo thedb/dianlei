@@ -230,6 +230,12 @@ export function drawField(renderer: Renderer, b: Battle, assets: GameAssets, alp
       );
     }
   });
+  b.wreckFloats.forEach((floater) => {
+    const sheet = assets.wreckFloat;
+    const frame = floater.hitFlashTimer > 0 ? sheet.hitFlash : sheet.idle;
+    ctx.globalAlpha = scrollFrame.fade.layers[floater.layer] ?? 0;
+    renderer.drawImage(frame.canvas, floater.x - frame.anchorX, floater.y - frame.anchorY);
+  });
   ctx.globalAlpha = 1;
 
   b.items.forEach((item) => {

@@ -14,6 +14,7 @@ const ENEMY_SIZES: Record<EnemyType, 'small' | 'medium'> = {
   parked_fighter: 'small',
   medium: 'medium',
   bomber: 'medium',
+  carrier_bomber: 'medium',
   turret2: 'medium',
   factory_aa: 'medium',
   strike: 'medium',
