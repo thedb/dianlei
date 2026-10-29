@@ -770,17 +770,18 @@ export const OBSIDIAN_HULL_H = 96;
  */
 export const OBSIDIAN_RADIUS = 32;
 /**
- * Folded locks. 13 is large enough to hit on purpose and still a lock,
- * not the fuselage (body radius stays 32). The live mark uses this radius.
+ * Folded locks. 19 is the playtest size (about 18–20): big enough to hit
+ * on purpose. The fuselage circle stays armor in this phase (radius 32,
+ * shots stop, no HP). The live mark's outer ring uses this radius.
  */
-export const OBSIDIAN_HINGE_RADIUS = 13;
+export const OBSIDIAN_HINGE_RADIUS = 19;
 export const OBSIDIAN_BLADE_RADIUS = 14;
 /** Distance from a hinge pivot to that blade's hit circle. */
 export const OBSIDIAN_BLADE_REACH = 38;
 /**
  * Swept wing, open cross blade, and round hinge lock, in pixels.
  * The fight rotates these around the hinge. Sizes do not move the hit circles
- * (`OBSIDIAN_BLADE_REACH` stays 38, radii stay 14 / 13 / 32). The fuselage
+ * (`OBSIDIAN_BLADE_REACH` stays 38, radii stay 14 / 19 / 32). The fuselage
  * frame stays 80×96 so the saucer gap in §8 stays 48px; the painted body
  * fills that frame (radar to a single jet) instead of sitting inset.
  */

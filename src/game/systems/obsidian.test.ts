@@ -191,9 +191,9 @@ describe('黑曜 constants', () => {
     expect(OBSIDIAN_FRAME_HP).toBe(300);
     expect(OBSIDIAN_OVERLOAD_HP).toBe(360);
     expect(OBSIDIAN_RADIUS).toBe(32);
-    expect(OBSIDIAN_HINGE_RADIUS).toBe(13);
-    expect(OBSIDIAN_HINGE_RADIUS).toBeGreaterThanOrEqual(12);
-    expect(OBSIDIAN_HINGE_RADIUS).toBeLessThanOrEqual(14);
+    expect(OBSIDIAN_HINGE_RADIUS).toBe(19);
+    expect(OBSIDIAN_HINGE_RADIUS).toBeGreaterThanOrEqual(18);
+    expect(OBSIDIAN_HINGE_RADIUS).toBeLessThanOrEqual(20);
     expect(OBSIDIAN.parts.find((part) => part.id === 'hinge0')?.radius).toBe(OBSIDIAN_HINGE_RADIUS);
     expect(OBSIDIAN_CRUISE_RAGE_SCALE).toBe(2);
     expect(OBSIDIAN_STRAFE_TELL * 2).toBeCloseTo(0.3, 8);
@@ -340,7 +340,8 @@ describe('黑曜 blade phases', () => {
     const frame = bossPart(boss, 'frame')!;
     const lock = bossPart(boss, 'hinge0')!;
     const before = lock.hp;
-    const armor = shot(boss, boss.x, boss.y + 24, 30);
+    // Nose of the fuselage circle, clear of the radius-19 locks (bullet is 4×12).
+    const armor = shot(boss, boss.x, boss.y + 32, 30);
     expect(armor.consumedBullet).toBe(true);
     expect(armor.clearBullets).toBe(false);
     expect(frame.hp).toBe(frame.maxHp);
