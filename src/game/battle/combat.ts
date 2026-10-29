@@ -120,12 +120,21 @@ function hitBuilding(b: Battle, building: Building, damage: number, x: number, y
   else b.sfx('enemyHit');
 }
 
+/**
+ * 挑战 Boss (`battleEntry: 'boss'` from the debug panel) keeps its stock so
+ * B can be pressed for the whole fight. A stage run, including 关卡选择,
+ * still spends one.
+ */
+function bombSpendsStock(b: Battle): boolean {
+  return !(b.rules().bossEntry && b.scene.battleEntry === 'boss');
+}
+
 /** Bomb: clear bullets now, then hit what was on screen as the ring reaches it. */
 export function activateBomb(b: Battle): void {
   const { state, player } = b;
   if (state.bombs <= 0 || state.bombCooldown > 0) return;
 
-  state.bombs--;
+  if (bombSpendsStock(b)) state.bombs--;
   state.bombCooldown = BOMB_COOLDOWN;
   state.bombInvincible = BOMB_INVINCIBLE_TIME;
   state.bombFlashTimer = BOMB_FLASH_TIME;
