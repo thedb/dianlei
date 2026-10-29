@@ -3,7 +3,7 @@
  * The saucer, smoke, and beam are screen-space and have no hitbox.
  */
 
-import { OBSIDIAN_HULL_H, OBSIDIAN_WRECK_BANK } from '@/game/config';
+import { OBSIDIAN_HINGE_RADIUS, OBSIDIAN_HULL_H, OBSIDIAN_WRECK_BANK } from '@/game/config';
 import type { BossRuntime } from '@/game/systems/boss';
 import {
   OBSIDIAN_BLADES,
@@ -67,14 +67,21 @@ function drawSmoke(ctx: CanvasRenderingContext2D, x: number, y: number, time: nu
   ctx.globalAlpha = 1;
 }
 
+/** Solid yellow ring on the hit radius, orange ticks on the lock. No blink. */
 function drawMark(ctx: CanvasRenderingContext2D, x: number, y: number): void {
   const px = Math.round(x);
   const py = Math.round(y);
+  const r = OBSIDIAN_HINGE_RADIUS;
+  ctx.fillStyle = PALETTE[COLOR.EXPLOSION_YELLOW];
+  ctx.fillRect(px - r - 1, py - 2, 6, 4);
+  ctx.fillRect(px + r - 5, py - 2, 6, 4);
+  ctx.fillRect(px - 2, py - r - 1, 4, 6);
+  ctx.fillRect(px - 2, py + r - 5, 4, 6);
   ctx.fillStyle = PALETTE[COLOR.EXPLOSION_ORANGE];
-  ctx.fillRect(px - 9, py - 1, 3, 2);
-  ctx.fillRect(px + 6, py - 1, 3, 2);
-  ctx.fillRect(px - 1, py - 9, 2, 3);
-  ctx.fillRect(px - 1, py + 6, 2, 3);
+  ctx.fillRect(px - 7, py - 1, 4, 3);
+  ctx.fillRect(px + 3, py - 1, 4, 3);
+  ctx.fillRect(px - 1, py - 7, 3, 4);
+  ctx.fillRect(px - 1, py + 3, 3, 4);
 }
 
 function drawBlade(

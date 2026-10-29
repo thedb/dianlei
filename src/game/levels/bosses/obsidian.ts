@@ -66,6 +66,7 @@ export const OBSIDIAN: BossDef = {
   anchorX: OBSIDIAN_CENTER_X,
   enterY: OBSIDIAN_ENTER_Y,
   parkY: OBSIDIAN_PARK_Y,
+  // Cruise is the obsidian script's lemniscate. Generic drift stays off.
   drift: { amp: 0, period: 8 },
   hull: { w: OBSIDIAN_HULL_W, h: OBSIDIAN_HULL_H },
   parts: [
