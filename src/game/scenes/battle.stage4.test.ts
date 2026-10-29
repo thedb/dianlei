@@ -1,6 +1,6 @@
 /**
- * Stage 4 map smoke. Waves stay empty. 挑战 Boss 4 reaches the live obsidian
- * fight. The catapult launch stays on a stage start.
+ * Stage 4 map smoke. The naval run waits out the carrier floor. 挑战 Boss 4
+ * reaches the live obsidian fight. The catapult launch stays on a stage start.
  */
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -16,6 +16,7 @@ import {
   LOGICAL_H,
   LOGICAL_W,
   OBSIDIAN_ENTER_AT,
+  STAGE4_FIRST_SPAWN,
 } from '@/game/config';
 import type { CarriedRun, SceneContext } from './types';
 import { createBattleScene } from './battle';
@@ -95,7 +96,7 @@ describe('stage 4 map entry', () => {
     scene.exit?.();
   });
 
-  it('reaches the obsidian fight from 挑战 Boss 4 with an empty wave table', () => {
+  it('reaches the obsidian fight from 挑战 Boss 4 without spawning the run', () => {
     const scene = createBattleScene(challenge());
     scene.enter();
     let phase = scene.getDebugInfo!().bossPhase;
@@ -156,6 +157,26 @@ describe('stage 4 map entry', () => {
     expect(info.bulletCount).toBeGreaterThan(0);
     expect(info.bombs).toBe(bombs);
     expect(scene.getScroll()).toBeCloseTo(BG_SCROLL_SPEED * (info.gameTime ?? 0), 4);
+    scene.exit?.();
+  });
+
+  it('keeps the sea empty until the stage clock reaches the carrier floor', () => {
+    const scene = createBattleScene(stageRun());
+    scene.enter();
+    let guard = 0;
+    while ((scene.getDebugInfo!().gameTime ?? 0) < STAGE4_FIRST_SPAWN && guard < 2000) {
+      scene.update(DT, held);
+      expect(scene.getDebugInfo!().enemyCount).toBe(0);
+      guard += 1;
+    }
+    expect(scene.getDebugInfo!().gameTime).toBeGreaterThanOrEqual(STAGE4_FIRST_SPAWN);
+    expect(scene.getDebugInfo!().enemyCount).toBe(0);
+    while ((scene.getDebugInfo!().gameTime ?? 0) < 12 && guard < 4000) {
+      scene.update(DT, held);
+      guard += 1;
+    }
+    expect(scene.getDebugInfo!().gameTime).toBeGreaterThanOrEqual(12);
+    expect(scene.getDebugInfo!().enemyCount).toBeGreaterThan(0);
     scene.exit?.();
   });
 

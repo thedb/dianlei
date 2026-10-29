@@ -47,6 +47,7 @@ import {
 } from '@/game/entities/enemy';
 import { isItemFlashing } from '@/game/entities/item';
 import { bombWaveRadius } from '@/game/systems/bomb';
+import { drawFlakMark, drawRadarPaint, drawTorpedoTrack } from '@/game/systems/seaStrike';
 import { warningBulletAlpha } from '@/game/systems/background';
 import type { Battle } from './context';
 import { shakeOffset } from './fx';
@@ -101,6 +102,8 @@ function drawEnemy(
   }
 
   if (def.barrel) drawGunBarrel(ctx, ex, ey, enemy.aimAngle, def.barrel === 'twin');
+
+  drawRadarPaint(ctx, enemy);
 
   if (enemy.shield > 0) {
     renderer.strokeCircle(
@@ -230,7 +233,15 @@ export function drawField(renderer: Renderer, b: Battle, assets: GameAssets, alp
       );
     }
   });
+  b.wreckFloats.forEach((floater) => {
+    const sheet = assets.wreckFloat;
+    const frame = floater.hitFlashTimer > 0 ? sheet.hitFlash : sheet.idle;
+    ctx.globalAlpha = scrollFrame.fade.layers[floater.layer] ?? 0;
+    renderer.drawImage(frame.canvas, floater.x - frame.anchorX, floater.y - frame.anchorY);
+  });
   ctx.globalAlpha = 1;
+  b.torpedoes.forEach((track) => drawTorpedoTrack(ctx, track));
+  b.flakMarks.forEach((mark) => drawFlakMark(ctx, mark));
 
   b.items.forEach((item) => {
     const ix = lerp(item.prevX, item.x, alpha);

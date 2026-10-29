@@ -24,7 +24,9 @@ import {
   SCORE_SMALL_FIGHTER,
   SCORE_STRIKE,
   SCORE_TANK,
+  SCORE_TORPEDO,
   STRIKE_HP,
+  TORPEDO_HP,
 } from '@/game/config';
 import type { SizeClass } from './objectClass';
 
@@ -40,7 +42,8 @@ export type EnemyType =
   | 'missile_car'
   | 'risk_crate'
   | 'parked_fighter'
-  | 'strike';
+  | 'strike'
+  | 'torpedo';
 
 /** Resolved at the kill, from live player state. Wave `drops` are the fixed P/B path. */
 export type KillDropKind = 'risk_crate';
@@ -196,6 +199,23 @@ export const ENEMY_DEFS: Readonly<Record<EnemyType, EnemyDef>> = {
     hitRadius: 14,
     size: 'small',
     category: 'ground',
+  },
+  /**
+   * Stage-4 torpedo plane. Drops a warning column, then a water lane.
+   * Not the heavy bomber.
+   */
+  torpedo: {
+    hp: TORPEDO_HP,
+    score: SCORE_TORPEDO,
+    width: 48,
+    height: 40,
+    hitRadius: 18,
+    size: 'medium',
+    category: 'air',
+    deathBursts: [
+      [-14, -4, 0.06],
+      [12, 6, 0.12],
+    ],
   },
   /** Stage-3 heavy ground-attack jet. One fan on the level run of its strafe. */
   strike: {

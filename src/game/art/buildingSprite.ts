@@ -445,11 +445,36 @@ function seaGun(dead: boolean): SpriteData {
   return g;
 }
 
+/** Flak mount. A red ring on a concrete pad. The burst is code-drawn, not these pixels. */
+function aaGun(dead: boolean): SpriteData {
+  const g = createGrid(32, 32);
+  each(g, (x, y) => {
+    const d = Math.hypot(x - 15.5, y - 15.5);
+    if (d > 14) return;
+    if (dead) {
+      g[y]![x] = d > 11 ? DG : d > 7 ? S : K;
+      return;
+    }
+    if (d > 11.2) g[y]![x] = EC;
+    else if (d > 7.5) g[y]![x] = CC;
+    else if (d > 3.5) g[y]![x] = EH;
+    else g[y]![x] = EV;
+  });
+  if (dead) rubble(g, 11, 16, [6, 6, 26, 26]);
+  else {
+    rect(g, 14, 3, 4, 7, DG);
+    rect(g, 15, 4, 2, 5, K);
+  }
+  rimSolid(g, dead ? K : ER);
+  return g;
+}
+
 const BUILDERS: Record<BuildingType, (dead: boolean) => SpriteData> = {
   pillbox,
   fuel_depot: fuelDepot,
   radar_station: radarStation,
   sea_gun: seaGun,
+  aa_gun: aaGun,
 };
 
 export interface BuildingArt {

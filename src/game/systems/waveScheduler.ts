@@ -336,6 +336,13 @@ export function resolveSpawnPosition(group: SpawnGroup, index: number): { x: num
     };
   }
   if (group.move.kind === 'ground') return resolveGroundSpawn(group, index, laneX);
+  if (group.move.kind === 'wake_climb') return { x: laneX, y: group.y ?? LOGICAL_H + 32 };
+  if (group.move.kind === 'cross_skim') {
+    return {
+      x: group.move.side === 'left' ? -36 : LOGICAL_W + 36,
+      y: group.y ?? group.move.y,
+    };
+  }
   return { x: laneX, y: group.y ?? -20 };
 }
 

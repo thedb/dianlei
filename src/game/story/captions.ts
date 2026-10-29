@@ -1,13 +1,14 @@
 /**
  * Story subtitles. Lines come from `docs/电雷_故事资产表_v1.md` §2.
  * Stage 1 uses `s1_open` / `s1_end`. Stage 2 uses `s2_open` / `s2_end`.
- * Stage 3 uses `s3_open` / `s3_end`. Stage 4 uses `s4_open` and `s4_ufo`.
- * The three stage-4 sentences stay as written. `s4_wreck` is stored and
- * still has no clock (the stage-4 waves own that). `s4_ufo` starts at
- * `cutsceneAt`, stamped when the saucer beam ends.
+ * Stage 3 uses `s3_open` / `s3_end`. Stage 4 uses `s4_open`, `s4_wreck`,
+ * and `s4_ufo`. The three stage-4 sentences stay as written. `s4_wreck` is
+ * a `mid` cue whose `t` is `STAGE4_WRECK_AT`. `s4_ufo` starts at `cutsceneAt`,
+ * stamped when the saucer beam ends.
  *
- * `mid` draws nothing until a later milestone supplies a clock. A later cue
- * in the list replaces an earlier one while both windows are open.
+ * A `mid` cue draws from its `t` for `CAPTION_HOLD` seconds. Without `t` it
+ * draws nothing. A later cue in the list replaces an earlier one while both
+ * windows are open.
  */
 
 import {
@@ -19,7 +20,7 @@ import {
   JOYSTICK_RADIUS,
   LOGICAL_H,
 } from '@/game/config';
-import type { CaptionAt, StageCaption } from '@/game/levels/types';
+import type { StageCaption } from '@/game/levels/types';
 
 /** Catalog. Add a row here; do not branch on the id in the battle scene. */
 export const CAPTION_LINES: Readonly<Record<string, string>> = {
@@ -40,21 +41,21 @@ export interface ShownCaption {
 }
 
 function triggerAt(
-  at: CaptionAt,
+  cue: StageCaption,
   finishedAt: number | null,
   cutsceneAt: number | null
 ): number | null {
-  switch (at) {
+  switch (cue.at) {
     case 'open':
       return CAPTION_OPEN_AT;
     case 'clear':
       return finishedAt;
     case 'mid':
-      return null;
+      return cue.t ?? null;
     case 'cutscene':
       return cutsceneAt;
     default: {
-      const _never: never = at;
+      const _never: never = cue.at;
       return _never;
     }
   }
@@ -74,7 +75,7 @@ export function activeCaption(
   if (!cues) return null;
   let shown: ShownCaption | null = null;
   for (const cue of cues) {
-    const start = triggerAt(cue.at, finishedAt, cutsceneAt);
+    const start = triggerAt(cue, finishedAt, cutsceneAt);
     if (start === null) continue;
     const age = gameTime - start;
     if (age < 0 || age >= CAPTION_HOLD) continue;

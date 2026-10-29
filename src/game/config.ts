@@ -690,8 +690,61 @@ export const OBSIDIAN_BOSS_SEED = 43;
  */
 export const STAGE4_WARNING_AT = 118;
 export const OBSIDIAN_ENTER_AT = 123;
-/** Chunk 7 reaches the top of the screen. The wreck line is not on a clock yet. */
+/** Chunk 7 reaches the top of the screen. `s4_wreck` starts on this clock. */
 export const STAGE4_WRECK_AT = 96;
+/**
+ * Earliest stage-4 spawn. Lamps freeze the stage clock; the 3.2s rush runs it.
+ * 3.2 + 8 = 11.2. The first wave in the table is later than this floor.
+ */
+export const STAGE4_FIRST_SPAWN = 11.2;
+
+/** Climb off the top after a wake hold. */
+export const WAKE_CLIMB_EXIT_SPEED = 200;
+/** Sideways wobble while a wake climber holds, pixels. */
+export const WAKE_CLIMB_DRIFT = 12;
+/** Radar painters drop in from above, then leave upward. */
+export const RADAR_ENTER_SPEED = 150;
+export const RADAR_EXIT_SPEED = 180;
+export const RADAR_DRIFT = 8;
+/** Lock line / fan must stay up at least this long before the volley. */
+export const RADAR_PAINT_MIN = 0.8;
+
+/** Stage-4 torpedo plane. Not the heavy bomber, and not a downward fan. */
+export const TORPEDO_HP = 56;
+export const SCORE_TORPEDO = 1400;
+/** Warning column, seconds. Not lethal. */
+export const TORPEDO_WARN = 1.5;
+/** Live water lane after the column, seconds. */
+export const TORPEDO_LIFE = 3.8;
+export const TORPEDO_LENGTH = 460;
+export const TORPEDO_WIDTH = 26;
+
+/**
+ * Stage-4 flak building. Independent of `BUILDING_HP`.
+ * Delays stay inside 0.6–0.9s. Hard is the shortest and the densest.
+ */
+export const AA_GUN_HP = 22;
+export const AA_BURST_DELAY = { easy: 0.9, medium: 0.75, hard: 0.62 } as const;
+export const AA_BURST_COUNT = { easy: 10, medium: 12, hard: 16 } as const;
+export const AA_FIRE_INTERVAL = { easy: 2.2, medium: 1.85, hard: 1.45 } as const;
+export const AA_BURST_SPEED = 155;
+export const AA_MARK_RADIUS = 36;
+
+/** Stage-4 wreck floater. A prop, not an enemy. */
+export const WRECK_FLOAT_HP = 4;
+export const SCORE_WRECK_FLOAT = 200;
+export const WRECK_FLOAT_HIT_RADIUS = 8;
+export const WRECK_FLOAT_SIZE = 16;
+export const WRECK_FLOAT_POOL = 8;
+
+/** Stage-4 risk crates. Never the other stages' clocks. */
+export const STAGE4_RISK_EARLY_T = 42;
+export const STAGE4_RISK_MID_T = 68;
+export const STAGE4_RISK_LATE_T = 92;
+export const STAGE4_RISK_CENTER_X = 180;
+export const STAGE4_RISK_LEFT_X = 48;
+export const STAGE4_RISK_MID_X = 220;
+export const STAGE4_RISK_RIGHT_X = 312;
 
 /**
  * Stage 4 carrier launch. Only a stage-start entry plays this (关卡选择 /

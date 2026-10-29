@@ -8,15 +8,10 @@
  * applyBossBomb at BOMB_BOSS_RATIO.
  */
 
-import {
-  BOMB_MEDIUM_RATIO,
-  BOMB_WAVE_TIME,
-  BUILDING_HP,
-  LOGICAL_H,
-  LOGICAL_W,
-} from '@/game/config';
+import { BOMB_MEDIUM_RATIO, BOMB_WAVE_TIME, LOGICAL_H, LOGICAL_W } from '@/game/config';
 import { damageEnemy, type Enemy } from '@/game/entities/enemy';
-import { damageBuilding, type Building } from '@/game/entities/building';
+import { damageWreckFloat, type WreckFloat } from '@/game/entities/wreckFloat';
+import { buildingMaxHp, damageBuilding, type Building } from '@/game/entities/building';
 import { buildingClass, enemyClass, type SizeClass } from '@/game/entities/objectClass';
 
 export interface BombBox {
@@ -107,5 +102,10 @@ export function bombHitEnemy(enemy: Enemy): boolean {
 /** Apply the size-class bomb damage to a building. True when it is wrecked. */
 export function bombHitBuilding(b: Building): boolean {
   if (b.wrecked) return false;
-  return damageBuilding(b, bombDamage(buildingClass(b.type).size, b.hp, BUILDING_HP));
+  return damageBuilding(b, bombDamage(buildingClass(b.type).size, b.hp, buildingMaxHp(b.type)));
+}
+
+/** A wreck floater is small: the ring destroys whatever HP it has left. */
+export function bombHitWreckFloat(floater: WreckFloat): boolean {
+  return damageWreckFloat(floater, bombDamage('small', floater.hp, floater.maxHp));
 }

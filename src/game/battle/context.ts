@@ -17,6 +17,7 @@ import {
   LIVES_START,
   LOGICAL_W,
   PLAYER_SPAWN_Y,
+  WRECK_FLOAT_POOL,
 } from '@/game/config';
 import { getStage } from '@/game/levels/registry';
 import { difficultyProfile, type Difficulty, type DifficultyProfile } from '@/game/difficulty';
@@ -34,7 +35,23 @@ import {
   spawnHomingMissile,
   type HomingTarget,
 } from '@/game/entities/homingMissile';
-import { BuildingScheduler, createBuilding, placeBuildings } from '@/game/entities/building';
+import {
+  BuildingScheduler,
+  createBuilding,
+  placeBuildings,
+  placementsForDifficulty,
+} from '@/game/entities/building';
+import {
+  createWreckFloat,
+  placeWreckFloats,
+  WreckFloatScheduler,
+} from '@/game/entities/wreckFloat';
+import {
+  createFlakMark,
+  createTorpedoTrack,
+  type FlakMark,
+  type TorpedoTrack,
+} from '@/game/systems/seaStrike';
 import { SpatialGrid } from '@/game/systems/collision';
 import { WaveScheduler } from '@/game/systems/waveScheduler';
 import { getAudioSystem, type SfxType } from '@/game/systems/audio';
@@ -106,6 +123,9 @@ export interface Battle {
   readonly enemyBullets: ObjectPool<ReturnType<typeof createEnemyBullet>>;
   readonly items: ObjectPool<ReturnType<typeof createItem>>;
   readonly buildings: ObjectPool<ReturnType<typeof createBuilding>>;
+  readonly wreckFloats: ObjectPool<ReturnType<typeof createWreckFloat>>;
+  readonly torpedoes: ObjectPool<TorpedoTrack>;
+  readonly flakMarks: ObjectPool<FlakMark>;
   readonly fx: Fx;
   readonly bombWave: BombWave;
   readonly homingTargets: HomingTarget[];
@@ -131,6 +151,7 @@ export interface Battle {
   /** Placement ids locked to an item for this run. Rolled once in `enter`. */
   fixedDrops: ReadonlyMap<string, ItemType>;
   buildingScheduler: BuildingScheduler;
+  wreckFloatScheduler: WreckFloatScheduler;
   scroller: Scroller;
   scrollFrame: ScrollFrame;
   gameTime: number;
@@ -193,6 +214,9 @@ export function createBattle(scene: SceneContext): Battle {
     enemyBullets,
     items: new ObjectPool(createItem, 10),
     buildings: new ObjectPool(createBuilding, 16),
+    wreckFloats: new ObjectPool(createWreckFloat, WRECK_FLOAT_POOL),
+    torpedoes: new ObjectPool(createTorpedoTrack, 8),
+    flakMarks: new ObjectPool(createFlakMark, 16),
     fx: createFx(),
     bombWave: { active: false, x: 0, y: 0, t: 0 },
     homingTargets: [],
@@ -248,7 +272,17 @@ export function createBattle(scene: SceneContext): Battle {
     track,
     fixedDrops: new Map(),
     buildingScheduler: new BuildingScheduler(
-      placeBuildings(stage.buildings, track),
+      placeBuildings(
+        placementsForDifficulty(
+          stage.buildings,
+          playModeRules(scene.playMode).difficulty ?? scene.difficulty
+        ),
+        track
+      ),
+      stage.warningAt
+    ),
+    wreckFloatScheduler: new WreckFloatScheduler(
+      placeWreckFloats(stage.wreckFloats ?? [], track),
       stage.warningAt
     ),
     scroller: new Scroller(track),
@@ -316,6 +350,9 @@ export function releaseAllPools(b: Battle): void {
   b.enemyBullets.releaseAll();
   b.items.releaseAll();
   b.buildings.releaseAll();
+  b.wreckFloats.releaseAll();
+  b.torpedoes.releaseAll();
+  b.flakMarks.releaseAll();
 }
 
 /** Count and clear every live enemy bullet. */

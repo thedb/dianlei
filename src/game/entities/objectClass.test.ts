@@ -17,6 +17,7 @@ const ENEMY_SIZES: Record<EnemyType, 'small' | 'medium'> = {
   turret2: 'medium',
   factory_aa: 'medium',
   strike: 'medium',
+  torpedo: 'medium',
 };
 
 describe('object size class', () => {
