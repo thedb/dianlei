@@ -48,7 +48,8 @@ dianlei/
 │   ├── game.js             # 微信入口（P0 为简化版）
 │   ├── game.json           # 游戏配置
 │   └── project.config.json # 项目配置
-├── assets/                 # 静态资源（字体、音频等）
+├── public/fonts/           # 标题字体 Fusion Pixel（OFL，见该目录 README）
+├── assets/                 # 静态资源占位（字体实际放在 public/fonts）
 └── dist/                   # H5 构建产物
 ```
 

@@ -1,6 +1,7 @@
 /**
  * Canvas-drawn UI primitives for menus (pause, settings, title).
- * Chinese labels use the system CJK font until Fusion Pixel Font lands.
+ * Menu and HUD labels use the system CJK stack. The title mark uses
+ * Fusion Pixel (`titleFont.ts`); this stack is its fallback too.
  */
 
 import { LOGICAL_H, LOGICAL_W } from '@/game/config';

@@ -1,10 +1,11 @@
 /**
- * Title scene - main menu: 开始游戏 / 设置
+ * Title scene - main menu: 开始游戏 / Boss连战 / 设置
  * The live stage demo starts here, in enter, once this scene is current.
  * Boot and any earlier loading frame do not create it.
  * A hidden top-right hot zone opens the debug panel; the demo keeps running.
  * 「关卡选择」 pauses it for a stage list and the normal 简单 / 中等 / 困难 step.
  * 「挑战 Boss」 then pauses it for a stage list and a 普通 / 困难 step.
+ * 「Boss连战」 uses that same formal difficulty step, then a boss-only chain.
  * 「地图预览」 pauses it for the map list.
  */
 
@@ -25,6 +26,8 @@ import {
   type Rect,
 } from '@/game/ui/widgets';
 import { START_BUTTON, drawStartButton, isStartTapped } from '@/game/ui/startButton';
+import { drawTitleCover } from '@/game/ui/titleCover';
+import { drawGameSubtitle, drawGameTitle } from '@/game/ui/titleFont';
 import { createDifficultySelect } from '@/game/ui/difficultySelect';
 import {
   challengeRunDifficulty,
@@ -35,15 +38,22 @@ import { createStageSelect } from '@/game/ui/stageSelect';
 import { createMapPreviewSelect } from '@/game/ui/mapPreviewSelect';
 import { sharedTitleAttract, type TitleAttract } from './titleAttract';
 
-const ITEM_COUNT = 2;
+const ITEM_COUNT = 3;
 const MENU_W = 180;
 const MENU_H = 44;
-/** Wider than the start button's touch slack so the two hits do not overlap. */
+/** Wider than the start button's touch slack (12) so the hits do not overlap. */
 const MENU_GAP = 16;
+
+export const BOSS_RUSH_BUTTON: Rect = {
+  x: LOGICAL_W / 2 - MENU_W / 2,
+  y: START_BUTTON.y + START_BUTTON.h + MENU_GAP,
+  w: MENU_W,
+  h: MENU_H,
+};
 
 export const SETTINGS_BUTTON: Rect = {
   x: LOGICAL_W / 2 - MENU_W / 2,
-  y: START_BUTTON.y + START_BUTTON.h + MENU_GAP,
+  y: BOSS_RUSH_BUTTON.y + BOSS_RUSH_BUTTON.h + MENU_GAP,
   w: MENU_W,
   h: MENU_H,
 };
@@ -53,6 +63,9 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
   let inSettings = false;
   let inDebug = false;
   let inDifficulty = false;
+  /** Which formal start the difficulty overlay will launch. */
+  let startKind: 'stage' | 'bossRush' = 'stage';
+  let coverTime = 0;
   /** Debug stage list, then the normal difficulty step. Null on the panel. */
   let stagePick: 'stage' | 'difficulty' | null = null;
   let stageRunId = '1';
@@ -78,10 +91,17 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
     return attract;
   }
 
-  function openDifficulty(): null {
+  function openDifficulty(kind: 'stage' | 'bossRush'): null {
+    startKind = kind;
     inDifficulty = true;
     difficultySelect.open();
     return null;
+  }
+
+  function clearChain(): void {
+    delete ctx.bossRush;
+    delete ctx.campaignNext;
+    delete ctx.carriedRun;
   }
 
   function openSettings(): null {
@@ -102,8 +122,7 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
       bossPick = null;
       inMapPreview = false;
       delete ctx.runStage;
-      delete ctx.campaignNext;
-      delete ctx.carriedRun;
+      clearChain();
       blinkTimer = 0;
       hotZone.reset();
       ctx.input.setControlsEnabled(false);
@@ -117,6 +136,7 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
 
     update(dt: number, input: InputState) {
       blinkTimer = (blinkTimer + dt) % 1;
+      coverTime += dt;
       const live = demo();
       // Formal difficulty, stage select, both challenge-Boss steps, and the
       // map list pause the demo. The debug panel itself keeps it running.
@@ -140,8 +160,7 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
             ctx.previewMap = choice;
             delete ctx.challengeStage;
             delete ctx.runStage;
-            delete ctx.campaignNext;
-            delete ctx.carriedRun;
+            clearChain();
             return 'battle';
           }
           return null;
@@ -159,8 +178,7 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
             ctx.difficulty = challengeRunDifficulty(choice);
             ctx.challengeStage = bossStageId;
             delete ctx.runStage;
-            delete ctx.campaignNext;
-            delete ctx.carriedRun;
+            clearChain();
             return 'battle';
           }
           return null;
@@ -192,8 +210,7 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
             ctx.difficulty = choice;
             ctx.runStage = stageRunId;
             delete ctx.challengeStage;
-            delete ctx.campaignNext;
-            delete ctx.carriedRun;
+            clearChain();
             return 'battle';
           }
           return null;
@@ -230,8 +247,7 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
           ctx.battleEntry = 'stage';
           delete ctx.challengeStage;
           delete ctx.runStage;
-          delete ctx.campaignNext;
-          delete ctx.carriedRun;
+          clearChain();
           return 'battle';
         }
         return null;
@@ -246,11 +262,16 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
         if (choice) {
           ctx.difficulty = choice;
           ctx.playMode = 'play';
-          ctx.battleEntry = 'stage';
-          delete ctx.challengeStage;
           delete ctx.runStage;
-          delete ctx.campaignNext;
-          delete ctx.carriedRun;
+          clearChain();
+          if (startKind === 'bossRush') {
+            ctx.battleEntry = 'boss';
+            ctx.bossRush = true;
+            ctx.challengeStage = '1';
+          } else {
+            ctx.battleEntry = 'stage';
+            delete ctx.challengeStage;
+          }
           return 'battle';
         }
         return null;
@@ -268,9 +289,16 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
       if (input.menuUp) selected = (selected + ITEM_COUNT - 1) % ITEM_COUNT;
       if (input.menuDown) selected = (selected + 1) % ITEM_COUNT;
 
-      if (isStartTapped(input.taps)) return openDifficulty();
+      if (isStartTapped(input.taps)) return openDifficulty('stage');
+      if (input.taps.some((t) => hitRect(BOSS_RUSH_BUTTON, t.x, t.y))) {
+        return openDifficulty('bossRush');
+      }
       if (input.taps.some((t) => hitRect(SETTINGS_BUTTON, t.x, t.y))) return openSettings();
-      if (input.menuConfirm) return selected === 0 ? openDifficulty() : openSettings();
+      if (input.menuConfirm) {
+        if (selected === 0) return openDifficulty('stage');
+        if (selected === 1) return openDifficulty('bossRush');
+        return openSettings();
+      }
       return null;
     },
 
@@ -279,22 +307,23 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
       else renderer.clear('#000');
       const c = renderer.getContext();
       drawTitleScrim(c);
-
-      drawText(c, '电雷', LOGICAL_W / 2, LOGICAL_H / 3, 56, UI_COLORS.accent, 'center');
-      drawText(c, 'DIANLEI', LOGICAL_W / 2, LOGICAL_H / 3 + 50, 14, UI_COLORS.dim, 'center');
+      drawTitleCover(c, coverTime, false);
+      drawGameTitle(c, LOGICAL_W / 2, 46);
+      drawGameSubtitle(c, LOGICAL_W / 2, 82);
       const best = readHighScore(ctx.storage);
       drawText(
         c,
         `最高分 ${best.toString().padStart(8, '0')}`,
         LOGICAL_W / 2,
-        LOGICAL_H / 3 + 78,
+        292,
         14,
         UI_COLORS.dim,
         'center'
       );
 
       drawStartButton(c, blinkTimer, selected === 0);
-      drawButton(c, SETTINGS_BUTTON, '设置', selected === 1);
+      drawButton(c, BOSS_RUSH_BUTTON, 'Boss连战', selected === 1);
+      drawButton(c, SETTINGS_BUTTON, '设置', selected === 2);
 
       drawText(
         c,

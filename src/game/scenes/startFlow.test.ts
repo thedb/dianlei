@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Renderer } from '@/engine/renderer';
 import { createBootScene, BOOT_DURATION } from './boot';
 import { createSceneManager } from './index';
-import { createTitleScene, SETTINGS_BUTTON } from './title';
+import { BOSS_RUSH_BUTTON, createTitleScene, SETTINGS_BUTTON } from './title';
+import { GAME_TITLE } from '@/game/ui/titleFont';
 import { peekSharedTitleAttract, resetSharedTitleAttractForTests } from './titleAttract';
 
 vi.mock('@/game/art', async (importOriginal) => {
@@ -98,8 +99,9 @@ function loadingRenderer(): Renderer & { clears: string[]; images: number } {
   return renderer as unknown as Renderer & { clears: string[]; images: number };
 }
 
-function textRenderer(): Renderer & { texts: string[] } {
+function textRenderer(): Renderer & { texts: string[]; fonts: string[] } {
   const texts: string[] = [];
+  const fonts: string[] = [];
   const gradient = { addColorStop: () => undefined };
   const ctx = new Proxy(
     {},
@@ -110,13 +112,15 @@ function textRenderer(): Renderer & { texts: string[] } {
         if (prop === 'fillText') return (text: string) => texts.push(text);
         return () => undefined;
       },
-      set() {
+      set(_target, prop, value) {
+        if (prop === 'font' && typeof value === 'string') fonts.push(value);
         return true;
       },
     }
   );
   const renderer = {
     texts,
+    fonts,
     clear() {
       return undefined;
     },
@@ -125,7 +129,7 @@ function textRenderer(): Renderer & { texts: string[] } {
     },
     getContext: () => ctx,
   };
-  return renderer as unknown as Renderer & { texts: string[] };
+  return renderer as unknown as Renderer & { texts: string[]; fonts: string[] };
 }
 
 describe('boot screen', () => {
@@ -154,11 +158,13 @@ describe('boot screen', () => {
     boot.enter();
     const renderer = textRenderer();
     boot.render(renderer, 1);
-    expect(renderer.texts).toEqual(['电雷']);
+    expect(renderer.texts).toEqual([GAME_TITLE]);
+    expect(renderer.fonts.some((font) => font.includes('Fusion Pixel Font'))).toBe(true);
+    expect(renderer.fonts.some((font) => font.includes('PingFang SC'))).toBe(true);
     boot.update(DT, makeInput({ taps: [center], menuConfirm: true }));
     renderer.texts.length = 0;
     boot.render(renderer, 1);
-    expect(renderer.texts).toEqual(['电雷']);
+    expect(renderer.texts).toEqual([GAME_TITLE]);
   });
 
   it('does not create or draw the attract demo while the boot screen is up', () => {
@@ -235,7 +241,7 @@ describe('title screen start button', () => {
     expect(ctx.difficulty).toBe('hard');
   });
 
-  it('the title menu is 开始游戏 and 设置', () => {
+  it('the title menu is 开始游戏, Boss连战, and 设置', () => {
     const ctx = context();
     const title = createTitleScene(ctx);
     title.enter();
@@ -255,14 +261,21 @@ describe('title screen start button', () => {
     expect(ctx.difficulty).toBe('easy');
   });
 
-  it('keyboard down selects 设置', () => {
+  it('keyboard down selects Boss连战, then 设置', () => {
     const ctx = context();
     const title = createTitleScene(ctx);
     title.enter();
     expect(title.update(DT, makeInput({ menuDown: true }))).toBeNull();
     expect(title.update(DT, makeInput({ menuConfirm: true }))).toBeNull();
     expect(ctx.battleEntry).toBe('stage');
+    expect(ctx.bossRush).toBeUndefined();
     expect(ctx.playMode).toBeUndefined();
+    expect(title.update(DT, makeInput({ taps: [point(DIFFICULTY_BACK_BUTTON)] }))).toBeNull();
+
+    expect(title.update(DT, makeInput({ menuDown: true }))).toBeNull();
+    expect(title.update(DT, makeInput({ menuConfirm: true }))).toBeNull();
+    expect(ctx.playMode).toBeUndefined();
+    expect(ctx.bossRush).toBeUndefined();
   });
 
   it('does not change volume or BGM from the title screen', () => {
@@ -291,6 +304,7 @@ describe('title screen start button', () => {
     const ctx = context();
     const title = createTitleScene(ctx);
     title.enter();
+    title.update(DT, makeInput({ menuDown: true }));
     title.update(DT, makeInput({ menuDown: true }));
     expect(title.update(DT, makeInput({ menuConfirm: true }))).toBeNull();
     for (let i = 0; i < 5; i++) title.update(DT, makeInput({ menuDown: true }));
@@ -324,6 +338,44 @@ describe('title screen start button', () => {
     expect(title.update(DT, makeInput({ menuBack: true }))).toBeNull();
     expect(title.update(DT, makeInput({ taps: [center] }))).toBeNull();
     expect(title.update(DT, makeInput({ taps: [point(DIFFICULTY_EASY_BUTTON)] }))).toBe('battle');
+  });
+
+  it('Boss连战 opens difficulty, then starts boss 1 with the rush flag', () => {
+    const ctx = context();
+    const title = createTitleScene(ctx);
+    title.enter();
+    const rush = {
+      x: BOSS_RUSH_BUTTON.x + BOSS_RUSH_BUTTON.w / 2,
+      y: BOSS_RUSH_BUTTON.y + BOSS_RUSH_BUTTON.h / 2,
+    };
+    expect(BOSS_RUSH_BUTTON.y).toBeGreaterThanOrEqual(START_BUTTON.y + START_BUTTON.h + 12);
+    expect(SETTINGS_BUTTON.y).toBeGreaterThanOrEqual(BOSS_RUSH_BUTTON.y + BOSS_RUSH_BUTTON.h + 12);
+    expect(title.update(DT, makeInput({ taps: [rush] }))).toBeNull();
+    expect(ctx.playMode).toBeUndefined();
+    expect(ctx.bossRush).toBeUndefined();
+    expect(ctx.battleEntry).toBe('stage');
+
+    expect(title.update(DT, makeInput({ taps: [point(DIFFICULTY_BACK_BUTTON)] }))).toBeNull();
+    expect(ctx.bossRush).toBeUndefined();
+
+    expect(title.update(DT, makeInput({ taps: [rush] }))).toBeNull();
+    expect(title.update(DT, makeInput({ taps: [point(DIFFICULTY_MEDIUM_BUTTON)] }))).toBe('battle');
+    expect(ctx.playMode).toBe('play');
+    expect(ctx.battleEntry).toBe('boss');
+    expect(ctx.bossRush).toBe(true);
+    expect(ctx.challengeStage).toBe('1');
+    expect(ctx.difficulty).toBe('medium');
+    expect(ctx.runStage).toBeUndefined();
+    expect(ctx.campaignNext).toBeUndefined();
+    expect(ctx.carriedRun).toBeUndefined();
+
+    const renderer = textRenderer();
+    createTitleScene(context()).render(renderer, 1);
+    expect(renderer.texts).toContain(GAME_TITLE);
+    expect(renderer.texts).toContain('DIANLEI PLAN');
+    expect(renderer.texts).toContain('Boss连战');
+    expect(renderer.texts).toContain('开始游戏');
+    expect(renderer.texts).toContain('设置');
   });
 
   it('pauses the attract demo while the difficulty overlay is open', () => {

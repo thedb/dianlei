@@ -4,6 +4,7 @@ import { createMemoryStorage, createSettingsStore } from '@/game/settings';
 import { computeControlLayout } from '@/game/controls';
 import { HIGH_SCORE_KEY, readHighScore } from '@/game/highScore';
 import type { SceneContext } from './types';
+import { assignClearHandoff } from '@/game/battle/campaign';
 import { createDebriefScene } from './debrief';
 
 const DT = 1 / 60;
@@ -102,5 +103,69 @@ describe('debrief', () => {
     expect(ctx.challengeStage).toBeUndefined();
     expect(ctx.carriedRun?.lives).toBe(2);
     expect(ctx.carriedRun?.main.level).toBe(3);
+  });
+
+  it('Boss连战 clear of boss 1 hands off to boss 2, and boss 4 does not chain', () => {
+    const carried = {
+      score: 1000,
+      lives: 2,
+      bombs: 4,
+      deaths: 0,
+      main: { id: 'vulcan' as const, level: 3 as const },
+      sub: { id: 'homing' as const, level: 1 as const },
+      mate: 1,
+      nextExtendScore: 100000,
+    };
+    const report = {
+      outcome: 'clear' as const,
+      baseScore: 1000,
+      kills: 1,
+      spawned: 1,
+      deaths: 0,
+      time: 40,
+    };
+
+    const ctx = context();
+    ctx.bossRush = true;
+    ctx.battleEntry = 'boss';
+    ctx.challengeStage = '1';
+    ctx.run.report = report;
+    assignClearHandoff(ctx, '1', carried);
+    expect(ctx.campaignNext).toBe('2');
+    const scene = createDebriefScene(ctx, 'clear');
+    scene.enter();
+    expect(scene.update(2.99, makeInput({ menuConfirm: true }))).toBeNull();
+    expect(ctx.challengeStage).toBe('1');
+    expect(scene.update(0.02, makeInput())).toBe('battle');
+    expect(ctx.battleEntry).toBe('boss');
+    expect(ctx.bossRush).toBe(true);
+    expect(ctx.challengeStage).toBe('2');
+    expect(ctx.runStage).toBeUndefined();
+    expect(ctx.campaignNext).toBeUndefined();
+    expect(ctx.carriedRun?.lives).toBe(2);
+    expect(ctx.carriedRun?.bombs).toBe(4);
+    expect(ctx.carriedRun?.sub?.level).toBe(1);
+
+    const end = context();
+    end.bossRush = true;
+    end.battleEntry = 'boss';
+    end.challengeStage = '4';
+    end.run.report = report;
+    assignClearHandoff(end, '4', carried);
+    expect(end.campaignNext).toBeUndefined();
+    expect(end.carriedRun).toBeUndefined();
+    const result = createDebriefScene(end, 'clear');
+    result.enter();
+    expect(result.update(DT, makeInput({ menuConfirm: true }))).toBe('battle');
+    expect(end.battleEntry).toBe('boss');
+    expect(end.bossRush).toBe(true);
+    expect(end.challengeStage).toBe('4');
+
+    const practice = context();
+    practice.battleEntry = 'boss';
+    practice.challengeStage = '2';
+    assignClearHandoff(practice, '2', carried);
+    expect(practice.campaignNext).toBeUndefined();
+    expect(practice.bossRush).toBeUndefined();
   });
 });

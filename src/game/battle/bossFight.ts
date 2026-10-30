@@ -14,7 +14,7 @@ import {
   type BossEvents,
   type BossRuntime,
 } from '@/game/systems/boss';
-import { nextStageId } from '@/game/levels/registry';
+import { assignClearHandoff } from './campaign';
 import { stepVictoryExit, victoryExitBlocksInput } from '@/game/systems/victoryExit';
 import { publishRun, runDifficulty, runProfile, type Battle } from './context';
 import { spawnExplosion, triggerShake } from './fx';
@@ -126,22 +126,10 @@ export function stepBoss(b: Battle, dt: number): 'result' | null {
     applyBossEvents(b, done);
     if (done.enterResult) {
       publishRun(b, 'clear');
-      // A normal clear with a later stage holds on the black card. 挑战 Boss
-      // and the last stage still open the result screen. The return stays
-      // 'result' so stage-1 replay digests keep the same outcome frame.
-      if (b.scene.battleEntry === 'stage') {
-        const next = nextStageId(b.stage.id);
-        if (next) {
-          b.scene.campaignNext = next;
-          b.scene.carriedRun = snapshotRun(b.state);
-        } else {
-          delete b.scene.campaignNext;
-          delete b.scene.carriedRun;
-        }
-      } else {
-        delete b.scene.campaignNext;
-        delete b.scene.carriedRun;
-      }
+      // A stage clear or Boss连战 with a later id holds on the black card.
+      // 挑战 Boss and the last fight still open the result screen. The return
+      // stays 'result' so stage-1 replay digests keep the same outcome frame.
+      assignClearHandoff(b.scene, b.stage.id, snapshotRun(b.state));
       return 'result';
     }
   }

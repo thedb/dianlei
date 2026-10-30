@@ -2,7 +2,8 @@
  * Stage clear and game over (design §7).
  * Clear adds kill-rate and no-death bonuses. Both screens can retry or go home.
  * A normal clear that still has a later stage shows a black card instead, then
- * starts that stage. 挑战 Boss and the last stage keep this screen.
+ * starts that stage. Boss连战 uses the same card and continues to the next
+ * boss. 挑战 Boss and the last fight keep this screen.
  */
 
 import type { Scene, SceneContext, SceneId } from './types';
@@ -10,6 +11,7 @@ import type { Renderer } from '@/engine/renderer';
 import type { InputState } from '@/engine/input';
 import { LOGICAL_H, LOGICAL_W, STAGE_CARD_TIME } from '@/game/config';
 import { commitHighScore } from '@/game/highScore';
+import { continueCampaign } from '@/game/battle/campaign';
 import { getStage } from '@/game/levels/registry';
 import { stageHeading } from '@/game/ui/stageSelect';
 import {
@@ -83,10 +85,7 @@ export function createDebriefScene(ctx: SceneContext, outcome: 'clear' | 'gameov
       if (showingCard) {
         cardTime += dt;
         if (cardTime < STAGE_CARD_TIME || !ctx.campaignNext) return null;
-        ctx.runStage = ctx.campaignNext;
-        delete ctx.campaignNext;
-        ctx.battleEntry = 'stage';
-        delete ctx.challengeStage;
+        continueCampaign(ctx);
         return 'battle';
       }
       if (input.menuUp) selected = 0;

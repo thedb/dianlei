@@ -6,6 +6,13 @@ import { EXTERIOR_VOID } from '@/engine/exterior';
 import { createH5Platform } from '@/platform/h5';
 import { createGame } from '@/game';
 
+// Kick the title face during boot. Canvas falls back down the stack until it arrives.
+const titleFonts = document.fonts;
+if (titleFonts?.load) {
+  void titleFonts.load('12px "Fusion Pixel Font"');
+  void titleFonts.load('36px "Fusion Pixel Font"');
+}
+
 // Get or create container
 const container = document.getElementById('game') ?? document.body;
 
