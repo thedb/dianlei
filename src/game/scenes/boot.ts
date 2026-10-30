@@ -1,5 +1,5 @@
 /**
- * Boot scene — loading. The frame is the game name and a loading bar.
+ * Boot scene — loading. The frame is the title poster, the game name, and a loading bar.
  * There is no start button and no difficulty overlay; taps and confirm do
  * nothing. When the timer elapses, the title scene takes over (start button
  * and the attract demo begin there, not here).
@@ -11,8 +11,10 @@
 
 import type { Scene, SceneContext } from './types';
 import type { Renderer } from '@/engine/renderer';
-import { LOGICAL_W, LOGICAL_H } from '@/game/config';
-import { drawText, UI_COLORS } from '@/game/ui/widgets';
+import { LOGICAL_W } from '@/game/config';
+import { drawTitleCover } from '@/game/ui/titleCover';
+import { drawGameTitle } from '@/game/ui/titleFont';
+import { UI_COLORS } from '@/game/ui/widgets';
 
 /** Seconds before the boot screen hands off to the title screen */
 export const BOOT_DURATION = 1.5;
@@ -41,12 +43,12 @@ export function createBootScene(ctx: SceneContext): Scene {
     render(renderer: Renderer, _alpha: number): void {
       renderer.clear('#000');
       const c = renderer.getContext();
-
-      drawText(c, '电雷', LOGICAL_W / 2, LOGICAL_H / 3, 56, UI_COLORS.accent, 'center');
+      drawTitleCover(c, timer, true);
+      drawGameTitle(c, LOGICAL_W / 2, 46);
 
       const barW = 160;
       const barX = LOGICAL_W / 2 - barW / 2;
-      const barY = LOGICAL_H / 3 + 50;
+      const barY = 96;
       const t = Math.min(1, timer / BOOT_DURATION);
       c.fillStyle = 'rgba(255, 255, 255, 0.15)';
       c.fillRect(barX, barY, barW, 4);

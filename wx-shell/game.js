@@ -23,6 +23,16 @@ ctx.scale(pixelRatio, pixelRatio);
 // Disable image smoothing for crisp pixels
 ctx.imageSmoothingEnabled = false;
 
+// Title face. H5 loads the same family from index.html @font-face.
+// The woff2 lives in public/fonts; copy it to fonts/ beside this shell to resolve.
+if (wx.loadFontFace) {
+  wx.loadFontFace({
+    family: 'Fusion Pixel Font',
+    source: 'url("fonts/fusion-pixel-12px-proportional-zh_hans.woff2")',
+    scopes: ['native'],
+  });
+}
+
 // Game state
 let frameCount = 0;
 let lastTime = 0;
@@ -80,9 +90,9 @@ function tick(timestamp) {
 
   // Draw title
   ctx.fillStyle = '#00e5ff';
-  ctx.font = '24px sans-serif';
+  ctx.font = '24px "Fusion Pixel Font", "PingFang SC", "Microsoft YaHei", sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('电雷 - P0 Stub', screenWidth / 2, 60);
+  ctx.fillText('电雷计划', screenWidth / 2, 60);
 
   // Draw instructions
   ctx.fillStyle = '#888';

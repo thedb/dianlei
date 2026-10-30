@@ -213,6 +213,7 @@ describe('title debug entry', () => {
     expect(ctx.battleEntry).toBe('boss');
     expect(ctx.difficulty).toBe('hard');
     expect(ctx.challengeStage).toBe('1');
+    expect(ctx.bossRush).toBeUndefined();
 
     title.enter();
     for (let i = 0; i < DEBUG_HOT_TAPS - 1; i++) {

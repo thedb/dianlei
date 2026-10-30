@@ -32,9 +32,18 @@ declare const wx: {
   onShow: (callback: () => void) => void;
   onWindowResize?: (callback: () => void) => void;
   createWebAudioContext?: () => AudioContext;
+  /** Canvas face for the title mark. H5 uses @font-face instead. */
+  loadFontFace?: (options: { family: string; source: string; scopes?: string[] }) => void;
 };
 
 export function createWxPlatform(): PlatformAdapter {
+  // Same family as index.html. The woff2 ships in public/fonts and must be
+  // copied next to the mini-game package for this relative url to resolve.
+  wx.loadFontFace?.({
+    family: 'Fusion Pixel Font',
+    source: 'url("fonts/fusion-pixel-12px-proportional-zh_hans.woff2")',
+    scopes: ['native'],
+  });
   let windowInfo = wx.getWindowInfo();
   wx.onWindowResize?.(() => {
     windowInfo = wx.getWindowInfo();

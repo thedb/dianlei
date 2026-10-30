@@ -130,9 +130,10 @@ function hitBuilding(b: Battle, building: Building, damage: number, x: number, y
 /**
  * 挑战 Boss (`battleEntry: 'boss'` from the debug panel) keeps its stock so
  * B can be pressed for the whole fight. A stage run, including 关卡选择,
- * still spends one.
+ * still spends one. Boss连战 spends too: the carried stock has to matter.
  */
 function bombSpendsStock(b: Battle): boolean {
+  if (b.scene.bossRush) return true;
   return !(b.rules().bossEntry && b.scene.battleEntry === 'boss');
 }
 

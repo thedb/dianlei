@@ -73,11 +73,19 @@ export interface SceneContext {
    */
   runStage?: string;
   /**
-   * Set when a normal clear has another stage. The result scene shows the
-   * black card, then writes `runStage` and enters battle. Absent on a final
-   * clear and on 挑战 Boss.
+   * Set when a clear still has a later stage. The result scene shows the
+   * black card, then continues. A stage run writes `runStage`. Boss连战
+   * writes `challengeStage` and stays on `battleEntry: 'boss'`. Absent on a
+   * final clear and on a single 挑战 Boss fight.
    */
   campaignNext?: string;
+  /**
+   * Formal title mode 「Boss连战」. Boss-only chain 1→2→3→4 with the same
+   * difficulty picker as 开始游戏. Distinct from debug 挑战 Boss, which is
+   * one stage and does not set this. Not persisted. Title enter clears it.
+   * Pause 「返回标题」 leaves the chain. Retry restarts the current boss.
+   */
+  bossRush?: boolean;
   /**
    * Loadout and score carried into the next stage. Battle enter applies it
    * once, after the fresh-ship reset, then deletes it.

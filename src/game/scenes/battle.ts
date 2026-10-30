@@ -174,10 +174,15 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       resetShake(b.fx);
       b.meter.reset();
 
-      // 挑战 Boss: Lv3, the normal bomb and life loadout, clock at the boss.
-      // seek() drops every wave that already passed, so those ships never
-      // enter and do not count toward the kill-rate denominator.
+      // 挑战 Boss and Boss连战: Lv3, clock at the boss. seek() drops every
+      // wave that already passed, so those ships never enter and do not
+      // count toward the kill-rate denominator. A rush handoff restores the
+      // carried stock first; maxOut then pins the main gun at Lv3.
       if (b.rules().bossEntry && sceneCtx.battleEntry === 'boss') {
+        if (sceneCtx.bossRush && sceneCtx.carriedRun) {
+          applyCarriedRun(state, sceneCtx.carriedRun);
+          delete sceneCtx.carriedRun;
+        }
         maxOut(state.main);
         jumpTo(b, stage.boss.enterAt);
       }
