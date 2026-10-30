@@ -118,11 +118,14 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       );
       b.stage = stage;
       // First stage-RNG draw of the run: which exclusive building drops M.
-      b.fixedDrops = resolvePlacementDrops(stage.buildings, b.rng);
+      // Only buildings this difficulty actually spawns may win the roll, so a
+      // hard run cannot lock `s4-fleet-mate` onto B05.
+      const spawnedBuildings = placementsForDifficulty(stage.buildings, runDifficulty(b));
+      b.fixedDrops = resolvePlacementDrops(spawnedBuildings, b.rng);
       const stageTrack = buildStageTrack(stage);
       b.track = b.rules().track === 'preview' ? buildPreviewTrack(sceneCtx.previewMap) : stageTrack;
       b.buildingScheduler = new BuildingScheduler(
-        placeBuildings(placementsForDifficulty(stage.buildings, runDifficulty(b)), stageTrack),
+        placeBuildings(spawnedBuildings, stageTrack),
         stage.warningAt
       );
       b.wreckFloatScheduler = new WreckFloatScheduler(

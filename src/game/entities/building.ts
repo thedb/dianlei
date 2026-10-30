@@ -57,7 +57,11 @@ export function placementsForDifficulty(
   difficulty?: WaveDifficulty
 ): BuildingPlacement[] {
   if (!difficulty) return [...placements];
-  return placements.filter((p) => !p.difficulties || p.difficulties.includes(difficulty));
+  const kept = placements.filter((p) => !p.difficulties || p.difficulties.includes(difficulty));
+  // Same members, same order: keep the array so a stage with no filter still
+  // rolls exclusive drops from the authored list.
+  if (kept.length === placements.length) return placements as BuildingPlacement[];
+  return kept;
 }
 
 export const BUILDING_SPECS: Record<BuildingType, BuildingSpec> = {

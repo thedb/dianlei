@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createRng, type Rng } from '@/engine/rng';
 import {
   AA_BURST_DELAY,
   AA_GUN_HP,
@@ -22,6 +23,7 @@ import {
 } from '@/game/entities/building';
 import { getMapGrid } from '@/game/maps';
 import { SEA_FLOAT_ANCHORS, SEA_GUN_PADS } from '@/game/maps/seaB';
+import { resolvePlacementDrops } from '@/game/systems/dropRules';
 import { stageEnemyCount } from './stageStats';
 import type { Move } from './types';
 import { getStage, listStages, nextStageId } from './registry';
@@ -108,10 +110,10 @@ describe('stage 4 naval run', () => {
     expect(stage.boss.enterAt).toBe(123);
   });
 
-  it('counts 132 / 168 / 208 ships at full power, with a heavier wreck', () => {
+  it('counts 132 / 168 / 200 ships at full power, with a heavier wreck', () => {
     expect(stageEnemyCount(stage, false, 'easy')).toBe(132);
     expect(stageEnemyCount(stage, false, 'medium')).toBe(168);
-    expect(stageEnemyCount(stage, false, 'hard')).toBe(208);
+    expect(stageEnemyCount(stage, false, 'hard')).toBe(200);
     const wreck = (difficulty: 'easy' | 'medium' | 'hard') =>
       stage.waves
         .filter((wave) => wave.section === 'wreck' && wave.id !== 'W30')
@@ -124,7 +126,30 @@ describe('stage 4 naval run', () => {
         }, 0);
     expect(wreck('easy')).toBe(28);
     expect(wreck('medium')).toBe(36);
-    expect(wreck('hard')).toBe(46);
+    expect(wreck('hard')).toBe(43);
+    const ships = (id: string, difficulty: 'easy' | 'medium' | 'hard') => {
+      const wave = stage.waves.find((row) => row.id === id);
+      expect(wave, id).toBeDefined();
+      return stageEnemyCount({ ...stage, waves: [wave!] }, true, difficulty);
+    };
+    expect(ships('W01', 'easy')).toBe(8);
+    expect(ships('W01', 'medium')).toBe(10);
+    expect(ships('W01', 'hard')).toBe(11);
+    expect(ships('W09', 'hard')).toBe(11);
+    expect(ships('W14', 'hard')).toBe(11);
+    expect(ships('W17', 'easy')).toBe(8);
+    expect(ships('W17', 'medium')).toBe(9);
+    expect(ships('W17', 'hard')).toBe(10);
+    expect(ships('W21', 'easy')).toBe(4);
+    expect(ships('W21', 'medium')).toBe(6);
+    expect(ships('W21', 'hard')).toBe(7);
+    expect(ships('W24', 'hard')).toBe(9);
+    expect(ships('W28', 'hard')).toBe(9);
+    expect(ships('W29', 'easy')).toBe(4);
+    expect(ships('W29', 'medium')).toBe(6);
+    expect(ships('W29', 'hard')).toBe(7);
+    expect(ships('W12', 'hard')).toBe(2);
+    expect(ships('W26', 'hard')).toBe(2);
   });
 
   it('uses the naval moves and refuses the old signatures', () => {
@@ -170,7 +195,7 @@ describe('stage 4 naval run', () => {
     ).toBe(5);
   });
 
-  it('fields flak on the painted pads, harder with one more gun', () => {
+  it('fields five flak guns on easy and medium, and four on hard', () => {
     expect(BUILDING_SPECS.aa_gun.hp).toBe(AA_GUN_HP);
     expect(AA_GUN_HP).not.toBe(BUILDING_HP);
     expect(BUILDING_SPECS.aa_gun.fire?.kind).toBe('airburst');
@@ -179,16 +204,39 @@ describe('stage 4 naval run', () => {
     expect(AA_BURST_DELAY.hard).toBeLessThan(AA_BURST_DELAY.medium);
     expect(AA_BURST_DELAY.medium).toBeLessThan(AA_BURST_DELAY.easy);
     const grid = getMapGrid('seaB');
-    expect(placementsForDifficulty(stage.buildings, 'easy')).toHaveLength(5);
-    expect(placementsForDifficulty(stage.buildings, 'medium')).toHaveLength(5);
-    expect(placementsForDifficulty(stage.buildings, 'hard')).toHaveLength(6);
+    const ids = (difficulty: 'easy' | 'medium' | 'hard') =>
+      placementsForDifficulty(stage.buildings, difficulty).map((b) => b.id);
+    expect(ids('easy')).toEqual(['B01', 'B02', 'B03', 'B04', 'B05']);
+    expect(ids('medium')).toEqual(['B01', 'B02', 'B03', 'B04', 'B05']);
+    expect(ids('hard')).toEqual(['B01', 'B02', 'B03', 'B04']);
     expect(stage.buildings.map((b) => b.type).every((type) => type === 'aa_gun')).toBe(true);
-    for (const pad of SEA_GUN_PADS) {
-      const placed = stage.buildings.find((b) => b.id === pad.id);
-      expect(placed).toMatchObject({ row: pad.row, col: pad.col, map: 'seaB' });
-      expect(validateBuildingFootprint(grid, placed!)).toBe(true);
+    expect(stage.buildings.find((b) => b.id === 'B05')?.difficulties).toEqual(['easy', 'medium']);
+    expect(stage.buildings.some((b) => b.id === 'B06')).toBe(false);
+    expect(SEA_GUN_PADS.some((pad) => pad.id === 'B06')).toBe(true);
+    for (const placed of stage.buildings) {
+      expect(validateBuildingFootprint(grid, placed)).toBe(true);
     }
-    expect(stage.buildings.find((b) => b.id === 'B06')?.difficulties).toEqual(['hard']);
+    const scripted =
+      (value: number): Rng =>
+      () =>
+        value;
+    const mate = (difficulty: 'easy' | 'medium' | 'hard', roll: number) => {
+      const fixed = resolvePlacementDrops(
+        placementsForDifficulty(stage.buildings, difficulty),
+        scripted(roll)
+      );
+      return ['B04', 'B05'].filter((id) => fixed.get(id) === 'M');
+    };
+    expect(mate('easy', 0)).toEqual(['B04']);
+    expect(mate('easy', 0.5)).toEqual(['B05']);
+    expect(mate('medium', 0.5)).toEqual(['B05']);
+    expect(mate('hard', 0)).toEqual(['B04']);
+    expect(mate('hard', 0.99)).toEqual(['B04']);
+    expect(
+      resolvePlacementDrops(placementsForDifficulty(stage.buildings, 'hard'), createRng(4)).get(
+        'B05'
+      )
+    ).toBeUndefined();
   });
 
   it('keeps eight wreck floats that are not an enemy type', () => {

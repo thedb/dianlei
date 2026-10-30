@@ -39,6 +39,7 @@ const TORPEDO_MOVE: Move = { kind: 'wake_climb', speed: 140, stopY: 200, hold: 2
 
 const NONE: Fire = { kind: 'none' };
 const HARD: readonly WaveDifficulty[] = ['hard'];
+const EASY_MEDIUM: readonly WaveDifficulty[] = ['easy', 'medium'];
 const MEDIUM_HARD: readonly WaveDifficulty[] = ['medium', 'hard'];
 
 const TORPEDO_FIRE: Fire = {
@@ -320,7 +321,10 @@ export const stage4: StageData = {
     { t: STAGE4_RISK_LATE_T, x: STAGE4_RISK_RIGHT_X, difficulties: MEDIUM_HARD },
   ],
   waves: [
-    wave('W01', 12, 'deck', wakes([72, 288], 4, 5, 6, 340, DECK_WAKE, DECK_WAKE_BY)),
+    wave('W01', 12, 'deck', [
+      ...wakes([72], 4, 5, 6, 340, DECK_WAKE, DECK_WAKE_BY),
+      ...wakes([288], 4, 5, 5, 340, DECK_WAKE, DECK_WAKE_BY),
+    ]),
     wave('W02', 16.5, 'deck', skims(240, 3, 4, 5, SKIM_E, SKIM_BY)),
     wave('W03', 21, 'deck', [
       painters(PAINT_XS, 4, 150, 1.05, LOCK_E, LOCK_BY, { medium: 5, hard: 6 }),
@@ -342,7 +346,10 @@ export const stage4: StageData = {
         drops: [{ index: 0, item: 'P' }],
       }),
     ]),
-    wave('W09', 44, 'fleet', wakes([64, 296], 4, 5, 6, 320, FLEET_WAKE, FLEET_WAKE_BY)),
+    wave('W09', 44, 'fleet', [
+      ...wakes([64], 4, 5, 6, 320, FLEET_WAKE, FLEET_WAKE_BY),
+      ...wakes([296], 4, 5, 5, 320, FLEET_WAKE, FLEET_WAKE_BY),
+    ]),
     wave('W10', 48, 'fleet', [
       painters([80, 140, 200, 260, 300, 340], 4, 140, 0.95, LOCK_E, LOCK_BY, {
         medium: 5,
@@ -385,7 +392,10 @@ export const stage4: StageData = {
         }
       ),
     ]),
-    wave('W14', 64, 'fleet', wakes([88, 272], 4, 5, 6, 400, FLEET_WAKE, FLEET_WAKE_BY)),
+    wave('W14', 64, 'fleet', [
+      ...wakes([88], 4, 5, 6, 400, FLEET_WAKE, FLEET_WAKE_BY),
+      ...wakes([272], 4, 5, 5, 400, FLEET_WAKE, FLEET_WAKE_BY),
+    ]),
     wave('W15', 67, 'fleet', [
       ...drones([100, 160, 220, 280], RING_E, RING_BY),
       ...drones([190], RING_E, RING_BY, MEDIUM_HARD),
@@ -408,7 +418,7 @@ export const stage4: StageData = {
     wave('W17', 71, 'fleet', [
       painters([40, 80, 120, 160, 200, 240, 280, 320], 8, 160, 0.9, LOCK_E, LOCK_BY),
       painters([100], 1, 160, 0.9, LOCK_E, LOCK_BY, { difficulties: MEDIUM_HARD, delay: 0.35 }),
-      painters([140, 300], 2, 160, 0.9, LOCK_E, LOCK_BY, { difficulties: HARD, delay: 0.7 }),
+      painters([140], 1, 160, 0.9, LOCK_E, LOCK_BY, { difficulties: HARD, delay: 0.7 }),
     ]),
     wave('W18', 76, 'swell', skims(260, 3, 4, 5, SKIM_E, SKIM_BY)),
     wave('W19', 80, 'swell', wakes([110, 250], 3, 4, 5, 360, FLEET_WAKE, FLEET_WAKE_BY)),
@@ -426,7 +436,7 @@ export const stage4: StageData = {
     wave('W21', 86, 'swell', [
       painters([60, 120, 180, 240], 4, 130, 0.9, LOCK_E, LOCK_BY),
       painters([300, 340], 2, 130, 0.9, LOCK_E, LOCK_BY, { difficulties: MEDIUM_HARD, delay: 0.3 }),
-      painters([100, 220], 2, 130, 0.9, LOCK_E, LOCK_BY, { difficulties: HARD, delay: 0.6 }),
+      painters([100], 1, 130, 0.9, LOCK_E, LOCK_BY, { difficulties: HARD, delay: 0.6 }),
     ]),
     wave('W22', 90, 'swell', [
       ...drones([140, 200, 260], RING_E, RING_BY),
@@ -435,7 +445,7 @@ export const stage4: StageData = {
     ]),
     wave('W23', 94, 'swell', skims(420, 2, 2, 3, SKIM_E, SKIM_BY, 3, 3)),
     wave('W24', 98, 'wreck', [
-      ...wakes([80], 4, 4, 5, 440, WRECK_WAKE, WRECK_WAKE_BY),
+      ...wakes([80], 4, 4, 4, 440, WRECK_WAKE, WRECK_WAKE_BY),
       ...wakes([260], 3, 4, 5, 440, WRECK_WAKE, WRECK_WAKE_BY),
     ]),
     wave('W25', 102, 'wreck', [
@@ -452,11 +462,14 @@ export const stage4: StageData = {
       }),
     ]),
     wave('W27', 108, 'wreck', skims(280, 3, 4, 5, WRECK_SKIM_E, WRECK_SKIM_BY)),
-    wave('W28', 111, 'wreck', wakes([100, 240], 3, 4, 5, 480, WRECK_WAKE, WRECK_WAKE_BY)),
+    wave('W28', 111, 'wreck', [
+      ...wakes([100], 3, 4, 5, 480, WRECK_WAKE, WRECK_WAKE_BY),
+      ...wakes([240], 3, 4, 4, 480, WRECK_WAKE, WRECK_WAKE_BY),
+    ]),
     wave('W29', 114, 'wreck', [
       ...drones([40, 90, 140, 190], WRECK_RING_E, WRECK_RING_BY),
       ...drones([230, 280], WRECK_RING_E, WRECK_RING_BY, MEDIUM_HARD),
-      ...drones([60, 320], WRECK_RING_E, WRECK_RING_BY, HARD),
+      ...drones([60], WRECK_RING_E, WRECK_RING_BY, HARD),
     ]),
     wave(
       'W30',
@@ -470,7 +483,8 @@ export const stage4: StageData = {
       'powerBelowMax'
     ),
   ],
-  buildings: SEA_GUN_PADS.map((pad, index) => {
+  // B06 stays a painted pad and never spawns. Hard also skips B05.
+  buildings: SEA_GUN_PADS.filter((pad) => pad.id !== 'B06').map((pad) => {
     const id = pad.id;
     const drop =
       id === 'B01' || id === 'B03'
@@ -487,7 +501,7 @@ export const stage4: StageData = {
       row: pad.row,
       col: pad.col,
       ...(drop ? { drop } : {}),
-      ...(index === SEA_GUN_PADS.length - 1 ? { difficulties: HARD } : {}),
+      ...(id === 'B05' ? { difficulties: EASY_MEDIUM } : {}),
     };
   }),
   wreckFloats: SEA_FLOAT_ANCHORS.map((anchor) => ({
