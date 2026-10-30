@@ -17,7 +17,7 @@ import { PALETTE, COLOR } from '@/game/palette';
 import { drawBossHpBar, type GameAssets } from '@/game/art';
 import { WEAPONS } from '@/game/systems/playerWeapons';
 import {
-  bossExtraSpan,
+  bossBarSpecs,
   bossHpBarLayout,
   bossIntroBarFill,
   bossIntroBarLayout,
@@ -95,7 +95,7 @@ function drawStageHud(renderer: Renderer, b: Battle, assets: GameAssets): void {
   const barIntro = bossIntroBarFill(gameTime, stage.warningAt, stage.boss.enterAt);
   let barLayout: BossHpBarLayout | null = null;
   if (barIntro !== null) {
-    barLayout = bossIntroBarLayout(barIntro, bossExtraSpan(stage.boss, runProfile(b).bossGates));
+    barLayout = bossIntroBarLayout(barIntro, bossBarSpecs(stage.boss, runProfile(b).bossGates));
   } else if (boss && boss.phase !== 'clear' && boss.phase !== 'done') {
     barLayout = bossHpBarLayout(boss);
   }

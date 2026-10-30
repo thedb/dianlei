@@ -8,8 +8,11 @@
  * drops changed what the pilot picks up. Boss practice and weapon test did
  * not move; their first stage-RNG draw is unused.
  * P22 recaptured stage and attract digests again: risk crates join the stage
- * clock. The hard dodge seed now dies in phase 3. Boss practice still seeks
- * past the crates, and weapon test does not spawn them, so those two held.
+ * clock. Boss practice still seeks past the crates, and weapon test does not
+ * spawn them.
+ * The full-width hard overload recaptured the hard dodge seed and hard boss
+ * practice: both run out of lives in phase 3. Easy, medium, and 普通 did not
+ * move.
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -293,7 +296,7 @@ const CASES: ReadonlyArray<{
     pilot: 'dodge',
   },
   {
-    name: 'stage 1 hard, phase 3 then clear',
+    name: 'stage 1 hard, dies in phase 3',
     entry: 'stage',
     difficulty: 'hard',
     seed: 37,
@@ -383,18 +386,18 @@ const EXPECTED: Record<string, ReplayResult> = {
     ],
     digest: 3535942816,
   },
-  'stage 1 hard, phase 3 then clear': {
-    outcome: 'result',
-    frames: 14009,
-    score: 76420,
-    lives: 1,
+  'stage 1 hard, dies in phase 3': {
+    outcome: 'gameover',
+    frames: 13986,
+    score: 46420,
+    lives: 0,
     report: {
-      outcome: 'clear',
-      baseScore: 76420,
+      outcome: 'gameover',
+      baseScore: 46420,
       kills: 91,
       spawned: 149,
-      deaths: 2,
-      time: 226.60000000007247,
+      deaths: 3,
+      time: 233.11666666674432,
     },
     bossPhases: [
       'enter@9299',
@@ -403,11 +406,8 @@ const EXPECTED: Record<string, ReplayResult> = {
       'phase2@10403',
       'transition3@12206',
       'phase3@12278',
-      'death@13444',
-      'clear@13595',
-      'done@14009',
     ],
-    digest: 1050369618,
+    digest: 665990149,
   },
   'stage 1 easy, demo pilot game over': {
     outcome: 'gameover',
@@ -466,17 +466,17 @@ const EXPECTED: Record<string, ReplayResult> = {
     digest: 76722877,
   },
   'boss practice 困难': {
-    outcome: 'result',
-    frames: 5465,
-    score: 40000,
-    lives: 1,
+    outcome: 'gameover',
+    frames: 5424,
+    score: 10000,
+    lives: 0,
     report: {
-      outcome: 'clear',
-      baseScore: 40000,
+      outcome: 'gameover',
+      baseScore: 10000,
       kills: 0,
       spawned: 0,
-      deaths: 2,
-      time: 239.200000000067,
+      deaths: 3,
+      time: 245.41666666673862,
     },
     bossPhases: [
       'enter@0',
@@ -485,11 +485,8 @@ const EXPECTED: Record<string, ReplayResult> = {
       'phase2@1420',
       'transition3@3653',
       'phase3@3725',
-      'death@4900',
-      'clear@5051',
-      'done@5465',
     ],
-    digest: 2462845047,
+    digest: 1358904631,
   },
 };
 

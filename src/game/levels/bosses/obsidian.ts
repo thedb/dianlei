@@ -2,7 +2,7 @@
  * Stage 4 boss 黑曜, look 3A 刃翼十字.
  * Nose locks, then the outer blades, then the inner blades plus the
  * fuselage. Tail locks stay visible and take no damage in phase 1.
- * Hard adds the yellow overload on the fuselage alone.
+ * Hard adds a full second yellow bar on the fuselage alone.
  * Empty HP does not take the generic explosion clear.
  *
  * HP is a draft aimed at about 40 seconds. The main bar sums to
@@ -84,6 +84,10 @@ export const OBSIDIAN: BossDef = {
     },
     ...hinges,
     ...wings,
+  ],
+  bars: [
+    { id: 'main', style: 'main' },
+    { id: 'extra', style: 'extra', gate: HARD_PHASE_GATE },
   ],
   phases: [
     {

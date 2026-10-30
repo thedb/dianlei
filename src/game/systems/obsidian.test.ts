@@ -193,7 +193,7 @@ describe('黑曜 constants', () => {
     expect(OBSIDIAN_MAIN_HP).toBe(1200);
     expect(OBSIDIAN.parts.reduce((sum, part) => sum + part.hp, 0)).toBe(OBSIDIAN_MAIN_HP);
     expect(OBSIDIAN_FRAME_HP).toBe(300);
-    expect(OBSIDIAN_OVERLOAD_HP).toBe(360);
+    expect(OBSIDIAN_OVERLOAD_HP).toBe(OBSIDIAN_MAIN_HP);
     expect(OBSIDIAN_RADIUS).toBe(32);
     expect(OBSIDIAN_HINGE_RADIUS).toBe(19);
     expect(OBSIDIAN_HINGE_RADIUS).toBeGreaterThanOrEqual(18);
@@ -710,7 +710,7 @@ describe('黑曜 saucer', () => {
     expect(boss.phase).toBe('saucer');
     expect(boss.x).toBe(OBSIDIAN_WRECK_X);
     expect(boss.y).toBe(fromY);
-    expect(bossHpBarLayout(boss).mainFill).toBe(0);
+    expect(bossHpBarLayout(boss).bars[bossHpBarLayout(boss).active]!.fill).toBe(0);
 
     const exit = createVictoryExit();
     expect(stepVictoryExit(exit, boss.phase, FIXED_DT, 180, 400, 180, 480)).toBe('none');
@@ -798,8 +798,14 @@ describe('黑曜 saucer', () => {
     expect(hard.invulnerable).toBe(false);
     expect(obsidianJettison(hard)).toEqual([]);
     expect(obsidianMotion(hard).flameBoost).toBe(OBSIDIAN_OVERLOAD_CRUISE_FLAME);
-    expect(bossHpBarLayout(hard).extraFill).toBeCloseTo(1, 6);
-    expect(bossHpBarLayout(hard).mainFill).toBe(0);
+    expect(bossHpBarLayout(hard).active).toBe(1);
+    expect(bossHpBarLayout(hard).bars[1]!.fill).toBeCloseTo(1, 6);
+    expect(bossHpBarLayout(hard).bars[1]!.style).toBe('extra');
+    expect(bossHpBarLayout(hard).bars[0]!.fill).toBe(0);
+    expect(bossHpBarLayout(hard).bars[1]!.maxHp).toBeCloseTo(
+      bossHpBarLayout(hard).bars[0]!.maxHp,
+      6
+    );
 
     const sweep = go(hard, 0.2);
     expect(sweep.bolts.filter((bolt) => bolt.type === 'missile')).toEqual([]);
@@ -831,7 +837,7 @@ describe('黑曜 saucer', () => {
     expect(hard.y).toBeLessThan(OBSIDIAN_STRAFE_DIVE_Y - 40);
     expect(shot(hard, frame.worldX, frame.worldY, frame.hp).score).toBe(OBSIDIAN_FRAME_SCORE);
     expect(hard.stage).toBe('saucer');
-    expect(bossHpBarLayout(hard).extraFill).toBe(0);
+    expect(bossHpBarLayout(hard).bars[bossHpBarLayout(hard).active]!.fill).toBe(0);
     expect(OBSIDIAN_OVERLOAD_SPAN).toBeGreaterThan(OBSIDIAN_SLICE);
   });
 });

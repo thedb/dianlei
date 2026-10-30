@@ -77,6 +77,6 @@ describe('challenge boss 2', () => {
     expect(easy.bossPhase3).toBe(false);
     expect(easy.bossMaxHp).toBe(840);
     expect(hard.bossPhase3).toBe(true);
-    expect(hard.bossMaxHp).toBeCloseTo(1404);
+    expect(hard.bossMaxHp).toBeCloseTo(2184);
   });
 });

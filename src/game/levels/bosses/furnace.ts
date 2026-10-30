@@ -5,8 +5,8 @@
  * Once they are gone, four armor petals
  * open and close on a fixed clock and the core only takes bullets while they
  * are opening or open. Orbit, iris, and weapons live in `systems/furnace.ts`.
- * Easy and Medium end when the core dies. Hard revives the core for the
- * yellow overload segment, and the core's 30000 waits for that kill.
+ * Easy and Medium end when the core dies. Hard revives the core on a full
+ * second yellow bar, and the core's 30000 waits for that kill.
  */
 
 import {
@@ -77,6 +77,10 @@ export const FURNACE: BossDef = {
       hp: FURNACE_CORE_HP,
       score: FURNACE_CORE_SCORE,
     },
+  ],
+  bars: [
+    { id: 'main', style: 'main' },
+    { id: 'extra', style: 'extra', gate: HARD_PHASE_GATE },
   ],
   phases: [
     {

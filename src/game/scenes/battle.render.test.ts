@@ -11,6 +11,9 @@
  * The weapon-test draw digest did not move.
  * P22 recaptured stage and attract draws: the risk crate and its shield ring
  * are on screen. Boss practice, weapon test, and the 12s pause did not move.
+ * The full-width HP bar recaptured stage easy (the layout object), plus the
+ * hard stage and hard boss practice, which now die in phase 3. Attract,
+ * weapon test, pause, and the demo game over did not move.
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -226,16 +229,16 @@ function stageRun(
 }
 
 const EXPECTED: Record<string, RenderResult> = {
-  'stage easy': { outcome: 'result', frames: 11366, renders: 496, calls: 85759, hash: 3930305795 },
+  'stage easy': { outcome: 'result', frames: 11366, renders: 496, calls: 85759, hash: 1494208581 },
   'stage hard': {
-    outcome: 'result',
-    frames: 14009,
-    renders: 611,
-    calls: 100766,
-    hash: 3617704030,
+    outcome: 'gameover',
+    frames: 13986,
+    renders: 610,
+    calls: 101368,
+    hash: 3222630490,
   },
   'stage demo': { outcome: 'gameover', frames: 5575, renders: 244, calls: 35067, hash: 766989114 },
-  'boss hard': { outcome: 'result', frames: 5465, renders: 239, calls: 36771, hash: 2228888089 },
+  'boss hard': { outcome: 'gameover', frames: 5424, renders: 237, calls: 37428, hash: 296711215 },
   attract: { outcome: 'timeout', frames: 5400, renders: 318, calls: 24899, hash: 727918577 },
   weaponTest: { outcome: 'timeout', frames: 600, renders: 55, calls: 26053, hash: 1189635685 },
   pause: { outcome: 'timeout', frames: 720, renders: 56, calls: 6021, hash: 2351038240 },
