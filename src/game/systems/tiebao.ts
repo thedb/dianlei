@@ -464,7 +464,7 @@ export function tiebaoMainRatio(boss: BossRuntime): number {
   const extra = boss.extraArmed ? boss.extraMax : 0;
   const mainMax = Math.max(1, boss.fightMax - extra);
   const phase = boss.phases[boss.phaseIndex];
-  if (phase?.bar === 'extra') return 0;
+  if (phase !== undefined && phase.bar !== 'main') return 0;
   let hp = 0;
   for (const part of boss.parts) hp += Math.max(0, part.hp);
   return Math.min(1, hp / mainMax);
@@ -761,7 +761,7 @@ function burstSheds(state: TiebaoState, ev: BossEvents, toSheds: number): void {
 function shedAnimated(boss: BossRuntime): boolean {
   if (boss.stage !== 'fight') return false;
   const phase = boss.phases[boss.phaseIndex];
-  return phase?.bar !== 'extra';
+  return (phase?.bar ?? 'main') === 'main';
 }
 
 function snapShed(boss: BossRuntime, state: TiebaoState, sheds: number): void {

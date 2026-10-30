@@ -1101,8 +1101,8 @@ function clampUnit(v: number): number {
 }
 
 /**
- * Top HUD bar. One red fill, plus a yellow slot on the right when the boss has
- * an armed extra phase (Hard phase 3); damage to the main phases does not eat it.
+ * Top HUD bar. One full-width bar: red for `main`, yellow on a crimson
+ * track for `extra`. `layout.active` picks the row. Earlier bars are gone.
  */
 export function drawBossHpBar(
   ctx: CanvasRenderingContext2D,
@@ -1112,9 +1112,9 @@ export function drawBossHpBar(
   w = 264,
   h = 8
 ): void {
-  const mainFill = clampUnit(layout.mainFill);
-  const phase3Fill = clampUnit(layout.extraFill);
-  const phase3Span = clampUnit(layout.extraSpan);
+  const slot = layout.bars[layout.active];
+  const fill = clampUnit(slot?.fill ?? 0);
+  const yellow = slot?.style === 'extra';
   ctx.fillStyle = '#000000';
   ctx.fillRect(x, y, w, h);
 
@@ -1122,29 +1122,14 @@ export function drawBossHpBar(
   const innerY = y + 1;
   const innerW = Math.max(0, w - 2);
   const innerH = Math.max(0, h - 2);
-  const split = phase3Span > 0.001 && innerW > 4;
-  const phase3W = split ? Math.max(2, Math.min(innerW - 3, Math.round(innerW * phase3Span))) : 0;
-  const divider = split ? 1 : 0;
-  const mainW = innerW - phase3W - divider;
-
-  if (mainW > 0 && mainFill > 0) {
-    const mainDraw = Math.max(0, Math.min(mainW, Math.round(mainW * mainFill)));
-    if (mainDraw > 0) {
-      ctx.fillStyle = PALETTE[COLOR.ENEMY_VIVID_RED];
-      ctx.fillRect(innerX, innerY, mainDraw, innerH);
-    }
-  }
-  if (split) {
-    const phaseX = innerX + mainW + divider;
+  if (yellow && innerW > 0) {
     ctx.fillStyle = PALETTE[COLOR.ENEMY_CRIMSON];
-    ctx.fillRect(phaseX, innerY, phase3W, innerH);
-    const phaseDraw = Math.max(0, Math.min(phase3W, Math.round(phase3W * phase3Fill)));
-    if (phaseDraw > 0) {
-      ctx.fillStyle = PALETTE[COLOR.EXPLOSION_YELLOW];
-      ctx.fillRect(phaseX, innerY, phaseDraw, innerH);
-    }
-    ctx.fillStyle = PALETTE[COLOR.WHITE];
-    ctx.fillRect(innerX + mainW, innerY, divider, innerH);
+    ctx.fillRect(innerX, innerY, innerW, innerH);
+  }
+  const drawn = Math.max(0, Math.min(innerW, Math.round(innerW * fill)));
+  if (drawn > 0) {
+    ctx.fillStyle = PALETTE[yellow ? COLOR.EXPLOSION_YELLOW : COLOR.ENEMY_VIVID_RED];
+    ctx.fillRect(innerX, innerY, drawn, innerH);
   }
 
   ctx.strokeStyle = PALETTE[COLOR.ENEMY_BRIGHT_RED];

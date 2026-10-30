@@ -27,6 +27,8 @@ import {
 import type { BulletFuse, EnemyBulletType } from '@/game/entities/enemyBullet';
 import type {
   BossAttack,
+  BossBarDef,
+  BossBarStyle,
   BossCycleAttack,
   BossDef,
   BossGunAttack,
@@ -141,11 +143,11 @@ export interface BossRuntime {
   deathSpawned: number;
   hitFlash: number;
   resultSent: boolean;
-  /** True when this run fights at least one `bar: 'extra'` phase. */
+  /** True when this run fights a bar after the first (Hard overload). */
   extraArmed: boolean;
-  /** HP banked in extra phases. */
+  /** HP banked in bars after the first. */
   extraMax: number;
-  /** Parts plus every armed segment. Bomb damage is 8% of this. */
+  /** Sum of every armed bar. Bomb damage is 8% of this. */
   fightMax: number;
 }
 
@@ -285,18 +287,71 @@ export function bossTotalHp(def: BossDef): number {
   return def.parts.reduce((sum, part) => sum + part.hp, 0);
 }
 
-/** HP banked in extra-bar phases this run fights. */
-export function bossExtraHp(def: BossDef, gates: readonly string[] = []): number {
-  return enabledBossPhases(def, gates).reduce(
-    (sum, phase) => sum + (phase.bar === 'extra' ? (phase.segmentHp ?? 0) : 0),
-    0
-  );
+/**
+ * Authored bar rows, or one derived row per distinct `phase.bar`.
+ * Derived rows follow phase order. Id `main` is red; every other id is yellow.
+ */
+export function bossBarCatalog(def: BossDef): BossBarDef[] {
+  if (def.bars && def.bars.length > 0) return def.bars.map((bar) => ({ ...bar }));
+  const out: BossBarDef[] = [];
+  for (const phase of def.phases) {
+    if (out.some((bar) => bar.id === phase.bar)) continue;
+    const group = def.phases.filter((item) => item.bar === phase.bar);
+    const gate = group[0]?.gate;
+    const shared = group.every((item) => item.gate === gate);
+    const row: BossBarDef = {
+      id: phase.bar,
+      style: phase.bar === 'main' ? 'main' : 'extra',
+    };
+    if (shared && gate !== undefined) row.gate = gate;
+    out.push(row);
+  }
+  if (out.length === 0) out.push({ id: 'main', style: 'main' });
+  return out;
 }
 
-/** Width of the extra slot on the HP bar, for the warning fill. 0 without one. */
-export function bossExtraSpan(def: BossDef, gates: readonly string[] = []): number {
-  const extra = bossExtraHp(def, gates);
-  return extra / Math.max(1, bossTotalHp(def) + extra);
+/** One armed bar: id, draw style, and the HP pool that fills it. */
+export interface BossBarSpec {
+  id: string;
+  style: BossBarStyle;
+  maxHp: number;
+}
+
+/**
+ * Bars this run actually fights. Bar 0 is `partPool` (spawned part HP).
+ * Each later bar sums `segmentHp` of the phases that name it. A phase whose
+ * `bar` is missing from `BossDef.bars` is appended as a yellow row.
+ */
+export function bossBarSpecsFromPhases(
+  def: BossDef,
+  phases: readonly BossPhaseDef[],
+  partPool: number
+): BossBarSpec[] {
+  const live = new Set(phases.map((phase) => phase.bar));
+  const catalog = bossBarCatalog(def).filter((bar) => live.has(bar.id));
+  for (const phase of phases) {
+    if (catalog.some((bar) => bar.id === phase.bar)) continue;
+    catalog.push({
+      id: phase.bar,
+      style: phase.bar === 'main' ? 'main' : 'extra',
+      ...(phase.gate !== undefined ? { gate: phase.gate } : {}),
+    });
+  }
+  return catalog.map((bar, index) => ({
+    id: bar.id,
+    style: bar.style,
+    maxHp:
+      index === 0
+        ? partPool
+        : phases
+            .filter((phase) => phase.bar === bar.id)
+            .reduce((sum, phase) => sum + (phase.segmentHp ?? 0), 0),
+  }));
+}
+
+/** Armed bars for a definition and the gates this run opens. */
+export function bossBarSpecs(def: BossDef, gates: readonly string[] = []): BossBarSpec[] {
+  return bossBarSpecsFromPhases(def, enabledBossPhases(def, gates), bossTotalHp(def));
 }
 
 /** 8% of total boss HP, rounded to the wave table's 67. */
@@ -325,76 +380,113 @@ export function bossHpRemaining(boss: BossRuntime): number {
   return boss.parts.reduce((sum, part) => sum + Math.max(0, part.hp), 0);
 }
 
-export interface BossHpBarLayout {
-  /** 0–1 fill of the main slot (every `bar: 'main'` phase). */
-  mainFill: number;
-  /** Width of the extra slot as a fraction of the bar. 0 when no extra phase is armed. */
-  extraSpan: number;
-  /** 0–1 fill inside the extra slot. Stays full until that segment is live. */
-  extraFill: number;
+export interface BossHpBarSlot {
+  id: string;
+  style: BossBarStyle;
+  maxHp: number;
+  /** 0–1 of this bar alone. The HUD draws only `BossHpBarLayout.active`. */
+  fill: number;
 }
 
-function extraLive(boss: BossRuntime): boolean {
-  if (
+export interface BossHpBarLayout {
+  /** Armed bars in fight order. Easy and Medium are a single `main` row. */
+  bars: BossHpBarSlot[];
+  /** Index of the one full-width bar to draw. */
+  active: number;
+}
+
+function runtimeBarSpecs(boss: BossRuntime): BossBarSpec[] {
+  const partPool = Math.max(0, boss.fightMax - boss.extraMax);
+  return bossBarSpecsFromPhases(boss.def, boss.phases, partPool);
+}
+
+function barIndexOf(specs: readonly BossBarSpec[], barId: string): number {
+  const index = specs.findIndex((bar) => bar.id === barId);
+  return index < 0 ? 0 : index;
+}
+
+function activeBarIndex(boss: BossRuntime, specs: readonly BossBarSpec[]): number {
+  if (specs.length === 0) return 0;
+  if (boss.stage === 'enter') return 0;
+  const phase = boss.phases[boss.phaseIndex];
+  if (!phase) return specs.length - 1;
+  return barIndexOf(specs, phase.bar);
+}
+
+/** HP still on this later bar: the live phase's targets, plus later segments. */
+function segmentRemaining(boss: BossRuntime, barId: string): number {
+  let hp = 0;
+  for (let i = boss.phaseIndex; i < boss.phases.length; i++) {
+    const phase = boss.phases[i]!;
+    if (phase.bar !== barId) continue;
+    hp += i === boss.phaseIndex ? targetHp(boss) : (phase.segmentHp ?? 0);
+  }
+  return hp;
+}
+
+function fightOver(boss: BossRuntime): boolean {
+  return (
     boss.stage === 'death' ||
     boss.stage === 'saucer' ||
     boss.stage === 'clear' ||
     boss.stage === 'done'
-  ) {
-    return true;
-  }
-  if (boss.stage !== 'transition' && boss.stage !== 'fight') return false;
-  return boss.phases[boss.phaseIndex]?.bar === 'extra';
+  );
 }
 
 /**
- * Two slots when an extra phase is armed. Main phases share the left slot. The
- * right slot is the extra HP and does not shrink while main phases take
- * damage. Without an extra phase the bar is one slot (`extraSpan` 0).
+ * One full-width bar at a time. Bars before the live phase are empty; bars
+ * after it stay full in the data and are not drawn until the fight reaches
+ * them. Easy and Medium never arm a second row.
  */
 export function bossHpBarLayout(boss: BossRuntime): BossHpBarLayout {
-  const extraMax = boss.extraArmed ? boss.extraMax : 0;
-  const total = Math.max(1, boss.fightMax);
-  const extraSpan = extraMax > 0 ? extraMax / total : 0;
-  const mainMax = Math.max(1, total - extraMax);
-  let mainHp = 0;
-  let extraHp = 0;
-  if (extraMax <= 0) {
-    mainHp = bossHpRemaining(boss);
-  } else if (extraLive(boss)) {
-    if (boss.stage === 'transition' || boss.stage === 'fight') {
-      extraHp = targetHp(boss);
-    }
-  } else {
-    mainHp = bossHpRemaining(boss);
-    extraHp = extraMax;
-  }
-  return {
-    mainFill: clamp01(mainHp / mainMax),
-    extraSpan,
-    extraFill: extraMax > 0 ? clamp01(extraHp / extraMax) : 0,
-  };
+  const specs = runtimeBarSpecs(boss);
+  const active = activeBarIndex(boss, specs);
+  const over = fightOver(boss);
+  const bars: BossHpBarSlot[] = specs.map((bar, index) => {
+    let fill = 1;
+    if (over || index < active) fill = 0;
+    else if (index > active) fill = 1;
+    else if (boss.stage === 'enter') fill = 1;
+    else if (index === 0) fill = clamp01(bossHpRemaining(boss) / Math.max(1, bar.maxHp));
+    else fill = clamp01(segmentRemaining(boss, bar.id) / Math.max(1, bar.maxHp));
+    return { id: bar.id, style: bar.style, maxHp: bar.maxHp, fill };
+  });
+  return { bars, active };
 }
 
 /**
- * Warning-bar fill, left to right across the same slots as `bossHpBarLayout`.
- * `extraSpan` 0 keeps the whole bar one segment.
+ * Warning fill walks the armed bars in order, each as its own full-width bar.
+ * Time is split by HP, so two equal bars each take half the warning.
+ * `fill` 0 is the first bar empty. `fill` 1 rests on the last bar full.
  */
-export function bossIntroBarLayout(fill: number, extraSpan: number): BossHpBarLayout {
-  const span = clamp01(extraSpan);
+export function bossIntroBarLayout(fill: number, specs: readonly BossBarSpec[]): BossHpBarLayout {
   const u = clamp01(fill);
-  if (span <= 0) return { mainFill: u, extraSpan: 0, extraFill: 0 };
-  const mainSpan = 1 - span;
-  if (u <= mainSpan) {
-    return { mainFill: mainSpan > 0 ? u / mainSpan : 0, extraSpan: span, extraFill: 0 };
+  const list = specs.length > 0 ? specs : [{ id: 'main', style: 'main' as const, maxHp: 1 }];
+  const total = list.reduce((sum, bar) => sum + Math.max(0, bar.maxHp), 0) || 1;
+  let cursor = 0;
+  const bars: BossHpBarSlot[] = list.map((bar) => {
+    const span = Math.max(0, bar.maxHp) / total;
+    const start = cursor;
+    cursor += span;
+    let slotFill = 0;
+    if (span <= 0) slotFill = u >= cursor ? 1 : 0;
+    else if (u >= start + span - 1e-9) slotFill = 1;
+    else if (u > start) slotFill = (u - start) / span;
+    return { id: bar.id, style: bar.style, maxHp: bar.maxHp, fill: clamp01(slotFill) };
+  });
+  let active = 0;
+  for (let i = 0; i < bars.length; i++) {
+    if (bars[i]!.fill > 0) active = i;
   }
-  return { mainFill: 1, extraSpan: span, extraFill: (u - mainSpan) / span };
+  return { bars, active };
 }
 
-/** Overall remaining fraction. The drawn bar splits this into two slots when armed. */
+/** Overall remaining fraction, weighted by each bar's HP. */
 export function bossBarRatio(boss: BossRuntime): number {
   const layout = bossHpBarLayout(boss);
-  return (1 - layout.extraSpan) * layout.mainFill + layout.extraSpan * layout.extraFill;
+  const total = layout.bars.reduce((sum, bar) => sum + bar.maxHp, 0);
+  if (total <= 0) return 0;
+  return layout.bars.reduce((sum, bar) => sum + bar.maxHp * bar.fill, 0) / total;
 }
 
 export function bossPart(boss: BossRuntime, id: string): BossPartRuntime | undefined {
@@ -484,10 +576,8 @@ export function bossIntroBarFill(
 
 export function createBoss(def: BossDef, options: BossSpawnOptions = {}): BossRuntime {
   const phases = enabledBossPhases(def, options.gates);
-  const extraMax = phases.reduce(
-    (sum, phase) => sum + (phase.bar === 'extra' ? (phase.segmentHp ?? 0) : 0),
-    0
-  );
+  const barSpecs = bossBarSpecsFromPhases(def, phases, bossTotalHp(def));
+  const extraMax = barSpecs.slice(1).reduce((sum, bar) => sum + bar.maxHp, 0);
   const guns: Record<string, GunClock> = {};
   for (const phase of def.phases) {
     for (const attack of phase.attacks) {
@@ -535,9 +625,8 @@ export function createBoss(def: BossDef, options: BossSpawnOptions = {}): BossRu
     resultSent: false,
     extraArmed: extraMax > 0,
     extraMax,
-    fightMax: 0,
+    fightMax: barSpecs.reduce((sum, bar) => sum + bar.maxHp, 0),
   };
-  boss.fightMax = boss.parts.reduce((sum, part) => sum + part.maxHp, 0) + extraMax;
   syncParts(boss);
   return boss;
 }

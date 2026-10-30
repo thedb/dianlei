@@ -15,6 +15,7 @@ import type { BossCycleAttack, BossDef, BossGunAttack, Fire } from '@/game/level
 import {
   applyBossBomb,
   bossBarRatio,
+  bossBarSpecs,
   bossBombDamage,
   bossHitsPlayer,
   bossHpBarLayout,
@@ -31,6 +32,7 @@ import {
   resolveBossBullet,
   splitBombDamage,
   updateBoss,
+  type BossHpBarLayout,
   type BossRuntime,
 } from './boss';
 
@@ -117,6 +119,7 @@ function toPhase2(): BossRuntime {
 describe('boss numbers', () => {
   it('totals 840 HP and an 8% bomb of 67', () => {
     expect(bossTotalHp(cfg)).toBe(840);
+    expect(bossPhaseDef(cfg, 'phase3').segmentHp).toBe(bossTotalHp(cfg));
     expect(bossBombDamage(840, BOMB_BOSS_RATIO)).toBe(67);
     expect(splitBombDamage(67, 2)).toEqual([34, 33]);
     expect(splitBombDamage(67, 1)).toEqual([67]);
@@ -487,7 +490,7 @@ describe('boss difficulty phases', () => {
     const boss = reachPhase2(hardCfg, true);
     expect(boss.phase).toBe('phase2');
     expect(boss.pattern).toBe('spiral');
-    expect(boss.fightMax).toBeCloseTo((140 + 140 + 560 + 240) * 1.3);
+    expect(boss.fightMax).toBeCloseTo((140 + 140 + 560 + 840) * 1.3);
     expect(bossPart(boss, 'core')!.hp).toBeCloseTo(560 * 1.3);
     expect(pattern.spiral.arms).toBe(4);
     expect(pattern.spiral.speed).toBe(180);
@@ -496,10 +499,12 @@ describe('boss difficulty phases', () => {
     expect(pattern.aimed.interval).toBeLessThan(1.15);
 
     const full = bossHpBarLayout(boss);
-    expect(full.extraSpan).toBeCloseTo(240 / 1080);
-    expect(full.extraFill).toBeCloseTo(1);
-    expect(full.mainFill).toBeCloseTo(560 / 840);
-    expect(bossBarRatio(boss)).toBeCloseTo((560 + 240) / 1080);
+    expect(full.bars.map((bar) => bar.id)).toEqual(['main', 'extra']);
+    expect(full.active).toBe(0);
+    expect(full.bars[0]!.fill).toBeCloseTo(560 / 840);
+    expect(full.bars[1]!.fill).toBeCloseTo(1);
+    expect(full.bars[1]!.style).toBe('extra');
+    expect(bossBarRatio(boss)).toBeCloseTo((560 + 840) / 1680);
 
     const spiral = updateBoss(boss, pattern.spiral.interval);
     expect(spiral.shots.map((shot) => shot.fire.kind)).toContain('spiral');
@@ -526,20 +531,22 @@ describe('boss difficulty phases', () => {
     const core = bossPart(boss, 'core')!;
     resolveBossBullet(boss, { x: core.worldX, y: core.worldY, w: 4, h: 12 }, 50);
     const nicked = bossHpBarLayout(boss);
-    expect(nicked.extraFill).toBeCloseTo(1);
-    expect(nicked.mainFill).toBeLessThan(1);
+    expect(nicked.active).toBe(0);
+    expect(nicked.bars[1]!.fill).toBeCloseTo(1);
+    expect(nicked.bars[0]!.fill).toBeLessThan(1);
 
     const broke = killCore(boss);
     expect(broke.score).toBe(0);
     expect(broke.convertBullets).toBe(false);
     expect(boss.phase).toBe('transition3');
     expect(boss.invulnerable).toBe(true);
-    expect(bossPart(boss, 'core')!.hp).toBeCloseTo(240 * 1.3);
+    expect(bossPart(boss, 'core')!.hp).toBeCloseTo(840 * 1.3);
     expect(applyBossBomb(boss).score).toBe(0);
     const handed = bossHpBarLayout(boss);
-    expect(handed.mainFill).toBe(0);
-    expect(handed.extraFill).toBeCloseTo(1);
-    expect(handed.extraSpan).toBeCloseTo(240 / 1080);
+    expect(handed.active).toBe(1);
+    expect(handed.bars[0]!.fill).toBe(0);
+    expect(handed.bars[1]!.fill).toBeCloseTo(1);
+    expect(handed.bars[1]!.maxHp).toBeCloseTo(840 * 1.3);
 
     updateBoss(boss, pattern.transition);
     expect(boss.phase).toBe('phase3');
@@ -553,48 +560,124 @@ describe('boss difficulty phases', () => {
     expect(ring.shots.some((shot) => shot.fire.kind === 'spiral')).toBe(false);
 
     const wounded = bossPart(boss, 'core')!;
-    const before = bossHpBarLayout(boss).extraFill;
+    const before = bossHpBarLayout(boss).bars[1]!.fill;
     resolveBossBullet(boss, { x: wounded.worldX, y: wounded.worldY, w: 4, h: 12 }, 40);
-    expect(bossHpBarLayout(boss).extraFill).toBeLessThan(before);
-    expect(bossHpBarLayout(boss).mainFill).toBe(0);
+    expect(bossHpBarLayout(boss).active).toBe(1);
+    expect(bossHpBarLayout(boss).bars[1]!.fill).toBeLessThan(before);
+    expect(bossHpBarLayout(boss).bars[0]!.fill).toBe(0);
 
     const death = killCore(boss);
     expect(death.score).toBe(30000);
     expect(boss.phase).toBe('death');
-    expect(bossHpBarLayout(boss).extraFill).toBe(0);
+    expect(shownBar(bossHpBarLayout(boss)).fill).toBe(0);
     expect(bossBarRatio(boss)).toBe(0);
   });
 });
 
+function shownBar(layout: BossHpBarLayout) {
+  return layout.bars[layout.active]!;
+}
+
 describe('boss HP bar segments', () => {
-  it('draws easy as one segment and keeps hard phase-3 HP in its own slot', () => {
+  it('draws easy as one full bar and hard phase 3 as a second full bar', () => {
     const easy = createBoss(cfg);
-    expect(bossHpBarLayout(easy)).toMatchObject({ extraSpan: 0, extraFill: 0 });
-    expect(bossHpBarLayout(easy).mainFill).toBeCloseTo(1);
+    const easyBar = bossHpBarLayout(easy);
+    expect(easyBar.bars).toHaveLength(1);
+    expect(easyBar.active).toBe(0);
+    expect(shownBar(easyBar)).toMatchObject({ id: 'main', style: 'main' });
+    expect(shownBar(easyBar).fill).toBeCloseTo(1);
 
     const hardCfg = prepareBossConfig(stage1.boss, 'hard');
     const hard = createBoss(hardCfg, { gates: [HARD_PHASE_GATE] });
     const layout = bossHpBarLayout(hard);
-    expect(layout.extraSpan).toBeCloseTo(240 / 1080);
-    expect(layout.extraFill).toBeCloseTo(1);
-    expect(layout.mainFill).toBeCloseTo(1);
+    expect(layout.bars.map((bar) => bar.style)).toEqual(['main', 'extra']);
+    expect(layout.active).toBe(0);
+    expect(shownBar(layout).fill).toBeCloseTo(1);
+    expect(layout.bars[1]!.fill).toBeCloseTo(1);
+    expect(layout.bars[0]!.maxHp).toBeCloseTo(layout.bars[1]!.maxHp);
 
     updateBoss(hard, hardCfg.enterDuration);
     const left = bossPart(hard, 'turretL')!;
     resolveBossBullet(hard, { x: left.worldX, y: left.worldY, w: 4, h: 12 }, left.hp);
     const after = bossHpBarLayout(hard);
-    expect(after.extraFill).toBeCloseTo(1);
-    expect(after.mainFill).toBeCloseTo(700 / 840);
-    expect(bossBarRatio(hard)).toBeCloseTo((700 + 240) / 1080);
+    expect(after.active).toBe(0);
+    expect(after.bars[1]!.fill).toBeCloseTo(1);
+    expect(after.bars[0]!.fill).toBeCloseTo(700 / 840);
+    expect(bossBarRatio(hard)).toBeCloseTo((700 + 840) / 1680);
 
-    const span = 240 / 1080;
-    expect(bossIntroBarLayout(0, span)).toMatchObject({ mainFill: 0, extraFill: 0 });
-    const mid = bossIntroBarLayout(0.5, span);
-    expect(mid.extraFill).toBe(0);
-    expect(mid.mainFill).toBeCloseTo(0.5 / (1 - span));
-    const late = bossIntroBarLayout(1 - span / 2, span);
-    expect(late.mainFill).toBeCloseTo(1);
-    expect(late.extraFill).toBeCloseTo(0.5);
-    expect(bossIntroBarLayout(1, 0)).toEqual({ mainFill: 1, extraSpan: 0, extraFill: 0 });
+    const specs = bossBarSpecs(hardCfg, [HARD_PHASE_GATE]);
+    expect(bossIntroBarLayout(0, specs).active).toBe(0);
+    expect(shownBar(bossIntroBarLayout(0, specs)).fill).toBe(0);
+    const mid = bossIntroBarLayout(0.25, specs);
+    expect(mid.active).toBe(0);
+    expect(mid.bars[0]!.fill).toBeCloseTo(0.5);
+    expect(mid.bars[1]!.fill).toBe(0);
+    const late = bossIntroBarLayout(0.75, specs);
+    expect(late.active).toBe(1);
+    expect(late.bars[0]!.fill).toBeCloseTo(1);
+    expect(late.bars[1]!.style).toBe('extra');
+    expect(late.bars[1]!.fill).toBeCloseTo(0.5);
+    const easyIntro = bossIntroBarLayout(1, bossBarSpecs(cfg, []));
+    expect(easyIntro.bars).toEqual([
+      expect.objectContaining({ id: 'main', style: 'main', fill: 1 }),
+    ]);
+    expect(easyIntro.active).toBe(0);
+  });
+
+  it('advances a third full-width bar from a bars row, without a HUD special case', () => {
+    const three: BossDef = {
+      ...cfg,
+      bars: [
+        { id: 'main', style: 'main' },
+        { id: 'extra', style: 'extra', gate: HARD_PHASE_GATE },
+        { id: 'enrage2', style: 'extra', gate: HARD_PHASE_GATE },
+      ],
+      phases: [
+        ...cfg.phases,
+        {
+          id: 'enrage2',
+          targets: ['core'],
+          gate: HARD_PHASE_GATE,
+          segmentHp: 100,
+          attacks: [],
+          look: { hull: 'open', glow: { part: 'core', color: 'yellow' } },
+          bar: 'enrage2',
+        },
+      ],
+    };
+    expect(bossBarSpecs(three, []).map((bar) => bar.id)).toEqual(['main']);
+    const boss = createBoss(three, { gates: [HARD_PHASE_GATE] });
+    expect(boss.phases.map((phase) => phase.id)).toEqual(['phase1', 'phase2', 'phase3', 'enrage2']);
+    expect(bossHpBarLayout(boss).bars.map((bar) => bar.id)).toEqual(['main', 'extra', 'enrage2']);
+    const specs = bossBarSpecs(three, [HARD_PHASE_GATE]);
+    expect(specs.map((bar) => bar.maxHp)).toEqual([840, 840, 100]);
+    const total = specs.reduce((sum, bar) => sum + bar.maxHp, 0);
+    const intoThird = (specs[0]!.maxHp + specs[1]!.maxHp + specs[2]!.maxHp / 2) / total;
+    const preview = bossIntroBarLayout(intoThird, specs);
+    expect(preview.active).toBe(2);
+    expect(preview.bars[2]!.fill).toBeCloseTo(0.5);
+    expect(preview.bars[0]!.fill).toBe(1);
+    expect(preview.bars[1]!.fill).toBe(1);
+
+    updateBoss(boss, three.enterDuration);
+    for (const id of ['turretL', 'turretR'] as const) {
+      const part = bossPart(boss, id)!;
+      resolveBossBullet(boss, { x: part.worldX, y: part.worldY, w: 4, h: 12 }, part.hp);
+    }
+    updateBoss(boss, TRANSITION);
+    const core = bossPart(boss, 'core')!;
+    resolveBossBullet(boss, { x: core.worldX, y: core.worldY, w: 4, h: 12 }, core.hp);
+    updateBoss(boss, P3.transition);
+    expect(boss.phase).toBe('phase3');
+    expect(bossHpBarLayout(boss).active).toBe(1);
+    expect(shownBar(bossHpBarLayout(boss)).fill).toBeCloseTo(1);
+    resolveBossBullet(boss, { x: core.worldX, y: core.worldY, w: 4, h: 12 }, core.hp);
+    expect(boss.phase).toBe('enrage2');
+    const third = bossHpBarLayout(boss);
+    expect(third.active).toBe(2);
+    expect(shownBar(third)).toMatchObject({ id: 'enrage2', style: 'extra', fill: 1 });
+    expect(third.bars[0]!.fill).toBe(0);
+    expect(third.bars[1]!.fill).toBe(0);
+    expect(core.hp).toBe(100);
   });
 });

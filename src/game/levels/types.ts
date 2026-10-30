@@ -308,6 +308,32 @@ export interface BossLaserAttack {
 export type BossAttack = BossGunAttack | BossCycleAttack | BossLaserAttack;
 
 /**
+ * Draw style of one full-width HP bar. `main` is the red bar. `extra` is the
+ * yellow overload bar. Later bars reuse `extra` unless a new style is added
+ * here and in `drawBossHpBar`.
+ */
+export type BossBarStyle = 'main' | 'extra';
+
+/**
+ * One row of the ordered HP-bar list (`BossDef.bars`).
+ * The HUD draws a single full-width bar at a time, in this order. Append a
+ * row (and point phases at its `id`) to add a 4th or 5th bar. The runner
+ * does not special-case a count of two.
+ *
+ * Bar 0 is the spawned part pool. Every later bar's HP is the sum of
+ * `segmentHp` on the phases whose `bar` is this id.
+ */
+export interface BossBarDef {
+  id: string;
+  style: BossBarStyle;
+  /**
+   * Dropped unless the run's gates include it. Phases on this row should
+   * use the same `gate`, which is what `enabledBossPhases` actually filters.
+   */
+  gate?: string;
+}
+
+/**
  * One fight phase. Phases run in order; a gated phase runs only when the run's
  * difficulty profile lists its gate (`DifficultyProfile.bossGates`).
  */
@@ -333,8 +359,13 @@ export interface BossPhaseDef {
     /** Code-drawn smoke. No hitbox. */
     smoke?: boolean;
   };
-  /** `extra` phases get their own slot on the HP bar (Hard phase 3). */
-  bar: 'main' | 'extra';
+  /**
+   * Id of the `BossDef.bars` row this phase feeds.
+   * `main` is the first red bar. `extra` is the yellow overload bar.
+   * A new id needs a matching `bars` row (the runner appends a yellow row
+   * if the id is missing, so the HP still shows).
+   */
+  bar: string;
 }
 
 export interface BossDef {
@@ -350,6 +381,12 @@ export interface BossDef {
   drift: { amp: number; period: number };
   hull: { w: number; h: number };
   parts: BossPartDef[];
+  /**
+   * Ordered HP bars. Omit to derive one row per distinct `phase.bar`, in
+   * phase order: id `main` is red, every other id is yellow. A phase gate
+   * shared by the whole row is copied onto the derived row.
+   */
+  bars?: readonly BossBarDef[];
   phases: BossPhaseDef[];
   /** Unused. Phase changes and death do not convert or clear enemy bullets. */
   bulletsToScore: number;

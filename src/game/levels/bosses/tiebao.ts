@@ -2,7 +2,7 @@
  * Stage 2 boss 铁堡. An armored munitions train on three fixed rails.
  * The rail clock and the six weapon modes live in `systems/tiebao.ts`.
  * Phases only decide which part takes damage. Easy and Medium end when the
- * core dies. Hard revives the core for the overload segment.
+ * core dies. Hard revives the core on a full second HP bar.
  */
 
 import {
@@ -72,6 +72,10 @@ export const TIEBAO: BossDef = {
       hp: TIEBAO_CORE_HP,
       score: TIEBAO_CORE_SCORE,
     },
+  ],
+  bars: [
+    { id: 'main', style: 'main' },
+    { id: 'extra', style: 'extra', gate: HARD_PHASE_GATE },
   ],
   phases: [
     {

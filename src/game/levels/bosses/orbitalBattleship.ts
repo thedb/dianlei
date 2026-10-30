@@ -4,7 +4,7 @@
  *
  * Phase 1: two turrets and the hull guns. Killing one turret speeds the other.
  * Phase 2: the core opens and alternates the spiral and a fast aimed volley.
- * Phase 3 (Hard only): the core comes back on its own HP segment with the
+ * Phase 3 (Hard only): the core comes back on a full second HP bar with the
  * ring, the sweeping laser, gap shots, and a half-HP enrage.
  *
  * The generic runner is `systems/boss.ts`; nothing there knows these ids.
@@ -58,6 +58,10 @@ export const ORBITAL_BATTLESHIP: BossDef = {
       onDestroy: 'fall',
     },
     { id: 'core', offset: { x: 0, y: 10 }, radius: 22, hp: 560, score: 30000 },
+  ],
+  bars: [
+    { id: 'main', style: 'main' },
+    { id: 'extra', style: 'extra', gate: HARD_PHASE_GATE },
   ],
   phases: [
     {

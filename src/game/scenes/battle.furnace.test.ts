@@ -92,7 +92,7 @@ describe('stage 3 on real assets', () => {
     scene.update(DT, makeInput());
     const info = scene.getDebugInfo!();
     expect(info.bossPhase3).toBe(true);
-    expect(info.bossMaxHp).toBeCloseTo(728 + 234, 6);
+    expect(info.bossMaxHp).toBeCloseTo(728 + 728, 6);
     expect(() => play(scene, 40, 9)).not.toThrow();
     scene.exit?.();
   });

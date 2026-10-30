@@ -871,8 +871,11 @@ export const OBSIDIAN_FRAME_SCORE = 40000;
 export const OBSIDIAN_HALF_RATIO = 0.5;
 /** Direct hits on the fuselage during phase 2. Locks and outer blades are full. */
 export const OBSIDIAN_BODY_CHIP = 0.5;
-/** Draft Hard overload HP, before the 1.30 scale. Revives `frame` only. */
-export const OBSIDIAN_OVERLOAD_HP = 360;
+/**
+ * Hard overload HP, before the 1.30 scale. A full second bar: the same pool
+ * as `OBSIDIAN_MAIN_HP`. Revives `frame` only.
+ */
+export const OBSIDIAN_OVERLOAD_HP = OBSIDIAN_MAIN_HP;
 /** Folded → half and half → open. Invulnerable, no fire. Bullets in flight stay. */
 export const OBSIDIAN_DEPLOY_TIME = 1.1;
 /** Overload beat. Same rules, a hair longer than the blade deploys. */
@@ -1172,7 +1175,9 @@ export const DIFFICULTY_HP_HARD = 1.3;
 /**
  * Spiral ↔ aimed pattern (scheme E). It now plays on phase 2 for every
  * difficulty. Hard phase 3 plays the old phase-2 ring and laser instead.
- * HP is still the hard-only extra segment, authored before the HP scale.
+ * HP is the hard-only second bar, authored before the HP scale. It matches
+ * the main pool (turrets 140 + 140 and core 560) so the bar reads as a full
+ * second life, not a short stub.
  *
  * Speeds are flight speeds in pixels/second (not multiplied by
  * `ENEMY_BULLET_SPEED_SCALE` again). The previous spiral used the small
@@ -1180,7 +1185,7 @@ export const DIFFICULTY_HP_HARD = 1.3;
  * every 1.15s. Steady-state spiral count stays under `ENEMY_BULLET_CAP`:
  * 4 / 0.12 shots per second, about 3 seconds on screen at 180 px/s.
  */
-export const BOSS_PHASE3_HP = 240;
+export const BOSS_PHASE3_HP = 840;
 export const BOSS_PHASE3_TRANSITION = 1.2;
 export const BOSS_PHASE3_PATTERN_HOLD = 3;
 export const BOSS_PHASE3_SPIRAL_INTERVAL = 0.12;
@@ -1329,12 +1334,14 @@ export const TIEBAO_FROG_AT = 0.9;
  */
 export const TIEBAO_OVERLOAD_PERIOD = 6;
 export const TIEBAO_OVERLOAD_MOVE = 1.2;
-export const TIEBAO_OVERLOAD_HP = 240;
 export const TIEBAO_OVERLOAD_TRANSITION = 1.2;
 
 export const TIEBAO_ROOF_HP = 140;
 export const TIEBAO_ROOF_SCORE = 5000;
 export const TIEBAO_CORE_HP = 560;
+/** Roof guns plus the core. Hard overload is a second bar of this same pool. */
+export const TIEBAO_MAIN_HP = TIEBAO_ROOF_HP * 2 + TIEBAO_CORE_HP;
+export const TIEBAO_OVERLOAD_HP = TIEBAO_MAIN_HP;
 export const TIEBAO_CORE_SCORE = 30000;
 export const TIEBAO_ROOF_RADIUS = 14;
 export const TIEBAO_CORE_RADIUS = 18;
@@ -1511,8 +1518,10 @@ export const FURNACE_CORE_HP = 280;
 export const FURNACE_CORE_SCORE = 30000;
 /** Core hit circle, the open throat's half width, and the homing radius. */
 export const FURNACE_CORE_RADIUS = 28;
+/** Pods plus the core. Hard overload is a second bar of this same pool. */
+export const FURNACE_MAIN_HP = FURNACE_POD_HP * 4 + FURNACE_CORE_HP;
 /** Hard only, before the Hard scale. The core's 30000 waits for this segment. */
-export const FURNACE_OVERLOAD_HP = 180;
+export const FURNACE_OVERLOAD_HP = FURNACE_MAIN_HP;
 /** Pods cleared → core, and core → overload. Invulnerable, no fire, no bomb. */
 export const FURNACE_PHASE_INVULN = 1.2;
 

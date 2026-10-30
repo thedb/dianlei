@@ -124,7 +124,7 @@ describe('炉心 config', () => {
     ]);
   });
 
-  it('scales HP without rounding: Easy 560, Medium 644, Hard 728 + 234', () => {
+  it('scales HP without rounding: Easy 560, Medium 644, Hard 728 + 728', () => {
     const total = (d: 'easy' | 'medium' | 'hard') =>
       prepareBossConfig(FURNACE, d).parts.reduce((sum, p) => sum + p.hp, 0);
     expect(total('easy')).toBe(4 * FURNACE_POD_HP + FURNACE_CORE_HP);
@@ -463,7 +463,10 @@ describe('炉心 endings', () => {
     const around = world();
     const boss = hard();
     toCore(boss, around);
-    expect(bossHpBarLayout(boss).extraSpan).toBeGreaterThan(0);
+    const layout = bossHpBarLayout(boss);
+    expect(layout.bars.map((bar) => bar.id)).toEqual(['main', 'extra']);
+    expect(layout.active).toBe(0);
+    expect(layout.bars[1]!.maxHp).toBeCloseTo(layout.bars[0]!.maxHp);
     const first = killCore(boss, around);
     expect(first.reduce((sum, ev) => sum + ev.score, 0)).toBe(0);
     expect(boss.stage).toBe('transition');
