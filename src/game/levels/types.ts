@@ -22,7 +22,10 @@ export type MoveKind =
   | 'slow_push'
   | 'ground'
   | 'planted'
-  | 'strafe';
+  | 'strafe'
+  | 'wake_climb'
+  | 'cross_skim'
+  | 'radar_paint';
 
 /**
  * How a ground unit enters.
@@ -71,7 +74,22 @@ export type Move =
       run: number;
       enterAngle: number;
       exitAngle: number;
-    };
+    }
+  /**
+   * Climb from below the screen up to `stopY`, hold, then leave upward.
+   * The fire clock stays held until the center is on screen.
+   */
+  | { kind: 'wake_climb'; speed: number; stopY: number; hold: number }
+  /**
+   * Flat run across the screen from `side` at altitude `y`.
+   * The matching shot is a short unaimed splash, not an aimed burst.
+   */
+  | { kind: 'cross_skim'; side: 'left' | 'right'; y: number; speed: number }
+  /**
+   * Drop to `stopY`, paint a lock line for `paint` seconds (at least
+   * `RADAR_PAINT_MIN`), then a volley along the frozen axis.
+   */
+  | { kind: 'radar_paint'; stopY: number; paint: number; hold: number };
 
 /** Shot timing shared by every non-ring fire. */
 interface ShotTiming {
@@ -89,7 +107,22 @@ interface ShotTiming {
  */
 export type Fire =
   | { kind: 'none' }
-  | ({ kind: 'aimed1' | 'aimed3burst' | 'missile' | 'aimed_fast3' | 'fixed2' } & ShotTiming)
+  | ({
+      kind: 'aimed1' | 'aimed3burst' | 'missile' | 'aimed_fast3' | 'fixed2' | 'splash';
+    } & ShotTiming & { spread?: number })
+  /**
+   * One drop: a warning column, then a straight lethal water lane.
+   * Not a bullet fan. Handled by `systems/seaStrike.ts`.
+   */
+  | ({
+      kind: 'torpedo';
+      warn: number;
+      life: number;
+      length: number;
+      width: number;
+    } & ShotTiming)
+  /** Red-circle telegraph, then a fragment ring. Buildings only. */
+  | { kind: 'airburst'; interval: number; delay: number; count: number; speed: number }
   | { kind: 'fan3' | 'fan5' | 'fan7wide'; spread: number; interval: number; firstDelay?: number }
   | { kind: 'ring8' | 'ring16'; interval: number; rotStep: number }
   | { kind: 'spiral'; interval: number; arms: number; rotStep: number; speed?: number }
@@ -148,6 +181,7 @@ export interface SpawnGroup {
  * Wave-table section a wave belongs to. A label only; scenery comes from `StageData.maps`.
  * Stage 1 uses `ground` / `coast` / `base`. Stage 2 uses `outskirts` / `runway` / `woods`.
  * Stage 3 uses `valley` / `dock` / `crossing` / `scorch`.
+ * Stage 4 uses `deck` / `fleet` / `swell` / `wreck`. A label only; it does not pick a map.
  */
 export type StageSection =
   | 'ground'
@@ -159,7 +193,11 @@ export type StageSection =
   | 'valley'
   | 'dock'
   | 'crossing'
-  | 'scorch';
+  | 'scorch'
+  | 'deck'
+  | 'fleet'
+  | 'swell'
+  | 'wreck';
 
 /** One map in a stage's pre-boss run. */
 export interface StageMapEntry {
@@ -183,7 +221,7 @@ export interface StageMaps {
 /**
  * When a story line is shown.
  * `cutscene` starts at the battle's `cutsceneAt` (黑曜 beam end, `s4_ufo`).
- * `mid` is still not on a clock (`s4_wreck` waits for the stage-4 waves).
+ * `mid` draws when `t` is set (`s4_wreck` at `STAGE4_WRECK_AT`). Without `t` it draws nothing.
  */
 export type CaptionAt = 'open' | 'clear' | 'mid' | 'cutscene';
 
@@ -191,6 +229,8 @@ export type CaptionAt = 'open' | 'clear' | 'mid' | 'cutscene';
 export interface StageCaption {
   id: string;
   at: CaptionAt;
+  /** Stage-clock seconds for a `mid` cue. Omit and `mid` draws nothing. */
+  t?: number;
 }
 
 export interface Wave {
@@ -341,7 +381,7 @@ export interface BossDef {
   hullTransfers?: boolean;
 }
 
-export type BuildingType = 'pillbox' | 'fuel_depot' | 'radar_station' | 'sea_gun';
+export type BuildingType = 'pillbox' | 'fuel_depot' | 'radar_station' | 'sea_gun' | 'aa_gun';
 
 /**
  * A destructible building fixed to the tile map (wave table §4.7).
@@ -362,6 +402,23 @@ export interface BuildingPlacement {
    * stage's default building-drop rules.
    */
   drop?: PlacementDrop;
+  /**
+   * Omit to spawn on every difficulty. Same rule as `Wave.difficulties`:
+   * a written list is the only difficulties that spawn this placement.
+   * Filtered before the building scheduler, not inside it.
+   */
+  difficulties?: readonly WaveDifficulty[];
+}
+
+/**
+ * One wreck floater anchored to a map cell. A prop pool, not an `EnemyType`:
+ * no guns, no drop, not in the kill rate. `row` / `col` are the cell.
+ */
+export interface WreckFloatAnchor {
+  id: string;
+  map: string;
+  row: number;
+  col: number;
 }
 
 /**
@@ -389,6 +446,8 @@ export interface StageData {
   /** Shielded floaters. Omitted stages spawn none. Not part of the ship count. */
   riskCrates?: readonly RiskCrateSpawn[];
   buildings: BuildingPlacement[];
+  /** Scroll-anchored debris. Omitted stages spawn none. Not part of the ship count. */
+  wreckFloats?: readonly WreckFloatAnchor[];
   boss: BossDef;
   /** Building drop rules. Omit for `BUILDING_DROP_RULES`. */
   buildingDrops?: readonly DropRule[];

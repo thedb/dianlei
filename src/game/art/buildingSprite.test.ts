@@ -5,7 +5,7 @@ import { buildingSize } from '@/game/entities/building';
 import { buildBuildingArt } from './buildingSprite';
 import type { SpriteData } from './types';
 
-const TYPES: BuildingType[] = ['pillbox', 'fuel_depot', 'radar_station', 'sea_gun'];
+const TYPES: BuildingType[] = ['pillbox', 'fuel_depot', 'radar_station', 'sea_gun', 'aa_gun'];
 const FOAM = new Set<number>([COLOR.WATER_FOAM, COLOR.WATER_SHALLOW]);
 
 /** Solid pixels touching transparency or foam, matching the rim rule. */
@@ -31,6 +31,7 @@ describe('building sprites', () => {
       fuel_depot: [48, 32],
       radar_station: [32, 32],
       sea_gun: [32, 32],
+      aa_gun: [32, 32],
     };
     for (const type of TYPES) {
       const { intact, wreck } = buildBuildingArt(type);

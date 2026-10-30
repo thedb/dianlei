@@ -27,6 +27,11 @@ import {
   SIDE_ARC_RADIUS,
   V_DIVE_EXIT_DEG,
   TURRET_TURN_RATE,
+  WAKE_CLIMB_DRIFT,
+  WAKE_CLIMB_EXIT_SPEED,
+  RADAR_DRIFT,
+  RADAR_ENTER_SPEED,
+  RADAR_EXIT_SPEED,
   TANK_ENTRY_SPEED,
   TANK_DIAG_VX,
   TANK_DIAG_CLIMB,
@@ -70,6 +75,8 @@ export interface Enemy extends Poolable {
   orbitAngle: number;
   /** Turret / tank barrel angle in radians (0 = right, +y down). */
   aimAngle: number;
+  /** Radar paint froze this aim. Later frames do not steer it. */
+  lockFrozen: boolean;
   /** Accumulated ring-pattern rotation in degrees. */
   patternRot: number;
 
@@ -111,6 +118,7 @@ export function createEnemy(): Enemy {
     phase: 'enter',
     orbitAngle: -Math.PI / 2,
     aimAngle: Math.PI / 2,
+    lockFrozen: false,
     patternRot: 0,
     fire: { kind: 'none' },
     fireTimer: 0,
@@ -143,6 +151,7 @@ export function createEnemy(): Enemy {
       this.phase = 'enter';
       this.orbitAngle = -Math.PI / 2;
       this.aimAngle = Math.PI / 2;
+      this.lockFrozen = false;
       this.patternRot = 0;
       this.fire = { kind: 'none' };
       this.fireTimer = 0;
@@ -192,6 +201,7 @@ export function spawnEnemy(
   enemy.phase = 'enter';
   enemy.orbitAngle = -Math.PI / 2;
   enemy.aimAngle = Math.PI / 2;
+  enemy.lockFrozen = false;
   enemy.patternRot = 0;
   enemy.fire = fire;
   enemy.fireTimer = 0;
@@ -305,6 +315,8 @@ export function enemyTravelHeading(enemy: Enemy): number | null {
   if (move.kind === 'step_slide') return stepSlidePose(move, enemy.moveTimer).heading;
   if (move.kind === 'dive_once') return diveOnceOffset(move, enemy.moveTimer).heading;
   if (move.kind === 'strafe') return strafePose(move, enemy.startY, enemy.moveTimer).heading;
+  if (move.kind === 'wake_climb') return 180;
+  if (move.kind === 'cross_skim') return move.side === 'left' ? 90 : 270;
   return null;
 }
 
@@ -314,7 +326,9 @@ export function enemyTravelHeading(enemy: Enemy): number | null {
  * also wait until x is inside the field window. The two downward moves
  * stop the clock again once they pass the bottom edge, so a fast exit
  * cannot shoot from under the screen. `strafe` only runs its clock on the
- * level leg.
+ * level leg. `wake_climb` waits until the center is on screen.
+ * `cross_skim` waits until x is inside the field. `radar_paint` waits
+ * out the lock.
  */
 export function enemyFireClockHeld(enemy: Enemy): boolean {
   if (enemy.y < 8) return true;
@@ -322,6 +336,12 @@ export function enemyFireClockHeld(enemy: Enemy): boolean {
   const kind = move.kind;
   if (move.kind === 'strafe') {
     return strafePose(move, enemy.startY, enemy.moveTimer).leg !== 'run';
+  }
+  if (move.kind === 'wake_climb' && enemy.y > LOGICAL_H - 8) return true;
+  if (move.kind === 'cross_skim' && (enemy.x < 12 || enemy.x > LOGICAL_W - 12)) return true;
+  if (move.kind === 'radar_paint') {
+    if (enemy.phase === 'enter') return true;
+    if (enemy.phase === 'hold' && enemy.moveTimer < move.paint) return true;
   }
   if (
     (kind === 'rear_diag' || kind === 'step_slide' || kind === 'dive_once') &&
@@ -384,7 +404,16 @@ export function updateEnemy(
 
   updateEnemyMovement(enemy, dt, scrollDelta, terrain);
 
-  if (fireUsesBarrel(enemy.fire)) {
+  if (enemy.move.kind === 'radar_paint') {
+    const painting = enemy.phase === 'hold' && enemy.moveTimer < enemy.move.paint;
+    if (painting) {
+      enemy.aimAngle = Math.atan2(playerY - enemy.y, playerX - enemy.x);
+      enemy.lockFrozen = false;
+    } else if (enemy.phase !== 'enter' && !enemy.lockFrozen) {
+      enemy.aimAngle = Math.atan2(playerY - enemy.y, playerX - enemy.x);
+      enemy.lockFrozen = true;
+    }
+  } else if (fireUsesBarrel(enemy.fire)) {
     steerAim(enemy, playerX, playerY, dt, TURRET_TURN_RATE);
   } else if (ENEMY_DEFS[enemy.type].snapAim) {
     enemy.aimAngle = Math.atan2(playerY - enemy.y, playerX - enemy.x);
@@ -600,6 +629,47 @@ function updateEnemyMovement(
         }
       } else {
         enemy.y += SLOW_PUSH_EXIT_SPEED * dt;
+      }
+      break;
+    }
+
+    case 'wake_climb': {
+      if (enemy.phase === 'enter') {
+        enemy.y -= move.speed * dt;
+        if (enemy.y <= move.stopY) {
+          enemy.y = move.stopY;
+          enemy.phase = 'hold';
+          enemy.moveTimer = 0;
+        }
+      } else if (enemy.phase === 'hold') {
+        enemy.x = enemy.startX + Math.sin(enemy.moveTimer * 1.6) * WAKE_CLIMB_DRIFT;
+        if (enemy.moveTimer >= move.hold) enemy.phase = 'exit';
+      } else {
+        enemy.y -= WAKE_CLIMB_EXIT_SPEED * dt;
+      }
+      break;
+    }
+
+    case 'cross_skim': {
+      const dir = move.side === 'left' ? 1 : -1;
+      enemy.x += dir * move.speed * dt;
+      enemy.y = move.y;
+      break;
+    }
+
+    case 'radar_paint': {
+      if (enemy.phase === 'enter') {
+        enemy.y += RADAR_ENTER_SPEED * dt;
+        if (enemy.y >= move.stopY) {
+          enemy.y = move.stopY;
+          enemy.phase = 'hold';
+          enemy.moveTimer = 0;
+        }
+      } else if (enemy.phase === 'hold') {
+        enemy.x = enemy.startX + Math.sin(enemy.moveTimer * 1.3) * RADAR_DRIFT;
+        if (enemy.moveTimer >= move.hold) enemy.phase = 'exit';
+      } else {
+        enemy.y -= RADAR_EXIT_SPEED * dt;
       }
       break;
     }

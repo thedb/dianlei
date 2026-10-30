@@ -9,7 +9,13 @@
 import type { Enemy } from '@/game/entities/enemy';
 import { enemyFireClockHeld, shouldEnemyFire } from '@/game/entities/enemy';
 import { executeFirePattern, type BulletSpawner } from '@/game/entities/enemyBullet';
-import { fireBurst, firePattern, fireRotStep, fireUsesBarrel } from '@/game/systems/danmaku';
+import {
+  fireBurst,
+  firePattern,
+  fireRotStep,
+  fireUsesBarrel,
+  isBulletFire,
+} from '@/game/systems/danmaku';
 import { AIMED_BURST_GAP, AIMED_MIN_DIST } from '@/game/config';
 
 function farEnough(enemy: Enemy, playerX: number, playerY: number): boolean {
@@ -42,6 +48,10 @@ export function updateEnemyWeapons(
   if (!enabled || enemy.fire.kind === 'none') return;
 
   if (enemy.burstLeft > 0) {
+    if (!isBulletFire(enemy.fire)) {
+      enemy.burstLeft = 0;
+      return;
+    }
     enemy.burstTimer += dt;
     if (enemy.burstTimer >= AIMED_BURST_GAP) {
       enemy.burstTimer -= AIMED_BURST_GAP;

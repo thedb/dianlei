@@ -96,11 +96,26 @@ export const FIRE_PRESETS = {
   ring8: { family: 'ring', shape: 'ring', count: 8, bullet: 'large' },
   ring16: { family: 'ring', shape: 'ring', count: 16, bullet: 'large' },
   spiral: { family: 'spiral', shape: 'ring', bullet: 'small' },
+  /** Short downward splash for `cross_skim`. Not aimed at the player. */
+  splash: {
+    family: 'fan',
+    shape: 'fan',
+    count: 5,
+    spreadDeg: 64,
+    aim: 'down',
+    bullet: 'small',
+    speed: 175,
+  },
 } as const satisfies Record<string, FirePreset>;
 
 export type FirePresetKind = keyof typeof FIRE_PRESETS;
 
-type ActiveFire = Exclude<Fire, { kind: 'none' }>;
+/** Bullet patterns. Torpedo lanes and flak telegraphs are not rows here. */
+type ActiveFire = Exclude<Fire, { kind: 'none' | 'torpedo' | 'airburst' }>;
+
+export function isBulletFire(fire: Fire): fire is ActiveFire {
+  return fire.kind !== 'none' && fire.kind !== 'torpedo' && fire.kind !== 'airburst';
+}
 
 /** Pattern parameters behind a fire entry. */
 export function firePattern(fire: ActiveFire): PatternSpec {
@@ -126,25 +141,25 @@ export function fireFirstDelay(fire: Fire, interval: number): number {
 
 /** Volleys per trigger (aimed3burst = 3). */
 export function fireBurst(fire: Fire): number {
-  if (fire.kind === 'none') return 1;
+  if (!isBulletFire(fire)) return 1;
   return firePattern(fire).burst ?? 1;
 }
 
 /** Ring rotation step in degrees per volley, or 0 for patterns that do not turn. */
 export function fireRotStep(fire: Fire): number {
-  if (fire.kind === 'none') return 0;
+  if (!isBulletFire(fire)) return 0;
   return 'rotStep' in fire ? (fire.rotStep ?? 0) : 0;
 }
 
 /** True when the volley follows the shooter's barrel instead of the player. */
 export function fireUsesBarrel(fire: Fire): boolean {
-  if (fire.kind === 'none') return false;
+  if (!isBulletFire(fire)) return false;
   return firePattern(fire).aim === 'barrel';
 }
 
 /** Offset a ship's first shot so a formation doesn't fire on one frame. Rings keep their clock. */
 export function withFireStagger(fire: Fire, extra: number): Fire {
-  if (extra === 0 || fire.kind === 'none') return fire;
+  if (extra === 0 || !isBulletFire(fire)) return fire;
   const family = fireFamily(fire);
   if (family === 'ring' || family === 'spiral') return fire;
   const timed = fire as Extract<Fire, { firstDelay?: number }>;
@@ -206,7 +221,7 @@ export function executeFirePattern(
 ): void {
   const options: FirePatternOptions =
     typeof rotationOffset === 'number' ? { rotation: rotationOffset } : rotationOffset;
-  if (fire.kind === 'none') return;
+  if (!isBulletFire(fire)) return;
   if (spawner.getBulletCount() >= ENEMY_BULLET_CAP) return;
 
   const spec = firePattern(fire);
@@ -233,7 +248,12 @@ export function executeFirePattern(
       const count = spec.count ?? 1;
       const spreadDeg = ('spread' in fire ? fire.spread : undefined) ?? spec.spreadDeg ?? 0;
       const spreadRad = (spreadDeg * Math.PI) / 180;
-      const base = spec.aim === 'down' ? Math.PI / 2 : Math.atan2(playerY - y, playerX - x);
+      const base =
+        spec.aim === 'down'
+          ? Math.PI / 2
+          : spec.aim === 'barrel' && options.aimAngle !== undefined
+            ? options.aimAngle
+            : Math.atan2(playerY - y, playerX - x);
       const step = count > 1 ? spreadRad / (count - 1) : 0;
       for (let i = 0; i < count; i++) {
         const angle = base + (i - (count - 1) / 2) * step;

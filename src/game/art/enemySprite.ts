@@ -588,6 +588,33 @@ function drawStrike(): EnemyArt {
   return art(g, twinNozzles(g, 6));
 }
 
+/** Torpedo plane. Narrower than the bomber, with a pale torpedo under each wing root. */
+function drawTorpedo(): EnemyArt {
+  const g = drawFighter({
+    w: 48,
+    h: 40,
+    engineRows: 5,
+    wingRows: 12,
+    wingHalf: 18,
+    engineHalf: 7,
+    notch: 4,
+    sweep: 7,
+    noseHalf: 1.2,
+    fuselage: 3.4,
+    dark: true,
+  });
+  for (let y = 18; y <= 34; y++) {
+    plot(g, 18, y, COLOR.PLAYER_PALE_CYAN);
+    plot(g, 19, y, COLOR.WATER_FOAM);
+    plot(g, 28, y, COLOR.WATER_FOAM);
+    plot(g, 29, y, COLOR.PLAYER_PALE_CYAN);
+  }
+  plot(g, 18, 34, COLOR.WATER_SHALLOW);
+  plot(g, 29, 34, COLOR.WATER_SHALLOW);
+  rim(g, ER);
+  return art(g, twinNozzles(g, 5));
+}
+
 const BUILDERS: Record<EnemyType, () => EnemyArt> = {
   small: drawSmall,
   medium: drawMedium,
@@ -601,6 +628,7 @@ const BUILDERS: Record<EnemyType, () => EnemyArt> = {
   risk_crate: drawRiskCrate,
   parked_fighter: drawParkedFighter,
   strike: drawStrike,
+  torpedo: drawTorpedo,
 };
 
 /** Palette-index art for one enemy. Safe to call in unit tests (no canvas). */

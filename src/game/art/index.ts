@@ -12,6 +12,7 @@ export * from './bulletSprite';
 export * from './itemSprite';
 export * from './explosionSprite';
 export * from './buildingSprite';
+export * from './wreckFloatSprite';
 export * from './weaponFx';
 export * from './gunBarrel';
 
@@ -21,6 +22,7 @@ import type { BuildingAssets } from './buildingSprite';
 import type { BulletAssets } from './bulletSprite';
 import type { ItemAssets } from './itemSprite';
 import type { ExplosionAssets } from './explosionSprite';
+import type { WreckFloatArt } from './wreckFloatSprite';
 import type { BackgroundArt } from './mapDraw';
 import type { BossAssets } from './bossSprite';
 
@@ -30,6 +32,7 @@ import { createBuildingAssets } from './buildingSprite';
 import { createBulletAssets } from './bulletSprite';
 import { createItemAssets } from './itemSprite';
 import { createExplosionAssets } from './explosionSprite';
+import { createWreckFloatArt } from './wreckFloatSprite';
 import { createBackgroundArt } from './mapDraw';
 import { createBossAssets } from './bossSprite';
 
@@ -44,6 +47,7 @@ export interface GameAssets {
   bullets: BulletAssets;
   items: ItemAssets;
   explosions: ExplosionAssets;
+  wreckFloat: WreckFloatArt;
   background: BackgroundArt;
   bosses: Record<string, BossAssets>;
 }
@@ -57,6 +61,7 @@ export function createGameAssets(): GameAssets {
     bullets: createBulletAssets(),
     items: createItemAssets(),
     explosions: createExplosionAssets(),
+    wreckFloat: createWreckFloatArt(),
     background: createBackgroundArt(),
     bosses: createBossAssets(),
   };

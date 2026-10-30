@@ -21,7 +21,12 @@ import {
   carrierTakeoffApplies,
   stepCarrierTakeoff,
 } from '@/game/battle/carrierTakeoff';
-import { BuildingScheduler, placeBuildings } from '@/game/entities/building';
+import {
+  BuildingScheduler,
+  placeBuildings,
+  placementsForDifficulty,
+} from '@/game/entities/building';
+import { placeWreckFloats, WreckFloatScheduler } from '@/game/entities/wreckFloat';
 import { Scroller, backgroundFade } from '@/game/systems/background';
 import { buildStageTrack, trackFinished } from '@/game/maps/track';
 import { buildPreviewTrack } from '@/game/maps/preview';
@@ -113,11 +118,18 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       );
       b.stage = stage;
       // First stage-RNG draw of the run: which exclusive building drops M.
-      b.fixedDrops = resolvePlacementDrops(stage.buildings, b.rng);
+      // Only buildings this difficulty actually spawns may win the roll, so a
+      // hard run cannot lock `s4-fleet-mate` onto B05.
+      const spawnedBuildings = placementsForDifficulty(stage.buildings, runDifficulty(b));
+      b.fixedDrops = resolvePlacementDrops(spawnedBuildings, b.rng);
       const stageTrack = buildStageTrack(stage);
       b.track = b.rules().track === 'preview' ? buildPreviewTrack(sceneCtx.previewMap) : stageTrack;
       b.buildingScheduler = new BuildingScheduler(
-        placeBuildings(stage.buildings, stageTrack),
+        placeBuildings(spawnedBuildings, stageTrack),
+        stage.warningAt
+      );
+      b.wreckFloatScheduler = new WreckFloatScheduler(
+        placeWreckFloats(stage.wreckFloats ?? [], stageTrack),
         stage.warningAt
       );
       b.scroller = new Scroller(b.track);
@@ -132,6 +144,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       }
       releaseAllPools(b);
       b.buildingScheduler.reset();
+      b.wreckFloatScheduler.reset();
       clearFx(b.fx);
       b.bombWave.active = false;
 

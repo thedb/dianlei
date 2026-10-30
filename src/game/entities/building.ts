@@ -6,7 +6,8 @@
  */
 
 import type { Poolable } from '@/engine/pool';
-import type { BuildingPlacement, BuildingType, Fire } from '@/game/levels/types';
+import type { BuildingPlacement, BuildingType, Fire, WaveDifficulty } from '@/game/levels/types';
+import type { AaProfile } from '@/game/systems/seaStrike';
 import type { BulletSpawner } from '@/game/entities/enemyBullet';
 import { executeFirePattern, fireInterval } from '@/game/systems/danmaku';
 import { footprintOn } from '@/game/maps/terrain';
@@ -19,6 +20,7 @@ import {
   HIT_FLASH_TIME,
   TURRET_TURN_RATE,
   SCORE_BUILDING,
+  AA_GUN_HP,
   BUILDING_HP,
   SEA_GUN_FIRE_INTERVAL,
   BUILDING_FIRE_MIN_Y,
@@ -34,8 +36,32 @@ export interface BuildingSpec {
   cols: number;
   rows: number;
   terrain: BuildingTerrain;
+  /** Body HP before the difficulty scale. Omit to use `BUILDING_HP`. */
+  hp?: number;
   /** Gun on the roof. Barrel patterns track the player at TURRET_TURN_RATE. */
   fire?: Fire;
+}
+
+/** Authored body HP. `aa_gun` does not use the global building HP. */
+export function buildingMaxHp(type: BuildingType): number {
+  return BUILDING_SPECS[type].hp ?? BUILDING_HP;
+}
+
+/**
+ * Placements this difficulty actually fields. Omit `difficulty` and every
+ * placement is kept. A written `difficulties` list is exclusive.
+ * Call this before the scheduler.
+ */
+export function placementsForDifficulty(
+  placements: readonly BuildingPlacement[],
+  difficulty?: WaveDifficulty
+): BuildingPlacement[] {
+  if (!difficulty) return [...placements];
+  const kept = placements.filter((p) => !p.difficulties || p.difficulties.includes(difficulty));
+  // Same members, same order: keep the array so a stage with no filter still
+  // rolls exclusive drops from the authored list.
+  if (kept.length === placements.length) return placements as BuildingPlacement[];
+  return kept;
 }
 
 export const BUILDING_SPECS: Record<BuildingType, BuildingSpec> = {
@@ -47,6 +73,14 @@ export const BUILDING_SPECS: Record<BuildingType, BuildingSpec> = {
     rows: 2,
     terrain: 'water',
     fire: { kind: 'fixed2', interval: SEA_GUN_FIRE_INTERVAL },
+  },
+  /** Stage-4 flak. Red circle, then a fragment ring. Not a downward twin gun. */
+  aa_gun: {
+    cols: 2,
+    rows: 2,
+    terrain: 'water',
+    hp: AA_GUN_HP,
+    fire: { kind: 'airburst', interval: 2.2, delay: 0.9, count: 10, speed: 155 },
   },
 };
 
@@ -240,9 +274,16 @@ function wrapPi(rad: number): number {
   return d;
 }
 
+/** One frame of flak orders. The battle arms a red circle for each. */
+export interface FlakArm {
+  profile: AaProfile;
+  /** Filled with one order when this building's clock fires. */
+  orders: Array<{ x: number; y: number; delay: number; count: number; speed: number }>;
+}
+
 /**
- * Follow the scroll, track and fire (sea gun only). Returns true once the
- * footprint has left the bottom of the screen.
+ * Follow the scroll, track and fire. Sea guns aim. Flak arms a delayed ring
+ * instead of shooting down. Returns true once the footprint has left the bottom.
  * `fireEnabled` is false during the warning.
  */
 export function updateBuilding(
@@ -252,7 +293,8 @@ export function updateBuilding(
   playerX: number,
   playerY: number,
   spawner: BulletSpawner,
-  fireEnabled: boolean
+  fireEnabled: boolean,
+  flak?: FlakArm
 ): boolean {
   const pos = buildingCenter(b.placement, scroll);
   b.x = pos.x;
@@ -260,7 +302,23 @@ export function updateBuilding(
   if (b.hitFlashTimer > 0) b.hitFlashTimer = Math.max(0, b.hitFlashTimer - dt);
 
   const fire = BUILDING_SPECS[b.type].fire;
-  if (!b.wrecked && fire) {
+  if (!b.wrecked && fire?.kind === 'airburst' && flak) {
+    const top = b.y - b.height / 2;
+    if (fireEnabled && top >= BUILDING_FIRE_MIN_Y && b.y <= LOGICAL_H) {
+      b.fireTimer += dt;
+      if (b.fireTimer >= flak.profile.interval) {
+        b.fireTimer -= flak.profile.interval;
+        b.shotsFired++;
+        flak.orders.push({
+          x: playerX,
+          y: playerY,
+          delay: flak.profile.delay,
+          count: flak.profile.count,
+          speed: flak.profile.speed,
+        });
+      }
+    }
+  } else if (!b.wrecked && fire && fire.kind !== 'airburst') {
     const desired = Math.atan2(playerY - b.y, playerX - b.x);
     const maxStep = ((TURRET_TURN_RATE * Math.PI) / 180) * dt;
     const diff = wrapPi(desired - b.aimAngle);

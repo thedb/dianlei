@@ -17,6 +17,7 @@ const TYPES: EnemyType[] = [
   'factory_aa',
   'missile_car',
   'risk_crate',
+  'torpedo',
 ];
 
 describe('enemy sprites', () => {
@@ -66,7 +67,7 @@ describe('enemy sprites', () => {
   });
 
   it('keeps a readable silhouette, red rim, and rear nozzles', () => {
-    const air: EnemyType[] = ['small', 'medium', 'interceptor', 'bomber'];
+    const air: EnemyType[] = ['small', 'medium', 'interceptor', 'bomber', 'torpedo'];
     const ground: EnemyType[] = ['tank', 'turret2', 'factory_aa', 'missile_car'];
     const reds = new Set([
       COLOR.ENEMY_BLACK,

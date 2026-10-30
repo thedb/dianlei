@@ -5,12 +5,13 @@
  */
 
 import {
-  BUILDING_HP,
   ENEMY_BULLET_CAP,
   LOGICAL_W,
   PLAYER_BULLET_SPEED,
   PLAYER_SPAWN_Y,
+  SCORE_WRECK_FLOAT,
   WARNING_BANNER_DELAY,
+  WRECK_FLOAT_HP,
 } from '@/game/config';
 import { scaleHp } from '@/game/difficulty';
 import { terrainBlocksTank } from '@/game/maps/track';
@@ -24,13 +25,22 @@ import { updateItem } from '@/game/entities/item';
 import { pickHomingTarget, updateHomingMissile } from '@/game/entities/homingMissile';
 import {
   buildingBlocksTank,
+  buildingMaxHp,
   spawnBuilding,
   updateBuilding,
   validateBuildingFootprint,
 } from '@/game/entities/building';
+import { spawnWreckFloat, updateWreckFloat } from '@/game/entities/wreckFloat';
+import {
+  aaProfile,
+  armFlakMark,
+  launchTorpedoIfDue,
+  updateFlakMark,
+  updateTorpedoTrack,
+} from '@/game/systems/seaStrike';
 import { updateEnemyWeapons } from '@/game/systems/weapons';
 import { resetVictoryExit } from '@/game/systems/victoryExit';
-import { resetCarrierTakeoff } from './carrierTakeoff';
+import { carrierHoldsClock, resetCarrierTakeoff } from './carrierTakeoff';
 import { warningBulletAlpha } from '@/game/systems/background';
 import { releaseAllPools, runDifficulty, runProfile, type Battle } from './context';
 import { clearFx, resetShake } from './fx';
@@ -84,7 +94,9 @@ export function stepPlayerBullets(b: Battle, dt: number): void {
 export function stepSpawns(b: Battle, dt: number, pastWarning: boolean): void {
   const { stage } = b;
   const difficulty = runDifficulty(b);
-  if (b.waves) {
+  // Lamp time freezes `gameTime`. The wave clock must freeze with it, or the
+  // first climb arrives about 3s before `STAGE4_FIRST_SPAWN`.
+  if (b.waves && !carrierHoldsClock(b.takeoff.phase)) {
     b.waves.setPowerLevel(b.state.main.level);
     const spawns = b.waves.update(dt);
     if (!pastWarning) {
@@ -116,10 +128,23 @@ export function stepSpawns(b: Battle, dt: number, pastWarning: boolean): void {
       b.buildings.acquire(),
       placement,
       b.scrollFrame.scroll,
-      scaleHp(BUILDING_HP, difficulty)
+      scaleHp(buildingMaxHp(placement.type), difficulty)
+    );
+  }
+  for (const anchor of b.wreckFloatScheduler.update(b.scrollFrame.scroll, b.gameTime)) {
+    spawnWreckFloat(
+      b.wreckFloats.acquire(),
+      anchor,
+      b.scrollFrame.scroll,
+      scaleHp(WRECK_FLOAT_HP, difficulty),
+      SCORE_WRECK_FLOAT
     );
   }
   const { player } = b;
+  const flak = {
+    profile: aaProfile(difficulty),
+    orders: [] as Array<{ x: number; y: number; delay: number; count: number; speed: number }>,
+  };
   b.buildings.forEach((building) => {
     const gone = updateBuilding(
       building,
@@ -128,10 +153,20 @@ export function stepSpawns(b: Battle, dt: number, pastWarning: boolean): void {
       player.x,
       player.y,
       b.spawner,
-      !pastWarning
+      !pastWarning,
+      flak
     );
     if (gone || (b.scrollFrame.fade.layers[building.layer] ?? 0) <= 0.01) {
       b.buildings.release(building);
+    }
+  });
+  for (const order of flak.orders) {
+    armFlakMark(b.flakMarks.acquire(), order.x, order.y, order.delay, order.count, order.speed);
+  }
+  b.wreckFloats.forEach((floater) => {
+    const gone = updateWreckFloat(floater, dt, b.scrollFrame.scroll);
+    if (gone || (b.scrollFrame.fade.layers[floater.layer] ?? 0) <= 0.01) {
+      b.wreckFloats.release(floater);
     }
   });
 }
@@ -154,9 +189,19 @@ export function stepEnemies(b: Battle, dt: number, pastWarning: boolean): void {
   b.enemies.forEach((enemy) => {
     if (updateEnemy(enemy, dt, player.x, player.y, b.scrollFrame.tileDelta, terrain)) {
       b.enemies.release(enemy);
+    } else if (enemy.bombHitIn < 0 && enemy.fire.kind === 'torpedo') {
+      if (!pastWarning) {
+        launchTorpedoIfDue(enemy, gunDt, player.x, player.y, () => b.torpedoes.acquire());
+      }
     } else if (enemy.bombHitIn < 0) {
       updateEnemyWeapons(enemy, gunDt, player.x, player.y, b.spawner, !pastWarning);
     }
+  });
+  b.torpedoes.forEach((track) => {
+    if (updateTorpedoTrack(track, dt, b.scrollFrame.tileDelta)) b.torpedoes.release(track);
+  });
+  b.flakMarks.forEach((mark) => {
+    if (updateFlakMark(mark, dt, b.spawner)) b.flakMarks.release(mark);
   });
 }
 
@@ -210,6 +255,7 @@ export function jumpTo(b: Battle, time: number): void {
   releaseAllPools(b);
   b.bombWave.active = false;
   b.buildingScheduler.reset();
+  b.wreckFloatScheduler.reset();
   clearFx(b.fx);
   b.boss = time >= stage.boss.enterAt ? spawnBoss(b) : null;
   resetVictoryExit(b.victory);

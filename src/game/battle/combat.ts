@@ -39,9 +39,16 @@ import {
   bombArrives,
   bombHitBuilding,
   bombHitEnemy,
+  bombHitWreckFloat,
   boxOnScreen,
   markBombTarget,
 } from '@/game/systems/bomb';
+import {
+  bulletHitsWreckFloat,
+  damageWreckFloat,
+  type WreckFloat,
+} from '@/game/entities/wreckFloat';
+import { torpedoHitsPlayer } from '@/game/systems/seaStrike';
 import {
   applyBossBomb,
   bossHitsPlayer,
@@ -129,6 +136,20 @@ function bombSpendsStock(b: Battle): boolean {
   return !(b.rules().bossEntry && b.scene.battleEntry === 'boss');
 }
 
+/** Score and a small blast. No drop and no kill-rate tick: this is not a ship. */
+export function destroyWreckFloat(b: Battle, floater: WreckFloat): void {
+  b.state.score += floater.score;
+  spawnExplosion(b.fx, floater.x, floater.y, explosionKindForSize('small'));
+  b.sfx('enemyExplode');
+  b.wreckFloats.release(floater);
+}
+
+function hitWreckFloat(b: Battle, floater: WreckFloat, damage: number, x: number, y: number): void {
+  spawnHitSpark(b.fx, x, y);
+  if (damageWreckFloat(floater, damage)) destroyWreckFloat(b, floater);
+  else b.sfx('enemyHit');
+}
+
 /** Bomb: clear bullets now, then hit what was on screen as the ring reaches it. */
 export function activateBomb(b: Battle): void {
   const { state, player } = b;
@@ -149,6 +170,7 @@ export function activateBomb(b: Battle): void {
   b.buildings.forEach((building) => {
     if (!building.wrecked) markBombTarget(building, player.x, player.y);
   });
+  b.wreckFloats.forEach((floater) => markBombTarget(floater, player.x, player.y));
 
   if (b.boss) {
     markBossBombProps(b.boss, player.x, player.y);
@@ -170,6 +192,9 @@ export function updateBombHits(b: Battle, dt: number): void {
   b.buildings.forEach((building) => {
     if (bombArrives(building, dt) && bombHitBuilding(building)) destroyBuilding(b, building);
   });
+  b.wreckFloats.forEach((floater) => {
+    if (bombArrives(floater, dt) && bombHitWreckFloat(floater)) destroyWreckFloat(b, floater);
+  });
   if (b.boss) applyBossEvents(b, resolveBossBombProps(b.boss, dt));
 }
 
@@ -189,6 +214,9 @@ export function collectHomingTargets(b: Battle): void {
   });
   b.buildings.forEach((building) => {
     if (!building.wrecked && buildingOnScreen(building)) targets.push(building);
+  });
+  b.wreckFloats.forEach((floater) => {
+    if (boxOnScreen(floater)) targets.push(floater);
   });
   if (b.boss) {
     for (const part of bossMissileTargets(b.boss)) {
@@ -261,6 +289,16 @@ function resolveShot(
     release();
     hitBuilding(b, building, damage, hx, hy);
   });
+  if (!shot.active) return;
+  b.wreckFloats.forEach((floater) => {
+    if (!shot.active) return;
+    if (!bulletHitsWreckFloat(floater, shot.x, shot.y, w, h)) return;
+    const damage = shot.damage;
+    const hx = shot.x;
+    const hy = shot.y;
+    release();
+    hitWreckFloat(b, floater, damage, hx, hy);
+  });
 }
 
 /** Every hit test for the frame. `warningWindow` bullets are fading and harmless. */
@@ -279,6 +317,9 @@ export function resolveCollisions(b: Battle, warningWindow: boolean): void {
   // Wingmen (M) have no hitbox. Only the player center is tested below.
   const { player, boss } = b;
   if (isPlayerVulnerable(b) && !warningWindow) {
+    b.torpedoes.forEach((track) => {
+      if (torpedoHitsPlayer(track, player.x, player.y)) killPlayer(b);
+    });
     b.enemyBullets.forEach((bullet) => {
       if (
         checkPlayerBulletSwept(

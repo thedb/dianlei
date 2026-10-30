@@ -19,6 +19,7 @@ import {
   headingSpriteRotation,
   isGroundEnemy,
   rearDiagHeading,
+  enemyFireClockHeld,
   shouldEnemyFire,
   spawnEnemy,
   stepSlidePose,
@@ -612,5 +613,101 @@ describe('stage 3 moves', () => {
     expect(fired).toBe(1);
     expect(firedLeg).toBe('run');
     expect(jet.y).toBeGreaterThan(150);
+  });
+});
+
+describe('stage 4 naval moves', () => {
+  it('holds wake-climb fire until the climb is on screen, then leaves upward', () => {
+    const enemy = createEnemy();
+    spawnEnemy(
+      enemy,
+      'small',
+      180,
+      672,
+      { kind: 'wake_climb', speed: 200, stopY: 400, hold: 0.4 },
+      { kind: 'aimed1', maxShots: 1, firstDelay: 0.05, interval: 2 }
+    );
+    expect(shouldEnemyFire(enemy, FIXED_DT, 180, 500).shouldFire).toBe(false);
+    let fired = false;
+    for (let i = 0; i < 180 && !fired; i++) {
+      updateEnemy(enemy, FIXED_DT, 180, 500, 0);
+      fired = shouldEnemyFire(enemy, FIXED_DT, 180, 500).shouldFire;
+    }
+    expect(fired).toBe(true);
+    expect(enemy.y).toBeLessThanOrEqual(632);
+    for (let i = 0; i < 240 && enemy.phase !== 'exit'; i++)
+      updateEnemy(enemy, FIXED_DT, 180, 500, 0);
+    expect(enemy.phase).toBe('exit');
+    const y = enemy.y;
+    updateEnemy(enemy, FIXED_DT, 180, 500, 0);
+    expect(enemy.y).toBeLessThan(y);
+  });
+
+  it('holds a water skim until it is inside the field', () => {
+    const enemy = createEnemy();
+    spawnEnemy(
+      enemy,
+      'small',
+      -40,
+      0,
+      { kind: 'cross_skim', side: 'left', y: 280, speed: 240 },
+      { kind: 'splash', maxShots: 1, firstDelay: 0.05, interval: 1 }
+    );
+    expect(enemyFireClockHeld(enemy)).toBe(true);
+    for (let i = 0; i < 30; i++) updateEnemy(enemy, FIXED_DT, 180, 500, 0);
+    expect(enemy.y).toBe(280);
+    expect(enemy.x).toBeGreaterThan(12);
+    expect(enemyFireClockHeld(enemy)).toBe(false);
+  });
+
+  it('paints a radar lock before freezing the volley axis', () => {
+    const enemy = createEnemy();
+    spawnEnemy(
+      enemy,
+      'interceptor',
+      180,
+      20,
+      { kind: 'radar_paint', stopY: 140, paint: 0.8, hold: 2 },
+      {
+        kind: 'pattern',
+        pattern: {
+          shape: 'fan',
+          count: 3,
+          spreadDeg: 20,
+          aim: 'barrel',
+          bullet: 'small',
+          speed: 180,
+        },
+        maxShots: 1,
+        firstDelay: 0.02,
+        interval: 8,
+      }
+    );
+    let shots = 0;
+    for (let i = 0; i < 400 && enemy.phase !== 'hold'; i++) {
+      updateEnemy(enemy, FIXED_DT, 300, 500, 0);
+      if (shouldEnemyFire(enemy, FIXED_DT, 300, 500).shouldFire) shots += 1;
+    }
+    expect(enemy.phase).toBe('hold');
+    expect(shots).toBe(0);
+    for (let i = 0; i < 40; i++) {
+      updateEnemy(enemy, FIXED_DT, 300, 500, 0);
+      if (shouldEnemyFire(enemy, FIXED_DT, 300, 500).shouldFire) shots += 1;
+    }
+    expect(enemy.moveTimer).toBeLessThan(0.8);
+    expect(shots).toBe(0);
+    expect(enemy.lockFrozen).toBe(false);
+    for (let i = 0; i < 40 && !enemy.lockFrozen; i++) {
+      updateEnemy(enemy, FIXED_DT, 40, 80, 0);
+      if (shouldEnemyFire(enemy, FIXED_DT, 40, 80).shouldFire) shots += 1;
+    }
+    expect(enemy.lockFrozen).toBe(true);
+    const frozen = enemy.aimAngle;
+    for (let i = 0; i < 10 && shots === 0; i++) {
+      updateEnemy(enemy, FIXED_DT, 20, 600, 0);
+      if (shouldEnemyFire(enemy, FIXED_DT, 20, 600).shouldFire) shots += 1;
+    }
+    expect(shots).toBe(1);
+    expect(enemy.aimAngle).toBeCloseTo(frozen, 5);
   });
 });
