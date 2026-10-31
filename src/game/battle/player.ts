@@ -11,14 +11,12 @@ import {
   BANK_OUT_TIME,
   BOMBS_MAX,
   BOMBS_ON_RESPAWN,
-  BOMBS_START,
   B_OVERFLOW_SCORE,
   M_OVERFLOW_SCORE,
   EXTEND_EVERY,
   EXTEND_OVERFLOW_SCORE,
   EXTEND_REPEAT,
   LIVES_MAX,
-  LIVES_START,
   LOGICAL_H,
   LOGICAL_W,
   PLAYER_MARGIN,
@@ -53,7 +51,14 @@ import {
   weaponTestVolleyRate,
 } from '@/game/scenes/weaponTest';
 import type { CarriedRun } from '@/game/scenes/types';
-import { clearEnemyBullets, type Battle, type GameState, type PlayerShip } from './context';
+import {
+  clearEnemyBullets,
+  freshBombs,
+  freshLives,
+  type Battle,
+  type GameState,
+  type PlayerShip,
+} from './context';
 import { spawnExplosion, triggerShake } from './fx';
 
 /** Player death burst: [dx, dy, delay] — staggered blasts around the wreck */
@@ -102,7 +107,11 @@ export function neutralizePlayerPose(player: PlayerShip): void {
   player.lastBankFrame = getBankFrameIndex(0);
 }
 
-/** Fresh run: full stock, Lv1 loadout, and the ship flying in from below. */
+/**
+ * Fresh run: this difficulty's starting lives, Boss连战 bombs when that flag
+ * is set, Lv1 loadout, and the ship flying in from below. A carried handoff
+ * overwrites lives and bombs after this returns.
+ */
 export function resetPlayer(b: Battle): void {
   const { player, state } = b;
   player.x = LOGICAL_W / 2;
@@ -112,8 +121,8 @@ export function resetPlayer(b: Battle): void {
   neutralizePlayerPose(player);
   player.velocityY = 0;
 
-  state.lives = LIVES_START;
-  state.bombs = BOMBS_START;
+  state.lives = freshLives(b.scene);
+  state.bombs = freshBombs(b.scene);
   state.score = 0;
   resetLoadout(state);
   state.bombCooldown = 0;

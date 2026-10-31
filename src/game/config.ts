@@ -197,8 +197,14 @@ export const DEATH_MATE_LOSS = 1;
 // §14.5 Lives, Bombs & Invincibility
 // ============================================================================
 
-/** Starting lives */
+/**
+ * Starting lives on Medium and Hard.
+ * Easy uses `LIVES_EASY` so the two stocks do not share one constant.
+ */
 export const LIVES_START = 3;
+
+/** Starting lives on Easy. Medium and Hard stay on `LIVES_START`. */
+export const LIVES_EASY = 5;
 
 /** Maximum lives */
 export const LIVES_MAX = 5;
@@ -209,8 +215,11 @@ export const EXTEND_EVERY = 100000;
 /** Whether to give extra lives repeatedly */
 export const EXTEND_REPEAT = true;
 
-/** Starting bombs */
+/** Starting bombs on a campaign, stage select, 挑战 Boss, attract, and weapon test. */
 export const BOMBS_START = 2;
+
+/** Starting bombs on a fresh Boss连战. A carried handoff keeps its own stock. */
+export const BOMBS_RUSH_START = 5;
 
 /** Maximum bombs */
 export const BOMBS_MAX = 5;

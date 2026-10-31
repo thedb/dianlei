@@ -11,16 +11,21 @@ import type { GameAssets } from '@/game/art';
 import { ObjectPool } from '@/engine/pool';
 import { clockSeed, createRng, type Rng } from '@/engine/rng';
 import {
+  BOMBS_RUSH_START,
   BOMBS_START,
   ENEMY_BULLET_CAP,
   EXTEND_EVERY,
-  LIVES_START,
   LOGICAL_W,
   PLAYER_SPAWN_Y,
   WRECK_FLOAT_POOL,
 } from '@/game/config';
 import { getStage } from '@/game/levels/registry';
-import { difficultyProfile, type Difficulty, type DifficultyProfile } from '@/game/difficulty';
+import {
+  difficultyProfile,
+  startingLives,
+  type Difficulty,
+  type DifficultyProfile,
+} from '@/game/difficulty';
 import { createBullet } from '@/game/entities/bullet';
 import { createEnemy, type Enemy } from '@/game/entities/enemy';
 import {
@@ -162,6 +167,17 @@ export interface Battle {
   assets: GameAssets | null;
 }
 
+/** Lives for a fresh start. Play-mode rules force Easy on attract, the range, and map preview. */
+export function freshLives(scene: SceneContext): number {
+  const difficulty = playModeRules(scene.playMode).difficulty ?? scene.difficulty ?? 'easy';
+  return startingLives(difficulty);
+}
+
+/** Bombs for a fresh start. Boss连战 opens at `BOMBS_RUSH_START`; every other start uses `BOMBS_START`. */
+export function freshBombs(scene: SceneContext): number {
+  return scene.bossRush ? BOMBS_RUSH_START : BOMBS_START;
+}
+
 export function createBattle(scene: SceneContext): Battle {
   const stage = getStage();
   const track = buildStageTrack(stage);
@@ -191,8 +207,8 @@ export function createBattle(scene: SceneContext): Battle {
       velocityY: 0,
     },
     state: {
-      lives: LIVES_START,
-      bombs: BOMBS_START,
+      lives: freshLives(scene),
+      bombs: freshBombs(scene),
       score: 0,
       main: { id: 'vulcan', level: 1 },
       sub: null,

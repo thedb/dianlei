@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ControlsView } from '@/engine/input';
-import { ATTRACT_LOOP_SECONDS, BOMBS_START, LIVES_START } from '@/game/config';
+import { ATTRACT_LOOP_SECONDS, BOMBS_START } from '@/game/config';
+import { startingLives } from '@/game/difficulty';
 import { computeControlLayout } from '@/game/controls';
 import { getStage } from '@/game/levels/registry';
 import { createMemoryStorage, createSettingsStore } from '@/game/settings';
@@ -146,8 +147,8 @@ describe('title attract demo', () => {
       if (deathStep < 0 && demo.playerDead) {
         deathStep = i;
         expect(live?.playerDead).toBe(true);
-        expect(demo.lives).toBe(LIVES_START - 1);
-        expect(live?.lives).toBe(LIVES_START - 1);
+        expect(demo.lives).toBe(startingLives('easy') - 1);
+        expect(live?.lives).toBe(startingLives('easy') - 1);
         expect(demo.enemies).toBe(live?.enemyCount);
         expect(demo.bombs).toBe(BOMBS_START);
       }
@@ -155,7 +156,7 @@ describe('title attract demo', () => {
       if (
         deathStep >= 0 &&
         demo.fade === 0 &&
-        demo.lives === LIVES_START &&
+        demo.lives === startingLives('easy') &&
         demo.time < 1 &&
         i > deathStep
       ) {
@@ -174,7 +175,7 @@ describe('title attract demo', () => {
     for (let i = 0; i < recover; i++) play.update(DT, makeInput());
     const after = play.getDebugInfo?.();
     expect(after?.playerDead).toBe(false);
-    expect(after?.lives).toBe(LIVES_START - 1);
+    expect(after?.lives).toBe(startingLives('easy') - 1);
     expect(playSfx).toHaveBeenCalled();
     playSfx.mockClear();
 
@@ -274,7 +275,7 @@ describe('title attract demo', () => {
         attract.plan().routeId !== 0 &&
         demo.fade === 0 &&
         demo.time < 1 &&
-        demo.lives === LIVES_START
+        demo.lives === startingLives('easy')
       ) {
         restarted = true;
       }
