@@ -45,6 +45,20 @@ jobs:
           fi
           echo "✓ All asset paths are relative"
 
+          # Vite copies public/ into dist/. These names are not hashed, and the
+          # boot cover, title mark, and Fusion Pixel fallback 404 if they are missing.
+          for f in \
+            dist/ui/boot-cover.jpg \
+            dist/ui/title-mark.jpg \
+            dist/fonts/fusion-pixel-12px-proportional-zh_hans.woff2
+          do
+            if [ ! -f "$f" ]; then
+              echo "::error::missing $f (public/ must be copied into dist/)"
+              exit 1
+            fi
+          done
+          echo "✓ Shell cover, title mark, and title font are in dist/"
+
       - name: Build WeChat (type check only)
         run: npm run build:wx
 
@@ -100,6 +114,27 @@ jobs:
           ossutil cp dist/index.html oss://it-consultis/vibeCoding/dianlei/h5/index.html \
             --meta "Cache-Control:no-cache" \
             --force
+
+          # public/ copies (ui/, fonts/) keep stable names, so they must be
+          # replaced on every deploy. One-day cache, not the hashed immutable year.
+          for f in \
+            dist/ui/boot-cover.jpg \
+            dist/ui/title-mark.jpg \
+            dist/fonts/fusion-pixel-12px-proportional-zh_hans.woff2
+          do
+            if [ ! -f "$f" ]; then
+              echo "::error::missing $f; refusing to deploy without shell files"
+              exit 1
+            fi
+          done
+          ossutil cp -r dist/ui/ oss://it-consultis/vibeCoding/dianlei/h5/ui/ \
+            --meta "Cache-Control:public, max-age=86400" \
+            --force \
+            --jobs 10
+          ossutil cp -r dist/fonts/ oss://it-consultis/vibeCoding/dianlei/h5/fonts/ \
+            --meta "Cache-Control:public, max-age=86400" \
+            --force \
+            --jobs 10
 
       - name: Output deploy URL
         run: |
