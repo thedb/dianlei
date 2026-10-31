@@ -124,6 +124,7 @@ npm run dev
 
 - H5 试玩：`https://cdn.it-consultis.com/vibeCoding/dianlei/h5/index.html`
 - 页面引用的脚本在同一前缀下的 `h5/assets/`（文件名带内容哈希）。没有单独的 `vibeCoding/dianlei/assets/` 目录。
+- 封面和标题图在 `h5/ui/`，标题字体在 `h5/fonts/`。文件名不带哈希，每次部署覆盖，缓存 1 天。
 
 ### 手动部署
 

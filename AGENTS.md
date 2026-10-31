@@ -203,6 +203,7 @@ This document defines the coding conventions and constraints for all AI agents w
 - **Never touch files outside this prefix**
 - Hashed assets: long cache (1 year, immutable)
 - index.html: no-cache
+- Unhashed shell files from `public/` (`h5/ui/`, `h5/fonts/`): force-upload every main deploy, cache 1 day. Filenames do not change with content.
 
 ## Repository Rules
 
