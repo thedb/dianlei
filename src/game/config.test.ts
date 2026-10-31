@@ -4,8 +4,10 @@ import {
   LOGICAL_H,
   FIXED_DT,
   PLAYER_SPEED,
+  LIVES_EASY,
   LIVES_START,
   LIVES_MAX,
+  BOMBS_RUSH_START,
   BOMBS_START,
   BOMBS_MAX,
   POWER_MAX,
@@ -63,13 +65,17 @@ describe('Game Config', () => {
   });
 
   it('should have valid lives configuration', () => {
-    expect(LIVES_START).toBeGreaterThan(0);
+    expect(LIVES_START).toBe(3);
+    expect(LIVES_EASY).toBe(5);
     expect(LIVES_MAX).toBeGreaterThanOrEqual(LIVES_START);
+    expect(LIVES_MAX).toBeGreaterThanOrEqual(LIVES_EASY);
   });
 
   it('should have valid bombs configuration', () => {
-    expect(BOMBS_START).toBeGreaterThan(0);
+    expect(BOMBS_START).toBe(2);
+    expect(BOMBS_RUSH_START).toBe(5);
     expect(BOMBS_MAX).toBeGreaterThanOrEqual(BOMBS_START);
+    expect(BOMBS_MAX).toBeGreaterThanOrEqual(BOMBS_RUSH_START);
   });
 
   it('should have 3 power levels', () => {

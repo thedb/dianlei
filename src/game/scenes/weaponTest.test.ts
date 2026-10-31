@@ -10,7 +10,7 @@ import {
   HOMING_DAMAGE,
   HOMING_FIRE_RATE,
   JOYSTICK_RADIUS,
-  LIVES_START,
+  LIVES_EASY,
   LOGICAL_H,
   LOGICAL_W,
   PLAYER_BULLET_DAMAGE,
@@ -431,7 +431,7 @@ describe('weapon-test battle', () => {
     flyIn(scene);
     expect(scene.applyTestDeath()).toBe(true);
     expect(scene.getDebugInfo!().playerDead).toBe(true);
-    expect(scene.getDebugInfo!().lives).toBe(LIVES_START - 1);
+    expect(scene.getDebugInfo!().lives).toBe(LIVES_EASY - 1);
     expect(run.report).toBeNull();
     expect(scene.update(DT, makeInput())).toBe('title');
     expect(run.report).toBeNull();

@@ -1,8 +1,8 @@
 /**
  * Run difficulty (P10.1). Easy is the authored wave table.
  *
- * Each difficulty is a profile with several knobs. Today only `hpScale` and
- * `bossGates` differ; bullet speed, fire rate, and drop rules are wired slots
+ * Each difficulty is a profile with several knobs. `hpScale`, `bossGates`, and
+ * `lives` differ. Bullet speed, fire rate, and drop rules are wired slots
  * that every profile leaves at the authored values. Stage 2's extra ships and
  * hotter patterns live on the wave table (`countByDifficulty`, `fireByDifficulty`),
  * not on `fireRateScale` or `bulletSpeedScale`.
@@ -13,7 +13,13 @@
  * scene context for that run (retry included) and is not written to settings.
  */
 
-import { DIFFICULTY_HP_EASY, DIFFICULTY_HP_HARD, DIFFICULTY_HP_MEDIUM } from '@/game/config';
+import {
+  DIFFICULTY_HP_EASY,
+  DIFFICULTY_HP_HARD,
+  DIFFICULTY_HP_MEDIUM,
+  LIVES_EASY,
+  LIVES_START,
+} from '@/game/config';
 import type { BossDef } from '@/game/levels/types';
 import type { DropRule } from '@/game/systems/dropRules';
 
@@ -36,16 +42,31 @@ export interface DifficultyProfile {
   bossGates: readonly string[];
   /** Replaces the stage's building drop rules when set. */
   buildingDrops?: readonly DropRule[];
+  /** Lives on a fresh start. A carried handoff overwrites this. */
+  lives: number;
 }
 
 export const DIFFICULTY_PROFILES: Readonly<Record<Difficulty, DifficultyProfile>> = {
-  easy: { hpScale: DIFFICULTY_HP_EASY, bulletSpeedScale: 1, fireRateScale: 1, bossGates: [] },
-  medium: { hpScale: DIFFICULTY_HP_MEDIUM, bulletSpeedScale: 1, fireRateScale: 1, bossGates: [] },
+  easy: {
+    hpScale: DIFFICULTY_HP_EASY,
+    bulletSpeedScale: 1,
+    fireRateScale: 1,
+    bossGates: [],
+    lives: LIVES_EASY,
+  },
+  medium: {
+    hpScale: DIFFICULTY_HP_MEDIUM,
+    bulletSpeedScale: 1,
+    fireRateScale: 1,
+    bossGates: [],
+    lives: LIVES_START,
+  },
   hard: {
     hpScale: DIFFICULTY_HP_HARD,
     bulletSpeedScale: 1,
     fireRateScale: 1,
     bossGates: [HARD_PHASE_GATE],
+    lives: LIVES_START,
   },
 };
 
@@ -61,6 +82,11 @@ export const DIFFICULTY_HP_SCALE: Record<Difficulty, number> = {
 
 export function difficultyHpScale(difficulty: Difficulty): number {
   return DIFFICULTY_PROFILES[difficulty].hpScale;
+}
+
+/** Lives for a fresh start of this difficulty. Carried runs do not use it. */
+export function startingLives(difficulty: Difficulty): number {
+  return DIFFICULTY_PROFILES[difficulty].lives;
 }
 
 /** `baseHp * scale`. Easy returns the authored value unchanged. */

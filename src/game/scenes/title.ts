@@ -26,7 +26,6 @@ import {
   type Rect,
 } from '@/game/ui/widgets';
 import { START_BUTTON, drawStartButton, isStartTapped } from '@/game/ui/startButton';
-import { drawTitleCover } from '@/game/ui/titleCover';
 import { drawGameSubtitle, drawGameTitle } from '@/game/ui/titleFont';
 import { createDifficultySelect } from '@/game/ui/difficultySelect';
 import {
@@ -65,7 +64,6 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
   let inDifficulty = false;
   /** Which formal start the difficulty overlay will launch. */
   let startKind: 'stage' | 'bossRush' = 'stage';
-  let coverTime = 0;
   /** Debug stage list, then the normal difficulty step. Null on the panel. */
   let stagePick: 'stage' | 'difficulty' | null = null;
   let stageRunId = '1';
@@ -136,7 +134,6 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
 
     update(dt: number, input: InputState) {
       blinkTimer = (blinkTimer + dt) % 1;
-      coverTime += dt;
       const live = demo();
       // Formal difficulty, stage select, both challenge-Boss steps, and the
       // map list pause the demo. The debug panel itself keeps it running.
@@ -307,7 +304,6 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
       else renderer.clear('#000');
       const c = renderer.getContext();
       drawTitleScrim(c);
-      drawTitleCover(c, coverTime, false);
       drawGameTitle(c, LOGICAL_W / 2, 46);
       drawGameSubtitle(c, LOGICAL_W / 2, 82);
       const best = readHighScore(ctx.storage);

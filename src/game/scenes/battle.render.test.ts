@@ -14,6 +14,9 @@
  * The full-width HP bar recaptured stage easy (the layout object), plus the
  * hard stage and hard boss practice, which now die in phase 3. Attract,
  * weapon test, pause, and the demo game over did not move.
+ * Easy starts with 5 lives. That recaptured the easy clear (HUD life text)
+ * and the easy demo game over. Hard, attract, weapon test, and pause did not
+ * move.
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -229,7 +232,7 @@ function stageRun(
 }
 
 const EXPECTED: Record<string, RenderResult> = {
-  'stage easy': { outcome: 'result', frames: 11366, renders: 496, calls: 85759, hash: 1494208581 },
+  'stage easy': { outcome: 'result', frames: 11366, renders: 496, calls: 85759, hash: 1946472077 },
   'stage hard': {
     outcome: 'gameover',
     frames: 13986,
@@ -237,7 +240,7 @@ const EXPECTED: Record<string, RenderResult> = {
     calls: 101368,
     hash: 3222630490,
   },
-  'stage demo': { outcome: 'gameover', frames: 5575, renders: 244, calls: 35067, hash: 766989114 },
+  'stage demo': { outcome: 'gameover', frames: 6843, renders: 299, calls: 47305, hash: 3030380236 },
   'boss hard': { outcome: 'gameover', frames: 5424, renders: 237, calls: 37428, hash: 296711215 },
   attract: { outcome: 'timeout', frames: 5400, renders: 318, calls: 24899, hash: 727918577 },
   weaponTest: { outcome: 'timeout', frames: 600, renders: 55, calls: 26053, hash: 1189635685 },

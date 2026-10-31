@@ -2,11 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { makeInput } from '@/test/fakes';
 import { createMemoryStorage, createSettingsStore } from '@/game/settings';
 import { computeControlLayout } from '@/game/controls';
-import { BOMBS_START, LIVES_START, POWER_MAX } from '@/game/config';
-import { prepareBossConfig, type Difficulty } from '@/game/difficulty';
+import { BOMBS_RUSH_START, BOMBS_START, LIVES_START, POWER_MAX } from '@/game/config';
+import { prepareBossConfig, startingLives, type Difficulty } from '@/game/difficulty';
 import { getStage } from '@/game/levels/registry';
 import { bossPhaseDef } from '@/game/systems/boss';
-import type { BattleEntry } from './types';
+import type { BattleEntry, SceneContext } from './types';
 import type { ControlsView } from '@/engine/input';
 import { createBattleScene } from './battle';
 
@@ -30,7 +30,11 @@ vi.mock('@/game/systems/audio', () => {
 
 const DT = 1 / 60;
 
-function setup(battleEntry: BattleEntry = 'stage', difficulty?: Difficulty) {
+function setup(
+  battleEntry: BattleEntry = 'stage',
+  difficulty?: Difficulty,
+  extra?: Partial<SceneContext>
+) {
   const settings = createSettingsStore(createMemoryStorage());
   const layout = computeControlLayout(settings.get(), { top: 0, bottom: 0 });
   const view: ControlsView = {
@@ -49,6 +53,7 @@ function setup(battleEntry: BattleEntry = 'stage', difficulty?: Difficulty) {
     battleEntry,
     ...(difficulty !== undefined ? { difficulty } : {}),
     ...(battleEntry === 'boss' ? { challengeStage: '1' } : {}),
+    ...extra,
     input: { setControlsEnabled: vi.fn(), getControlsView: () => view },
   });
   scene.enter();
@@ -62,7 +67,7 @@ describe('battle boss practice', () => {
     expect(info.gameTime).toBe(stage1.boss.enterAt);
     expect(info.bossPhase).toBe('enter');
     expect(info.power).toBe(POWER_MAX);
-    expect(info.lives).toBe(LIVES_START);
+    expect(info.lives).toBe(startingLives('easy'));
     expect(info.bombs).toBe(BOMBS_START);
     expect(info.enemyCount).toBe(0);
 
@@ -92,6 +97,46 @@ describe('battle boss practice', () => {
     const parts = prepared.parts.reduce((sum, part) => sum + part.hp, 0);
     expect(info.bossPhase3).toBe(true);
     expect(info.bossMaxHp).toBeCloseTo(parts + (bossPhaseDef(prepared, 'phase3').segmentHp ?? 0));
+  });
+
+  it('easy starts with 5 lives; medium and hard stay at 3; bombs stay at 2', () => {
+    expect(setup('stage', 'easy').getDebugInfo!().lives).toBe(startingLives('easy'));
+    expect(setup('stage', 'easy').getDebugInfo!().bombs).toBe(BOMBS_START);
+    expect(setup('stage', 'medium').getDebugInfo!().lives).toBe(LIVES_START);
+    expect(setup('stage', 'medium').getDebugInfo!().bombs).toBe(BOMBS_START);
+    expect(setup('stage', 'hard').getDebugInfo!().lives).toBe(LIVES_START);
+    expect(setup('stage', 'hard').getDebugInfo!().bombs).toBe(BOMBS_START);
+    expect(setup('boss', 'easy').getDebugInfo!().bombs).toBe(BOMBS_START);
+    expect(setup('boss', 'hard').getDebugInfo!().lives).toBe(LIVES_START);
+  });
+
+  it('a fresh Boss连战 starts with 5 bombs and still uses the difficulty life stock', () => {
+    for (const difficulty of ['easy', 'medium', 'hard'] as const) {
+      const info = setup('boss', difficulty, { bossRush: true }).getDebugInfo!();
+      expect(info.bombs).toBe(BOMBS_RUSH_START);
+      expect(info.lives).toBe(startingLives(difficulty));
+    }
+  });
+
+  it('a Boss连战 handoff keeps the carried bombs and lives', () => {
+    const info = setup('boss', 'easy', {
+      bossRush: true,
+      challengeStage: '2',
+      carriedRun: {
+        score: 12000,
+        lives: 4,
+        bombs: 1,
+        deaths: 1,
+        main: { id: 'vulcan', level: 3 },
+        sub: null,
+        mate: 0,
+        nextExtendScore: 100000,
+      },
+    }).getDebugInfo!();
+    expect(info.lives).toBe(4);
+    expect(info.bombs).toBe(1);
+    expect(info.score).toBe(12000);
+    expect(info.power).toBe(POWER_MAX);
   });
 
   it('holds fire during the fly-in, then shoots', () => {
