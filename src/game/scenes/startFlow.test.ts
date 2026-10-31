@@ -1,9 +1,16 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Renderer } from '@/engine/renderer';
-import { createBootScene, BOOT_DURATION } from './boot';
+import {
+  createBootScene,
+  BOOT_DURATION,
+  BOOT_ENTER_LABEL,
+  BOOT_READY_AT,
+  BOOT_READY_HOLD,
+} from './boot';
 import { createSceneManager } from './index';
 import { BOSS_RUSH_BUTTON, createTitleScene, SETTINGS_BUTTON } from './title';
 import { GAME_TITLE } from '@/game/ui/titleFont';
+import { fakeShellImage, resetShellArtForTests, setShellArtForTests } from '@/game/ui/shellArt';
 import { peekSharedTitleAttract, resetSharedTitleAttractForTests } from './titleAttract';
 
 vi.mock('@/game/art', async (importOriginal) => {
@@ -40,6 +47,10 @@ import { makeInput } from '@/test/fakes';
 import type { SceneContext } from './types';
 
 const DT = 1 / 60;
+
+beforeEach(() => {
+  resetShellArtForTests();
+});
 
 function context(): SceneContext {
   const settings = createSettingsStore(createMemoryStorage());
@@ -99,9 +110,10 @@ function loadingRenderer(): Renderer & { clears: string[]; images: number } {
   return renderer as unknown as Renderer & { clears: string[]; images: number };
 }
 
-function textRenderer(): Renderer & { texts: string[]; fonts: string[] } {
+function textRenderer(): Renderer & { texts: string[]; fonts: string[]; draws: number } {
   const texts: string[] = [];
   const fonts: string[] = [];
+  let draws = 0;
   const gradient = { addColorStop: () => undefined };
   const ctx = new Proxy(
     {},
@@ -110,6 +122,10 @@ function textRenderer(): Renderer & { texts: string[]; fonts: string[] } {
         if (prop === 'createLinearGradient' || prop === 'createRadialGradient')
           return () => gradient;
         if (prop === 'fillText') return (text: string) => texts.push(text);
+        if (prop === 'drawImage')
+          return () => {
+            draws += 1;
+          };
         return () => undefined;
       },
       set(_target, prop, value) {
@@ -121,6 +137,9 @@ function textRenderer(): Renderer & { texts: string[]; fonts: string[] } {
   const renderer = {
     texts,
     fonts,
+    get draws() {
+      return draws;
+    },
     clear() {
       return undefined;
     },
@@ -129,42 +148,71 @@ function textRenderer(): Renderer & { texts: string[]; fonts: string[] } {
     },
     getContext: () => ctx,
   };
-  return renderer as unknown as Renderer & { texts: string[]; fonts: string[] };
+  return renderer as unknown as Renderer & { texts: string[]; fonts: string[]; draws: number };
 }
 
 describe('boot screen', () => {
-  it('ignores the start button and confirm, then hands off to the title', () => {
+  it('stays on boot until the load and the extra hold have elapsed, and a tap', () => {
     const ctx = context();
     const boot = createBootScene(ctx);
     boot.enter();
-    expect(boot.update(DT, makeInput({ taps: [center], menuConfirm: true }))).toBeNull();
+    expect(BOOT_READY_HOLD).toBe(2);
+    expect(BOOT_READY_AT).toBe(BOOT_DURATION + BOOT_READY_HOLD);
+
+    expect(boot.update(BOOT_DURATION, makeInput({ taps: [center], menuConfirm: true }))).toBeNull();
+    expect(
+      boot.update(BOOT_READY_HOLD - DT, makeInput({ taps: [center], menuConfirm: true }))
+    ).toBeNull();
+    expect(boot.update(DT, makeInput())).toBeNull();
     expect(ctx.playMode).toBeUndefined();
     expect(ctx.difficulty).toBeUndefined();
     expect(ctx.battleEntry).toBe('stage');
-    const edge = { x: START_BUTTON.x - 8, y: START_BUTTON.y + START_BUTTON.h + 8 };
-    expect(boot.update(DT, makeInput({ taps: [edge] }))).toBeNull();
-    expect(boot.update(DT, makeInput({ taps: [{ x: 20, y: 20 }] }))).toBeNull();
-    let next = null;
-    for (let t = 0; t < BOOT_DURATION + 0.1 && !next; t += DT) {
-      next = boot.update(DT, makeInput({ taps: [center], menuConfirm: true }));
-    }
-    expect(next).toBe('title');
+
+    expect(boot.update(DT, makeInput({ taps: [{ x: 20, y: 20 }] }))).toBe('title');
     expect(ctx.difficulty).toBeUndefined();
     expect(ctx.playMode).toBeUndefined();
   });
 
-  it('draws only the game name', () => {
+  it('does not advance early, then advances on confirm once ready', () => {
+    const boot = createBootScene(context());
+    boot.enter();
+    expect(
+      boot.update(BOOT_READY_AT - 0.05, makeInput({ taps: [center], menuConfirm: true }))
+    ).toBeNull();
+    expect(boot.update(0.05, makeInput({ menuConfirm: true }))).toBe('title');
+  });
+
+  it('draws the enter prompt only after the gate is ready', () => {
     const boot = createBootScene(context());
     boot.enter();
     const renderer = textRenderer();
     boot.render(renderer, 1);
-    expect(renderer.texts).toEqual([GAME_TITLE]);
+    expect(renderer.texts).not.toContain(BOOT_ENTER_LABEL);
+    expect(renderer.texts).not.toContain(GAME_TITLE);
+
+    boot.update(BOOT_READY_AT, makeInput());
+    boot.render(renderer, 1);
+    expect(renderer.texts).toContain(BOOT_ENTER_LABEL);
+    expect(renderer.texts).toContain(GAME_TITLE);
     expect(renderer.fonts.some((font) => font.includes('Fusion Pixel Font'))).toBe(true);
     expect(renderer.fonts.some((font) => font.includes('PingFang SC'))).toBe(true);
-    boot.update(DT, makeInput({ taps: [center], menuConfirm: true }));
-    renderer.texts.length = 0;
-    boot.render(renderer, 1);
-    expect(renderer.texts).toEqual([GAME_TITLE]);
+  });
+
+  it('draws the cover and the title mark without throwing once they are ready', () => {
+    setShellArtForTests({
+      cover: fakeShellImage(720, 1280),
+      mark: fakeShellImage(1024, 1024),
+    });
+    const boot = createBootScene(context());
+    boot.enter();
+    const renderer = textRenderer();
+    expect(() => boot.render(renderer, 1)).not.toThrow();
+    expect(renderer.draws).toBe(1);
+    boot.update(BOOT_READY_AT, makeInput());
+    expect(() => boot.render(renderer, 1)).not.toThrow();
+    expect(renderer.draws).toBe(3);
+    expect(renderer.texts).toContain(BOOT_ENTER_LABEL);
+    expect(renderer.texts).not.toContain(GAME_TITLE);
   });
 
   it('does not create or draw the attract demo while the boot screen is up', () => {
@@ -176,22 +224,28 @@ describe('boot screen', () => {
     const renderer = loadingRenderer();
     let scene = manager.getCurrentScene();
     expect(scene?.id).toBe('boot');
-    for (let i = 0; i < 200 && scene?.id === 'boot'; i++) {
+    const frames = Math.ceil((BOOT_READY_AT + 1) / DT);
+    for (let i = 0; i < frames && scene?.id === 'boot'; i++) {
       const next = scene.update(DT, makeInput());
       scene.render(renderer, 1);
-      if (next) {
-        expect(next).toBe('title');
-        expect(peekSharedTitleAttract()).toBeNull();
-        manager.transition(next);
-        scene = manager.getCurrentScene();
-      }
+      expect(next).toBeNull();
     }
 
-    expect(scene?.id).toBe('title');
-    expect(peekSharedTitleAttract()?.isRunning()).toBe(true);
+    expect(scene?.id).toBe('boot');
+    expect(peekSharedTitleAttract()).toBeNull();
     expect(renderer.clears.length).toBeGreaterThan(0);
     expect(renderer.clears.every((color) => color === '#000')).toBe(true);
     expect(renderer.images).toBe(0);
+    if (!scene) throw new Error('boot scene missing');
+
+    const next = scene.update(DT, makeInput({ taps: [{ x: 180, y: 320 }] }));
+    expect(next).toBe('title');
+    expect(peekSharedTitleAttract()).toBeNull();
+    if (next !== 'title') throw new Error('expected title');
+    manager.transition(next);
+    scene = manager.getCurrentScene();
+    expect(scene?.id).toBe('title');
+    expect(peekSharedTitleAttract()?.isRunning()).toBe(true);
 
     manager.transition('battle');
     expect(peekSharedTitleAttract()?.isRunning()).toBe(false);
@@ -376,6 +430,16 @@ describe('title screen start button', () => {
     expect(renderer.texts).toContain('Boss连战');
     expect(renderer.texts).toContain('开始游戏');
     expect(renderer.texts).toContain('设置');
+  });
+
+  it('draws the centered title mark without throwing', () => {
+    setShellArtForTests({ mark: fakeShellImage(1024, 1024) });
+    const renderer = textRenderer();
+    expect(() => createTitleScene(context()).render(renderer, 1)).not.toThrow();
+    expect(renderer.draws).toBeGreaterThan(0);
+    expect(renderer.texts).toContain('DIANLEI PLAN');
+    expect(renderer.texts).toContain('开始游戏');
+    expect(renderer.texts).not.toContain(GAME_TITLE);
   });
 
   it('pauses the attract demo while the difficulty overlay is open', () => {

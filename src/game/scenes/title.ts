@@ -27,6 +27,13 @@ import {
 } from '@/game/ui/widgets';
 import { START_BUTTON, drawStartButton, isStartTapped } from '@/game/ui/startButton';
 import { drawGameSubtitle, drawGameTitle } from '@/game/ui/titleFont';
+import {
+  TITLE_MARK_CY,
+  TITLE_MARK_MAX_W,
+  TITLE_SUB_Y,
+  drawTitleMark,
+  ensureShellArt,
+} from '@/game/ui/shellArt';
 import { createDifficultySelect } from '@/game/ui/difficultySelect';
 import {
   challengeRunDifficulty,
@@ -83,6 +90,7 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
   const bossDifficultySelect = createBossDifficultySelect();
   const mapPreviewSelect = createMapPreviewSelect();
   const hotZone = createDebugHotZone();
+  ensureShellArt();
 
   function demo(): TitleAttract {
     if (!attract) attract = sharedTitleAttract();
@@ -112,6 +120,7 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
     id: 'title',
 
     enter(): void {
+      ensureShellArt();
       selected = 0;
       inSettings = false;
       inDebug = false;
@@ -304,8 +313,10 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
       else renderer.clear('#000');
       const c = renderer.getContext();
       drawTitleScrim(c);
-      drawGameTitle(c, LOGICAL_W / 2, 46);
-      drawGameSubtitle(c, LOGICAL_W / 2, 82);
+      if (!drawTitleMark(c, LOGICAL_W / 2, TITLE_MARK_CY, TITLE_MARK_MAX_W)) {
+        drawGameTitle(c, LOGICAL_W / 2, TITLE_MARK_CY);
+      }
+      drawGameSubtitle(c, LOGICAL_W / 2, TITLE_SUB_Y);
       const best = readHighScore(ctx.storage);
       drawText(
         c,
