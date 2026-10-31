@@ -1,6 +1,6 @@
 /**
  * Big touch-first 开始游戏 button on the title screen.
- * Boot does not draw or hit-test it. Loading shows only the game name.
+ * Boot does not draw or hit-test it. Boot ends on 「点击进入」, not this button.
  */
 
 import { LOGICAL_W, LOGICAL_H } from '@/game/config';

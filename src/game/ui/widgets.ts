@@ -1,7 +1,8 @@
 /**
  * Canvas-drawn UI primitives for menus (pause, settings, title).
- * Menu and HUD labels use the system CJK stack. The title mark uses
- * Fusion Pixel (`titleFont.ts`); this stack is its fallback too.
+ * Menu and HUD labels use the system CJK stack. The title mark is the
+ * shell bitmap (`shellArt.ts`). Fusion Pixel (`titleFont.ts`) is only the
+ * fallback when that image has not loaded, and it uses this stack next.
  */
 
 import { LOGICAL_H, LOGICAL_W } from '@/game/config';

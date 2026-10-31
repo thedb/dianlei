@@ -1,7 +1,9 @@
 /**
- * Title mark. Boot and the title screen share 「电雷计划」.
- * The face is Fusion Pixel (OFL), loaded in index.html / wx.loadFontFace.
+ * Fusion Pixel fallback for 「电雷计划」.
+ * Boot-ready and the title scene draw `public/ui/title-mark.jpg` first
+ * (`shellArt.ts`). This face is used only when that bitmap has not loaded.
  * Menu labels and the HUD stay on the system CJK stack in widgets.ts.
+ * The face is loaded in index.html / wx.loadFontFace.
  */
 
 import { PALETTE, COLOR } from '@/game/palette';
