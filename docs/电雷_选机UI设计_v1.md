@@ -1,6 +1,6 @@
 # 《电雷》选机 UI 设计 v1
 
-状态：**设计已确认，未进代码。** 画面跟着 `docs/电雷_机型造型设计_v1.md` 的三架像素走。选机预览就是局内帧放大，不另画立绘。
+状态：**造型方向已确认（黑 Mandy / 紫金单发 Jason），仍未进代码。** 画面跟着 `docs/电雷_机型造型设计_v1.md` 的三架像素走。选机预览就是局内帧放大，不另画立绘。气氛稿不进这个画面。
 
 ---
 
@@ -79,7 +79,7 @@ Yoan 给的是合金弹头 3 的 **SOLDIER SELECT**（横屏，四栏）。对�
 ### 2.1 选中行
 
 - 画该机平飞到侧倾的 **局内 11 帧**，最近邻 **3 倍**。Eagle 84×96，Mandy 96×108，Jason 66×78。都进得了 132 的井。Mandy 最高，上下余量最小，这是故意的。
-- 尾焰用该机自己的喷口和焰长（Eagle 8×4，Mandy 10×5，Jason 6×3），画在精灵后面。
+- 尾焰用该机自己的喷口和焰长（Eagle 双发 8×4 白芯青边，Mandy 双发 10×5 白芯青边，Jason 单发 12×6 紫金），画在精灵后面。
 - 井的底边 8 像素是黄黑斜条，只用 `EXPLOSION_YELLOW` 和 `BLACK`，静止，不滚动。只有选中行有。
 - 名字牌亮边用 `WHITE`，字是白色的 Eagle / Mandy / Jason。
 - 身份用玩家青，特性用白色。
@@ -96,7 +96,7 @@ Yoan 给的是合金弹头 3 的 **SOLDIER SELECT**（横屏，四栏）。对�
 | PLAYER_CYAN、PLAYER_MED_CYAN、PLAYER_BLUE | LIGHT_GRAY |
 | LIGHT_GRAY | GRAY |
 | GRAY、MEDIUM_GRAY、PLAYER_DARK_CYAN | MEDIUM_GRAY |
-| DARK_GRAY、SHADOW、Eagle 的红脊 | DARK_GRAY |
+| DARK_GRAY、SHADOW、Eagle 的红脊、Jason 的紫和金 | DARK_GRAY |
 
 - 不画尾焰，不画黄黑条。
 - 名字牌仍可读：字白色，牌的边用 `MEDIUM_GRAY`。身份和特性用 `UI_COLORS.dim`，不藏起来。未选中也能比较三句介绍。
@@ -193,6 +193,6 @@ attract、标题演示：不选机，固定 Eagle
 1. 标题锁定为「选择机体」，不用 SHIP SELECT。
 2. Mandy：每秒 4 发，普通弹 1.5，加粗弹 2.5，DPS 12 / 18 / 30，外侧两发 ±12。
 3. Jason 弹速 1.25 倍（900），弹形不改。
-4. 红脊只留给 Eagle。Mandy 用灰弹舱，Jason 用白脊短翼。
+4. 红脊只留给 Eagle。Mandy 是黑色飞翼，弹舱门可见，双发。Jason 是紫金，金脊，单发。
 5. 选中预览就是局内帧的 3 倍加尾焰和慢侧倾。未选中是同一帧上半截的 4 倍灰阶。不另做立绘。
 6. 三句特性按 §6 定稿。
