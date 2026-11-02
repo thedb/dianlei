@@ -7,6 +7,8 @@
 import type { Scene, SceneContext } from './types';
 import type { Renderer, GameDebugInfo } from '@/engine/renderer';
 import type { InputState } from '@/engine/input';
+import { FIRE_RATE } from '@/game/config';
+import { shipDef } from '@/game/entities/shipDefs';
 import { createGameAssets } from '@/game/art';
 import { getStage } from '@/game/levels/registry';
 import type { ItemType } from '@/game/entities/item';
@@ -151,10 +153,14 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       // Full wave table, including ground units and the conditional relief ship
       b.waves = new WaveScheduler({ mvpOnly: false, stage, difficulty: runDifficulty(b) });
 
-      // Weapon-test tune returns to the permanent constants.
-      resetWeaponTestTune(b.tune);
+      // Weapon-test tune returns to that ship's thin-shell rate and damage.
+      // Eagle is still FIRE_RATE / PLAYER_BULLET_DAMAGE. Other modes reset
+      // to those Eagle constants; the tune is only read on the range.
+      const ship = shipDef(sceneCtx.shipId);
+      resetWeaponTestTune(b.tune, b.rules().range ? ship : undefined);
       b.guns.main = volleyInterval(b, state.main);
       b.guns.sub = 0;
+      b.guns.mate = 1 / FIRE_RATE;
       b.gameTime = 0;
       b.scroller.reset();
       b.scrollFrame = {
@@ -204,7 +210,7 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
 
     exit(): void {
       b.pause.close();
-      resetWeaponTestTune(b.tune);
+      resetWeaponTestTune(b.tune, b.rules().range ? shipDef(sceneCtx.shipId) : undefined);
       b.meter.reset();
       releaseAllPools(b);
       clearFx(b.fx);

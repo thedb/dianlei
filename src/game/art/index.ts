@@ -6,6 +6,8 @@
 export * from './types';
 export * from './spriteRenderer';
 export * from './playerSprite';
+export * from './shipSprites';
+export * from './shipPortrait';
 export * from './engineFlame';
 export * from './enemySprite';
 export * from './bulletSprite';
@@ -27,6 +29,7 @@ import type { BackgroundArt } from './mapDraw';
 import type { BossAssets } from './bossSprite';
 
 import { createPlayerSpriteSheet } from './playerSprite';
+import { createJasonSpriteSheet, createMandySpriteSheet } from './shipSprites';
 import { createEnemyAssets } from './enemySprite';
 import { createBuildingAssets } from './buildingSprite';
 import { createBulletAssets } from './bulletSprite';
@@ -41,7 +44,10 @@ export { drawBossWorld, drawBossHpBar, drawBossLaser, drawTiebaoMine } from './b
 
 /** All game sprite assets */
 export interface GameAssets {
+  /** Eagle sheet. Render replays and attract keep reading this field. */
   player: PlayerSpriteSheet;
+  /** Mandy and Jason. Omitted on stubs; Eagle never reads it. */
+  ships?: { mandy: PlayerSpriteSheet; jason: PlayerSpriteSheet };
   enemies: EnemyAssets;
   buildings: BuildingAssets;
   bullets: BulletAssets;
@@ -56,6 +62,7 @@ export interface GameAssets {
 export function createGameAssets(): GameAssets {
   return {
     player: createPlayerSpriteSheet(),
+    ships: { mandy: createMandySpriteSheet(), jason: createJasonSpriteSheet() },
     enemies: createEnemyAssets(),
     buildings: createBuildingAssets(),
     bullets: createBulletAssets(),

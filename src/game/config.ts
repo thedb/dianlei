@@ -29,8 +29,11 @@ export const TILE_SIZE = 16;
 /** Background scroll speed (pixels/second) */
 export const BG_SCROLL_SPEED = 40;
 
-/** Palette color count */
-export const PALETTE_SIZE = 48;
+/**
+ * Original 48 colors, plus four Jason purples and golds appended after index 47.
+ * Indices 0–47 are unchanged. Keep this equal to `PALETTE.length`.
+ */
+export const PALETTE_SIZE = 52;
 
 // ============================================================================
 // §14.2 Controls & Movement

@@ -11,6 +11,7 @@ import { createSceneManager } from './index';
 import { BOSS_RUSH_BUTTON, createTitleScene, SETTINGS_BUTTON } from './title';
 import { GAME_TITLE } from '@/game/ui/titleFont';
 import { fakeShellImage, resetShellArtForTests, setShellArtForTests } from '@/game/ui/shellArt';
+import { FakeOffscreenCanvas } from '@/test/fakeCanvas';
 import { peekSharedTitleAttract, resetSharedTitleAttractForTests } from './titleAttract';
 
 vi.mock('@/game/art', async (importOriginal) => {
@@ -33,6 +34,7 @@ vi.mock('@/game/systems/audio', () => {
   return { getAudioSystem: () => sfx, createAudioSystem: () => sfx };
 });
 import { START_BUTTON } from '@/game/ui/startButton';
+import { SHIP_SELECT_BACK, SHIP_SELECT_CONFIRM } from '@/game/ui/shipSelect';
 import {
   DIFFICULTY_BACK_BUTTON,
   DIFFICULTY_EASY_BUTTON,
@@ -79,6 +81,13 @@ const center = { x: START_BUTTON.x + START_BUTTON.w / 2, y: START_BUTTON.y + STA
 
 function point(rect: { x: number; y: number; w: number; h: number }) {
   return { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
+}
+
+/** Confirm the highlighted ship. Stays on the title; the next step is still open. */
+function confirmShip(title: {
+  update: (dt: number, input: ReturnType<typeof makeInput>) => unknown;
+}) {
+  expect(title.update(DT, makeInput({ taps: [point(SHIP_SELECT_CONFIRM)] }))).toBeNull();
 }
 
 function loadingRenderer(): Renderer & { clears: string[]; images: number } {
@@ -256,13 +265,25 @@ describe('boot screen', () => {
 });
 
 describe('title screen start button', () => {
-  it('first tap on 开始游戏 opens difficulty and does not start battle', () => {
+  it('first tap on 开始游戏 opens ship select and does not start battle', () => {
     const ctx = context();
     const title = createTitleScene(ctx);
     title.enter();
     expect(title.update(DT, makeInput({ taps: [center] }))).toBeNull();
     expect(ctx.playMode).toBeUndefined();
     expect(ctx.difficulty).toBeUndefined();
+    expect(ctx.shipId).toBeUndefined();
+    // The flow mock has no map art, and node has no canvas. Stop the attract
+    // and stub the bake so this render only has to draw the select text.
+    vi.stubGlobal('OffscreenCanvas', FakeOffscreenCanvas);
+    peekSharedTitleAttract()?.stop();
+    const renderer = textRenderer();
+    title.render(renderer, 1);
+    vi.unstubAllGlobals();
+    expect(renderer.texts).toContain('选择机体');
+    expect(renderer.texts).toContain('Eagle');
+    expect(renderer.texts).toContain('Mandy');
+    expect(renderer.texts).toContain('Jason');
   });
 
   it('opens difficulty from the start button', () => {
@@ -273,26 +294,35 @@ describe('title screen start button', () => {
     ).toBeNull();
   });
 
-  it('Easy, Medium, and Hard start a stage and Back returns to the title', () => {
+  it('Easy, Medium, and Hard start a stage and Back returns to ship select', () => {
     const ctx = context();
     const title = createTitleScene(ctx);
     title.enter();
     title.update(DT, makeInput({ taps: [center] }));
+    confirmShip(title);
     expect(title.update(DT, makeInput({ taps: [point(DIFFICULTY_BACK_BUTTON)] }))).toBeNull();
     expect(ctx.playMode).toBeUndefined();
+    expect(ctx.shipId).toBe('eagle');
+    expect(title.update(DT, makeInput({ taps: [point(SHIP_SELECT_BACK)] }))).toBeNull();
+    expect(ctx.shipId).toBeUndefined();
 
     title.update(DT, makeInput({ taps: [center] }));
+    confirmShip(title);
     expect(title.update(DT, makeInput({ taps: [point(DIFFICULTY_MEDIUM_BUTTON)] }))).toBe('battle');
     expect(ctx.difficulty).toBe('medium');
     expect(ctx.battleEntry).toBe('stage');
     expect(ctx.playMode).toBe('play');
+    expect(ctx.shipId).toBe('eagle');
 
     title.enter();
+    expect(ctx.shipId).toBeUndefined();
     title.update(DT, makeInput({ taps: [center] }));
+    confirmShip(title);
     title.update(DT, makeInput({ menuDown: true }));
     title.update(DT, makeInput({ menuDown: true }));
     expect(title.update(DT, makeInput({ menuConfirm: true }))).toBe('battle');
     expect(ctx.difficulty).toBe('hard');
+    expect(ctx.shipId).toBe('eagle');
   });
 
   it('the title menu is 开始游戏, Boss连战, and 设置', () => {
@@ -309,6 +339,7 @@ describe('title screen start button', () => {
 
     title.update(DT, makeInput({ menuBack: true }));
     expect(title.update(DT, makeInput({ taps: [center] }))).toBeNull();
+    confirmShip(title);
     expect(title.update(DT, makeInput({ taps: [point(DIFFICULTY_EASY_BUTTON)] }))).toBe('battle');
     expect(ctx.battleEntry).toBe('stage');
     expect(ctx.playMode).toBe('play');
@@ -391,6 +422,7 @@ describe('title screen start button', () => {
     // Now in settings: tapping where 开始游戏 was must not start the game
     expect(title.update(DT, makeInput({ menuBack: true }))).toBeNull();
     expect(title.update(DT, makeInput({ taps: [center] }))).toBeNull();
+    confirmShip(title);
     expect(title.update(DT, makeInput({ taps: [point(DIFFICULTY_EASY_BUTTON)] }))).toBe('battle');
   });
 
@@ -409,10 +441,13 @@ describe('title screen start button', () => {
     expect(ctx.bossRush).toBeUndefined();
     expect(ctx.battleEntry).toBe('stage');
 
+    confirmShip(title);
     expect(title.update(DT, makeInput({ taps: [point(DIFFICULTY_BACK_BUTTON)] }))).toBeNull();
     expect(ctx.bossRush).toBeUndefined();
+    expect(title.update(DT, makeInput({ taps: [point(SHIP_SELECT_BACK)] }))).toBeNull();
 
     expect(title.update(DT, makeInput({ taps: [rush] }))).toBeNull();
+    confirmShip(title);
     expect(title.update(DT, makeInput({ taps: [point(DIFFICULTY_MEDIUM_BUTTON)] }))).toBe('battle');
     expect(ctx.playMode).toBe('play');
     expect(ctx.battleEntry).toBe('boss');
@@ -449,6 +484,8 @@ describe('title screen start button', () => {
     expect(title.update(DT, makeInput({ taps: [center] }))).toBeNull();
     const frozen = peekSharedTitleAttract()?.stats().time ?? -1;
     for (let i = 0; i < 30; i++) title.update(DT, makeInput());
+    expect(peekSharedTitleAttract()?.stats().time).toBe(frozen);
+    confirmShip(title);
     expect(peekSharedTitleAttract()?.stats().time).toBe(frozen);
     expect(title.update(DT, makeInput({ taps: [point(DIFFICULTY_HARD_BUTTON)] }))).toBe('battle');
   });

@@ -1661,7 +1661,7 @@ function stepImpact(state: TiebaoState, dt: number): void {
 
 function playerHit(world: BossWorld | undefined, x: number, y: number, radius: number): boolean {
   if (!world) return false;
-  const reach = radius + HITBOX_RADIUS;
+  const reach = radius + (world.hitRadius ?? HITBOX_RADIUS);
   const dx = world.playerX - x;
   const dy = world.playerY - y;
   return dx * dx + dy * dy <= reach * reach;

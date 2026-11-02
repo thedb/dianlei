@@ -31,7 +31,18 @@ export type WeaponId = 'vulcan' | 'homing';
 
 /** Where a volley's projectiles go. The battle scene backs these with pools. */
 export interface WeaponEmitter {
-  bullet(x: number, y: number, vx: number, vy: number, damage: number): void;
+  /**
+   * `width` / `height` default to the 4×12 vulcan shell. Mandy Lv3 passes 6×14.
+   */
+  bullet(
+    x: number,
+    y: number,
+    vx: number,
+    vy: number,
+    damage: number,
+    width?: number,
+    height?: number
+  ): void;
   /** `angle` in radians, -PI/2 is straight up. */
   missile(x: number, y: number, angle: number, damage: number): void;
 }

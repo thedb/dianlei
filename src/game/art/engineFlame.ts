@@ -108,18 +108,11 @@ export function drawPlayerFlames(
   nozzleOffsets: Array<{ x: number; y: number }>,
   velocityY: number,
   time: number,
-  boost = 0
+  boost = 0,
+  config: FlameConfig = PLAYER_FLAME_CONFIG
 ): void {
   for (const nozzle of nozzleOffsets) {
-    drawEngineFlame(
-      ctx,
-      centerX + nozzle.x,
-      centerY + nozzle.y,
-      PLAYER_FLAME_CONFIG,
-      velocityY,
-      time,
-      boost
-    );
+    drawEngineFlame(ctx, centerX + nozzle.x, centerY + nozzle.y, config, velocityY, time, boost);
   }
 }
 
@@ -178,13 +171,17 @@ export function fittedNozzle(
   };
 }
 
-function fittedFlameConfig(scaleX: number, scaleY: number): FlameConfig {
-  if (scaleX === 1 && scaleY === 1) return PLAYER_FLAME_CONFIG;
+function fittedFlameConfig(
+  scaleX: number,
+  scaleY: number,
+  base: FlameConfig = PLAYER_FLAME_CONFIG
+): FlameConfig {
+  if (scaleX === 1 && scaleY === 1 && base === PLAYER_FLAME_CONFIG) return PLAYER_FLAME_CONFIG;
   return {
-    ...PLAYER_FLAME_CONFIG,
-    baseLength: PLAYER_FLAME_CONFIG.baseLength * scaleY,
-    baseWidth: PLAYER_FLAME_CONFIG.baseWidth * scaleX,
-    flickerAmount: PLAYER_FLAME_CONFIG.flickerAmount * scaleY,
+    ...base,
+    baseLength: base.baseLength * scaleY,
+    baseWidth: base.baseWidth * scaleX,
+    flickerAmount: base.flickerAmount * scaleY,
   };
 }
 
@@ -201,11 +198,12 @@ export function drawFittedPlayerFlames(
   drawn: FlameSpriteBox,
   velocityY: number,
   time: number,
-  boost = 0
+  boost = 0,
+  base: FlameConfig = PLAYER_FLAME_CONFIG
 ): void {
   const scaleX = drawn.width / source.width;
   const scaleY = drawn.height / source.height;
-  const config = fittedFlameConfig(scaleX, scaleY);
+  const config = fittedFlameConfig(scaleX, scaleY, base);
   for (const nozzle of source.nozzles) {
     const at = fittedNozzle(source, nozzle, drawn);
     drawEngineFlame(ctx, centerX + at.x, centerY + at.y, config, velocityY, time, boost);

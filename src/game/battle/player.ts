@@ -19,9 +19,9 @@ import {
   LIVES_MAX,
   LOGICAL_H,
   LOGICAL_W,
+  FIRE_RATE,
   PLAYER_MARGIN,
   PLAYER_SPAWN_Y,
-  PLAYER_SPEED,
   RESPAWN_DELAY,
   RESPAWN_FLYIN_TIME,
   RESPAWN_INVINCIBLE_TIME,
@@ -30,6 +30,7 @@ import {
 } from '@/game/config';
 import { getBankFrameIndex, PLAYER_DEATH_EXPLOSION } from '@/game/art';
 import { ITEM_DEFS, type ItemType } from '@/game/entities/item';
+import { shipDef } from '@/game/entities/shipDefs';
 import { isPlayerVulnerable as isVulnerable } from '@/game/systems/collision';
 import { applyMatePickup, fireMates } from '@/game/systems/mate';
 import {
@@ -60,15 +61,6 @@ import {
   type PlayerShip,
 } from './context';
 import { spawnExplosion, triggerShake } from './fx';
-
-/** Player death burst: [dx, dy, delay] — staggered blasts around the wreck */
-const DEATH_BURSTS: ReadonlyArray<readonly [number, number, number]> = [
-  [0, 0, 0],
-  [-7, -5, 0.08],
-  [6, 4, 0.14],
-  [-4, 7, 0.22],
-  [5, -8, 0.3],
-];
 
 /** End-of-stage stock, copied before the next stage's fresh-ship reset. */
 export function snapshotRun(state: GameState): CarriedRun {
@@ -141,9 +133,11 @@ export function resetPlayer(b: Battle): void {
 
 /** Seconds between volleys. The weapon-test range substitutes its live rate. */
 export function volleyInterval(b: Battle, w: EquippedWeapon): number {
-  const rate =
-    weaponTestVolleyRate(b.rules().range, b.tune, w.id) ?? weaponLevel(w.id, w.level).rate;
-  return 1 / rate;
+  const tuned = weaponTestVolleyRate(b.rules().range, b.tune, w.id);
+  if (tuned !== null) return 1 / tuned;
+  // Eagle's rate is FIRE_RATE, so an omitted shipId stays on the old clock.
+  if (w.id === 'vulcan') return 1 / shipDef(b.scene.shipId).fireRate;
+  return 1 / weaponLevel(w.id, w.level).rate;
 }
 
 /** One volley of the weapon in a slot. The title demo goes through here too. */
@@ -151,14 +145,12 @@ function fireVolley(b: Battle, weapon: EquippedWeapon): void {
   const level = weaponLevel(weapon.id, weapon.level);
   const damage = weaponTestVolleyDamage(b.rules().range, b.tune, weapon.id);
   const emit = damage === null ? b.emitter : emitWithDamage(b.emitter, damage);
-  level.fire(b.player.x, b.player.y, emit);
-  if (WEAPONS[weapon.id].slot === 'main') {
-    // Same beat as the main gun, including a weapon-test P速 change.
-    // The raw emitter keeps the damage on PLAYER_BULLET_DAMAGE, so P伤
-    // and the vulcan pattern do not leak onto the wingmen.
-    fireMates(b.state.mate, b.player.x, b.player.y, b.emitter);
-    b.sfx('shoot');
+  if (weapon.id === 'vulcan') {
+    shipDef(b.scene.shipId).fire(weapon.level, b.player.x, b.player.y, emit);
+  } else {
+    level.fire(b.player.x, b.player.y, emit);
   }
+  if (WEAPONS[weapon.id].slot === 'main') b.sfx('shoot');
 }
 
 export function isPlayerControllable(b: Battle): boolean {
@@ -216,7 +208,7 @@ export function killPlayer(b: Battle): void {
   clearEnemyBullets(b);
 
   // The ship sprite stops drawing this frame; only the explosion remains
-  for (const [dx, dy, delay] of DEATH_BURSTS) {
+  for (const [dx, dy, delay] of shipDef(b.scene.shipId).deathBursts) {
     spawnExplosion(b.fx, player.x + dx, player.y + dy, PLAYER_DEATH_EXPLOSION, delay);
   }
   triggerShake(b.fx, SHAKE_BIG_INTENSITY, SHAKE_BIG_DURATION);
@@ -253,7 +245,8 @@ function easeOutQuad(t: number): number {
 /** Movement, banking, and both weapon slots while the ship is under control. */
 export function steerPlayer(b: Battle, dt: number, input: InputState): void {
   const { player, state } = b;
-  const speed = PLAYER_SPEED * input.joystickMagnitude;
+  const ship = shipDef(b.scene.shipId);
+  const speed = ship.speed * input.joystickMagnitude;
   player.x += input.joystickX * speed * dt;
   player.y += input.joystickY * speed * dt;
   player.velocityY = input.joystickY * input.joystickMagnitude;
@@ -292,11 +285,16 @@ export function steerPlayer(b: Battle, dt: number, input: InputState): void {
   // The saucer show keeps the stick. Guns, wingmen, and the bomb do not.
   if (obsidianCutsceneActive(b.boss)) return;
 
-  // Main and sub fire together while A is held, each on its own clock
+  // Main and sub fire together while A is held, each on its own clock.
+  // Wingmen keep Eagle's 5 Hz even when the main gun is Jason's 10 Hz.
+  // On Eagle both clocks start at the same interval, so the shots still match.
   const held = b.controls.fireHeld;
   const main = state.main;
   b.guns.main = stepFireClock(b.guns.main, dt, volleyInterval(b, main), held, () =>
     fireVolley(b, main)
+  );
+  b.guns.mate = stepFireClock(b.guns.mate, dt, 1 / FIRE_RATE, held, () =>
+    fireMates(state.mate, player.x, player.y, b.emitter, ship.mateOffsetX)
   );
   const sub = state.sub;
   if (sub) {

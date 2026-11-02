@@ -13,6 +13,7 @@ import {
   createDebugPanel,
 } from '@/game/ui/debugPanel';
 import { START_BUTTON } from '@/game/ui/startButton';
+import { SHIP_SELECT_BACK, SHIP_SELECT_CONFIRM } from '@/game/ui/shipSelect';
 import { DIFFICULTY_EASY_BUTTON, DIFFICULTY_MEDIUM_BUTTON } from '@/game/ui/difficultySelect';
 import { STAGE_SELECT_2_BUTTON, STAGE_SELECT_BACK_BUTTON } from '@/game/ui/stageSelect';
 import {
@@ -93,6 +94,13 @@ function stubAttract(): TitleAttract & { updates: () => number } {
   };
 }
 
+function confirmShip(
+  title: ReturnType<typeof createTitleScene>,
+  next: 'battle' | null = null
+): void {
+  expect(title.update(DT, makeInput({ taps: [point(SHIP_SELECT_CONFIRM)] }))).toBe(next);
+}
+
 function openPanel(title: ReturnType<typeof createTitleScene>): void {
   for (let i = 0; i < DEBUG_HOT_TAPS; i++) {
     expect(title.update(DT, makeInput({ taps: [hot] }))).toBeNull();
@@ -131,6 +139,8 @@ describe('title debug entry', () => {
     expect(attract.updates()).toBe(frozen);
     expect(ctx.battleEntry).toBe('stage');
     expect(ctx.difficulty).toBeUndefined();
+    confirmShip(title);
+    expect(attract.updates()).toBe(frozen);
 
     expect(title.update(DT, makeInput({ taps: [point(BOSS_STAGE_1_BUTTON)] }))).toBeNull();
     expect(title.update(DT, makeInput())).toBeNull();
@@ -161,13 +171,16 @@ describe('title debug entry', () => {
     const title = createTitleScene(ctx, stubAttract());
     title.enter();
     openPanel(title);
-    expect(title.update(DT, makeInput({ taps: [point(DEBUG_WEAPON_BUTTON)] }))).toBe('battle');
+    expect(title.update(DT, makeInput({ taps: [point(DEBUG_WEAPON_BUTTON)] }))).toBeNull();
+    confirmShip(title, 'battle');
     expect(ctx.playMode).toBe('weaponTest');
     expect(ctx.battleEntry).toBe('stage');
+    expect(ctx.shipId).toBe('eagle');
 
     title.enter();
     const start = { x: START_BUTTON.x + 8, y: START_BUTTON.y + 8 };
     expect(title.update(DT, makeInput({ taps: [start] }))).toBeNull();
+    confirmShip(title);
     expect(title.update(DT, makeInput({ taps: [point(DIFFICULTY_EASY_BUTTON)] }))).toBe('battle');
     expect(ctx.playMode).toBe('play');
     expect(ctx.battleEntry).toBe('stage');
@@ -189,6 +202,7 @@ describe('title debug entry', () => {
       y: START_BUTTON.y + START_BUTTON.h / 2,
     };
     expect(title.update(DT, makeInput({ taps: [start] }))).toBeNull();
+    confirmShip(title);
     expect(title.update(DT, makeInput({ taps: [point(DIFFICULTY_EASY_BUTTON)] }))).toBe('battle');
     expect(ctx.playMode).toBe('play');
     expect(ctx.difficulty).toBe('easy');
@@ -208,6 +222,7 @@ describe('title debug entry', () => {
 
     expect(title.update(DT, makeInput({ taps: [hot] }))).toBeNull();
     expect(title.update(DT, makeInput({ taps: [point(DEBUG_BOSS_BUTTON)] }))).toBeNull();
+    confirmShip(title);
     expect(title.update(DT, makeInput({ taps: [point(BOSS_STAGE_1_BUTTON)] }))).toBeNull();
     expect(title.update(DT, makeInput({ taps: [point(BOSS_DIFF_HARD_BUTTON)] }))).toBe('battle');
     expect(ctx.battleEntry).toBe('boss');
@@ -230,6 +245,7 @@ describe('title debug entry', () => {
     expect(title.update(DT, makeInput({ taps: [hot] }))).toBeNull();
     expect(title.update(DT, makeInput({ taps: [point(DEBUG_BOSS_BUTTON)] }))).toBeNull();
     expect(title.update(DT, makeInput({ menuConfirm: true }))).toBeNull();
+    expect(title.update(DT, makeInput({ menuConfirm: true }))).toBeNull();
     expect(title.update(DT, makeInput({ menuConfirm: true }))).toBe('battle');
     expect(ctx.battleEntry).toBe('boss');
     expect(ctx.difficulty).toBe('easy');
@@ -242,6 +258,7 @@ describe('title debug entry', () => {
     title.enter();
     openPanel(title);
     expect(title.update(DT, makeInput({ taps: [point(DEBUG_BOSS_BUTTON)] }))).toBeNull();
+    confirmShip(title);
     expect(title.update(DT, makeInput({ taps: [point(BOSS_STAGE_1_BUTTON)] }))).toBeNull();
     const frozen = attract.updates();
 
@@ -251,10 +268,12 @@ describe('title debug entry', () => {
     expect(ctx.playMode).toBeUndefined();
 
     expect(title.update(DT, makeInput({ menuBack: true }))).toBeNull();
+    expect(title.update(DT, makeInput({ taps: [point(SHIP_SELECT_BACK)] }))).toBeNull();
     expect(title.update(DT, makeInput())).toBeNull();
     expect(attract.updates()).toBe(frozen + 1);
 
-    expect(title.update(DT, makeInput({ taps: [point(DEBUG_WEAPON_BUTTON)] }))).toBe('battle');
+    expect(title.update(DT, makeInput({ taps: [point(DEBUG_WEAPON_BUTTON)] }))).toBeNull();
+    confirmShip(title, 'battle');
     expect(ctx.playMode).toBe('weaponTest');
     expect(ctx.battleEntry).toBe('stage');
     expect(ctx.challengeStage).toBeUndefined();
@@ -270,6 +289,8 @@ describe('title debug entry', () => {
     expect(title.update(DT, makeInput({ taps: [point(DEBUG_STAGE_BUTTON)] }))).toBeNull();
     const frozen = attract.updates();
     expect(title.update(DT, makeInput())).toBeNull();
+    expect(attract.updates()).toBe(frozen);
+    confirmShip(title);
     expect(attract.updates()).toBe(frozen);
 
     expect(title.update(DT, makeInput({ taps: [point(STAGE_SELECT_2_BUTTON)] }))).toBeNull();
@@ -288,8 +309,11 @@ describe('title debug entry', () => {
     title.enter();
     openPanel(title);
     title.update(DT, makeInput({ taps: [point(DEBUG_STAGE_BUTTON)] }));
+    confirmShip(title);
     expect(title.update(DT, makeInput({ taps: [point(STAGE_SELECT_BACK_BUTTON)] }))).toBeNull();
+    expect(title.update(DT, makeInput({ taps: [point(SHIP_SELECT_BACK)] }))).toBeNull();
     expect(title.update(DT, makeInput({ taps: [point(DEBUG_BOSS_BUTTON)] }))).toBeNull();
+    confirmShip(title);
     expect(title.update(DT, makeInput({ taps: [point(BOSS_STAGE_2_BUTTON)] }))).toBeNull();
     expect(title.update(DT, makeInput({ taps: [point(BOSS_DIFF_HARD_BUTTON)] }))).toBe('battle');
     expect(ctx.battleEntry).toBe('boss');
@@ -304,7 +328,9 @@ describe('title debug entry', () => {
     title.enter();
     openPanel(title);
     title.update(DT, makeInput({ taps: [point(DEBUG_BOSS_BUTTON)] }));
+    confirmShip(title);
     expect(title.update(DT, makeInput({ taps: [point(BOSS_STAGE_BACK_BUTTON)] }))).toBeNull();
+    expect(title.update(DT, makeInput({ taps: [point(SHIP_SELECT_BACK)] }))).toBeNull();
     expect(title.update(DT, makeInput({ taps: [point(DEBUG_CLOSE_BUTTON)] }))).toBeNull();
     expect(ctx.battleEntry).toBe('stage');
     expect(ctx.difficulty).toBeUndefined();

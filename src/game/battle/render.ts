@@ -8,7 +8,6 @@ import type { Renderer } from '@/engine/renderer';
 import {
   BOMB_WAVE_TIME,
   HITBOX_ALPHA,
-  HITBOX_RADIUS,
   INVINCIBLE_ALPHA_MAX,
   INVINCIBLE_ALPHA_MIN,
   INVINCIBLE_BLINK_FAST,
@@ -37,6 +36,7 @@ import {
   type BankFrame,
   type GameAssets,
 } from '@/game/art';
+import { shipDef, type ShipId } from '@/game/entities/shipDefs';
 import { matePixels, matePlacements } from '@/game/systems/mate';
 import { ENEMY_DEFS } from '@/game/entities/enemyDefs';
 import {
@@ -124,6 +124,12 @@ function exhaustBoost(b: Battle): number | null {
   return Math.max(b.victory.flame, b.chaseBoost, launch);
 }
 
+function playerSheet(assets: GameAssets, id: ShipId) {
+  if (id === 'mandy') return assets.ships?.mandy ?? assets.player;
+  if (id === 'jason') return assets.ships?.jason ?? assets.player;
+  return assets.player;
+}
+
 function drawMates(
   renderer: Renderer,
   ctx: CanvasRenderingContext2D,
@@ -133,7 +139,8 @@ function drawMates(
   renderY: number,
   boost: number | null
 ): void {
-  const places = matePlacements(b.state.mate);
+  const ship = shipDef(b.scene.shipId);
+  const places = matePlacements(b.state.mate, ship.mateOffsetX);
   if (places.length === 0) return;
   const w = matePixels(frame.width);
   const h = matePixels(frame.height);
@@ -146,16 +153,30 @@ function drawMates(
     // or it drifts across the snapped ship while the player moves.
     const at = flooredSpriteCenter(x, y, ax, ay);
     if (boost !== null) {
-      drawFittedPlayerFlames(
-        ctx,
-        at.x,
-        at.y,
-        frame,
-        { width: w, height: h, anchorX: ax, anchorY: ay },
-        b.player.velocityY,
-        b.gameTime,
-        boost
-      );
+      if (ship.id === 'eagle') {
+        drawFittedPlayerFlames(
+          ctx,
+          at.x,
+          at.y,
+          frame,
+          { width: w, height: h, anchorX: ax, anchorY: ay },
+          b.player.velocityY,
+          b.gameTime,
+          boost
+        );
+      } else {
+        drawFittedPlayerFlames(
+          ctx,
+          at.x,
+          at.y,
+          frame,
+          { width: w, height: h, anchorX: ax, anchorY: ay },
+          b.player.velocityY,
+          b.gameTime,
+          boost,
+          ship.flame
+        );
+      }
     }
     renderer.drawImage(frame.canvas, x - ax, y - ay, w, h);
   }
@@ -175,12 +196,26 @@ function drawShip(renderer: Renderer, b: Battle, assets: GameAssets, alpha: numb
     playerAlpha = blinkPhase === 0 ? INVINCIBLE_ALPHA_MAX : INVINCIBLE_ALPHA_MIN;
   }
 
-  const bankFrame = assets.player.bankFrames[player.lastBankFrame]!;
+  const ship = shipDef(b.scene.shipId);
+  const bankFrame = playerSheet(assets, ship.id).bankFrames[player.lastBankFrame]!;
   const boost = exhaustBoost(b);
   ctx.globalAlpha = playerAlpha;
   drawMates(renderer, ctx, b, bankFrame, renderX, renderY, boost);
   if (boost !== null) {
-    drawPlayerFlames(ctx, renderX, renderY, bankFrame.nozzles, player.velocityY, gameTime, boost);
+    if (ship.id === 'eagle') {
+      drawPlayerFlames(ctx, renderX, renderY, bankFrame.nozzles, player.velocityY, gameTime, boost);
+    } else {
+      drawPlayerFlames(
+        ctx,
+        renderX,
+        renderY,
+        bankFrame.nozzles,
+        player.velocityY,
+        gameTime,
+        boost,
+        ship.flame
+      );
+    }
   }
   renderer.drawImage(bankFrame.canvas, renderX - bankFrame.anchorX, renderY - bankFrame.anchorY);
   ctx.globalAlpha = 1;
@@ -195,8 +230,8 @@ function drawShip(renderer: Renderer, b: Battle, assets: GameAssets, alpha: numb
     const immune = !isPlayerVulnerable(b);
     const fill = immune ? 'rgba(0, 229, 255, 0.35)' : `rgba(255, 255, 255, ${HITBOX_ALPHA})`;
     const ring = immune ? 'rgba(0, 229, 255, 0.9)' : 'rgba(255, 255, 255, 0.9)';
-    renderer.fillCircle(renderX, renderY, HITBOX_RADIUS, fill);
-    renderer.strokeCircle(renderX, renderY, HITBOX_RADIUS + 1, ring, 1);
+    renderer.fillCircle(renderX, renderY, ship.hitRadius, fill);
+    renderer.strokeCircle(renderX, renderY, ship.hitRadius + 1, ring, 1);
   }
 }
 
@@ -293,7 +328,10 @@ export function drawField(renderer: Renderer, b: Battle, assets: GameAssets, alp
     const bx = lerp(bullet.prevX, bullet.x, alpha);
     const by = lerp(bullet.prevY, bullet.y, alpha);
     drawBulletGlow(ctx, bx, by, 8, BULLET_GLOW_COLORS.player);
-    const frame = assets.bullets.playerBullet;
+    const frame =
+      bullet.width > 4 && assets.bullets.playerBulletThick
+        ? assets.bullets.playerBulletThick
+        : assets.bullets.playerBullet;
     renderer.drawImage(frame.canvas, bx - frame.anchorX, by - frame.anchorY);
   });
 

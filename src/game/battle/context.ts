@@ -145,7 +145,7 @@ export interface Battle {
   readonly tune: WeaponTestTune;
   readonly meter: DamageMeter;
   /** Fire clocks, one per weapon slot. */
-  readonly guns: { main: number; sub: number };
+  readonly guns: { main: number; sub: number; mate: number };
   readonly controls: { fireHeld: boolean; bombPressed: boolean; lastBombInput: boolean };
   stage: StageData;
   bossCfg: BossDef;
@@ -260,7 +260,7 @@ export function createBattle(scene: SceneContext): Battle {
       },
     },
     emitter: {
-      bullet(x, y, vx, vy, damage) {
+      bullet(x, y, vx, vy, damage, width?: number, height?: number) {
         const bullet = bullets.acquire();
         bullet.x = x;
         bullet.y = y;
@@ -269,6 +269,8 @@ export function createBattle(scene: SceneContext): Battle {
         bullet.vx = vx;
         bullet.vy = vy;
         bullet.damage = damage;
+        if (width !== undefined) bullet.width = width;
+        if (height !== undefined) bullet.height = height;
       },
       missile(x, y, angle, damage) {
         spawnHomingMissile(missiles.acquire(), x, y, angle, damage);
@@ -279,7 +281,7 @@ export function createBattle(scene: SceneContext): Battle {
     chaseBoost: 0,
     tune: createWeaponTestTune(),
     meter: createDamageMeter(),
-    guns: { main: 0, sub: 0 },
+    guns: { main: 0, sub: 0, mate: 0 },
     controls: { fireHeld: false, bombPressed: false, lastBombInput: false },
     stage,
     bossCfg: stage.boss,

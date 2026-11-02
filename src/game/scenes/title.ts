@@ -7,6 +7,7 @@
  * 「挑战 Boss」 then pauses it for a stage list and a 普通 / 困难 step.
  * 「Boss连战」 uses that same formal difficulty step, then a boss-only chain.
  * 「地图预览」 pauses it for the map list.
+ * Every battle entry opens 「选择机体」 first. Attract stays Eagle and does not.
  */
 
 import type { Scene, SceneContext } from './types';
@@ -42,6 +43,8 @@ import {
 } from '@/game/ui/bossChallenge';
 import { createStageSelect } from '@/game/ui/stageSelect';
 import { createMapPreviewSelect } from '@/game/ui/mapPreviewSelect';
+import { createShipSelect } from '@/game/ui/shipSelect';
+import type { ShipId } from '@/game/entities/shipDefs';
 import { sharedTitleAttract, type TitleAttract } from './titleAttract';
 
 const ITEM_COUNT = 3;
@@ -79,6 +82,10 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
   let bossStageId = '1';
   /** 地图预览 list is up (over the debug panel). */
   let inMapPreview = false;
+  /** Where 返回 from ship select lands. Null while the screen is closed. */
+  let shipFrom: 'menu' | 'debug' | null = null;
+  type ShipNext = 'stage' | 'bossRush' | 'weapon' | 'map' | 'stageList' | 'bossList';
+  let shipNext: ShipNext | null = null;
   let blinkTimer = 0;
   // Shared demo is created in enter. An injected demo stays stopped until then.
   let attract: TitleAttract | null = injected ?? null;
@@ -89,6 +96,7 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
   const bossStageSelect = createBossStageSelect();
   const bossDifficultySelect = createBossDifficultySelect();
   const mapPreviewSelect = createMapPreviewSelect();
+  const shipSelect = createShipSelect();
   const hotZone = createDebugHotZone();
   ensureShellArt();
 
@@ -110,6 +118,52 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
     delete ctx.carriedRun;
   }
 
+  function openShip(from: 'menu' | 'debug', next: ShipNext): null {
+    shipFrom = from;
+    shipNext = next;
+    shipSelect.open(ctx.shipId);
+    return null;
+  }
+
+  function closeShip(): void {
+    shipFrom = null;
+    shipNext = null;
+    delete ctx.shipId;
+  }
+
+  function acceptShip(id: ShipId): 'battle' | null {
+    ctx.shipId = id;
+    const next = shipNext;
+    shipFrom = null;
+    shipNext = null;
+    if (next === 'stage') return openDifficulty('stage');
+    if (next === 'bossRush') return openDifficulty('bossRush');
+    if (next === 'weapon') {
+      ctx.playMode = 'weaponTest';
+      ctx.battleEntry = 'stage';
+      delete ctx.challengeStage;
+      delete ctx.runStage;
+      clearChain();
+      return 'battle';
+    }
+    if (next === 'map') {
+      inMapPreview = true;
+      mapPreviewSelect.open();
+      return null;
+    }
+    if (next === 'stageList') {
+      stagePick = 'stage';
+      stageSelect.open();
+      return null;
+    }
+    if (next === 'bossList') {
+      bossPick = 'stage';
+      bossStageSelect.open();
+      return null;
+    }
+    return null;
+  }
+
   function openSettings(): null {
     inSettings = true;
     settingsPanel.open();
@@ -128,7 +182,10 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
       stagePick = null;
       bossPick = null;
       inMapPreview = false;
+      shipFrom = null;
+      shipNext = null;
       delete ctx.runStage;
+      delete ctx.shipId;
       clearChain();
       blinkTimer = 0;
       hotZone.reset();
@@ -144,9 +201,10 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
     update(dt: number, input: InputState) {
       blinkTimer = (blinkTimer + dt) % 1;
       const live = demo();
-      // Formal difficulty, stage select, both challenge-Boss steps, and the
-      // map list pause the demo. The debug panel itself keeps it running.
-      if (!inDifficulty && stagePick === null && bossPick === null && !inMapPreview) {
+      // Ship select, formal difficulty, stage select, both challenge-Boss
+      // steps, and the map list pause the demo. The debug panel itself keeps
+      // it running, and the demo ship stays Eagle.
+      if (!inDifficulty && stagePick === null && bossPick === null && !inMapPreview && !shipFrom) {
         if (!live.isRunning()) live.start();
         live.update(dt);
       }
@@ -156,11 +214,25 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
         return null;
       }
 
+      if (shipFrom) {
+        shipSelect.tick(dt);
+        const choice = shipSelect.update(input);
+        if (choice === 'back') {
+          closeShip();
+          return null;
+        }
+        if (choice) return acceptShip(choice);
+        return null;
+      }
+
       if (inDebug) {
         if (inMapPreview) {
           const choice = mapPreviewSelect.update(input);
-          if (choice === 'back') inMapPreview = false;
-          else if (choice) {
+          if (choice === 'back') {
+            inMapPreview = false;
+            return openShip('debug', 'map');
+          }
+          if (choice) {
             ctx.playMode = 'mapPreview';
             ctx.battleEntry = 'stage';
             ctx.previewMap = choice;
@@ -193,7 +265,7 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
           const choice = bossStageSelect.update(input);
           if (choice === 'back') {
             bossPick = null;
-            return null;
+            return openShip('debug', 'bossList');
           }
           if (choice) {
             bossStageId = choice;
@@ -225,7 +297,7 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
           const choice = stageSelect.update(input);
           if (choice === 'back') {
             stagePick = null;
-            return null;
+            return openShip('debug', 'stageList');
           }
           if (choice) {
             stageRunId = choice;
@@ -240,21 +312,13 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
         else if (action === 'toggleDebug') {
           ctx.settings.update({ debugMode: !ctx.settings.get().debugMode });
         } else if (action === 'stage') {
-          stagePick = 'stage';
-          stageSelect.open();
+          return openShip('debug', 'stageList');
         } else if (action === 'boss') {
-          bossPick = 'stage';
-          bossStageSelect.open();
+          return openShip('debug', 'bossList');
         } else if (action === 'mapPreview') {
-          inMapPreview = true;
-          mapPreviewSelect.open();
+          return openShip('debug', 'map');
         } else if (action === 'weaponTest') {
-          ctx.playMode = 'weaponTest';
-          ctx.battleEntry = 'stage';
-          delete ctx.challengeStage;
-          delete ctx.runStage;
-          clearChain();
-          return 'battle';
+          return openShip('debug', 'weapon');
         }
         return null;
       }
@@ -263,7 +327,7 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
         const choice = difficultySelect.update(input);
         if (choice === 'back') {
           inDifficulty = false;
-          return null;
+          return openShip('menu', startKind === 'bossRush' ? 'bossRush' : 'stage');
         }
         if (choice) {
           ctx.difficulty = choice;
@@ -295,14 +359,14 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
       if (input.menuUp) selected = (selected + ITEM_COUNT - 1) % ITEM_COUNT;
       if (input.menuDown) selected = (selected + 1) % ITEM_COUNT;
 
-      if (isStartTapped(input.taps)) return openDifficulty('stage');
+      if (isStartTapped(input.taps)) return openShip('menu', 'stage');
       if (input.taps.some((t) => hitRect(BOSS_RUSH_BUTTON, t.x, t.y))) {
-        return openDifficulty('bossRush');
+        return openShip('menu', 'bossRush');
       }
       if (input.taps.some((t) => hitRect(SETTINGS_BUTTON, t.x, t.y))) return openSettings();
       if (input.menuConfirm) {
-        if (selected === 0) return openDifficulty('stage');
-        if (selected === 1) return openDifficulty('bossRush');
+        if (selected === 0) return openShip('menu', 'stage');
+        if (selected === 1) return openShip('menu', 'bossRush');
         return openSettings();
       }
       return null;
@@ -345,6 +409,8 @@ export function createTitleScene(ctx: SceneContext, injected?: TitleAttract): Sc
 
       if (inSettings) {
         settingsPanel.render(c, ctx.input.getControlsView(), '设置');
+      } else if (shipFrom) {
+        shipSelect.render(c);
       } else if (stagePick === 'stage') {
         stageSelect.render(c);
       } else if (stagePick === 'difficulty') {

@@ -8,6 +8,7 @@ import { getStage } from '@/game/levels/registry';
 import { buildPreviewTrack, type MapPreviewTarget } from '@/game/maps';
 import { PLAY_MODE_RULES } from '@/game/battle/playMode';
 import { DEBUG_MAP_BUTTON } from '@/game/ui/debugPanel';
+import { SHIP_SELECT_BACK, SHIP_SELECT_CONFIRM } from '@/game/ui/shipSelect';
 import { MAP_PREVIEW_ROWS, mapPreviewButton } from '@/game/ui/mapPreviewSelect';
 import type { ControlsView } from '@/engine/input';
 import type { SceneContext } from './types';
@@ -162,6 +163,7 @@ describe('地图预览 entry on the title', () => {
     title.enter();
     for (let i = 0; i < DEBUG_HOT_TAPS; i++) title.update(DT, makeInput({ taps: [hot] }));
     expect(title.update(DT, makeInput({ taps: [point(DEBUG_MAP_BUTTON)] }))).toBeNull();
+    expect(title.update(DT, makeInput({ taps: [point(SHIP_SELECT_CONFIRM)] }))).toBeNull();
     return title;
   }
 
@@ -202,10 +204,11 @@ describe('地图预览 entry on the title', () => {
     const ctx = context(undefined, false);
     const title = openList(ctx);
     expect(title.update(DT, makeInput({ taps: [point(mapPreviewButton('back'))] }))).toBeNull();
+    expect(title.update(DT, makeInput({ taps: [point(SHIP_SELECT_BACK)] }))).toBeNull();
     expect(title.update(DT, makeInput({ taps: [point(DEBUG_MAP_BUTTON)] }))).toBeNull();
+    expect(title.update(DT, makeInput({ taps: [point(SHIP_SELECT_CONFIRM)] }))).toBeNull();
     expect(title.update(DT, makeInput({ menuBack: true }))).toBeNull();
-    expect(title.update(DT, makeInput({ taps: [point(DEBUG_MAP_BUTTON)] }))).toBeNull();
-    expect(title.update(DT, makeInput({ menuBack: true }))).toBeNull();
+    expect(title.update(DT, makeInput({ taps: [point(SHIP_SELECT_BACK)] }))).toBeNull();
     expect(ctx.playMode).not.toBe('mapPreview');
   });
 });
