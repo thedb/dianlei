@@ -10,6 +10,7 @@ import {
   PLAYER_BULLET_SPEED,
   PLAYER_SPEED,
 } from '@/game/config';
+import { PLAYER_FLAME_CONFIG } from '@/game/art/engineFlame';
 import { COLOR, PALETTE } from '@/game/palette';
 import { weaponLevel } from '@/game/systems/playerWeapons';
 import type { WeaponEmitter } from '@/game/systems/playerWeapons';
@@ -91,8 +92,8 @@ describe('ship table', () => {
       bulletSpeed: 720,
       muzzleY: 18,
       mateOffsetX: 32,
-      flame: { baseLength: 10, baseWidth: 5 },
     });
+    expect(shipDef('mandy').flame).toBe(PLAYER_FLAME_CONFIG);
     expect(shipDef('mandy').lines.join('')).toContain('主炮更宽');
     expect(shipDef('jason')).toMatchObject({
       role: '高速',
@@ -105,8 +106,8 @@ describe('ship table', () => {
       bulletSpeed: 900,
       muzzleY: 13,
       mateOffsetX: 20,
-      flame: { baseLength: 12, baseWidth: 6 },
     });
+    expect(shipDef('jason').flame).toBe(PLAYER_FLAME_CONFIG);
     expect(shipDef('jason').lines.join('')).toContain('炮弹更快');
     expect(shipDef('eagle').lines.join('')).toContain('火力取中');
   });

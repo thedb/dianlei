@@ -11,7 +11,6 @@ import { createSceneManager } from './index';
 import { BOSS_RUSH_BUTTON, createTitleScene, SETTINGS_BUTTON } from './title';
 import { GAME_TITLE } from '@/game/ui/titleFont';
 import { fakeShellImage, resetShellArtForTests, setShellArtForTests } from '@/game/ui/shellArt';
-import { FakeOffscreenCanvas } from '@/test/fakeCanvas';
 import { peekSharedTitleAttract, resetSharedTitleAttractForTests } from './titleAttract';
 
 vi.mock('@/game/art', async (importOriginal) => {
@@ -273,13 +272,10 @@ describe('title screen start button', () => {
     expect(ctx.playMode).toBeUndefined();
     expect(ctx.difficulty).toBeUndefined();
     expect(ctx.shipId).toBeUndefined();
-    // The flow mock has no map art, and node has no canvas. Stop the attract
-    // and stub the bake so this render only has to draw the select text.
-    vi.stubGlobal('OffscreenCanvas', FakeOffscreenCanvas);
+    // The flow mock has no map art. Stop the attract so this render only draws the list.
     peekSharedTitleAttract()?.stop();
     const renderer = textRenderer();
     title.render(renderer, 1);
-    vi.unstubAllGlobals();
     expect(renderer.texts).toContain('选择机体');
     expect(renderer.texts).toContain('Eagle');
     expect(renderer.texts).toContain('Mandy');

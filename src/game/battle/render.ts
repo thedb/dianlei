@@ -124,6 +124,7 @@ function exhaustBoost(b: Battle): number | null {
   return Math.max(b.victory.flame, b.chaseBoost, launch);
 }
 
+/** TEMP: Mandy and Jason resolve to Eagle's sheet until G2/G4. */
 function playerSheet(assets: GameAssets, id: ShipId) {
   if (id === 'mandy') return assets.ships?.mandy ?? assets.player;
   if (id === 'jason') return assets.ships?.jason ?? assets.player;
@@ -153,30 +154,17 @@ function drawMates(
     // or it drifts across the snapped ship while the player moves.
     const at = flooredSpriteCenter(x, y, ax, ay);
     if (boost !== null) {
-      if (ship.id === 'eagle') {
-        drawFittedPlayerFlames(
-          ctx,
-          at.x,
-          at.y,
-          frame,
-          { width: w, height: h, anchorX: ax, anchorY: ay },
-          b.player.velocityY,
-          b.gameTime,
-          boost
-        );
-      } else {
-        drawFittedPlayerFlames(
-          ctx,
-          at.x,
-          at.y,
-          frame,
-          { width: w, height: h, anchorX: ax, anchorY: ay },
-          b.player.velocityY,
-          b.gameTime,
-          boost,
-          ship.flame
-        );
-      }
+      // Eagle's call shape. Mandy and Jason use the same flame until G4.
+      drawFittedPlayerFlames(
+        ctx,
+        at.x,
+        at.y,
+        frame,
+        { width: w, height: h, anchorX: ax, anchorY: ay },
+        b.player.velocityY,
+        b.gameTime,
+        boost
+      );
     }
     renderer.drawImage(frame.canvas, x - ax, y - ay, w, h);
   }
@@ -202,20 +190,7 @@ function drawShip(renderer: Renderer, b: Battle, assets: GameAssets, alpha: numb
   ctx.globalAlpha = playerAlpha;
   drawMates(renderer, ctx, b, bankFrame, renderX, renderY, boost);
   if (boost !== null) {
-    if (ship.id === 'eagle') {
-      drawPlayerFlames(ctx, renderX, renderY, bankFrame.nozzles, player.velocityY, gameTime, boost);
-    } else {
-      drawPlayerFlames(
-        ctx,
-        renderX,
-        renderY,
-        bankFrame.nozzles,
-        player.velocityY,
-        gameTime,
-        boost,
-        ship.flame
-      );
-    }
+    drawPlayerFlames(ctx, renderX, renderY, bankFrame.nozzles, player.velocityY, gameTime, boost);
   }
   renderer.drawImage(bankFrame.canvas, renderX - bankFrame.anchorX, renderY - bankFrame.anchorY);
   ctx.globalAlpha = 1;

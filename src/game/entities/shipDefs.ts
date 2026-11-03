@@ -15,7 +15,6 @@ import {
   PLAYER_BULLET_SPEED,
   PLAYER_SPEED,
 } from '@/game/config';
-import { PALETTE, COLOR } from '@/game/palette';
 import { PLAYER_FLAME_CONFIG, type FlameConfig } from '@/game/art/engineFlame';
 import { weaponLevel, type WeaponEmitter } from '@/game/systems/playerWeapons';
 
@@ -39,6 +38,10 @@ export interface ShipDef {
   lines: readonly string[];
   speed: number;
   hitRadius: number;
+  /**
+   * Previous look-lock size. The drawn sheet is Eagle's 28×32 until G4.
+   * The next canvas is about 48×32 (Mandy) and 26×30 (Jason). Not applied.
+   */
   spriteW: number;
   spriteH: number;
   /** Main-gun volleys per second. Thin-shell damage is `bulletDamage`. */
@@ -50,6 +53,7 @@ export interface ShipDef {
   /** Muzzle distance above the ship center. Eagle's shots still use VULCAN_MUZZLE_Y. */
   muzzleY: number;
   mateOffsetX: number;
+  /** TEMP: every ship uses Eagle's flame until G4. */
   flame: FlameConfig;
   /** [dx, dy, delay] around the wreck. Eagle's list is the historical one. */
   deathBursts: ReadonlyArray<readonly [number, number, number]>;
@@ -139,12 +143,7 @@ const MANDY: ShipDef = {
   bulletSpeed: MANDY_SPEED,
   muzzleY: MANDY_MUZZLE_Y,
   mateOffsetX: 32,
-  flame: {
-    ...PLAYER_FLAME_CONFIG,
-    baseLength: 10,
-    baseWidth: 5,
-    flickerAmount: 2,
-  },
+  flame: PLAYER_FLAME_CONFIG,
   deathBursts: [
     [0, 0, 0],
     [-8, -6, 0.08],
@@ -169,14 +168,7 @@ const JASON: ShipDef = {
   bulletSpeed: JASON_SPEED,
   muzzleY: JASON_MUZZLE_Y,
   mateOffsetX: 20,
-  flame: {
-    baseLength: 12,
-    baseWidth: 6,
-    flickerAmount: 2,
-    coreColor: PALETTE[COLOR.PLAYER_GOLD_LIGHT],
-    outerColor: PALETTE[COLOR.PLAYER_PURPLE_MID],
-    glowColor: 'rgba(253, 185, 39, 0.35)',
-  },
+  flame: PLAYER_FLAME_CONFIG,
   deathBursts: [
     [0, 0, 0],
     [-5, -4, 0.08],
