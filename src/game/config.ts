@@ -846,14 +846,19 @@ export const OBSIDIAN_BLADE_RADIUS = 14;
 /** Distance from a hinge pivot to that blade's hit circle. */
 export const OBSIDIAN_BLADE_REACH = 38;
 /**
- * Swept wing, open cross blade, and round hinge lock, in pixels.
+ * Folded swept wing, open cross blade, and round hinge lock, in pixels.
+ * Phase 2 uses `OBSIDIAN_HALF_BLADE_W/H` (about +40% on the swept wing only).
  * The fight rotates these around the hinge. Sizes do not move the hit circles
- * (`OBSIDIAN_BLADE_REACH` stays 38, radii stay 14 / 19 / 32). The fuselage
- * frame stays 80×96 so the saucer gap in §8 stays 48px; the painted body
- * fills that frame (radar to a single jet) instead of sitting inset.
+ * (`OBSIDIAN_BLADE_REACH` stays 38, radii stay 14 / 19 / 32, armor samples
+ * stay 14 / 28 / 46). The fuselage frame stays 80×96 so the saucer gap in §8
+ * stays 48px; the painted body fills that frame (radar to a single jet)
+ * instead of sitting inset.
  */
 export const OBSIDIAN_BLADE_W = 28;
 export const OBSIDIAN_BLADE_H = 68;
+/** Phase-2 swept wing. 28×1.4 and 68×1.4, rounded. Folded swept and the cross stay put. */
+export const OBSIDIAN_HALF_BLADE_W = 39;
+export const OBSIDIAN_HALF_BLADE_H = 95;
 export const OBSIDIAN_CROSS_W = 18;
 export const OBSIDIAN_CROSS_H = 80;
 export const OBSIDIAN_BLADE_STUB = 18;

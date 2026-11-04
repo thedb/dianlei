@@ -141,7 +141,10 @@ export function drawObsidianBoss(
       ctx.save();
       ctx.translate(boss.x, boss.y);
       ctx.rotate(bank);
-      const swept = assets.parts.bladeSwept;
+      const foldedSweep = boss.phase === 'folded' || boss.phase === 'enter';
+      const swept = foldedSweep
+        ? assets.parts.bladeSwept
+        : (assets.parts.bladeHalf ?? assets.parts.bladeSwept);
       const cross = assets.parts.bladeCross ?? swept;
       const stub = assets.parts.bladeStub;
       const bladeOrder = OBSIDIAN_BLADES.map((spec, index) => ({ spec, index })).sort((a, b) => {

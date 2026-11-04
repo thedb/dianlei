@@ -45,7 +45,7 @@ const river = getMapGrid('riverA');
 
 const COUNTS = {
   easy: {
-    small: 78,
+    small: 98,
     medium: 3,
     interceptor: 12,
     bomber: 2,
@@ -55,11 +55,11 @@ const COUNTS = {
     missile_car: 1,
     parked_fighter: 4,
     strike: 2,
-    total: 125,
-    target: 120,
+    total: 145,
+    target: 145,
   },
   medium: {
-    small: 94,
+    small: 110,
     medium: 3,
     interceptor: 15,
     bomber: 2,
@@ -69,11 +69,11 @@ const COUNTS = {
     missile_car: 1,
     parked_fighter: 6,
     strike: 5,
-    total: 155,
-    target: 155,
+    total: 171,
+    target: 171,
   },
   hard: {
-    small: 120,
+    small: 130,
     medium: 3,
     interceptor: 18,
     bomber: 2,
@@ -83,8 +83,8 @@ const COUNTS = {
     missile_car: 2,
     parked_fighter: 8,
     strike: 7,
-    total: 192,
-    target: 185,
+    total: 202,
+    target: 202,
   },
 } as const;
 
