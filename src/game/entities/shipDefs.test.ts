@@ -14,7 +14,7 @@ import { PLAYER_FLAME_CONFIG } from '@/game/art/engineFlame';
 import { COLOR, PALETTE } from '@/game/palette';
 import { weaponLevel } from '@/game/systems/playerWeapons';
 import type { WeaponEmitter } from '@/game/systems/playerWeapons';
-import { listShips, shipDef, type ShipId } from './shipDefs';
+import { listShips, shipDef, shipGradeLine, type ShipId } from './shipDefs';
 
 interface Shot {
   x: number;
@@ -82,34 +82,42 @@ describe('ship table', () => {
     expect(listShips().map((s) => s.name)).toEqual(['Eagle', 'Mandy', 'Jason']);
     expect(shipDef('mandy')).toMatchObject({
       role: '轰炸',
-      speed: 240,
+      speed: 224,
+      speedGrade: 4,
+      powerGrade: 7,
+      rateGrade: 4,
       hitRadius: 3,
       spriteW: 32,
       spriteH: 36,
       fireRate: 4,
-      bulletDamage: 1.5,
-      thickDamage: 2.5,
+      bulletDamage: 1.75,
+      thickDamage: 2.75,
       bulletSpeed: 720,
       muzzleY: 18,
       mateOffsetX: 32,
     });
     expect(shipDef('mandy').flame).toBe(PLAYER_FLAME_CONFIG);
-    expect(shipDef('mandy').lines.join('')).toContain('主炮更宽');
+    expect(shipDef('mandy').lines).toEqual([shipGradeLine(shipDef('mandy'))]);
     expect(shipDef('jason')).toMatchObject({
       role: '高速',
-      speed: 420,
+      speed: 336,
+      speedGrade: 6,
+      powerGrade: 3,
+      rateGrade: 6,
       hitRadius: 2,
       spriteW: 22,
       spriteH: 26,
-      fireRate: 10,
+      fireRate: 6,
       bulletDamage: 1,
       bulletSpeed: 900,
       muzzleY: 13,
       mateOffsetX: 20,
     });
     expect(shipDef('jason').flame).toBe(PLAYER_FLAME_CONFIG);
-    expect(shipDef('jason').lines.join('')).toContain('炮弹更快');
-    expect(shipDef('eagle').lines.join('')).toContain('火力取中');
+    expect(shipGradeLine(shipDef('eagle'))).toBe('速度 5/8 · 火力 5/8 · 攻击频率 5/8');
+    expect(shipGradeLine(shipDef('mandy'))).toBe('速度 4/8 · 火力 7/8 · 攻击频率 4/8');
+    expect(shipGradeLine(shipDef('jason'))).toBe('速度 6/8 · 火力 3/8 · 攻击频率 6/8');
+    expect(shipGradeLine(shipDef('eagle'))).not.toContain('判定');
   });
 
   it('delegates Eagle volleys to the existing vulcan fire', () => {
@@ -132,19 +140,19 @@ describe('ship table', () => {
   it('fires Mandy wide and thin, then a thick center shell at Lv3', () => {
     const lv1 = volley('mandy', 1);
     expect(lv1.map((s) => s.x - 180)).toEqual([-12, 12]);
-    expect(lv1.every((s) => s.damage === 1.5 && s.vy === -720 && s.vx === 0)).toBe(true);
+    expect(lv1.every((s) => s.damage === 1.75 && s.vy === -720 && s.vx === 0)).toBe(true);
     expect(lv1.every((s) => s.width === undefined && s.y === 560 - 18)).toBe(true);
 
     const lv2 = volley('mandy', 2);
     expect(lv2.map((s) => s.x - 180)).toEqual([-12, 0, 12]);
-    expect(lv2.every((s) => s.damage === 1.5 && s.width === undefined)).toBe(true);
+    expect(lv2.every((s) => s.damage === 1.75 && s.width === undefined)).toBe(true);
 
     const lv3 = volley('mandy', 3);
     expect(lv3.map((s) => s.x - 180)).toEqual([-12, 0, 12]);
-    expect(lv3.every((s) => s.damage === 2.5 && s.width === 6 && s.height === 14)).toBe(true);
-    expect(4 * 2 * 1.5).toBe(12);
-    expect(4 * 3 * 1.5).toBe(18);
-    expect(4 * 3 * 2.5).toBe(30);
+    expect(lv3.every((s) => s.damage === 2.75 && s.width === 6 && s.height === 14)).toBe(true);
+    expect(4 * 2 * 1.75).toBe(14);
+    expect(4 * 3 * 1.75).toBe(21);
+    expect(4 * 3 * 2.75).toBe(33);
   });
 
   it('fires Jason with Eagle spacing, damage 1, and speed 900', () => {
@@ -164,8 +172,14 @@ describe('ship table', () => {
     expect(lv3[1]!.vx).toBeCloseTo(-Math.sin(spread) * 900);
     expect(lv3[1]!.vy).toBeCloseTo(-Math.cos(spread) * 900);
     expect(lv3[2]!.vx).toBeCloseTo(Math.sin(spread) * 900);
-    expect(10 * 1).toBe(10);
-    expect(10 * 2 * 1).toBe(20);
-    expect(10 * 3 * 1).toBe(30);
+    expect(6 * 1).toBe(6);
+    expect(6 * 2 * 1).toBe(12);
+    expect(6 * 3 * 1).toBe(18);
+    expect(14).toBeGreaterThan(10);
+    expect(10).toBeGreaterThan(6);
+    expect(21).toBeGreaterThan(20);
+    expect(20).toBeGreaterThan(12);
+    expect(33).toBeGreaterThan(30);
+    expect(30).toBeGreaterThan(18);
   });
 });

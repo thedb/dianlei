@@ -34,9 +34,18 @@ export interface ShipDef {
   name: string;
   /** One-word role under the name plate. */
   role: string;
-  /** Confirmed blurb, already broken for the 156px column. */
+  /** Select-screen copy. The grade line, not the hit radius. */
   lines: readonly string[];
+  /**
+   * Eighths on the select screen (2026-11-04). Eagle is 5/8.
+   * Speed eighth is `PLAYER_SPEED / 5` (56). Rate eighth is 1 volley/s.
+   * Power eighth is 2 Lv1 full-hit DPS. Hit radius is not a grade.
+   */
+  speedGrade: number;
+  powerGrade: number;
+  rateGrade: number;
   speed: number;
+  /** Kept on the table. The select screen does not draw it. */
   hitRadius: number;
   /**
    * Previous look-lock size. The drawn sheet is Eagle's 28×32 until G4.
@@ -68,8 +77,9 @@ const EAGLE_DEATH: ReadonlyArray<readonly [number, number, number]> = [
   [5, -8, 0.3],
 ];
 
-const MANDY_THIN = 1.5;
-const MANDY_THICK = 2.5;
+/** 2026-11-04. Lv1 full-hit is 4×2×1.75 = 14. Thick keeps Lv3 above Eagle's 30. */
+const MANDY_THIN = 1.75;
+const MANDY_THICK = 2.75;
 const MANDY_SPEED = 720;
 const MANDY_MUZZLE_Y = 18;
 const JASON_SPEED = 900;
@@ -107,11 +117,21 @@ function jasonFire(level: number, x: number, y: number, emit: WeaponEmitter): vo
   emit.bullet(x + 4, by, vx, vy, JASON_DAMAGE);
 }
 
+/** Select row: 速度 a/8 · 火力 b/8 · 攻击频率 c/8. No hitbox term. */
+export function shipGradeLine(
+  ship: Pick<ShipDef, 'speedGrade' | 'powerGrade' | 'rateGrade'>
+): string {
+  return `速度 ${ship.speedGrade}/8 · 火力 ${ship.powerGrade}/8 · 攻击频率 ${ship.rateGrade}/8`;
+}
+
 const EAGLE: ShipDef = {
   id: 'eagle',
   name: 'Eagle',
   role: '均衡',
-  lines: ['速度、判定和火力取中。'],
+  speedGrade: 5,
+  powerGrade: 5,
+  rateGrade: 5,
+  lines: [],
   speed: PLAYER_SPEED,
   hitRadius: HITBOX_RADIUS,
   spriteW: 28,
@@ -127,13 +147,17 @@ const EAGLE: ShipDef = {
     weaponLevel('vulcan', level).fire(x, y, emit);
   },
 };
+EAGLE.lines = [shipGradeLine(EAGLE)];
 
 const MANDY: ShipDef = {
   id: 'mandy',
   name: 'Mandy',
   role: '轰炸',
-  lines: ['机身更大，移速更低。', '主炮更宽，射速更慢。'],
-  speed: 240,
+  speedGrade: 4,
+  powerGrade: 7,
+  rateGrade: 4,
+  lines: [],
+  speed: 224,
   hitRadius: 3,
   spriteW: 32,
   spriteH: 36,
@@ -153,17 +177,21 @@ const MANDY: ShipDef = {
   ],
   fire: mandyFire,
 };
+MANDY.lines = [shipGradeLine(MANDY)];
 
 const JASON: ShipDef = {
   id: 'jason',
   name: 'Jason',
   role: '高速',
-  lines: ['机身更小，走位更快。', '连射更密，炮弹更快。'],
-  speed: 420,
+  speedGrade: 6,
+  powerGrade: 3,
+  rateGrade: 6,
+  lines: [],
+  speed: 336,
   hitRadius: 2,
   spriteW: 22,
   spriteH: 26,
-  fireRate: 10,
+  fireRate: 6,
   bulletDamage: JASON_DAMAGE,
   bulletSpeed: JASON_SPEED,
   muzzleY: JASON_MUZZLE_Y,
@@ -178,6 +206,7 @@ const JASON: ShipDef = {
   ],
   fire: jasonFire,
 };
+JASON.lines = [shipGradeLine(JASON)];
 
 const SHIPS: Readonly<Record<ShipId, ShipDef>> = {
   eagle: EAGLE,

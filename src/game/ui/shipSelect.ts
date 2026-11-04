@@ -7,14 +7,14 @@
 
 import type { InputState } from '@/engine/input';
 import { LOGICAL_H, LOGICAL_W } from '@/game/config';
-import { listShips, SHIP_IDS, type ShipId } from '@/game/entities/shipDefs';
+import { listShips, shipGradeLine, SHIP_IDS, type ShipId } from '@/game/entities/shipDefs';
 import { drawButton, drawScrim, drawText, hitRect, UI_COLORS, type Rect } from './widgets';
 
 export const SHIP_SELECT_TITLE: Rect = { x: 24, y: 48, w: 312, h: 36 };
 export const SHIP_SELECT_ROWS: readonly Rect[] = [
-  { x: 24, y: 120, w: 312, h: 44 },
-  { x: 24, y: 176, w: 312, h: 44 },
-  { x: 24, y: 232, w: 312, h: 44 },
+  { x: 24, y: 108, w: 312, h: 68 },
+  { x: 24, y: 188, w: 312, h: 68 },
+  { x: 24, y: 268, w: 312, h: 68 },
 ];
 export const SHIP_SELECT_BACK: Rect = { x: 24, y: 568, w: 100, h: 44 };
 export const SHIP_SELECT_CONFIRM: Rect = { x: 136, y: 568, w: 200, h: 44 };
@@ -84,7 +84,18 @@ export function createShipSelect(): ShipSelect {
       for (let i = 0; i < ships.length; i++) {
         const ship = ships[i]!;
         const row = SHIP_SELECT_ROWS[i]!;
-        drawButton(ctx, row, ship.name, i === index);
+        const on = i === index;
+        drawButton(ctx, row, '', on);
+        drawText(ctx, ship.name, row.x + row.w / 2, row.y + 22, 16, UI_COLORS.text, 'center');
+        drawText(
+          ctx,
+          shipGradeLine(ship),
+          row.x + row.w / 2,
+          row.y + 46,
+          12,
+          on ? UI_COLORS.text : UI_COLORS.dim,
+          'center'
+        );
       }
 
       drawButton(ctx, SHIP_SELECT_BACK, '返回', false);

@@ -82,10 +82,10 @@ describe('ship feel in battle', () => {
     expect(scene.getWeaponTestStats()?.mainDamage).toBe(2);
   });
 
-  it('Mandy fires two shells at 4 Hz and moves at 240', () => {
+  it('Mandy fires two shells at 4 Hz and moves at 224', () => {
     const scene = setup('mandy');
     flyIn(scene);
-    expect(scene.getWeaponTestStats()).toMatchObject({ mainRate: 4, mainDamage: 1.5 });
+    expect(scene.getWeaponTestStats()).toMatchObject({ mainRate: 4, mainDamage: 1.75 });
     const frames = 18;
     for (let i = 0; i < frames; i++) scene.update(DT, makeInput({ buttonA: true }));
     expect(scene.getDebugInfo!().bulletCount).toBe(shotsIn(1 / 4, frames) * 2);
@@ -94,18 +94,18 @@ describe('ship feel in battle', () => {
     for (let i = 0; i < 10; i++) {
       scene.update(DT, makeInput({ joystickX: 1, joystickMagnitude: 1 }));
     }
-    expect(scene.getBattleView().player.x - start).toBeCloseTo(240 * 10 * DT, 5);
+    expect(scene.getBattleView().player.x - start).toBeCloseTo(224 * 10 * DT, 5);
   });
 
-  it('Jason fires at 10 Hz and 420, while mates stay on Eagle 5 Hz', () => {
+  it('Jason fires at 6 Hz and 336, while mates stay on Eagle 5 Hz', () => {
     const scene = setup('jason');
     flyIn(scene);
-    expect(scene.getWeaponTestStats()).toMatchObject({ mainRate: 10, mainDamage: 1 });
+    expect(scene.getWeaponTestStats()).toMatchObject({ mainRate: 6, mainDamage: 1 });
     scene.update(DT, makeInput());
     const frames = 18;
     const hold = makeInput({ buttonA: true });
     for (let i = 0; i < frames; i++) scene.update(DT, hold);
-    const main = shotsIn(0.1, frames);
+    const main = shotsIn(1 / 6, frames);
     const mates = shotsIn(1 / FIRE_RATE, frames) * 2;
     expect(scene.getDebugInfo!().bulletCount).toBe(main);
     expect(mates).toBeGreaterThan(0);
@@ -124,6 +124,6 @@ describe('ship feel in battle', () => {
     for (let i = 0; i < 10; i++) {
       scene.update(DT, makeInput({ joystickX: -1, joystickMagnitude: 1 }));
     }
-    expect(start - scene.getBattleView().player.x).toBeCloseTo(420 * 10 * DT, 5);
+    expect(start - scene.getBattleView().player.x).toBeCloseTo(336 * 10 * DT, 5);
   });
 });
