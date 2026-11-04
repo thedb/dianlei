@@ -28,7 +28,7 @@ import type { BackgroundArt } from './mapDraw';
 import type { BossAssets } from './bossSprite';
 
 import { createPlayerSpriteSheet } from './playerSprite';
-import { temporaryShipSheets } from './shipSprites';
+import { createLockedShipSheets } from './shipSprites';
 import { createEnemyAssets } from './enemySprite';
 import { createBuildingAssets } from './buildingSprite';
 import { createBulletAssets } from './bulletSprite';
@@ -46,7 +46,7 @@ export interface GameAssets {
   /** Eagle sheet. Render replays and attract keep reading this field. */
   player: PlayerSpriteSheet;
   /**
-   * TEMP until G2/G4: both entries are Eagle's sheet. Omitted on stubs.
+   * Mandy and Jason, baked from the G2 lock. Omitted on stubs.
    * Eagle's own draw reads `player`, not this map.
    */
   ships?: { mandy: PlayerSpriteSheet; jason: PlayerSpriteSheet };
@@ -65,8 +65,7 @@ export function createGameAssets(): GameAssets {
   const player = createPlayerSpriteSheet();
   return {
     player,
-    // TEMP: Mandy and Jason share Eagle's sheet until G2/G4.
-    ships: temporaryShipSheets(player),
+    ships: createLockedShipSheets(),
     enemies: createEnemyAssets(),
     buildings: createBuildingAssets(),
     bullets: createBulletAssets(),

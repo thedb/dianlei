@@ -47,10 +47,7 @@ export interface ShipDef {
   speed: number;
   /** Kept on the table. The select screen does not draw it. */
   hitRadius: number;
-  /**
-   * Previous look-lock size. The drawn sheet is Eagle's 28×32 until G4.
-   * The next canvas is about 48×32 (Mandy) and 26×30 (Jason). Not applied.
-   */
+  /** Drawn sheet. Eagle 28×32. Mandy and Jason are the 2026-11-04 G2 lock. */
   spriteW: number;
   spriteH: number;
   /** Main-gun volleys per second. Thin-shell damage is `bulletDamage`. */
@@ -159,8 +156,8 @@ const MANDY: ShipDef = {
   lines: [],
   speed: 224,
   hitRadius: 3,
-  spriteW: 32,
-  spriteH: 36,
+  spriteW: 48,
+  spriteH: 32,
   fireRate: 4,
   bulletDamage: MANDY_THIN,
   thickDamage: MANDY_THICK,
@@ -189,8 +186,8 @@ const JASON: ShipDef = {
   lines: [],
   speed: 336,
   hitRadius: 2,
-  spriteW: 22,
-  spriteH: 26,
+  spriteW: 26,
+  spriteH: 30,
   fireRate: 6,
   bulletDamage: JASON_DAMAGE,
   bulletSpeed: JASON_SPEED,

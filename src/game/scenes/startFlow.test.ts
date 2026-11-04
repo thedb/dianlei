@@ -280,10 +280,16 @@ describe('title screen start button', () => {
     expect(renderer.texts).toContain('Eagle');
     expect(renderer.texts).toContain('Mandy');
     expect(renderer.texts).toContain('Jason');
-    expect(renderer.texts).toContain('速度 5/8 · 火力 5/8 · 攻击频率 5/8');
-    expect(renderer.texts).toContain('速度 4/8 · 火力 7/8 · 攻击频率 4/8');
-    expect(renderer.texts).toContain('速度 6/8 · 火力 3/8 · 攻击频率 6/8');
+    expect(renderer.texts).toContain('速度');
+    expect(renderer.texts).toContain('火力');
+    expect(renderer.texts).toContain('攻击频率');
+    expect(renderer.texts).toContain('5/8');
+    expect(renderer.texts).not.toContain('4/8');
+    expect(renderer.texts).not.toContain('6/8');
     expect(renderer.texts.some((text) => text.includes('判定'))).toBe(false);
+    expect(renderer.texts.some((text) => text.includes('TEMP') || text.includes('Jason B'))).toBe(
+      false
+    );
   });
 
   it('opens difficulty from the start button', () => {

@@ -124,7 +124,7 @@ function exhaustBoost(b: Battle): number | null {
   return Math.max(b.victory.flame, b.chaseBoost, launch);
 }
 
-/** TEMP: Mandy and Jason resolve to Eagle's sheet until G2/G4. */
+/** Eagle reads `assets.player`. Mandy and Jason read the locked sheets. */
 function playerSheet(assets: GameAssets, id: ShipId) {
   if (id === 'mandy') return assets.ships?.mandy ?? assets.player;
   if (id === 'jason') return assets.ships?.jason ?? assets.player;
@@ -154,7 +154,6 @@ function drawMates(
     // or it drifts across the snapped ship while the player moves.
     const at = flooredSpriteCenter(x, y, ax, ay);
     if (boost !== null) {
-      // Eagle's call shape. Mandy and Jason use the same flame until G4.
       drawFittedPlayerFlames(
         ctx,
         at.x,
