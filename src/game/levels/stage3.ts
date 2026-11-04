@@ -7,7 +7,10 @@
  * `step_slide`, and `dive_once` are not used here. No `turret2`, no armed boat.
  *
  * Easy is the base count and fire. Medium and hard add ships or swap patterns
- * on the same clock. `STAGE3_WARNING_AT` (118) ends the spawns; 炉心 enters at
+ * on the same clock (145 / 171 / 202 at full power). Mid-stage (11.8s–94.4s,
+ * 10%–80% of the 118s warning) is plan B: W37 and an earlier W14 close
+ * 44–52s, and the dock / crossing smalls shoot more. Scorch after 94.4s is
+ * unchanged. `STAGE3_WARNING_AT` (118) ends the spawns; 炉心 enters at
  * `FURNACE_ENTER_AT` (123). Clear-wave rewards and the timed supply ship are
  * not implemented; W36 is the `powerBelowMax` relief carrier.
  */
@@ -61,6 +64,8 @@ function ring(interval: number, rotStep: number): Fire {
 
 /** Small-fighter fire from 0:20 on: medium adds a little, hard swaps in aimed shots (§4). */
 const SMALL_LATE: FireBy = { medium: aimedOnce(0.6), hard: burstOnce(0.55) };
+/** Dense crossing smalls. Medium takes the three-shot burst; hard stays on that burst. */
+const SMALL_DENSE: FireBy = { medium: burstOnce(0.6), hard: burstOnce(0.55) };
 const SMALL_LATE_LIGHT: FireBy = { hard: aimedOnce(0.55) };
 
 const TANK_BY: FireBy = { medium: aimed(2.0), hard: aimed(1.7) };
@@ -104,7 +109,17 @@ function sineColumn(
   x: number,
   count: number,
   countBy: CountBy,
-  opts: { vy?: number; amp?: number; period?: number; interval?: number; fireBy?: FireBy } = {}
+  opts: {
+    vy?: number;
+    amp?: number;
+    period?: number;
+    interval?: number;
+    fireBy?: FireBy;
+    /** Easy indices that fire one aimed shot. Omitted keeps every easy ship silent. */
+    easyOnly?: readonly number[];
+    /** Every ship fires. Skips the medium/hard index list. */
+    armAll?: boolean;
+  } = {}
 ): SpawnGroup {
   const group: SpawnGroup = {
     enemy: 'small',
@@ -112,26 +127,32 @@ function sineColumn(
     xs: [x],
     interval: opts.interval ?? 0.32,
     move: { kind: 'sine', vy: opts.vy ?? 120, amp: opts.amp ?? 34, period: opts.period ?? 2.2 },
-    fire: NONE,
+    fire: opts.easyOnly || opts.armAll ? aimedOnce(opts.armAll ? 0.45 : 0.55) : NONE,
   };
   if (countBy) group.countByDifficulty = countBy;
   if (opts.fireBy) {
     group.fireByDifficulty = opts.fireBy;
-    group.fireOnlyByDifficulty = { medium: [1, 3], hard: [0, 2, 4] };
+    if (!opts.armAll) group.fireOnlyByDifficulty = { medium: [1, 3], hard: [0, 2, 4] };
   }
+  if (opts.easyOnly) group.fireOnly = opts.easyOnly;
   return group;
 }
 
 /** V from the top. Lead first, then pairs outward. Hard adds the next pair. */
-function vee(center: number, fireBy?: FireBy, delay = 0): SpawnGroup {
+function vee(
+  center: number,
+  fireBy?: FireBy,
+  delay = 0,
+  opts?: { count?: number; easyOnly?: readonly number[] }
+): SpawnGroup {
   const xs = [0, -30, 30, -60, 60, -90, 90].map((dx) => center + dx);
   const group: SpawnGroup = {
     enemy: 'small',
-    count: 5,
+    count: opts?.count ?? 5,
     xs,
     interval: 0.1,
     move: { kind: 'v_dive', speed: 170, stopY: 210 },
-    fire: NONE,
+    fire: opts?.easyOnly ? aimedOnce(0.5) : NONE,
     countByDifficulty: { hard: 7 },
   };
   if (delay) group.delay = delay;
@@ -139,6 +160,7 @@ function vee(center: number, fireBy?: FireBy, delay = 0): SpawnGroup {
     group.fireByDifficulty = fireBy;
     group.fireOnlyByDifficulty = { medium: [0], hard: [0, 3, 4] };
   }
+  if (opts?.easyOnly) group.fireOnly = opts.easyOnly;
   return group;
 }
 
@@ -147,7 +169,8 @@ function cross(
   count: number,
   countBy: CountBy,
   delay = 0,
-  fireBy?: FireBy
+  fireBy?: FireBy,
+  easyOnly?: readonly number[]
 ): SpawnGroup {
   const group: SpawnGroup = {
     enemy: 'small',
@@ -156,7 +179,7 @@ function cross(
     y: -16,
     interval: 0.26,
     move: { kind: 'cross', from, speed: 175 },
-    fire: NONE,
+    fire: easyOnly ? aimedOnce(0.55) : NONE,
   };
   if (countBy) group.countByDifficulty = countBy;
   if (delay) group.delay = delay;
@@ -164,6 +187,7 @@ function cross(
     group.fireByDifficulty = fireBy;
     group.fireOnlyByDifficulty = { medium: [1], hard: [0, 2] };
   }
+  if (easyOnly) group.fireOnly = easyOnly;
   return group;
 }
 
@@ -445,8 +469,8 @@ export const stage3: StageData = {
       section: 'valley',
       mvp: false,
       groups: [
-        cross('topLeft', 3, { medium: 4, hard: 5 }),
-        cross('topRight', 3, { medium: 4, hard: 5 }, 0.5),
+        cross('topLeft', 3, { medium: 4, hard: 5 }, 0, undefined, [1]),
+        cross('topRight', 3, { medium: 4, hard: 5 }, 0.5, undefined, [1]),
       ],
     },
 
@@ -469,8 +493,11 @@ export const stage3: StageData = {
       section: 'dock',
       mvp: true,
       groups: [
-        sineColumn(220, 3, { medium: 4, hard: 5 }, { fireBy: SMALL_LATE }),
-        { ...sineColumn(310, 3, { medium: 4, hard: 5 }, { fireBy: SMALL_LATE }), delay: 0.16 },
+        sineColumn(220, 5, undefined, { fireBy: SMALL_LATE, easyOnly: [1, 3] }),
+        {
+          ...sineColumn(310, 5, undefined, { fireBy: SMALL_LATE, easyOnly: [1, 3] }),
+          delay: 0.16,
+        },
       ],
     },
     {
@@ -485,7 +512,7 @@ export const stage3: StageData = {
       t: 32,
       section: 'dock',
       mvp: true,
-      groups: [vee(230, SMALL_LATE)],
+      groups: [vee(230, SMALL_LATE, 0, { count: 7, easyOnly: [0, 2, 4] })],
     },
     {
       id: 'W10',
@@ -524,10 +551,32 @@ export const stage3: StageData = {
       groups: [drone(140, 0), drone(240, 0.35), drone(320, 0.7), drone(190, 1.05, MEDIUM_HARD)],
     },
 
-    // crossing 0:46–1:06. Air pressure; a gap near 0:48 for the risk crate.
+    // Dock filler, then crossing. W37 and the earlier W14 close the 44–52s hole.
+    // The easy risk crate still arrives at 50s.
+    {
+      id: 'W37',
+      t: 46,
+      section: 'dock',
+      mvp: true,
+      groups: [150, 280].map((x, i) => ({
+        ...sineColumn(
+          x,
+          2,
+          { hard: 3 },
+          {
+            vy: 140,
+            amp: 26,
+            interval: 0.28,
+            armAll: true,
+            fireBy: { hard: burstOnce(0.45) },
+          }
+        ),
+        delay: i * 0.14,
+      })),
+    },
     {
       id: 'W14',
-      t: 52,
+      t: 49,
       section: 'crossing',
       mvp: false,
       groups: arcs(4, 150),
@@ -538,8 +587,8 @@ export const stage3: StageData = {
       section: 'crossing',
       mvp: true,
       groups: [
-        cross('topLeft', 3, { medium: 4, hard: 5 }, 0, SMALL_LATE),
-        cross('topRight', 3, { medium: 4, hard: 5 }, 0.5, SMALL_LATE),
+        cross('topLeft', 4, { medium: 5, hard: 6 }, 0, SMALL_DENSE, [1, 3]),
+        cross('topRight', 4, { medium: 5, hard: 6 }, 0.5, SMALL_DENSE, [1, 3]),
       ],
     },
     {
@@ -555,8 +604,11 @@ export const stage3: StageData = {
       section: 'crossing',
       mvp: true,
       groups: [
-        sineColumn(200, 3, { medium: 4, hard: 5 }, { fireBy: SMALL_LATE }),
-        { ...sineColumn(300, 3, { medium: 4, hard: 5 }, { fireBy: SMALL_LATE }), delay: 0.16 },
+        sineColumn(200, 5, undefined, { fireBy: SMALL_DENSE, easyOnly: [1, 3, 4] }),
+        {
+          ...sineColumn(300, 5, undefined, { fireBy: SMALL_DENSE, easyOnly: [1, 3, 4] }),
+          delay: 0.16,
+        },
       ],
     },
     {
@@ -622,7 +674,7 @@ export const stage3: StageData = {
       t: 80,
       section: 'crossing',
       mvp: true,
-      groups: [vee(150, SMALL_LATE)],
+      groups: [vee(150, SMALL_LATE, 0, { count: 7, easyOnly: [0, 2, 4] })],
     },
     {
       id: 'W25',
@@ -643,8 +695,11 @@ export const stage3: StageData = {
       section: 'scorch',
       mvp: true,
       groups: [
-        sineColumn(60, 4, { medium: 5, hard: 6 }, { fireBy: SMALL_LATE }),
-        { ...sineColumn(170, 4, { medium: 5, hard: 6 }, { fireBy: SMALL_LATE }), delay: 0.16 },
+        sineColumn(60, 5, { medium: 6, hard: 7 }, { fireBy: SMALL_LATE, easyOnly: [1, 3] }),
+        {
+          ...sineColumn(170, 5, { medium: 6, hard: 7 }, { fireBy: SMALL_LATE, easyOnly: [1, 3] }),
+          delay: 0.16,
+        },
       ],
     },
     {

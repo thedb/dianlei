@@ -11,7 +11,12 @@ import {
   FIXED_DT,
   OBSIDIAN_BEAM,
   OBSIDIAN_BLADE_H,
+  OBSIDIAN_BLADE_RADIUS,
+  OBSIDIAN_BLADE_REACH,
+  OBSIDIAN_BLADE_STUB,
   OBSIDIAN_BLADE_W,
+  OBSIDIAN_HALF_BLADE_H,
+  OBSIDIAN_HALF_BLADE_W,
   OBSIDIAN_CROSS_H,
   OBSIDIAN_CROSS_W,
   OBSIDIAN_BREAK_AT,
@@ -39,6 +44,8 @@ import {
   OBSIDIAN_HINGE_RADIUS,
   OBSIDIAN_FRAME_SCORE,
   OBSIDIAN_HALF_CYCLE,
+  LOGICAL_H,
+  LOGICAL_W,
   OBSIDIAN_HULL_H,
   OBSIDIAN_MAIN_HP,
   OBSIDIAN_MISSILE_B_COUNT,
@@ -87,6 +94,8 @@ import { prepareBossConfig } from '@/game/difficulty';
 import { OBSIDIAN } from '@/game/levels/bosses/obsidian';
 import {
   OBSIDIAN_BLADE_PIVOT_Y,
+  OBSIDIAN_HALF_BLADE_PIVOT_X,
+  OBSIDIAN_HALF_BLADE_PIVOT_Y,
   buildObsidianBlade,
   buildObsidianHinge,
   buildObsidianHull,
@@ -307,9 +316,22 @@ describe('黑曜 constants', () => {
     expect(tip.some((cell) => cell === COLOR.PLAYER_PALE_CYAN || cell === COLOR.WHITE)).toBe(true);
     expect(swept.length).toBe(OBSIDIAN_BLADE_H);
     expect(swept[0]?.length).toBe(OBSIDIAN_BLADE_W);
+    const half = buildObsidianBlade('half');
+    const stub = buildObsidianBlade('stub');
+    expect(half.length).toBe(OBSIDIAN_HALF_BLADE_H);
+    expect(half[0]?.length).toBe(OBSIDIAN_HALF_BLADE_W);
+    expect(half[OBSIDIAN_HALF_BLADE_PIVOT_Y]?.[OBSIDIAN_HALF_BLADE_PIVOT_X]).toBeGreaterThanOrEqual(
+      0
+    );
+    expect(colorsOf(half)).toContain(COLOR.PLAYER_CYAN);
+    expect(colorsOf(half)).toContain(COLOR.ENEMY_RED);
+    expect(stub.length).toBe(OBSIDIAN_BLADE_STUB);
+    expect(stub[0]?.length).toBe(OBSIDIAN_BLADE_W);
     expect(cross.length).toBe(OBSIDIAN_CROSS_H);
     expect(cross[0]?.length).toBe(OBSIDIAN_CROSS_W);
     expect(cross.length).toBeGreaterThan(swept.length);
+    expect(half.length).toBeGreaterThan(cross.length);
+    expect(span(half, 39)).toBeGreaterThan(span(swept, 28));
 
     let minX = 80;
     let maxX = 0;
@@ -539,6 +561,57 @@ describe('黑曜 blade phases', () => {
     expect(boss.y).toBe(OBSIDIAN_STRAFE_DIVE_Y);
     expect(boss.x).toBe(OBSIDIAN_CENTER_X);
     expect(boss.y).toBeLessThanOrEqual(OBSIDIAN_STRAFE_Y_MAX);
+  });
+
+  it('draws phase-2 swept wings larger without moving the hit circles off the cruise', () => {
+    expect(OBSIDIAN_BLADE_W).toBe(28);
+    expect(OBSIDIAN_BLADE_H).toBe(68);
+    expect(OBSIDIAN_HALF_BLADE_W).toBe(39);
+    expect(OBSIDIAN_HALF_BLADE_H).toBe(95);
+    expect(OBSIDIAN_CROSS_W).toBe(18);
+    expect(OBSIDIAN_CROSS_H).toBe(80);
+    expect(OBSIDIAN_BLADE_STUB).toBe(18);
+    expect(OBSIDIAN_BLADE_REACH).toBe(38);
+    expect(OBSIDIAN_BLADE_RADIUS).toBe(14);
+    expect(OBSIDIAN_HINGE_RADIUS).toBe(19);
+    expect(OBSIDIAN_RADIUS).toBe(32);
+    expect(OBSIDIAN_HALF_BLADE_PIVOT_X).toBe(19);
+    expect(OBSIDIAN_HALF_BLADE_PIVOT_Y).toBe(6);
+
+    const tip = OBSIDIAN_HALF_BLADE_H - OBSIDIAN_HALF_BLADE_PIVOT_Y;
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (const blade of OBSIDIAN_BLADES) {
+      const side = blade.x < 0 ? -1 : 1;
+      blade.layers.half.forEach((angle, layer) => {
+        const off = layer * 2;
+        const hx = blade.x + side * off * 0.5;
+        const hy = blade.y - off * 0.45;
+        const vx = -Math.sin(angle) * tip;
+        const vy = Math.cos(angle) * tip;
+        const px = Math.cos(angle) * 4;
+        const py = Math.sin(angle) * 4;
+        for (let step = 0; step <= 720; step++) {
+          const theta = (step / 720) * Math.PI * 2;
+          const bx = OBSIDIAN_CENTER_X + OBSIDIAN_CRUISE_AMP_X * Math.sin(theta);
+          const by = OBSIDIAN_PARK_Y + OBSIDIAN_CRUISE_AMP_Y * Math.sin(2 * theta);
+          for (const sign of [-1, 1]) {
+            const x = bx + hx + vx + sign * px;
+            const y = by + hy + vy + sign * py;
+            minX = Math.min(minX, x);
+            maxX = Math.max(maxX, x);
+            minY = Math.min(minY, y);
+            maxY = Math.max(maxY, y);
+          }
+        }
+      });
+    }
+    expect(minX).toBeGreaterThanOrEqual(20);
+    expect(LOGICAL_W - maxX).toBeGreaterThanOrEqual(20);
+    expect(minY).toBeGreaterThanOrEqual(20);
+    expect(LOGICAL_H - maxY).toBeGreaterThanOrEqual(20);
   });
 
   it('keeps swept wings on their own side and dives only on the open strafe', () => {

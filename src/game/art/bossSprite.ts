@@ -55,6 +55,8 @@ import { drawObsidianBoss } from './obsidianDraw';
 import {
   OBSIDIAN_BLADE_PIVOT_X,
   OBSIDIAN_BLADE_PIVOT_Y,
+  OBSIDIAN_HALF_BLADE_PIVOT_X,
+  OBSIDIAN_HALF_BLADE_PIVOT_Y,
   OBSIDIAN_CROSS_PIVOT_X,
   OBSIDIAN_CROSS_PIVOT_Y,
   buildObsidianBlade,
@@ -381,11 +383,18 @@ export function buildTiebaoAa(broken: boolean): SpriteData {
   return g;
 }
 
-function bladeFrame(kind: 'swept' | 'cross' | 'stub'): SpriteFrame {
+function bladeFrame(kind: 'swept' | 'half' | 'cross' | 'stub'): SpriteFrame {
   const frame = renderSprite(buildObsidianBlade(kind), 0, 0);
-  const cross = kind === 'cross';
-  frame.anchorX = cross ? OBSIDIAN_CROSS_PIVOT_X : OBSIDIAN_BLADE_PIVOT_X;
-  frame.anchorY = cross ? OBSIDIAN_CROSS_PIVOT_Y : OBSIDIAN_BLADE_PIVOT_Y;
+  if (kind === 'cross') {
+    frame.anchorX = OBSIDIAN_CROSS_PIVOT_X;
+    frame.anchorY = OBSIDIAN_CROSS_PIVOT_Y;
+  } else if (kind === 'half') {
+    frame.anchorX = OBSIDIAN_HALF_BLADE_PIVOT_X;
+    frame.anchorY = OBSIDIAN_HALF_BLADE_PIVOT_Y;
+  } else {
+    frame.anchorX = OBSIDIAN_BLADE_PIVOT_X;
+    frame.anchorY = OBSIDIAN_BLADE_PIVOT_Y;
+  }
   return frame;
 }
 
@@ -421,6 +430,7 @@ export const BOSS_ART: Readonly<Record<string, () => BossAssets>> = {
     parts: {
       wreck: renderSprite(buildObsidianHull('wreck')),
       bladeSwept: bladeFrame('swept'),
+      bladeHalf: bladeFrame('half'),
       bladeCross: bladeFrame('cross'),
       bladeStub: bladeFrame('stub'),
       hinge: renderSprite(buildObsidianHinge('live')),

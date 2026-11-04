@@ -4,8 +4,11 @@
  * v1's "0 new models" lock is revoked. This table adds `factory_aa`,
  * `step_slide`, and `dive_once`, and keeps `rear_diag` as the signature.
  * Easy is the base count and fire. Medium and hard add ships or swap patterns
- * on the same clock (124 / 164 / 192, plus the W21 relief ship when main power
- * is below max). `STAGE2_WARNING_AT` stays 118. 铁堡 still enters at 123.
+ * on the same clock (142 / 180 / 202, plus the W21 relief ship when main power
+ * is below max). Mid-stage (11.8s–94.4s, 10%–80% of the 118s warning) is
+ * plan B: W33 fills 37–43, easy flies a light W13, and the runway smalls
+ * shoot more. Woods after 94.4s is unchanged. `STAGE2_WARNING_AT` stays 118.
+ * 铁堡 still enters at 123.
  *
  * Clear-wave rewards and the timed supply ship are not implemented (§5.3).
  * W21 is the `powerBelowMax` relief carrier, the same rule as stage 1 W27.
@@ -261,7 +264,8 @@ function columnSine(
   countBy: SpawnGroup['countByDifficulty'],
   interval: number,
   move: Extract<SpawnGroup['move'], { kind: 'sine' }>,
-  fireOnly?: readonly number[]
+  fireOnly?: readonly number[],
+  fire?: Fire
 ): SpawnGroup {
   const group: SpawnGroup = {
     enemy: 'small',
@@ -269,7 +273,7 @@ function columnSine(
     xs: [x],
     interval,
     move,
-    fire: { kind: 'none' },
+    fire: fire ?? { kind: 'none' },
   };
   if (countBy) group.countByDifficulty = countBy;
   if (fireOnly) group.fireOnly = fireOnly;
@@ -479,8 +483,7 @@ export const stage2: StageData = {
       groups: [
         {
           enemy: 'small',
-          count: 6,
-          countByDifficulty: { medium: 8, hard: 8 },
+          count: 8,
           xs: [72, 108, 144, 180, 216, 252, 288, 324],
           interval: 0.22,
           move: { kind: 'v_dive', speed: 170, stopY: 200 },
@@ -543,6 +546,25 @@ export const stage2: StageData = {
       ],
     },
     {
+      // Fills the easy hole between the factory gun (36s) and the rear entry (43s).
+      id: 'W33',
+      t: 40,
+      section: 'outskirts',
+      mvp: true,
+      groups: [120, 240].map((x, i) => ({
+        ...columnSine(
+          x,
+          2,
+          { medium: 3, hard: 3 },
+          0.32,
+          { kind: 'sine', vy: 150, amp: 28, period: 1.6 },
+          undefined,
+          aimedOnce(0.45)
+        ),
+        delay: i * 0.16,
+      })),
+    },
+    {
       id: 'W08',
       t: 43,
       section: 'outskirts',
@@ -550,16 +572,18 @@ export const stage2: StageData = {
       groups: [
         rear({
           side: 'left',
-          count: 8,
+          count: 10,
           y0: 620,
           bearing: 28,
           speed: 160,
           interval: 0.3,
           difficulties: EASY,
+          fire: REAR_SHOT,
+          fireOnly: [1, 6, 8],
         }),
         rear({
           side: 'left',
-          count: 6,
+          count: 8,
           y0: 620,
           bearing: 28,
           speed: 168,
@@ -568,7 +592,7 @@ export const stage2: StageData = {
         }),
         rear({
           side: 'right',
-          count: 6,
+          count: 8,
           y0: 620,
           bearing: 28,
           speed: 168,
@@ -577,7 +601,7 @@ export const stage2: StageData = {
         }),
         rear({
           side: 'left',
-          count: 6,
+          count: 7,
           y0: 620,
           bearing: 28,
           speed: 180,
@@ -588,7 +612,7 @@ export const stage2: StageData = {
         }),
         rear({
           side: 'right',
-          count: 6,
+          count: 7,
           y0: 620,
           bearing: 28,
           speed: 180,
@@ -629,14 +653,15 @@ export const stage2: StageData = {
       mvp: true,
       groups: (['topLeft', 'topRight'] as const).map((from) => ({
         enemy: 'small' as const,
-        count: 6,
-        countByDifficulty: { medium: 7, hard: 7 },
+        count: 7,
+        countByDifficulty: { medium: 8, hard: 8 },
         xs: [from === 'topLeft' ? -12 : 372],
         y: 40,
         interval: 0.22,
         move: { kind: 'cross' as const, from, speed: 185 },
-        fire: { kind: 'none' as const },
-        fireByDifficulty: { medium: aimedOnce(), hard: burstOnce() },
+        fire: aimedOnce(),
+        fireByDifficulty: { medium: burstOnce(), hard: burstOnce() },
+        fireOnly: [2, 5],
         fireOnlyByDifficulty: { medium: [2, 5], hard: [1, 3, 5] },
       })),
     },
@@ -692,24 +717,26 @@ export const stage2: StageData = {
         stepLane({
           x: 88,
           run: 64,
-          count: 3,
-          countBy: { medium: 4, hard: 4 },
+          count: 4,
+          countBy: { medium: 5 },
           speed: 160,
           drop: 56,
           steps: 2,
           interval: 0.2,
+          fire: aimedOnce(0.12),
           fireBy: { medium: aimedOnce(0.12), hard: burstOnce(0.12) },
           fireOnly: [1, 3],
         }),
         stepLane({
           x: 272,
           run: -64,
-          count: 3,
-          countBy: { medium: 4, hard: 4 },
+          count: 4,
+          countBy: { medium: 5 },
           speed: 160,
           drop: 56,
           steps: 2,
           interval: 0.2,
+          fire: aimedOnce(0.12),
           fireBy: { medium: aimedOnce(0.12), hard: burstOnce(0.12) },
           fireOnly: [1, 3],
         }),
@@ -752,8 +779,27 @@ export const stage2: StageData = {
       t: 78,
       section: 'runway',
       mvp: true,
-      difficulties: MEDIUM_HARD,
       groups: [
+        rear({
+          side: 'left',
+          count: 2,
+          y0: 600,
+          bearing: 26,
+          speed: 170,
+          interval: 0.26,
+          difficulties: EASY,
+          fire: REAR_SHOT,
+          fireOnly: [1],
+        }),
+        rear({
+          side: 'right',
+          count: 2,
+          y0: 600,
+          bearing: 26,
+          speed: 170,
+          interval: 0.26,
+          difficulties: EASY,
+        }),
         rear({
           side: 'left',
           count: 4,
@@ -804,13 +850,14 @@ export const stage2: StageData = {
       groups: [64, 296].map((x) => ({
         ...columnSine(
           x,
-          5,
-          { medium: 6, hard: 6 },
+          6,
+          { medium: 7 },
           0.22,
           { kind: 'sine', vy: 125, amp: 64, period: 1.5 },
-          [1, 3]
+          [1, 3],
+          aimedOnce()
         ),
-        fireByDifficulty: { medium: aimedOnce(), hard: burstOnce() },
+        fireByDifficulty: { medium: burstOnce(), hard: burstOnce() },
       })),
     },
     {

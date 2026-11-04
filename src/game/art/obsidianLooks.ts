@@ -14,6 +14,8 @@ import {
   OBSIDIAN_BLADE_W,
   OBSIDIAN_CROSS_H,
   OBSIDIAN_CROSS_W,
+  OBSIDIAN_HALF_BLADE_H,
+  OBSIDIAN_HALF_BLADE_W,
   OBSIDIAN_HINGE_H,
   OBSIDIAN_HINGE_W,
   OBSIDIAN_HULL_H,
@@ -24,11 +26,17 @@ import { createGrid, fillEllipse, fillPoly, fillRect, plot, rim } from './pixelD
 import type { SpriteData } from './types';
 
 export type ObsidianHullKind = 'warm' | 'warn' | 'wreck';
-export type ObsidianBladeKind = 'swept' | 'cross' | 'stub';
+export type ObsidianBladeKind = 'swept' | 'half' | 'cross' | 'stub';
 
-/** Root pixel of the swept wing. The bake copies this onto the frame anchor. */
+/** Root pixel of the folded swept wing. The bake copies this onto the frame anchor. */
 export const OBSIDIAN_BLADE_PIVOT_X = 14;
 export const OBSIDIAN_BLADE_PIVOT_Y = 4;
+/**
+ * Root of the phase-2 swept wing. Scaled with the sprite (14/28 → 19, 4/68 → 6)
+ * so the hinge stays on the same pixel of the plate.
+ */
+export const OBSIDIAN_HALF_BLADE_PIVOT_X = 19;
+export const OBSIDIAN_HALF_BLADE_PIVOT_Y = 6;
 export const OBSIDIAN_CROSS_PIVOT_X = 9;
 export const OBSIDIAN_CROSS_PIVOT_Y = 3;
 
@@ -86,23 +94,6 @@ function paintWing(
   }
 }
 
-/** Dark plate under the crystal so the swept pose reads as a wing. */
-function paintPlate(g: SpriteData): void {
-  const y0 = OBSIDIAN_BLADE_PIVOT_Y + 1;
-  const y1 = y0 + Math.round((OBSIDIAN_BLADE_H - y0) * 0.74);
-  paintWing(
-    g,
-    y0,
-    y1,
-    (t) => OBSIDIAN_BLADE_W * 0.46 * (1 - 0.42 * t),
-    (t, edge) => {
-      if (edge) return S;
-      if (t > 0.16 && t < 0.24) return ER;
-      return t < 0.5 ? D : M;
-    }
-  );
-}
-
 function paintCrystal(g: SpriteData, y0: number, y1: number, wide: number): void {
   paintWing(
     g,
@@ -147,29 +138,70 @@ export function buildObsidianBlade(kind: ObsidianBladeKind): SpriteData {
     paintTip(g, OBSIDIAN_CROSS_PIVOT_X);
     return g;
   }
-  const g = createGrid(OBSIDIAN_BLADE_W, OBSIDIAN_BLADE_H, -1);
-  paintPlate(g);
-  paintRoot(g, OBSIDIAN_BLADE_PIVOT_X, OBSIDIAN_BLADE_PIVOT_Y, 6);
-  paintCrystal(g, OBSIDIAN_BLADE_PIVOT_Y + 2, OBSIDIAN_BLADE_H - 2, OBSIDIAN_BLADE_W * 0.34);
-  rim(g, K);
-  paintTip(g, OBSIDIAN_BLADE_PIVOT_X);
-  return g;
+  if (kind === 'half') {
+    return buildSweptWing(
+      OBSIDIAN_HALF_BLADE_W,
+      OBSIDIAN_HALF_BLADE_H,
+      OBSIDIAN_HALF_BLADE_PIVOT_X,
+      OBSIDIAN_HALF_BLADE_PIVOT_Y,
+      OBSIDIAN_HALF_BLADE_H / OBSIDIAN_BLADE_H
+    );
+  }
+  return buildSweptWing(
+    OBSIDIAN_BLADE_W,
+    OBSIDIAN_BLADE_H,
+    OBSIDIAN_BLADE_PIVOT_X,
+    OBSIDIAN_BLADE_PIVOT_Y,
+    1
+  );
 }
 
 /** The last rows are a few pixels wide, so the black outline would hide the gradient. */
-function paintTip(g: SpriteData, pivotX: number): void {
+function paintTip(g: SpriteData, pivotX: number, scale = 1): void {
   const height = g.length;
-  const y0 = height - 8;
-  const y1 = height - 2;
+  const y0 = height - Math.round(8 * scale);
+  const y1 = height - Math.max(2, Math.round(2 * scale));
   const cx = pivotX + 0.5;
   for (let y = y0; y <= y1; y++) {
     const t = (y - y0) / Math.max(1, y1 - y0);
-    const half = Math.max(1.1, 3.2 * (1 - t));
+    const half = Math.max(1.1, 3.2 * scale * (1 - t));
     const color = t > 0.5 ? W : CP;
     const left = Math.round(cx - half);
     const right = Math.round(cx + half);
     for (let x = left; x <= right; x++) plot(g, x, y, color);
   }
+}
+
+/**
+ * Swept plate. `scale` 1 is the folded 28×68 wing. Phase 2 passes ~1.4 so the
+ * same gradient fills the larger grid. The hinge pixel stays the pivot.
+ */
+function buildSweptWing(
+  w: number,
+  h: number,
+  pivotX: number,
+  pivotY: number,
+  scale: number
+): SpriteData {
+  const g = createGrid(w, h, -1);
+  const y0 = pivotY + 1;
+  const y1 = y0 + Math.round((h - y0) * 0.74);
+  paintWing(
+    g,
+    y0,
+    y1,
+    (t) => w * 0.46 * (1 - 0.42 * t),
+    (t, edge) => {
+      if (edge) return S;
+      if (t > 0.16 && t < 0.24) return ER;
+      return t < 0.5 ? D : M;
+    }
+  );
+  paintRoot(g, pivotX, pivotY, Math.max(5, Math.round(6 * scale)));
+  paintCrystal(g, pivotY + Math.round(2 * scale), h - 2, w * 0.34);
+  rim(g, K);
+  paintTip(g, pivotX, scale);
+  return g;
 }
 
 function fuselage(): Pt[] {

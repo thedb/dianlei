@@ -35,7 +35,7 @@ afterAll(() => {
 });
 
 /** Ships and ground units the stage 3 table spawns per difficulty in the stage 3 wave table. */
-const SPAWNED = { easy: 125, hard: 192 } as const;
+const SPAWNED = { easy: 145, hard: 202 } as const;
 
 function challenge(difficulty: Difficulty): SceneContext {
   return { ...battleContext('boss', difficulty, seeded(31)), challengeStage: '3' };
