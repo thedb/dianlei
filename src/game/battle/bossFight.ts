@@ -6,6 +6,7 @@
 
 import { LOGICAL_W, PLAYER_SPAWN_Y } from '@/game/config';
 import { prepareBossConfig } from '@/game/difficulty';
+import { shipDef } from '@/game/entities/shipDefs';
 import { executeFirePattern } from '@/game/entities/enemyBullet';
 import {
   createBoss,
@@ -84,6 +85,7 @@ export function stepBoss(b: Battle, dt: number): 'result' | null {
     playerY: b.player.y,
     rng: b.rng,
     scroll: b.scrollFrame.scroll,
+    hitRadius: shipDef(b.scene.shipId).hitRadius,
   });
   applyBossEvents(b, ev);
   if (ev.cutscene && b.cutsceneAt === null) b.cutsceneAt = b.gameTime;

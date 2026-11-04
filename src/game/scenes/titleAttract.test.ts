@@ -8,6 +8,7 @@ import { createMemoryStorage, createSettingsStore } from '@/game/settings';
 import { WaveScheduler } from '@/game/systems/waveScheduler';
 import { makeInput } from '@/test/fakes';
 import { DIFFICULTY_EASY_BUTTON } from '@/game/ui/difficultySelect';
+import { SHIP_SELECT_CONFIRM } from '@/game/ui/shipSelect';
 import { START_BUTTON } from '@/game/ui/startButton';
 import { createBattleScene } from './battle';
 import { createTitleScene } from './title';
@@ -204,6 +205,19 @@ describe('title attract demo', () => {
     };
     expect(title.update(DT, makeInput({ taps: [center] }))).toBeNull();
     expect(attract.stats().fade).toBeGreaterThan(0);
+    expect(
+      title.update(
+        DT,
+        makeInput({
+          taps: [
+            {
+              x: SHIP_SELECT_CONFIRM.x + SHIP_SELECT_CONFIRM.w / 2,
+              y: SHIP_SELECT_CONFIRM.y + SHIP_SELECT_CONFIRM.h / 2,
+            },
+          ],
+        })
+      )
+    ).toBeNull();
     const easy = {
       x: DIFFICULTY_EASY_BUTTON.x + DIFFICULTY_EASY_BUTTON.w / 2,
       y: DIFFICULTY_EASY_BUTTON.y + DIFFICULTY_EASY_BUTTON.h / 2,

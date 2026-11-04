@@ -5,7 +5,8 @@
  */
 
 import type { InputState } from '@/engine/input';
-import { LOGICAL_H, LOGICAL_W } from '@/game/config';
+import { FIRE_RATE, LOGICAL_H, LOGICAL_W } from '@/game/config';
+import { shipDef } from '@/game/entities/shipDefs';
 import { PALETTE, COLOR } from '@/game/palette';
 import { mateLevel } from '@/game/systems/mate';
 import { weaponForItem } from '@/game/systems/playerWeapons';
@@ -43,8 +44,9 @@ function applyWeaponCommand(b: Battle, command: WeaponTestCommand): void {
   const { state } = b;
   if (command.kind === 'reset') {
     b.meter.reset();
-    resetWeaponTestTune(b.tune);
+    resetWeaponTestTune(b.tune, shipDef(b.scene.shipId));
     b.guns.main = volleyInterval(b, state.main);
+    b.guns.mate = 1 / FIRE_RATE;
     if (state.sub) b.guns.sub = volleyInterval(b, state.sub);
     return;
   }

@@ -211,12 +211,18 @@ export function createWeaponTestTune(): WeaponTestTune {
   };
 }
 
-export function resetWeaponTestTune(tune: WeaponTestTune): void {
-  const fresh = createWeaponTestTune();
-  tune.mainRate = fresh.mainRate;
-  tune.mainDamage = fresh.mainDamage;
-  tune.homingRate = fresh.homingRate;
-  tune.homingDamage = fresh.homingDamage;
+/**
+ * Puts the four tune values back. Omitted rates are Eagle (`FIRE_RATE` / 2).
+ * Weapon test passes the selected ship's thin-shell rate and damage.
+ */
+export function resetWeaponTestTune(
+  tune: WeaponTestTune,
+  rates?: { fireRate: number; bulletDamage: number }
+): void {
+  tune.mainRate = rates?.fireRate ?? FIRE_RATE;
+  tune.mainDamage = rates?.bulletDamage ?? PLAYER_BULLET_DAMAGE;
+  tune.homingRate = HOMING_FIRE_RATE;
+  tune.homingDamage = HOMING_DAMAGE;
 }
 
 function tuneBounds(field: WeaponTestTuneField): { step: number; min: number; max: number } {
@@ -267,7 +273,8 @@ export function weaponTestVolleyDamage(
 /** Emitter that stamps one damage onto every projectile. Does not edit WEAPONS. */
 export function emitWithDamage(emit: WeaponEmitter, damage: number): WeaponEmitter {
   return {
-    bullet: (x, y, vx, vy) => emit.bullet(x, y, vx, vy, damage),
+    bullet: (x, y, vx, vy, _kept, width, height) =>
+      emit.bullet(x, y, vx, vy, damage, width, height),
     missile: (x, y, angle) => emit.missile(x, y, angle, damage),
   };
 }

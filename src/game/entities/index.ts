@@ -3,6 +3,7 @@
  */
 
 export * from './bullet';
+export * from './shipDefs';
 export * from './enemy';
 export * from './enemyBullet';
 export * from './item';

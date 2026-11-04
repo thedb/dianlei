@@ -10,6 +10,7 @@ import type { RunReport } from '@/game/systems/score';
 import type { Rng } from '@/engine/rng';
 import type { PlayMode } from '@/game/battle/playMode';
 import type { EquippedWeapon } from '@/game/systems/playerWeapons';
+import type { ShipId } from '@/game/entities/shipDefs';
 
 export type SceneId = 'boot' | 'title' | 'battle' | 'result' | 'gameover';
 
@@ -112,4 +113,10 @@ export interface SceneContext {
    * tests inject a seeded one.
    */
   rng?: Rng;
+  /**
+   * Ship for this run, including retry and the stage handoff. Omitted means
+   * Eagle. Not persisted, not part of `CarriedRun`, and not read by attract.
+   * Title enter clears it. The select screen writes it before every battle.
+   */
+  shipId?: ShipId;
 }

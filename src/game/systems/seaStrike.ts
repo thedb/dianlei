@@ -113,7 +113,12 @@ export function updateTorpedoTrack(track: TorpedoTrack, dt: number, scrollDelta:
   return track.y > LOGICAL_H + 20;
 }
 
-export function torpedoHitsPlayer(track: TorpedoTrack, px: number, py: number): boolean {
+export function torpedoHitsPlayer(
+  track: TorpedoTrack,
+  px: number,
+  py: number,
+  hitRadius = HITBOX_RADIUS
+): boolean {
   if (track.phase !== 'live') return false;
   const left = track.x - track.width / 2;
   const top = track.y;
@@ -121,7 +126,7 @@ export function torpedoHitsPlayer(track: TorpedoTrack, px: number, py: number): 
   const ny = Math.max(top, Math.min(py, top + track.length));
   const dx = px - nx;
   const dy = py - ny;
-  return dx * dx + dy * dy <= HITBOX_RADIUS * HITBOX_RADIUS;
+  return dx * dx + dy * dy <= hitRadius * hitRadius;
 }
 
 /**

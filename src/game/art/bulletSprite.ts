@@ -37,6 +37,26 @@ const PLAYER_BULLET = [
 ];
 
 /**
+ * Mandy Lv3 shell — 6×14. Player cyan and white only. Head and tail taper.
+ */
+const PLAYER_BULLET_THICK = [
+  [_, _, PM, PM, _, _],
+  [_, PM, W, W, PM, _],
+  [PD, PM, W, W, PM, PD],
+  [PD, PM, W, W, PM, PD],
+  [PD, PM, W, W, PM, PD],
+  [PD, PM, W, W, PM, PD],
+  [PD, PM, W, W, PM, PD],
+  [PD, PM, W, W, PM, PD],
+  [PD, PM, W, W, PM, PD],
+  [PD, PM, W, W, PM, PD],
+  [PD, PM, W, W, PM, PD],
+  [PD, PM, W, W, PM, PD],
+  [_, PM, W, W, PM, _],
+  [_, _, PD, PD, _, _],
+];
+
+/**
  * Enemy bullet small - 6x6 pink/magenta orb
  */
 const ENEMY_BULLET_SMALL = [
@@ -105,6 +125,8 @@ export function homingMissilePixels(): number[][] {
 
 export interface BulletAssets {
   playerBullet: SpriteFrame;
+  /** Mandy Lv3. Eagle and Jason keep `playerBullet`. */
+  playerBulletThick: SpriteFrame;
   homingMissile: SpriteFrame;
   enemyBulletSmall: SpriteFrame;
   enemyBulletLarge: SpriteFrame;
@@ -115,6 +137,7 @@ export interface BulletAssets {
 export function createBulletAssets(): BulletAssets {
   return {
     playerBullet: renderSprite(PLAYER_BULLET, 0.5, 0.5),
+    playerBulletThick: renderSprite(PLAYER_BULLET_THICK, 0.5, 0.5),
     homingMissile: renderSprite(HOMING_MISSILE, 0.5, 0.5),
     enemyBulletSmall: renderSprite(ENEMY_BULLET_SMALL, 0.5, 0.5),
     enemyBulletLarge: renderSprite(ENEMY_BULLET_LARGE, 0.5, 0.5),

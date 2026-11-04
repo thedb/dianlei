@@ -194,6 +194,11 @@ export interface BossWorld {
    * factory downward. Omitted means the turnouts stay where they were painted.
    */
   scroll?: number;
+  /**
+   * Player hit radius. Omitted stays on HITBOX_RADIUS (Eagle).
+   * 铁堡 crate blasts read this. Hull contact goes through `bossHitsPlayer`.
+   */
+  hitRadius?: number;
 }
 
 export interface BossShake {
@@ -858,29 +863,39 @@ function hullOverlapsBullet(
   return rectsOverlap(left, top, w, h, hull.x, hull.y, hull.w, hull.h);
 }
 
-export function bossHitsPlayer(boss: BossRuntime, px: number, py: number): boolean {
+export function bossHitsPlayer(
+  boss: BossRuntime,
+  px: number,
+  py: number,
+  hitRadius = HITBOX_RADIUS
+): boolean {
   if (!bossBlocksShots(boss)) return false;
-  if (boss.def.script === 'obsidian') return obsidianTouches(boss, px, py);
+  if (boss.def.script === 'obsidian') return obsidianTouches(boss, px, py, hitRadius);
   if (boss.def.script === 'tiebao') {
     for (const seg of tiebaoHullSegments(boss)) {
-      if (circleRect(px, py, HITBOX_RADIUS, seg.x, seg.y, seg.w, seg.h)) return true;
+      if (circleRect(px, py, hitRadius, seg.x, seg.y, seg.w, seg.h)) return true;
     }
   } else {
     const hull = bossHullRect(boss);
-    if (circleRect(px, py, HITBOX_RADIUS, hull.x, hull.y, hull.w, hull.h)) return true;
+    if (circleRect(px, py, hitRadius, hull.x, hull.y, hull.w, hull.h)) return true;
   }
   for (const part of boss.parts) {
     if (!part.alive || part.falling) continue;
     const dx = px - part.worldX;
     const dy = py - part.worldY;
-    const reach = HITBOX_RADIUS + part.radius;
+    const reach = hitRadius + part.radius;
     if (dx * dx + dy * dy < reach * reach) return true;
   }
   return false;
 }
 
 /** Sweeping beam only. The telegraph line does not hurt. */
-export function bossLaserHits(boss: BossRuntime, px: number, py: number): boolean {
+export function bossLaserHits(
+  boss: BossRuntime,
+  px: number,
+  py: number,
+  hitRadius = HITBOX_RADIUS
+): boolean {
   const active = bossActiveLaser(boss);
   if (!active) return false;
   const length = LOGICAL_H + boss.def.hull.h;
@@ -892,7 +907,7 @@ export function bossLaserHits(boss: BossRuntime, px: number, py: number): boolea
     length,
     px,
     py,
-    HITBOX_RADIUS
+    hitRadius
   );
 }
 

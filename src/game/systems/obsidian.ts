@@ -500,11 +500,16 @@ export function obsidianShotPlan(
 }
 
 /** Fuselage, living locks, and living blades. A stripped blade no longer touches. */
-export function obsidianTouches(boss: BossRuntime, px: number, py: number): boolean {
+export function obsidianTouches(
+  boss: BossRuntime,
+  px: number,
+  py: number,
+  hitRadius = HITBOX_RADIUS
+): boolean {
   const near = (x: number, y: number, radius: number): boolean => {
     const dx = px - x;
     const dy = py - y;
-    const reach = HITBOX_RADIUS + radius;
+    const reach = hitRadius + radius;
     return dx * dx + dy * dy < reach * reach;
   };
   if (near(boss.x, boss.y, OBSIDIAN_RADIUS)) return true;

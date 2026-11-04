@@ -45,12 +45,12 @@ export function mateCount(level: number): number {
  * M=1 is the left ship only. M=2 adds the right ship at the same height.
  * Offsets are from the player center, so the ships track the live position.
  */
-export function matePlacements(level: number): MatePlacement[] {
+export function matePlacements(level: number, offsetX = MATE_OFFSET_X): MatePlacement[] {
   const n = mateLevel(level);
   if (n <= 0) return [];
-  const left: MatePlacement = { side: 'left', dx: -MATE_OFFSET_X, dy: MATE_OFFSET_Y };
+  const left: MatePlacement = { side: 'left', dx: -offsetX, dy: MATE_OFFSET_Y };
   if (n === 1) return [left];
-  return [left, { side: 'right', dx: MATE_OFFSET_X, dy: MATE_OFFSET_Y }];
+  return [left, { side: 'right', dx: offsetX, dy: MATE_OFFSET_Y }];
 }
 
 /** Whole pixels for a source length at MATE_SCALE. At least 1. */
@@ -59,12 +59,20 @@ export function matePixels(sourcePixels: number): number {
 }
 
 /**
- * One straight vulcan bullet per wingman, on the caller's beat.
- * Damage is always PLAYER_BULLET_DAMAGE. The main weapon's level, spread,
+ * One straight vulcan bullet per wingman. The caller owns the 5 Hz clock.
+ * Damage is always PLAYER_BULLET_DAMAGE and speed is PLAYER_BULLET_SPEED.
+ * The main weapon's level, spread, Mandy's wide pattern, Jason's 900 speed,
  * and any weapon-test P伤 override are not applied.
+ * `offsetX` defaults to Eagle's MATE_OFFSET_X.
  */
-export function fireMates(level: number, x: number, y: number, emit: MateShotEmitter): void {
-  for (const mate of matePlacements(level)) {
+export function fireMates(
+  level: number,
+  x: number,
+  y: number,
+  emit: MateShotEmitter,
+  offsetX = MATE_OFFSET_X
+): void {
+  for (const mate of matePlacements(level, offsetX)) {
     emit.bullet(
       x + mate.dx,
       y + mate.dy - MATE_MUZZLE_Y,

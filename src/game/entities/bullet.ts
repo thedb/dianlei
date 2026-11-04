@@ -32,6 +32,8 @@ export function createBullet(): Bullet {
 
     reset(): void {
       this.damage = PLAYER_BULLET_DAMAGE;
+      this.width = 4;
+      this.height = 12;
       this.x = 0;
       this.y = 0;
       this.prevX = 0;

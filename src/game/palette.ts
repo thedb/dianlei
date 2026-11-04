@@ -1,5 +1,9 @@
 /**
- * 48-color locked palette for pixel sprites
+ * Locked palette for pixel sprites.
+ *
+ * Indices 0–47 are the original 48 colors. Do not reorder them.
+ * Jason's purple and gold are appended after index 47 (机型选择).
+ * Do not paint that hull with enemy magenta or explosion yellow.
  *
  * Design doc §3.4 specifies the color groups but not exact hex values.
  * This palette is designed to match the arcade aesthetic:
@@ -94,6 +98,15 @@ export const PALETTE = [
   '#ff80c0', // 45: Pink
   '#c020a0', // 46: Dark magenta (outline)
   '#ffe0ff', // 47: White-pink (bullet core)
+
+  // ============================================================================
+  // Jason (4 colors) — appended. Indices 0–47 stay where they are.
+  // Lakers purple / gold. Not explosion yellow, not enemy-bullet magenta.
+  // ============================================================================
+  '#2d0a4e', // 48: Deep purple (Jason hull shadow)
+  '#552583', // 49: Lakers purple (Jason hull)
+  '#c99214', // 50: Gold (Jason edge)
+  '#fdb927', // 51: Light gold (Jason spine and highlight)
 ] as const;
 
 /** Palette color indices by semantic name */
@@ -161,6 +174,12 @@ export const COLOR = {
   BULLET_PINK: 45,
   BULLET_DARK: 46,
   BULLET_CORE: 47,
+
+  // Jason — appended after the original 48. Do not reuse these for enemies.
+  PLAYER_PURPLE: 48,
+  PLAYER_PURPLE_MID: 49,
+  PLAYER_GOLD: 50,
+  PLAYER_GOLD_LIGHT: 51,
 } as const;
 
 /** Get color by palette index */

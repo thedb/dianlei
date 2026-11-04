@@ -6,6 +6,7 @@
 export * from './types';
 export * from './spriteRenderer';
 export * from './playerSprite';
+export * from './shipSprites';
 export * from './engineFlame';
 export * from './enemySprite';
 export * from './bulletSprite';
@@ -27,6 +28,7 @@ import type { BackgroundArt } from './mapDraw';
 import type { BossAssets } from './bossSprite';
 
 import { createPlayerSpriteSheet } from './playerSprite';
+import { createLockedShipSheets } from './shipSprites';
 import { createEnemyAssets } from './enemySprite';
 import { createBuildingAssets } from './buildingSprite';
 import { createBulletAssets } from './bulletSprite';
@@ -41,7 +43,13 @@ export { drawBossWorld, drawBossHpBar, drawBossLaser, drawTiebaoMine } from './b
 
 /** All game sprite assets */
 export interface GameAssets {
+  /** Eagle sheet. Render replays and attract keep reading this field. */
   player: PlayerSpriteSheet;
+  /**
+   * Mandy and Jason, baked from the G2 lock. Omitted on stubs.
+   * Eagle's own draw reads `player`, not this map.
+   */
+  ships?: { mandy: PlayerSpriteSheet; jason: PlayerSpriteSheet };
   enemies: EnemyAssets;
   buildings: BuildingAssets;
   bullets: BulletAssets;
@@ -54,8 +62,10 @@ export interface GameAssets {
 
 /** Initialize all game assets (call once at boot) */
 export function createGameAssets(): GameAssets {
+  const player = createPlayerSpriteSheet();
   return {
-    player: createPlayerSpriteSheet(),
+    player,
+    ships: createLockedShipSheets(),
     enemies: createEnemyAssets(),
     buildings: createBuildingAssets(),
     bullets: createBulletAssets(),

@@ -14,6 +14,7 @@ import {
 } from '@/game/config';
 import { explosionKindForSize } from '@/game/art';
 import { ENEMY_DEFS, ENEMY_MAX_HIT_RADIUS } from '@/game/entities/enemyDefs';
+import { shipDef } from '@/game/entities/shipDefs';
 import { damageEnemy, isGroundEnemy, type Enemy } from '@/game/entities/enemy';
 import { spawnItem } from '@/game/entities/item';
 import {
@@ -317,9 +318,10 @@ export function resolveCollisions(b: Battle, warningWindow: boolean): void {
 
   // Wingmen (M) have no hitbox. Only the player center is tested below.
   const { player, boss } = b;
+  const hitRadius = shipDef(b.scene.shipId).hitRadius;
   if (isPlayerVulnerable(b) && !warningWindow) {
     b.torpedoes.forEach((track) => {
-      if (torpedoHitsPlayer(track, player.x, player.y)) killPlayer(b);
+      if (torpedoHitsPlayer(track, player.x, player.y, hitRadius)) killPlayer(b);
     });
     b.enemyBullets.forEach((bullet) => {
       if (
@@ -332,7 +334,8 @@ export function resolveCollisions(b: Battle, warningWindow: boolean): void {
           bullet.prevY,
           bullet.x,
           bullet.y,
-          bullet.hitRadius
+          bullet.hitRadius,
+          hitRadius
         )
       ) {
         killPlayer(b);
@@ -341,12 +344,18 @@ export function resolveCollisions(b: Battle, warningWindow: boolean): void {
   }
 
   // The hull and laser kill on contact; ground units never body-kill.
-  if (isPlayerVulnerable(b) && boss && bossHitsPlayer(boss, player.x, player.y)) killPlayer(b);
-  if (isPlayerVulnerable(b) && boss && bossLaserHits(boss, player.x, player.y)) killPlayer(b);
+  if (isPlayerVulnerable(b) && boss && bossHitsPlayer(boss, player.x, player.y, hitRadius)) {
+    killPlayer(b);
+  }
+  if (isPlayerVulnerable(b) && boss && bossLaserHits(boss, player.x, player.y, hitRadius)) {
+    killPlayer(b);
+  }
   if (isPlayerVulnerable(b)) {
     b.enemies.forEach((enemy) => {
       if (isGroundEnemy(enemy.type)) return;
-      if (checkPlayerEnemyCollision(player.x, player.y, enemy.x, enemy.y, enemy.hitRadius)) {
+      if (
+        checkPlayerEnemyCollision(player.x, player.y, enemy.x, enemy.y, enemy.hitRadius, hitRadius)
+      ) {
         killPlayer(b);
       }
     });

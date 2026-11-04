@@ -20,7 +20,7 @@
  */
 
 import { TILE_SIZE } from '@/game/config';
-import { COLOR } from '@/game/palette';
+import { COLOR, PALETTE } from '@/game/palette';
 import { TileId, getTileOverlays, getTilePixels, getTileTallMasks, hash } from './tiles';
 
 export const SHADOW_OFFSET = 3;
@@ -59,7 +59,7 @@ export const SHADE: readonly number[] = (() => {
     [COLOR.ENEMY_RED, COLOR.ENEMY_CRIMSON],
     [COLOR.ENEMY_CRIMSON, COLOR.ENEMY_DARK_RED],
   ];
-  const table = Array.from({ length: 48 }, (_, i) => i);
+  const table = Array.from({ length: PALETTE.length }, (_, i) => i);
   for (const [from, to] of ramp) table[from] = to;
   return table;
 })();

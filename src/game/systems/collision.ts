@@ -51,9 +51,10 @@ export function checkPlayerBulletCollision(
   playerY: number,
   bulletX: number,
   bulletY: number,
-  bulletRadius: number
+  bulletRadius: number,
+  hitRadius = HITBOX_RADIUS
 ): boolean {
-  return circleCollision(playerX, playerY, HITBOX_RADIUS, bulletX, bulletY, bulletRadius);
+  return circleCollision(playerX, playerY, hitRadius, bulletX, bulletY, bulletRadius);
 }
 
 /**
@@ -94,7 +95,8 @@ export function checkPlayerBulletSwept(
   bulletPrevY: number,
   bulletX: number,
   bulletY: number,
-  bulletRadius: number
+  bulletRadius: number,
+  hitRadius = HITBOX_RADIUS
 ): boolean {
   return segmentCircleCollision(
     bulletPrevX - playerPrevX,
@@ -103,7 +105,7 @@ export function checkPlayerBulletSwept(
     bulletY - playerY,
     0,
     0,
-    HITBOX_RADIUS + bulletRadius
+    hitRadius + bulletRadius
   );
 }
 
@@ -125,9 +127,10 @@ export function checkPlayerEnemyCollision(
   playerY: number,
   enemyX: number,
   enemyY: number,
-  enemyRadius: number
+  enemyRadius: number,
+  hitRadius = HITBOX_RADIUS
 ): boolean {
-  return circleCollision(playerX, playerY, HITBOX_RADIUS, enemyX, enemyY, enemyRadius);
+  return circleCollision(playerX, playerY, hitRadius, enemyX, enemyY, enemyRadius);
 }
 
 /** Check if player bullet hits enemy */
