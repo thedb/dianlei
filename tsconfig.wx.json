@@ -6,7 +6,10 @@
     "outDir": "dist-wx",
     "declaration": false,
     "module": "CommonJS",
-    "moduleResolution": "Node"
+    "moduleResolution": "Node",
+    // Locked ship frames are default-imported JSON. CommonJS rejects that
+    // unless this flag is on. It only affects typechecking, not emit.
+    "allowSyntheticDefaultImports": true
   },
   "include": ["src/platform/wx.ts", "src/engine/**/*", "src/game/**/*"],
   "exclude": ["src/platform/h5.ts", "src/main.ts"]
