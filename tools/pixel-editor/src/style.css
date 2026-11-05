@@ -403,3 +403,9 @@ dialog .hint,
 .bank-controls button {
   margin-top: 0;
 }
+
+#asm-view:focus-visible,
+#bank-view:focus-visible {
+  outline: 2px solid #fdb927;
+  outline-offset: 2px;
+}

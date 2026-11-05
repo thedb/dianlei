@@ -54,4 +54,12 @@ describe('pixel editor guide', () => {
     expect(page).toContain('改成手调');
     expect(page).toContain('横向拉伸');
   });
+
+  it('explains the selection handles and where arrow keys go', () => {
+    expect(page).toContain('拖白色角点');
+    expect(page).toContain('拖顶上圆点旋转');
+    expect(page).toContain('焦点在「侧倾对比」上时，← → 切换格子，不挪零件');
+    expect(page).toMatch(/id="asm-view"[^>]*tabindex="0"/);
+    expect(page).toMatch(/id="bank-view"[^>]*tabindex="0"/);
+  });
 });

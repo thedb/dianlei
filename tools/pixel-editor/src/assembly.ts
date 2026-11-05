@@ -53,6 +53,13 @@ import {
   type EntityStage,
 } from '@/game/art/entityFile';
 import { parsePaletteGrid, serializePaletteGrid, type PaletteGridFile } from '@/game/art/gridFile';
+import {
+  dragAngle,
+  dragStretch,
+  handleAt,
+  partHandles,
+  type PartHandle,
+} from '@/game/art/entityHandles';
 import { gridColorStats } from '@/game/art/gridStats';
 import { blitPlacedSprite, renderSprite } from '@/game/art/spriteRenderer';
 import { colorWarnings, renderColorStats } from './colorStats';
@@ -94,6 +101,37 @@ const BANK_MAX_H = 84;
 const BANK_LABEL_H = 14;
 let bankOpen = false;
 let bankFrameId = 't1';
+/** Picked strip cell, 0–10. Cells 0–4 mirror t5…t1, 5 is t0, 6–10 are t1–t5. */
+let bankCell = 6;
+/** Which canvas last took a pointer: arrows follow it when focus is on the page body. */
+let keyOwner: 'canvas' | 'bank' | null = null;
+/** Handle size and hit radius in CSS pixels, and the rotate stem length. */
+const HANDLE_PX = 6;
+const HANDLE_HIT_PX = 8;
+const ROTATE_STEM_PX = 18;
+const ANGLE_STEP_DEG = 1;
+const ANGLE_SHIFT_STEP_DEG = 15;
+interface PartDrag {
+  mode: 'move' | 'stretch' | 'rotate';
+  handle: PartHandle | null;
+  start: EntityPlacement;
+  fromX: number;
+  fromY: number;
+  moved: boolean;
+}
+let drag: PartDrag | null = null;
+let swallowClick = false;
+const HANDLE_CURSORS: Record<string, string> = {
+  nw: 'nwse-resize',
+  se: 'nwse-resize',
+  ne: 'nesw-resize',
+  sw: 'nesw-resize',
+  n: 'ns-resize',
+  s: 'ns-resize',
+  e: 'ew-resize',
+  w: 'ew-resize',
+  rotate: 'grab',
+};
 /** Last source and result written into each bank stage, to spot hand edits. */
 const bankApplied = new WeakMap<EntityStage, { input: string; output: string }>();
 
@@ -195,7 +233,12 @@ export function mountAssembly(next: AssemblyHost): void {
     bankOpen = false;
     paintBank();
   });
-  must(HTMLCanvasElement, 'bank-view').addEventListener('click', (event) => {
+  const bankView = must(HTMLCanvasElement, 'bank-view');
+  bankView.addEventListener('pointerdown', () => {
+    keyOwner = 'bank';
+    bankView.focus({ preventScroll: true });
+  });
+  bankView.addEventListener('click', (event) => {
     pickBankFrame(event);
   });
   bindBankRange('bank-angle', (bank, value) => {
@@ -341,7 +384,26 @@ export function mountAssembly(next: AssemblyHost): void {
   must(HTMLButtonElement, 'asm-layer-down').addEventListener('click', () => {
     moveLayer(-1);
   });
-  must(HTMLCanvasElement, 'asm-view').addEventListener('click', (event) => {
+  const view = must(HTMLCanvasElement, 'asm-view');
+  view.addEventListener('pointerdown', (event) => {
+    keyOwner = 'canvas';
+    view.focus({ preventScroll: true });
+    startDrag(event);
+  });
+  view.addEventListener('pointermove', (event) => {
+    moveDrag(event);
+  });
+  view.addEventListener('pointerup', (event) => {
+    endDrag(event);
+  });
+  view.addEventListener('pointercancel', (event) => {
+    endDrag(event);
+  });
+  view.addEventListener('click', (event) => {
+    if (swallowClick) {
+      swallowClick = false;
+      return;
+    }
     selectAt(event);
   });
   must(HTMLButtonElement, 'asm-inspector-close').addEventListener('click', () => {
@@ -362,9 +424,17 @@ export function mountAssembly(next: AssemblyHost): void {
       ArrowDown: [0, step],
     };
     const move = delta[event.key];
-    if (!move || !partId) return;
+    if (!move) return;
     if (target instanceof Element && target.closest('input, select, textarea')) return;
     if (document.querySelector('dialog[open]')) return;
+    const owner = arrowOwner(target);
+    if (owner === 'bank') {
+      if (move[0] === 0) return;
+      event.preventDefault();
+      stepBankCell(move[0] < 0 ? -1 : 1);
+      return;
+    }
+    if (owner !== 'canvas' || !partId) return;
     event.preventDefault();
     editPart((part) => {
       part.x += move[0];
@@ -957,6 +1027,7 @@ function addBankStages(): void {
   }
   bankOpen = true;
   bankFrameId = 't1';
+  bankCell = 6;
   selectStage(entity.stages.some((item) => item.id === 't1') ? 't1' : source.id);
   setStatus(
     added.length > 0
@@ -1068,9 +1139,24 @@ function pickBankFrame(event: MouseEvent): void {
   if (rect.width <= 0) return;
   const cell = Math.floor(((event.clientX - rect.left) / rect.width) * BANK_CELLS);
   if (cell < 0 || cell >= BANK_CELLS) return;
+  selectBankCell(cell);
+}
+
+function stepBankCell(dir: -1 | 1): void {
+  if (!bankOpen || !entity) return;
+  const next = Math.max(0, Math.min(BANK_CELLS - 1, bankCell + dir));
+  if (next === bankCell) {
+    setStatus(next === 0 ? '已经是最左一格（左 5 镜像）' : '已经是最右一格（t5）');
+    return;
+  }
+  selectBankCell(next);
+}
+
+function selectBankCell(cell: number): void {
   const level = Math.abs(cell - 5);
   const id = `t${level}`;
   stopPlay();
+  bankCell = cell;
   bankFrameId = id;
   if (entity?.stages.some((stage) => stage.id === id)) {
     selectStage(id);
@@ -1091,6 +1177,8 @@ function paintBank(): void {
   }
   panel.hidden = false;
   if ((BANK_STAGE_IDS as readonly string[]).includes(stageId)) bankFrameId = stageId;
+  const pickedLevel = bankLevel(bankFrameId);
+  if (pickedLevel >= 0 && Math.abs(bankCell - 5) !== pickedLevel) bankCell = 5 + pickedLevel;
   const stages = BANK_STAGE_IDS.map(
     (id) => entity?.stages.find((stage) => stage.id === id) ?? null
   );
@@ -1133,7 +1221,7 @@ function paintBank(): void {
     const picked = `t${level}` === bankFrameId;
     if (picked) {
       ctx.strokeStyle = mark;
-      ctx.globalAlpha = mirrored ? 0.5 : 1;
+      ctx.globalAlpha = cell === bankCell ? 1 : 0.4;
       ctx.lineWidth = 2;
       ctx.strokeRect(x0 + 2, 1, cellPx - 4, cellH * scale - 2);
       ctx.globalAlpha = 1;
@@ -1727,11 +1815,193 @@ function paintMain(): void {
     strokeSelection(ctx, placementCorners(selectedGrid, selected), scale);
     const selectedHit = placedHitLocal(selectedGrid, selected);
     if (selectedHit) strokeHit(ctx, selected, selectedHit, scale, 3);
+    drawHandles(ctx, selectedGrid, selected, scale);
   }
   for (const part of stage.parts) {
     if (!anchorsOn && part.id !== partId) continue;
     for (const anchor of part.anchors ?? []) drawAnchor(ctx, part, anchor, scale);
   }
+}
+
+/** Canvas pixels per CSS pixel of the assembly view (it may be shown smaller than its backing size). */
+function viewDensity(): number {
+  const canvas = must(HTMLCanvasElement, 'asm-view');
+  const width = canvas.getBoundingClientRect().width;
+  return width > 0 ? canvas.width / width : 1;
+}
+
+function selectedHandles(grid: PaletteGridFile, part: EntityPlacement): PartHandle[] {
+  const scale = viewMap?.scale ?? 1;
+  return partHandles(grid, part, (ROTATE_STEM_PX * viewDensity()) / scale);
+}
+
+function drawHandles(
+  ctx: CanvasRenderingContext2D,
+  grid: PaletteGridFile,
+  part: EntityPlacement,
+  scale: number
+): void {
+  const handles = selectedHandles(grid, part);
+  const fill = PALETTE[COLOR.WHITE] ?? '#ffffff';
+  const edge = PALETTE[COLOR.PLAYER_GOLD_LIGHT] ?? '#fdb927';
+  const unit = viewDensity() / scale;
+  const size = HANDLE_PX * unit;
+  const top = handles.find((handle) => handle.kind === 'n');
+  const rotate = handles.find((handle) => handle.kind === 'rotate');
+  ctx.save();
+  ctx.lineWidth = unit;
+  ctx.strokeStyle = edge;
+  if (top && rotate) {
+    ctx.beginPath();
+    ctx.moveTo(top.x, top.y);
+    ctx.lineTo(rotate.x, rotate.y);
+    ctx.stroke();
+  }
+  for (const handle of handles) {
+    ctx.fillStyle = fill;
+    if (handle.kind === 'rotate') {
+      ctx.beginPath();
+      ctx.arc(handle.x, handle.y, size / 2 + unit, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      continue;
+    }
+    ctx.fillRect(handle.x - size / 2, handle.y - size / 2, size, size);
+    ctx.strokeRect(handle.x - size / 2, handle.y - size / 2, size, size);
+  }
+  ctx.restore();
+}
+
+function eventPoint(event: MouseEvent): { x: number; y: number } | null {
+  if (!viewMap) return null;
+  const canvas = must(HTMLCanvasElement, 'asm-view');
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) return null;
+  const sx = ((event.clientX - rect.left) * canvas.width) / rect.width;
+  const sy = ((event.clientY - rect.top) * canvas.height) / rect.height;
+  return {
+    x: (sx - viewMap.bleed) / viewMap.scale + viewMap.minX,
+    y: (sy - viewMap.bleed) / viewMap.scale + viewMap.minY,
+  };
+}
+
+function handleUnder(
+  point: { x: number; y: number },
+  grid: PaletteGridFile,
+  part: EntityPlacement
+): PartHandle | null {
+  const scale = viewMap?.scale ?? 1;
+  return handleAt(
+    selectedHandles(grid, part),
+    point.x,
+    point.y,
+    (HANDLE_HIT_PX * viewDensity()) / scale
+  );
+}
+
+function startDrag(event: PointerEvent): void {
+  if (event.button !== 0 || !entity) return;
+  const located = locate();
+  const point = eventPoint(event);
+  if (!located || !point) return;
+  const { part, grid } = located;
+  const handle = handleUnder(point, grid, part);
+  const inside = placementContains(grid, part, point.x, point.y);
+  if (!handle && !inside) return;
+  drag = {
+    mode: handle ? (handle.kind === 'rotate' ? 'rotate' : 'stretch') : 'move',
+    handle,
+    start: clonePlacement(part),
+    fromX: point.x,
+    fromY: point.y,
+    moved: false,
+  };
+  swallowClick = true;
+  must(HTMLCanvasElement, 'asm-view').setPointerCapture(event.pointerId);
+  event.preventDefault();
+}
+
+function moveDrag(event: PointerEvent): void {
+  const canvas = must(HTMLCanvasElement, 'asm-view');
+  const point = eventPoint(event);
+  if (!point) return;
+  if (!drag) {
+    const located = locate();
+    if (!located) {
+      canvas.style.cursor = '';
+      return;
+    }
+    const handle = handleUnder(point, located.grid, located.part);
+    canvas.style.cursor = handle
+      ? (HANDLE_CURSORS[handle.kind] ?? '')
+      : placementContains(located.grid, located.part, point.x, point.y)
+        ? 'move'
+        : '';
+    return;
+  }
+  const active = drag;
+  editPart((part, grid) => {
+    const start = active.start;
+    if (active.mode === 'move') {
+      part.x = start.x + Math.round(point.x - active.fromX);
+      part.y = start.y + Math.round(point.y - active.fromY);
+      return;
+    }
+    if (active.mode === 'rotate') {
+      part.angle = dragAngle(
+        start,
+        active.fromX,
+        active.fromY,
+        point.x,
+        point.y,
+        event.shiftKey ? ANGLE_SHIFT_STEP_DEG : ANGLE_STEP_DEG
+      );
+      return;
+    }
+    if (!active.handle) return;
+    const next = dragStretch(grid, start, active.handle, point.x, point.y, event.shiftKey);
+    for (const key of ['stretchX', 'stretchY'] as const) {
+      if (next[key] === 1) delete part[key];
+      else part[key] = next[key];
+    }
+  }, true);
+  active.moved = true;
+}
+
+function endDrag(event: PointerEvent): void {
+  const active = drag;
+  if (!active) return;
+  drag = null;
+  const canvas = must(HTMLCanvasElement, 'asm-view');
+  if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+  if (!active.moved) {
+    if (active.mode === 'move') swallowClick = false;
+    return;
+  }
+  const part = locate()?.part;
+  if (!part) return;
+  const text =
+    active.mode === 'move'
+      ? `位置 (${part.x}, ${part.y})`
+      : active.mode === 'rotate'
+        ? `角度 ${formatDeg(part.angle)}°`
+        : `横向拉伸 ×${part.stretchX ?? 1}，纵向拉伸 ×${part.stretchY ?? 1}`;
+  const stage = currentStage();
+  const freed =
+    stage &&
+    !stage.bank &&
+    (BANK_STAGE_IDS as readonly string[]).includes(stage.id) &&
+    stage.id !== 't0';
+  setStatus(`${part.id}：${text}${freed ? `。${stage.id} 是手调帧` : ''}`);
+}
+
+function arrowOwner(target: EventTarget | null): 'canvas' | 'bank' | null {
+  if (target instanceof Element) {
+    if (target.closest('#bank-panel')) return 'bank';
+    if (target.id === 'asm-view' || target.closest('#asm-parts')) return 'canvas';
+    if (target !== document.body && target !== document.documentElement) return null;
+  }
+  return keyOwner;
 }
 
 function strokeSelection(

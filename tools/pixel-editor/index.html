@@ -151,7 +151,7 @@
             </div>
           </div>
           <div class="canvas-slot">
-            <canvas id="asm-view" width="160" height="120"></canvas>
+            <canvas id="asm-view" width="160" height="120" tabindex="0" aria-label="装配画布。选中零件后拖角点或边点拉伸，拖顶上圆点旋转，拖零件内部移动；方向键挪位置。"></canvas>
             <aside id="asm-inspector" aria-hidden="true" inert aria-labelledby="asm-inspector-title">
               <div class="inspector-head">
                 <h2 id="asm-inspector-title">选中零件</h2>
@@ -289,11 +289,11 @@
             <div class="bank-head">
               <h2 id="bank-title">侧倾对比</h2>
               <p class="hint">
-                和局内一样：只编右倾。t0 平飞，t1–t5 逐级向右倾。左边五格是代码把 t1–t5 水平镜像出来的，文件里没有左倾阶段，也不用画。点右边任一格（或它的镜像）调这一帧。
+                和局内一样：只编右倾。t0 平飞，t1–t5 逐级向右倾。左边五格是代码把 t1–t5 水平镜像出来的，文件里没有左倾阶段，也不用画。点右边任一格（或它的镜像）调这一帧；点过之后 ← → 在格子之间切换。
               </p>
               <button id="bank-hide" type="button" title="收起对比。再点「侧倾 t0–t5」打开。">收起</button>
             </div>
-            <canvas id="bank-view" width="11" height="1" title="左 5 格是镜像，中间 t0，右 5 格是 t1–t5。点一格选中它。"></canvas>
+            <canvas id="bank-view" width="11" height="1" tabindex="0" title="左 5 格是镜像，中间 t0，右 5 格是 t1–t5。点一格选中它；选中后 ← → 切换格子。" aria-label="侧倾对比。← → 在左 5 镜像、t0、t1–t5 之间切换。"></canvas>
             <div class="bank-controls">
               <strong id="bank-frame">t1</strong>
               <label>
@@ -325,7 +325,7 @@
             <span class="hint" title="列表从左到右是从后往前画。">图层 后 → 前</span>
             <div id="asm-parts"></div>
           </div>
-          <p class="hint">选中零件后，方向键每次挪 1 像素，按住 Shift 挪 8 像素。</p>
+          <p class="hint">选中零件后：拖白色角点同时拉宽高，拖边点只拉一边（按住 Shift 保持比例），拖顶上圆点旋转（每次 1°，Shift 15°），拖零件内部移动。拉伸绕轴心，宽高吸附到整像素，写进检查栏的「横向拉伸」「纵向拉伸」「角度」。焦点在装配画布上时，方向键每次挪 1 像素，Shift 挪 8 像素；焦点在「侧倾对比」上时，← → 切换格子，不挪零件。</p>
           <p id="asm-status">尚未装配。点「零件预览」做好一张再移入装配，或点「载入装配示例」。</p>
         </div>
       </section>
@@ -470,7 +470,8 @@
         <li>生成后装配下方出现「侧倾对比」：左五格是镜像，中间 t0，右五格是 t1–t5，和局内 11 帧一样排。点一格，装配画布也切到那一帧。</li>
         <li>在对比里拖「角度」「横向拉伸」「纵向拉伸」「透视」，结果写回那一帧的零件。透视为正时，右侧（下沉的那边）更窄。改 t0，跟参数走的帧会一起重算。</li>
         <li>想一件件细调某一帧，点「改成手调」，或直接在装配里改那一帧的零件（会自动变成手调）。「按参数重算」再回到跟 t0 走。单个零件也有「横向拉伸」「纵向拉伸」。</li>
-        <li>选中机身，加「尾焰喷口」和「枪口」锚点。坐标相对轴心，画布上闪烁。方向键挪零件，Shift 一次 8 像素。</li>
+        <li>选中机身，加「尾焰喷口」和「枪口」锚点。坐标相对轴心，画布上闪烁。</li>
+        <li>选中零件后画布上有选框：拖角点拉宽高，拖边点拉一边，Shift 保持比例；拖顶上圆点旋转；拖内部移动。检查栏的数字跟着变。点一下装配画布再按方向键挪零件；点一下「侧倾对比」再按 ← → 切换格子。</li>
       </ol>
       <p>「网格文件」读一份已经导出的 <code>*.grid.json</code>，加进零件列表。</p>
       <div class="row">
