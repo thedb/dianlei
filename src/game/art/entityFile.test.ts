@@ -182,7 +182,11 @@ describe('entity file', () => {
       scale: part.scale,
       layer: part.layer,
     };
-    if (part.hit) duplicate.hit = { x: part.hit.x, y: part.hit.y, w: part.hit.w, h: part.hit.h };
+    if (part.hit?.shape === 'circle') {
+      duplicate.hit = { shape: 'circle', x: part.hit.x, y: part.hit.y, r: part.hit.r };
+    } else if (part.hit) {
+      duplicate.hit = { x: part.hit.x, y: part.hit.y, w: part.hit.w, h: part.hit.h };
+    }
     stage.parts.push(duplicate);
     expect(() => serializeEntityFile(entity)).toThrow(/duplicate part id/);
 
@@ -281,5 +285,39 @@ describe('entity file', () => {
     expect(() => serializeEntityFile(sample)).toThrow(/previewFrame\.width/);
     sample.previewFrame = { width: 48, height: 1.5 };
     expect(() => serializeEntityFile(sample)).toThrow(/previewFrame\.height/);
+  });
+
+  it('keeps an old rectangle and round-trips a circle larger than the sprite', () => {
+    const entity = sampleAssemblyEntity();
+    const bodyGrid = entity.grids.body;
+    const wing = entity.grids.wing;
+    const body = entity.stages[0]?.parts[0];
+    const right = entity.stages[0]?.parts.find((part) => part.id === 'wingR');
+    if (!bodyGrid || !wing || !body || !right) throw new Error('fixture missing body');
+
+    body.hit = { x: -4, y: -2, w: 30, h: 4 };
+    const wide = serializeEntityFile(entity);
+    expect(wide).not.toContain('"shape"');
+    expect(parseEntityFile(wide).stages[0]?.parts[0]?.hit).toEqual({ x: -4, y: -2, w: 30, h: 4 });
+
+    body.hit = { shape: 'circle', x: 4, y: 5, r: 20 };
+    const circled = serializeEntityFile(entity);
+    expect(circled).toContain('"r": 20');
+    expect(parseEntityFile(circled).stages[0]?.parts[0]?.hit).toEqual({
+      shape: 'circle',
+      x: 4,
+      y: 5,
+      r: 20,
+    });
+    expect(placedHitLocal(bodyGrid, body)).toEqual({ shape: 'circle', x: 0, y: 0, r: 20 });
+    expect(placedHit(wing, { ...right, hit: { shape: 'circle', x: 1, y: 2, r: 20 } })).toEqual({
+      shape: 'circle',
+      x: 3,
+      y: 2,
+      r: 20,
+    });
+
+    body.hit = { shape: 'circle', x: 0, y: 0, r: 0 };
+    expect(() => serializeEntityFile(entity)).toThrow(/hit\.r/);
   });
 });

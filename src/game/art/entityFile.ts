@@ -15,13 +15,16 @@
  * in one screen pixel, and the sample is the nearest source cell.
  * `flipX` mirrors the grid in pixel indices before that blit. There is no vertical flip.
  *
- * `hit`, when present, is an axis-aligned box in unflipped sprite pixels.
- * The live fight still uses its own hit circles until a boss is switched
- * onto this file. Reference PNGs are not stored here.
+ * `hit`, when present, is in unflipped sprite pixels, before `flipX`, `scale`,
+ * and `angle`. A missing `shape` is a rectangle (`x,y` top-left, `w,h`).
+ * `shape: "circle"` is a center (`x,y`) and radius `r`. Either one may sit
+ * outside the sprite and may be larger than it. The live fight still uses its
+ * own hit circles until a boss is switched onto this file.
  *
- * `previewFrame`, when present, is the editor's reference rectangle in entity
- * pixels, centered on the origin. It is not a hit box and the fight does not
- * read it. Missing means the logical screen, 360×640.
+ * `previewFrame`, when present, is a saved editor rectangle in entity pixels,
+ * centered on the origin. The fight does not read it. The editor does not
+ * treat a missing frame as the 360×640 logical screen: that size is only named
+ * in the UI. A loaded assembly with no `previewFrame` is framed from its parts.
  *
  * `sampleAssemblyEntity` is the editor smoke fixture (folded / half / open).
  * It is not the live Obsidian boss.
@@ -91,15 +94,33 @@ export interface EntityPivot {
 }
 
 /**
- * Axis-aligned hit box in unflipped sprite pixels, before `flipX` and `angle`.
- * Omit the field when the part does not take hits.
+ * Axis-aligned hit box in unflipped sprite pixels. `x,y` is the top-left.
+ * Width and height are not clamped to the sprite, so the box may be larger
+ * and may start outside it. Omit `hit` when the part does not take hits.
+ * Older files have no `shape`; that is this rectangle.
  */
-export interface EntityHitBox {
+export interface EntityRectHit {
+  /** Absent on purpose. A missing shape stays a rectangle, including old files. */
+  shape?: undefined;
   x: number;
   y: number;
   w: number;
   h: number;
 }
+
+/**
+ * Circle in unflipped sprite pixels. `x,y` is the center and may lie outside
+ * the sprite. `r` may be larger than the sprite. Flip mirrors the center
+ * (`width - x`) and keeps `r`.
+ */
+export interface EntityCircleHit {
+  shape: 'circle';
+  x: number;
+  y: number;
+  r: number;
+}
+
+export type EntityHitBox = EntityRectHit | EntityCircleHit;
 
 export interface EntityPlacement {
   id: string;
@@ -203,7 +224,10 @@ export function defaultPreviewFrame(): EntityPreviewFrame {
   return { width: LOGICAL_W, height: LOGICAL_H };
 }
 
-/** The file's frame, or the logical screen when the field is absent. */
+/**
+ * The file's frame, or the logical screen when the field is absent.
+ * The editor does not use that fallback as the current object's box.
+ */
 export function previewFrameOf(entity: EntityFile): EntityPreviewFrame {
   return entity.previewFrame ?? defaultPreviewFrame();
 }
@@ -276,10 +300,18 @@ export function placedSprite(grid: PaletteGridFile, part: EntityPlacement): Plac
   };
 }
 
-/** Hit box after `flipX`. Rotation stays with the part transform. `null` when the part has no hit. */
+/** Hit shape after `flipX`. Rotation and scale stay with the part transform. */
 export function placedHit(grid: PaletteGridFile, part: EntityPlacement): EntityHitBox | null {
   const hit = part.hit;
   if (!hit) return null;
+  if (hit.shape === 'circle') {
+    return {
+      shape: 'circle',
+      x: part.flipX ? grid.width - hit.x : hit.x,
+      y: hit.y,
+      r: hit.r,
+    };
+  }
   if (!part.flipX) return { x: hit.x, y: hit.y, w: hit.w, h: hit.h };
   return {
     x: grid.width - hit.x - hit.w,
@@ -346,6 +378,14 @@ export function placedHitLocal(grid: PaletteGridFile, part: EntityPlacement): En
   const hit = placedHit(grid, part);
   if (!hit) return null;
   const placed = placedSprite(grid, part);
+  if (hit.shape === 'circle') {
+    return {
+      shape: 'circle',
+      x: hit.x - placed.anchorX,
+      y: hit.y - placed.anchorY,
+      r: hit.r,
+    };
+  }
   return {
     x: hit.x - placed.anchorX,
     y: hit.y - placed.anchorY,
@@ -548,7 +588,11 @@ function shapePlacement(part: EntityPlacement): EntityPlacement {
     scale: part.scale,
     layer: part.layer,
   };
-  if (part.hit) shaped.hit = { x: part.hit.x, y: part.hit.y, w: part.hit.w, h: part.hit.h };
+  if (part.hit?.shape === 'circle') {
+    shaped.hit = { shape: 'circle', x: part.hit.x, y: part.hit.y, r: part.hit.r };
+  } else if (part.hit) {
+    shaped.hit = { x: part.hit.x, y: part.hit.y, w: part.hit.w, h: part.hit.h };
+  }
   return shaped;
 }
 
@@ -639,9 +683,16 @@ function clampFrame(value: number): number {
 
 function parseHit(value: unknown): EntityHitBox {
   const raw = asObject(value, 'hit');
+  const shape = raw.shape === undefined ? 'rect' : raw.shape;
+  const x = asInt(raw.x, 'hit.x', ENTITY_HIT_MIN, ENTITY_HIT_MAX);
+  const y = asInt(raw.y, 'hit.y', ENTITY_HIT_MIN, ENTITY_HIT_MAX);
+  if (shape === 'circle') {
+    return { shape: 'circle', x, y, r: asInt(raw.r, 'hit.r', 1, ENTITY_HIT_MAX) };
+  }
+  if (shape !== 'rect') throw new Error('hit.shape must be rect or circle');
   return {
-    x: asInt(raw.x, 'hit.x', ENTITY_HIT_MIN, ENTITY_HIT_MAX),
-    y: asInt(raw.y, 'hit.y', ENTITY_HIT_MIN, ENTITY_HIT_MAX),
+    x,
+    y,
     w: asInt(raw.w, 'hit.w', 1, ENTITY_HIT_MAX),
     h: asInt(raw.h, 'hit.h', 1, ENTITY_HIT_MAX),
   };

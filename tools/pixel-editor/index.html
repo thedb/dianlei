@@ -53,19 +53,19 @@
             </label>
             <label>
               受击框
-              <input id="asm-hits" type="checkbox" checked title="在装配预览上描出可受击的矩形。现役战斗仍用圆。" />
+              <input id="asm-hits" type="checkbox" checked title="画出所有零件的受击框。当前选中的零件即使不勾也会画，并且更粗。战斗还不读。" />
             </label>
             <label>
               边界宽
-              <input id="asm-frame-w" type="number" min="1" max="4096" step="1" value="360" title="预览边界的宽度。默认 360，和局内逻辑画面一样。中心在原点。" aria-describedby="hint-frame" />
+              <input id="asm-frame-w" type="number" min="1" max="4096" step="1" value="32" title="当前装配的预览边界宽度。载入后按零件包围盒重算。中心在原点。" aria-describedby="hint-frame" />
             </label>
             <label>
               边界高
-              <input id="asm-frame-h" type="number" min="1" max="4096" step="1" value="640" title="预览边界的高度。默认 640。" aria-describedby="hint-frame" />
+              <input id="asm-frame-h" type="number" min="1" max="4096" step="1" value="32" title="当前装配的预览边界高度。载入后按零件包围盒重算。" aria-describedby="hint-frame" />
             </label>
             <button id="asm-frame-fit" type="button" title="把边界缩到包住所有阶段的零件，远处再留 8 像素。">框住零件</button>
             <p id="hint-frame" class="hint">
-              白框是编辑边界，中心在原点。默认宽 360、高 640，和局内逻辑画面一样。改数字立刻重画；改过才写入装配文件的 <code>previewFrame</code>，没改过不写。战斗不读这个框。「框住零件」缩到零件外面。
+              白框是当前这套装配的编辑边界，中心在原点。局内逻辑画面是 360×640，那是游戏屏幕，不是这个框的默认大小。载入装配、载入示例或移入零件后，按零件包围盒外加 8 像素重算。手改宽高，或点「框住零件」，才写入 <code>previewFrame</code>；没改过不写。文件里若已有这个字段，载入时用文件里的数。战斗不读。
             </p>
             <p id="hint-asm-example" class="hint">
               「载入装配示例」打开 <code>sample.entity.json</code>：一块机身加一对翼，阶段是 folded（收起）、half（一边张开）、open（两边张开）。用来冒烟，不是现役黑曜。点零件后在右侧调参。
@@ -158,25 +158,51 @@
             <p class="hint">「上移」盖住后面的零件，「下移」被别的零件盖住。点过之后图层会重排成 0、1、2…</p>
             <label>
               可受击
-              <input id="asm-hit" type="checkbox" title="给这个零件标一块可受击的矩形。" />
+              <input id="asm-hit" type="checkbox" title="给这个零件单独设受击框。可以比零件大。" />
             </label>
             <div id="asm-hit-box">
               <label>
-                受击 x
-                <input id="asm-hx" type="number" step="1" />
+                形状
+                <select id="asm-hit-shape" title="方形是矩形，宽高分开。圆形用圆心和半径。">
+                  <option value="rect">方形</option>
+                  <option value="circle">圆形</option>
+                </select>
               </label>
-              <label>
-                受击 y
-                <input id="asm-hy" type="number" step="1" />
-              </label>
-              <label>
-                受击宽
-                <input id="asm-hw" type="number" step="1" />
-              </label>
-              <label>
-                受击高
-                <input id="asm-hh" type="number" step="1" />
-              </label>
+              <div id="asm-hit-rect">
+                <label>
+                  受击 x
+                  <input id="asm-hx" type="number" step="1" title="方形左上角。可以在零件外面。" />
+                </label>
+                <label>
+                  受击 y
+                  <input id="asm-hy" type="number" step="1" title="方形左上角。可以在零件外面。" />
+                </label>
+                <label>
+                  受击宽
+                  <input id="asm-hw" type="number" step="1" title="可以大于零件宽度。" />
+                </label>
+                <label>
+                  受击高
+                  <input id="asm-hh" type="number" step="1" title="可以大于零件高度。" />
+                </label>
+              </div>
+              <div id="asm-hit-circle" hidden>
+                <label>
+                  圆心 x
+                  <input id="asm-hcx" type="number" step="1" title="圆心可以在零件外面。" />
+                </label>
+                <label>
+                  圆心 y
+                  <input id="asm-hcy" type="number" step="1" title="圆心可以在零件外面。" />
+                </label>
+                <label>
+                  半径
+                  <input id="asm-hr" type="number" min="1" step="1" title="可以大于零件。" />
+                </label>
+              </div>
+              <p class="hint">
+                方形的 x、y 是左上角，宽高各自可调，所以可以不是正方。圆形是圆心加半径。两者都按精灵像素，可以比零件大，也可以偏到外面。选中的零件始终用粗青线圈出；勾上工具栏「受击框」则其余零件也画细圈。战斗还不读。
+              </p>
             </div>
             <button id="asm-delete" type="button">删除部件</button>
           </div>
@@ -268,7 +294,7 @@
     <dialog id="guide" aria-labelledby="guide-title">
       <h2 id="guide-title">使用说明</h2>
       <p>
-        主界面是装配预览，画布是 <code>#asm-view</code>。零件预览是弹窗，点页头「零件预览」打开，画布是 <code>#view</code>。两块画布不会互相替换。关掉弹窗后，屏幕上只留装配。白框是编辑边界，默认 360×640（局内逻辑画面），改宽高记入 <code>previewFrame</code>，只作预览参考。
+        主界面是装配预览，画布是 <code>#asm-view</code>。零件预览是弹窗，点页头「零件预览」打开，画布是 <code>#view</code>。两块画布不会互相替换。关掉弹窗后，屏幕上只留装配。局内逻辑画面是 360×640，那只是游戏屏幕。白框按载入的零件包围盒来，手改宽高才写入 <code>previewFrame</code>。受击框可以是方形或圆形，尺寸可以大于零件。
       </p>
       <p>
         参考 PNG 只是原料。游戏以后只认导出的 JSON，不要按着预览再仿画一张。现役机体和 Boss（Eagle、黑曜等）还没有改去读这些文件。
@@ -285,7 +311,7 @@
       <ol>
         <li>点「载入装配示例」，或在零件弹窗里「移入装配」。</li>
         <li>点装配画布上的零件，或点下方列表。选中的描金边，右侧打开「选中零件」。</li>
-        <li>在这一栏改角度、缩放（大于 0，可以是 0.5）、上移或下移图层。位移、轴心、水平翻转、受击框也在这一栏。不用翻整页。</li>
+        <li>在这一栏改角度、缩放（大于 0，可以是 0.5）、上移或下移图层。位移、轴心、水平翻转也在这一栏。受击框选方形或圆形，尺寸可以大于零件。不用翻整页。</li>
         <li>按 Esc、点「关闭」，或点画布空白处，退出调参。阶段选 folded、half、open，看翼动。零件弹窗不动。</li>
         <li>点「导出 .entity.json」。再用「装配文件」把刚导出的文件载入，阶段和零件还在。</li>
       </ol>

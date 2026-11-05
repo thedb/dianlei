@@ -4,7 +4,7 @@
  * Selecting a part opens the inspector; Esc, its close button, or a miss on the canvas leaves it.
  */
 
-import { LOGICAL_H, LOGICAL_W } from '@/game/config';
+import { LOGICAL_W } from '@/game/config';
 import { EXTERIOR_VOID } from '@/engine/exterior';
 import { COLOR, PALETTE } from '@/game/palette';
 import {
@@ -49,8 +49,10 @@ let entity: EntityFile | null = null;
 let stageId = '';
 let partId = '';
 let hitsOn = true;
-let frameW = LOGICAL_W;
-let frameH = LOGICAL_H;
+/** Quiet box before any assembly is loaded. Not the logical screen. */
+const FRAME_PLACEHOLDER = 32;
+let frameW = FRAME_PLACEHOLDER;
+let frameH = FRAME_PLACEHOLDER;
 let frameDirty = false;
 let viewMap: { scale: number; minX: number; minY: number; bleed: number } | null = null;
 
@@ -110,7 +112,7 @@ export function mountAssembly(next: AssemblyHost): void {
       .text()
       .then((text) => {
         adopt(parseEntityFile(text));
-        setStatus(`已载入 ${entity?.name ?? '装配'}`);
+        setStatus(frameStatus(`已载入 ${entity?.name ?? '装配'}`));
         paintAssembly();
       })
       .catch((error: unknown) => fail(error));
@@ -215,10 +217,38 @@ export function mountAssembly(next: AssemblyHost): void {
       part.hit = part.hit ?? { x: 0, y: 0, w: grid.width, h: grid.height };
     }, true);
   });
+  const hitShape = must(HTMLSelectElement, 'asm-hit-shape');
+  hitShape.addEventListener('change', () => {
+    editPart((part) => {
+      const hit = part.hit;
+      if (!hit) return;
+      if (hitShape.value === 'circle' && hit.shape !== 'circle') {
+        const radius = Math.max(1, Math.round(Math.max(hit.w, hit.h) / 2));
+        part.hit = {
+          shape: 'circle',
+          x: hit.x + Math.round(hit.w / 2),
+          y: hit.y + Math.round(hit.h / 2),
+          r: radius,
+        };
+        return;
+      }
+      if (hitShape.value === 'rect' && hit.shape === 'circle') {
+        part.hit = {
+          x: hit.x - hit.r,
+          y: hit.y - hit.r,
+          w: hit.r * 2,
+          h: hit.r * 2,
+        };
+      }
+    }, true);
+  });
   bindHit('asm-hx', 'x', '受击 x');
   bindHit('asm-hy', 'y', '受击 y');
   bindHit('asm-hw', 'w', '受击宽');
   bindHit('asm-hh', 'h', '受击高');
+  bindHit('asm-hcx', 'x', '圆心 x');
+  bindHit('asm-hcy', 'y', '圆心 y');
+  bindHit('asm-hr', 'r', '半径');
   hitsOn = hits.checked;
   syncFrameInputs();
   setStatus('尚未装配。点「零件预览」做好一张再移入装配，或点「载入装配示例」。');
@@ -231,7 +261,7 @@ function loadExample(): Promise<void> {
   return fetch(current.assetUrl('sample.entity.json')).then(async (response) => {
     if (!response.ok) throw new Error('装配示例读取失败');
     adopt(parseEntityFile(await response.text()));
-    setStatus('已载入 folded / half / open 示例');
+    setStatus(frameStatus('已载入 folded / half / open 示例'));
     paintAssembly();
   });
 }
@@ -271,7 +301,13 @@ function addGrid(grid: PaletteGridFile): void {
     throw error;
   }
   showEditor();
-  setStatus(`已移入装配 ${partId}`);
+  if (!frameDirty && entity) {
+    const fit = contentFrame(entity);
+    frameW = fit.width;
+    frameH = fit.height;
+    syncFrameInputs();
+  }
+  setStatus(frameStatus(`已移入装配 ${partId}`));
   paintAssembly();
 }
 
@@ -284,8 +320,9 @@ function adopt(next: EntityFile): void {
     frameH = next.previewFrame.height;
     frameDirty = true;
   } else {
-    frameW = LOGICAL_W;
-    frameH = LOGICAL_H;
+    const fit = contentFrame(next);
+    frameW = fit.width;
+    frameH = fit.height;
     frameDirty = false;
   }
   syncFrameInputs();
@@ -396,14 +433,20 @@ function bindNumber(
   });
 }
 
-function bindHit(id: string, key: 'x' | 'y' | 'w' | 'h', label: string): void {
+function bindHit(id: string, key: 'x' | 'y' | 'w' | 'h' | 'r', label: string): void {
   const input = must(HTMLInputElement, id);
-  const min = key === 'w' || key === 'h' ? 1 : ENTITY_HIT_MIN;
+  const min = key === 'w' || key === 'h' || key === 'r' ? 1 : ENTITY_HIT_MIN;
   const max = ENTITY_HIT_MAX;
   input.addEventListener('input', () => {
     editPart((part) => {
-      if (!part.hit) return;
-      part.hit[key] = readInt(input, label, min, max);
+      const hit = part.hit;
+      if (!hit) return;
+      const value = readInt(input, label, min, max);
+      if (hit.shape === 'circle') {
+        if (key === 'x' || key === 'y' || key === 'r') hit[key] = value;
+        return;
+      }
+      if (key === 'x' || key === 'y' || key === 'w' || key === 'h') hit[key] = value;
     }, false);
   });
 }
@@ -507,12 +550,23 @@ function fillFields(): void {
   must(HTMLInputElement, 'asm-flip').checked = part.flipX;
   must(HTMLInputElement, 'asm-scale').value = String(part.scale);
   must(HTMLInputElement, 'asm-layer').value = String(part.layer);
-  must(HTMLInputElement, 'asm-hit').checked = part.hit !== undefined;
-  must(HTMLInputElement, 'asm-hx').value = String(part.hit?.x ?? 0);
-  must(HTMLInputElement, 'asm-hy').value = String(part.hit?.y ?? 0);
-  must(HTMLInputElement, 'asm-hw').value = String(part.hit?.w ?? grid.width);
-  must(HTMLInputElement, 'asm-hh').value = String(part.hit?.h ?? grid.height);
-  must(HTMLDivElement, 'asm-hit-box').hidden = part.hit === undefined;
+  const hit = part.hit;
+  const circle = hit?.shape === 'circle';
+  must(HTMLInputElement, 'asm-hit').checked = hit !== undefined;
+  must(HTMLSelectElement, 'asm-hit-shape').value = circle ? 'circle' : 'rect';
+  must(HTMLDivElement, 'asm-hit-box').hidden = hit === undefined;
+  must(HTMLDivElement, 'asm-hit-rect').hidden = hit === undefined || circle;
+  must(HTMLDivElement, 'asm-hit-circle').hidden = !circle;
+  if (hit?.shape === 'circle') {
+    must(HTMLInputElement, 'asm-hcx').value = String(hit.x);
+    must(HTMLInputElement, 'asm-hcy').value = String(hit.y);
+    must(HTMLInputElement, 'asm-hr').value = String(hit.r);
+  } else {
+    must(HTMLInputElement, 'asm-hx').value = String(hit?.x ?? 0);
+    must(HTMLInputElement, 'asm-hy').value = String(hit?.y ?? 0);
+    must(HTMLInputElement, 'asm-hw').value = String(hit?.w ?? grid.width);
+    must(HTMLInputElement, 'asm-hh').value = String(hit?.h ?? grid.height);
+  }
 }
 
 function fillName(): void {
@@ -721,25 +775,20 @@ function paintAssembly(): void {
       frame.anchorX = placed.anchorX;
       frame.anchorY = placed.anchorY;
       blitPlacedSprite(ctx, frame, part.x, part.y, part.angle, part.scale);
-      if (!hitsOn) continue;
+      if (!hitsOn || part.id === partId) continue;
       const hit = placedHitLocal(gridFile, part);
       if (!hit) continue;
-      ctx.save();
-      ctx.translate(part.x, part.y);
-      ctx.rotate(part.angle);
-      if (part.scale !== 1) ctx.scale(part.scale, part.scale);
-      const hitColor = PALETTE[COLOR.PLAYER_CYAN];
-      if (!hitColor) throw new Error('missing hit color');
-      ctx.strokeStyle = hitColor;
-      ctx.lineWidth = 1 / (scale * part.scale);
-      ctx.strokeRect(hit.x, hit.y, hit.w, hit.h);
-      ctx.restore();
+      strokeHit(ctx, part, hit, scale, 1);
     }
   }
   strokePreviewFrame(ctx, scale);
   if (!entity || !stage) return;
   const selected = stage.parts.find((part) => part.id === partId);
   const selectedGrid = selected ? entity.grids[selected.grid] : undefined;
+  if (selected && selectedGrid) {
+    const selectedHit = placedHitLocal(selectedGrid, selected);
+    if (selectedHit) strokeHit(ctx, selected, selectedHit, scale, 3);
+  }
   if (!selected || !selectedGrid) return;
   const corners = placementCorners(selectedGrid, selected);
   const mark = PALETTE[COLOR.PLAYER_GOLD_LIGHT];
@@ -753,6 +802,31 @@ function paintAssembly(): void {
   ctx.strokeStyle = mark;
   ctx.lineWidth = 1 / scale;
   ctx.stroke();
+}
+
+function strokeHit(
+  ctx: CanvasRenderingContext2D,
+  part: EntityPlacement,
+  hit: NonNullable<ReturnType<typeof placedHitLocal>>,
+  viewScale: number,
+  pixels: number
+): void {
+  const color = PALETTE[COLOR.PLAYER_CYAN];
+  if (!color) throw new Error('missing hit color');
+  ctx.save();
+  ctx.translate(part.x, part.y);
+  ctx.rotate(part.angle);
+  if (part.scale !== 1) ctx.scale(part.scale, part.scale);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = pixels / (viewScale * part.scale);
+  if (hit.shape === 'circle') {
+    ctx.beginPath();
+    ctx.arc(hit.x, hit.y, hit.r, 0, Math.PI * 2);
+    ctx.stroke();
+  } else {
+    ctx.strokeRect(hit.x, hit.y, hit.w, hit.h);
+  }
+  ctx.restore();
 }
 
 function strokePreviewFrame(ctx: CanvasRenderingContext2D, scale: number): void {
@@ -784,7 +858,11 @@ function commitFrame(widthInput: HTMLInputElement, heightInput: HTMLInputElement
 }
 
 function fitFrame(): void {
-  const next = entity ? suggestedPreviewFrame(entity) : { width: LOGICAL_W, height: LOGICAL_H };
+  if (!entity || !entity.stages.some((stage) => stage.parts.length > 0)) {
+    setStatus('还没有零件，边界先不动');
+    return;
+  }
+  const next = suggestedPreviewFrame(entity);
   frameW = next.width;
   frameH = next.height;
   frameDirty = true;
@@ -792,6 +870,18 @@ function fitFrame(): void {
   syncFrameInputs();
   paintAssembly();
   setStatus(`边界 ${frameW}×${frameH}`);
+}
+
+function contentFrame(next: EntityFile): { width: number; height: number } {
+  if (!next.stages.some((stage) => stage.parts.length > 0)) {
+    return { width: FRAME_PLACEHOLDER, height: FRAME_PLACEHOLDER };
+  }
+  return suggestedPreviewFrame(next);
+}
+
+function frameStatus(prefix: string): string {
+  if (entity?.previewFrame) return `${prefix}，边界用文件里的 ${frameW}×${frameH}`;
+  return `${prefix}，边界按零件包住 ${frameW}×${frameH}`;
 }
 
 function rememberFrame(): void {
