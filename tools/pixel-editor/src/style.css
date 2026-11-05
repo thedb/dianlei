@@ -89,8 +89,24 @@ header p {
   flex: none;
 }
 
-.toolbar .hint {
+.toolbar .hint,
+.toolbar .hints {
   flex-basis: 100%;
+}
+
+.hints summary {
+  cursor: pointer;
+  color: #9ec4d4;
+  font-size: 12px;
+}
+
+.hints[open] {
+  max-height: 30vh;
+  overflow: auto;
+}
+
+.hints .hint {
+  margin: 4px 0;
 }
 
 .canvas-slot {
@@ -205,8 +221,74 @@ canvas {
   white-space: pre-wrap;
 }
 
-#asm-parts {
+.parts-row {
   flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.parts-row > .hint {
+  flex: none;
+}
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: center;
+  margin: 4px 0;
+  font-size: 12px;
+}
+
+.swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.swatch i {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 1px solid #9ec4d4;
+}
+
+.warn {
+  margin: 4px 0 8px;
+  color: #ffc040;
+  font-size: 12px;
+}
+
+.hint.warn {
+  color: #ffc040;
+}
+
+.anchor-row {
+  display: grid;
+  grid-template-columns: 4.5em minmax(0, 1fr) 4em 4em auto;
+  gap: 4px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.anchor-row input,
+.anchor-row select {
+  min-width: 0;
+}
+
+.anchor-row button {
+  margin-top: 0;
+}
+
+#asm-inspector h3 {
+  margin: 12px 0 4px;
+}
+
+#asm-parts {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: row;
   flex-wrap: nowrap;

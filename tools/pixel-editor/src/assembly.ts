@@ -16,27 +16,39 @@ import {
   ENTITY_HIT_MIN,
   ENTITY_LAYER_MAX,
   ENTITY_LAYER_MIN,
+  ENTITY_MAX_ANCHORS,
+  ENTITY_MAX_STAGES,
   ENTITY_POS_MAX,
   ENTITY_POS_MIN,
   ENTITY_SCALE_MAX,
   ENTITY_SCALE_MIN,
+  clonePlacement,
+  cloneStage,
+  copyPartToStage,
   createEmptyEntity,
+  hitRole,
   isEntityId,
   parseEntityFile,
+  placedAnchor,
   placedHitLocal,
   placedSprite,
   placementContains,
   placementCorners,
   previewFrameRect,
   serializeEntityFile,
+  stageBounds,
   stageDrawOrder,
   suggestedPreviewFrame,
+  type EntityAnchor,
+  type EntityAnchorKind,
   type EntityFile,
   type EntityPlacement,
   type EntityStage,
 } from '@/game/art/entityFile';
 import { parsePaletteGrid, serializePaletteGrid, type PaletteGridFile } from '@/game/art/gridFile';
+import { gridColorStats } from '@/game/art/gridStats';
 import { blitPlacedSprite, renderSprite } from '@/game/art/spriteRenderer';
+import { colorWarnings, renderColorStats } from './colorStats';
 
 export interface AssemblyHost {
   currentGrid(): PaletteGridFile | null;
@@ -57,6 +69,17 @@ let frameDirty = false;
 let viewMap: { scale: number; minX: number; minY: number; bleed: number } | null = null;
 
 const FRAME_BLEED = 2;
+/** Anchor flicker period. Only repaints while a visible anchor exists. */
+const FLICKER_MS = 120;
+const PLAY_MS = 600;
+const BANK_STAGE_IDS = ['t0', 't1', 't2', 't3', 't4', 't5'] as const;
+const NUDGE_STEP = 1;
+const NUDGE_SHIFT_STEP = 8;
+
+let anchorsOn = true;
+let refSize: { width: number; height: number } | null = null;
+let flickerPhase = false;
+let playTimer: number | null = null;
 
 export function mountAssembly(next: AssemblyHost): void {
   host = next;
@@ -72,7 +95,7 @@ export function mountAssembly(next: AssemblyHost): void {
   const exportButton = must(HTMLButtonElement, 'asm-export');
   const deleteButton = must(HTMLButtonElement, 'asm-delete');
   const flipInput = must(HTMLInputElement, 'asm-flip');
-  const hitInput = must(HTMLInputElement, 'asm-hit');
+  const roleInput = must(HTMLSelectElement, 'asm-hit-role');
 
   exampleButton.addEventListener('click', () => {
     if (exampleButton.disabled) return;
@@ -125,6 +148,50 @@ export function mountAssembly(next: AssemblyHost): void {
     hitsOn = hits.checked;
     paintAssembly();
   });
+  const anchorsToggle = must(HTMLInputElement, 'asm-anchors');
+  anchorsToggle.addEventListener('change', () => {
+    anchorsOn = anchorsToggle.checked;
+    paintAssembly();
+  });
+  const refSelect = must(HTMLSelectElement, 'asm-ref');
+  refSelect.addEventListener('change', () => {
+    refSize = parseRef(refSelect.value);
+    paintAssembly();
+    setStatus(refSize ? `对照 ${refSize.width}×${refSize.height}` : '不对照尺寸');
+  });
+  must(HTMLInputElement, 'asm-stage-name').addEventListener('change', (event) => {
+    const input = event.target;
+    if (input instanceof HTMLInputElement) renameStageLabel(input.value.trim());
+  });
+  must(HTMLButtonElement, 'asm-dup-stage').addEventListener('click', () => {
+    duplicateStage();
+  });
+  must(HTMLButtonElement, 'asm-del-stage').addEventListener('click', () => {
+    deleteStage();
+  });
+  must(HTMLButtonElement, 'asm-bank').addEventListener('click', () => {
+    addBankStages();
+  });
+  must(HTMLButtonElement, 'asm-play').addEventListener('click', () => {
+    togglePlay();
+  });
+  must(HTMLButtonElement, 'asm-dup-part').addEventListener('click', () => {
+    duplicatePart();
+  });
+  must(HTMLButtonElement, 'asm-copy-part').addEventListener('click', () => {
+    copyPartAcross();
+  });
+  must(HTMLButtonElement, 'asm-add-exhaust').addEventListener('click', () => {
+    addAnchor('exhaust');
+  });
+  must(HTMLButtonElement, 'asm-add-muzzle').addEventListener('click', () => {
+    addAnchor('muzzle');
+  });
+  window.setInterval(() => {
+    if (document.hidden || !stageHasVisibleAnchor()) return;
+    flickerPhase = !flickerPhase;
+    paintAssembly();
+  }, FLICKER_MS);
   const frameWidth = must(HTMLInputElement, 'asm-frame-w');
   const frameHeight = must(HTMLInputElement, 'asm-frame-h');
   frameWidth.addEventListener('input', () => {
@@ -140,6 +207,7 @@ export function mountAssembly(next: AssemblyHost): void {
     renameEntity(nameInput.value);
   });
   stageSelect.addEventListener('change', () => {
+    stopPlay();
     stageId = stageSelect.value;
     partId = '';
     const stage = currentStage();
@@ -160,23 +228,53 @@ export function mountAssembly(next: AssemblyHost): void {
   deleteButton.addEventListener('click', () => {
     deletePart();
   });
-  bindNumber('asm-x', (part, value) => {
-    part.x = value;
-  }, 'x', ENTITY_POS_MIN, ENTITY_POS_MAX);
-  bindNumber('asm-y', (part, value) => {
-    part.y = value;
-  }, 'y', ENTITY_POS_MIN, ENTITY_POS_MAX);
-  bindNumber('asm-px', (part, value, grid) => {
-    if (value < 0 || value >= grid.width) throw new Error('轴心要落在部件像素内');
-    part.pivot = { x: value, y: part.pivot.y };
-  }, '轴心 x', 0, 1024);
-  bindNumber('asm-py', (part, value, grid) => {
-    if (value < 0 || value >= grid.height) throw new Error('轴心要落在部件像素内');
-    part.pivot = { x: part.pivot.x, y: value };
-  }, '轴心 y', 0, 1024);
-  bindNumber('asm-layer', (part, value) => {
-    part.layer = value;
-  }, '层', ENTITY_LAYER_MIN, ENTITY_LAYER_MAX);
+  bindNumber(
+    'asm-x',
+    (part, value) => {
+      part.x = value;
+    },
+    'x',
+    ENTITY_POS_MIN,
+    ENTITY_POS_MAX
+  );
+  bindNumber(
+    'asm-y',
+    (part, value) => {
+      part.y = value;
+    },
+    'y',
+    ENTITY_POS_MIN,
+    ENTITY_POS_MAX
+  );
+  bindNumber(
+    'asm-px',
+    (part, value, grid) => {
+      if (value < 0 || value >= grid.width) throw new Error('轴心要落在部件像素内');
+      part.pivot = { x: value, y: part.pivot.y };
+    },
+    '轴心 x',
+    0,
+    1024
+  );
+  bindNumber(
+    'asm-py',
+    (part, value, grid) => {
+      if (value < 0 || value >= grid.height) throw new Error('轴心要落在部件像素内');
+      part.pivot = { x: part.pivot.x, y: value };
+    },
+    '轴心 y',
+    0,
+    1024
+  );
+  bindNumber(
+    'asm-layer',
+    (part, value) => {
+      part.layer = value;
+    },
+    '层',
+    ENTITY_LAYER_MIN,
+    ENTITY_LAYER_MAX
+  );
   const scaleInput = must(HTMLInputElement, 'asm-scale');
   scaleInput.addEventListener('input', () => {
     editPart((part) => {
@@ -196,10 +294,28 @@ export function mountAssembly(next: AssemblyHost): void {
     clearSelection();
   });
   document.addEventListener('keydown', (event) => {
-    if (event.key !== 'Escape') return;
     const target = event.target;
     if (target instanceof Element && target.closest('dialog')) return;
-    clearSelection();
+    if (event.key === 'Escape') {
+      clearSelection();
+      return;
+    }
+    const step = event.shiftKey ? NUDGE_SHIFT_STEP : NUDGE_STEP;
+    const delta: Record<string, [number, number]> = {
+      ArrowLeft: [-step, 0],
+      ArrowRight: [step, 0],
+      ArrowUp: [0, -step],
+      ArrowDown: [0, step],
+    };
+    const move = delta[event.key];
+    if (!move || !partId) return;
+    if (target instanceof Element && target.closest('input, select, textarea')) return;
+    if (document.querySelector('dialog[open]')) return;
+    event.preventDefault();
+    editPart((part) => {
+      part.x += move[0];
+      part.y += move[1];
+    }, true);
   });
   const angleInput = must(HTMLInputElement, 'asm-angle');
   angleInput.addEventListener('input', () => {
@@ -212,13 +328,16 @@ export function mountAssembly(next: AssemblyHost): void {
       part.flipX = flipInput.checked;
     }, true);
   });
-  hitInput.addEventListener('change', () => {
+  roleInput.addEventListener('change', () => {
     editPart((part, grid) => {
-      if (!hitInput.checked) {
+      if (roleInput.value === 'none') {
         delete part.hit;
         return;
       }
-      part.hit = part.hit ?? { x: 0, y: 0, w: grid.width, h: grid.height };
+      const hit = part.hit ?? { x: 0, y: 0, w: grid.width, h: grid.height };
+      if (roleInput.value === 'block') hit.role = 'block';
+      else delete hit.role;
+      part.hit = hit;
     }, true);
   });
   const hitShape = must(HTMLSelectElement, 'asm-hit-shape');
@@ -234,9 +353,7 @@ export function mountAssembly(next: AssemblyHost): void {
           y: hit.y + Math.round(hit.h / 2),
           r: radius,
         };
-        return;
-      }
-      if (hitShape.value === 'rect' && hit.shape === 'circle') {
+      } else if (hitShape.value === 'rect' && hit.shape === 'circle') {
         part.hit = {
           x: hit.x - hit.r,
           y: hit.y - hit.r,
@@ -244,6 +361,7 @@ export function mountAssembly(next: AssemblyHost): void {
           h: hit.r * 2,
         };
       }
+      if (hit.role === 'block' && part.hit) part.hit.role = 'block';
     }, true);
   });
   bindHit('asm-hx', 'x', '受击 x');
@@ -283,7 +401,10 @@ function addGrid(grid: PaletteGridFile): void {
     }
     const stage = current.stages.find((item) => item.id === stageId) ?? current.stages[0];
     if (!stage) throw new Error('没有阶段');
-    const id = uniqueId(gridId, stage.parts.map((part) => part.id));
+    const id = uniqueId(
+      gridId,
+      stage.parts.map((part) => part.id)
+    );
     const part: EntityPlacement = {
       id,
       grid: gridId,
@@ -312,11 +433,14 @@ function addGrid(grid: PaletteGridFile): void {
     frameH = fit.height;
     syncFrameInputs();
   }
-  setStatus(frameStatus(`已移入装配 ${partId}`));
+  const warnings = colorWarnings(gridColorStats(grid.cells));
+  const note = warnings.length > 0 ? `。注意：${warnings.join(' ')}` : '';
+  setStatus(frameStatus(`已移入装配 ${partId}`) + note);
   paintAssembly();
 }
 
 function adopt(next: EntityFile): void {
+  stopPlay();
   entity = next;
   stageId = next.stages[0]?.id ?? '';
   partId = '';
@@ -386,7 +510,10 @@ function addStage(): void {
     setStatus('阶段数量已满');
     return;
   }
-  const id = uniqueId('stage', entity.stages.map((stage) => stage.id));
+  const id = uniqueId(
+    'stage',
+    entity.stages.map((stage) => stage.id)
+  );
   entity.stages.push({ id, parts: [] });
   stageId = id;
   partId = '';
@@ -512,6 +639,7 @@ function syncSampleLocks(): void {
 }
 
 function clearAssembly(): void {
+  stopPlay();
   entity = null;
   stageId = '';
   partId = '';
@@ -567,7 +695,9 @@ function renderParts(): void {
     if (!part) continue;
     const button = document.createElement('button');
     button.type = 'button';
-    button.textContent = `${part.id} · ${part.grid} · L${part.layer}`;
+    const role = part.hit ? (hitRole(part.hit) === 'block' ? ' · 阻挡' : ' · 可打') : '';
+    const marks = part.anchors?.length ? ` · 锚点 ${part.anchors.length}` : '';
+    button.textContent = `L${part.layer} ${part.id} · ${part.grid}${role}${marks}`;
     button.setAttribute('aria-pressed', part.id === partId ? 'true' : 'false');
     button.addEventListener('click', () => {
       partId = part.id;
@@ -601,9 +731,18 @@ function fillFields(): void {
   must(HTMLInputElement, 'asm-flip').checked = part.flipX;
   must(HTMLInputElement, 'asm-scale').value = String(part.scale);
   must(HTMLInputElement, 'asm-layer').value = String(part.layer);
+  must(HTMLParagraphElement, 'asm-grid-size').textContent =
+    `网格 ${part.grid}：${grid.width}×${grid.height}，源 ${grid.source.params.sourceWidth}×${grid.source.params.sourceHeight}`;
+  renderColorStats(
+    must(HTMLDivElement, 'asm-grid-colors'),
+    must(HTMLParagraphElement, 'asm-grid-warn'),
+    grid.cells
+  );
+  fillCopyTargets();
+  renderAnchors(part);
   const hit = part.hit;
   const circle = hit?.shape === 'circle';
-  must(HTMLInputElement, 'asm-hit').checked = hit !== undefined;
+  must(HTMLSelectElement, 'asm-hit-role').value = hit ? hitRole(hit) : 'none';
   must(HTMLSelectElement, 'asm-hit-shape').value = circle ? 'circle' : 'rect';
   must(HTMLDivElement, 'asm-hit-box').hidden = hit === undefined;
   must(HTMLDivElement, 'asm-hit-rect').hidden = hit === undefined || circle;
@@ -626,7 +765,363 @@ function fillName(): void {
 }
 
 function fillStageId(): void {
-  must(HTMLInputElement, 'asm-stage-id').value = currentStage()?.id ?? '';
+  const stage = currentStage();
+  must(HTMLInputElement, 'asm-stage-id').value = stage?.id ?? '';
+  must(HTMLInputElement, 'asm-stage-name').value = stage?.name ?? '';
+  must(HTMLButtonElement, 'asm-del-stage').disabled = (entity?.stages.length ?? 0) <= 1;
+}
+
+function renameStageLabel(name: string): void {
+  if (!entity) return;
+  const stage = currentStage();
+  if (!stage) return;
+  const backup = serializeEntityFile(entity);
+  if (name.length === 0) delete stage.name;
+  else stage.name = name;
+  try {
+    serializeEntityFile(entity);
+  } catch (error) {
+    entity = parseEntityFile(backup);
+    fillStageId();
+    fail(error);
+    return;
+  }
+  renderStages();
+  setStatus(name.length === 0 ? '已清掉阶段说明' : `阶段说明：${name}`);
+}
+
+function selectStage(id: string): void {
+  stageId = id;
+  if (!currentStage()?.parts.some((part) => part.id === partId)) partId = '';
+  renderStages();
+  renderParts();
+  fillFields();
+  paintAssembly();
+}
+
+function duplicateStage(): void {
+  if (!entity) return;
+  const stage = currentStage();
+  if (!stage) return;
+  if (entity.stages.length >= ENTITY_MAX_STAGES) {
+    setStatus('阶段数量已满');
+    return;
+  }
+  const id = uniqueId(
+    `${stage.id}`.slice(0, 24),
+    entity.stages.map((item) => item.id)
+  );
+  const index = entity.stages.indexOf(stage);
+  entity.stages.splice(index + 1, 0, cloneStage(stage, id));
+  selectStage(id);
+  setStatus(`已复制成 ${id}。零件 id 不变，改完角度和位移再导出`);
+}
+
+function deleteStage(): void {
+  if (!entity) return;
+  const stage = currentStage();
+  if (!stage) return;
+  if (entity.stages.length <= 1) {
+    setStatus('至少要留一个阶段');
+    return;
+  }
+  if (
+    stage.parts.length > 0 &&
+    !window.confirm(`删掉阶段 ${stage.id} 和它的 ${stage.parts.length} 个零件？`)
+  ) {
+    return;
+  }
+  stopPlay();
+  const index = entity.stages.indexOf(stage);
+  entity.stages.splice(index, 1);
+  const next = entity.stages[Math.max(0, index - 1)];
+  partId = '';
+  selectStage(next?.id ?? '');
+  syncSampleLocks();
+  setStatus(`已删除阶段 ${stage.id}`);
+}
+
+function addBankStages(): void {
+  if (!entity) return;
+  const stage = currentStage();
+  if (!stage) return;
+  const used = entity.stages.map((item) => item.id);
+  const missing = BANK_STAGE_IDS.filter((id) => !used.includes(id));
+  if (missing.length === 0) {
+    setStatus('t0–t5 都已经有了');
+    return;
+  }
+  if (entity.stages.length + missing.length > ENTITY_MAX_STAGES) {
+    setStatus(`阶段最多 ${ENTITY_MAX_STAGES} 个，放不下 ${missing.length} 个侧倾阶段`);
+    return;
+  }
+  for (const id of missing) {
+    const copy = cloneStage(stage, id);
+    copy.name = id === 't0' ? '平飞' : `右倾 ${id.slice(1)}`;
+    entity.stages.push(copy);
+  }
+  serializeEntityFile(entity);
+  selectStage(missing[0] ?? stage.id);
+  setStatus(
+    `已从 ${stage.id} 复制出 ${missing.join('、')}。t0 平飞，t1–t5 逐级右倾，左倾由游戏镜像`
+  );
+}
+
+function togglePlay(): void {
+  if (playTimer !== null) {
+    stopPlay();
+    setStatus('已停止播放');
+    return;
+  }
+  if (!entity || entity.stages.length < 2) {
+    setStatus('至少两个阶段才能播放');
+    return;
+  }
+  partId = '';
+  fillFields();
+  must(HTMLButtonElement, 'asm-play').setAttribute('aria-pressed', 'true');
+  must(HTMLButtonElement, 'asm-play').textContent = '停止播放';
+  playTimer = window.setInterval(() => {
+    if (!entity) return;
+    const index = entity.stages.findIndex((stage) => stage.id === stageId);
+    const next = entity.stages[(index + 1) % entity.stages.length];
+    if (next) selectStage(next.id);
+    setStatus(`播放中：${next?.id ?? ''}${next?.name ? ` ${next.name}` : ''}`);
+  }, PLAY_MS);
+  setStatus('播放中');
+}
+
+function stopPlay(): void {
+  if (playTimer === null) return;
+  window.clearInterval(playTimer);
+  playTimer = null;
+  const button = must(HTMLButtonElement, 'asm-play');
+  button.setAttribute('aria-pressed', 'false');
+  button.textContent = '播放阶段';
+}
+
+function duplicatePart(): void {
+  if (!entity) return;
+  const located = locate();
+  if (!located) return;
+  const { part, stage } = located;
+  const copy = clonePlacement(part);
+  copy.id = uniqueId(
+    part.id.slice(0, 24),
+    stage.parts.map((item) => item.id)
+  );
+  copy.x = Math.min(ENTITY_POS_MAX, part.x + 2);
+  copy.y = Math.min(ENTITY_POS_MAX, part.y + 2);
+  copy.layer = nextLayer(stage.parts);
+  stage.parts.push(copy);
+  try {
+    serializeEntityFile(entity);
+  } catch (error) {
+    stage.parts.pop();
+    fail(error);
+    return;
+  }
+  partId = copy.id;
+  renderParts();
+  fillFields();
+  paintAssembly();
+  setStatus(`已复制成 ${copy.id}，偏 2 像素，画在最前`);
+}
+
+function fillCopyTargets(): void {
+  const select = must(HTMLSelectElement, 'asm-copy-target');
+  const previous = select.value;
+  select.replaceChildren();
+  for (const stage of entity?.stages ?? []) {
+    if (stage.id === stageId) continue;
+    const option = document.createElement('option');
+    option.value = stage.id;
+    const has = stage.parts.some((part) => part.id === partId);
+    option.textContent = `${stage.id}${has ? '（替换同 id）' : '（新增）'}`;
+    select.append(option);
+  }
+  if ([...select.options].some((option) => option.value === previous)) select.value = previous;
+  select.disabled = select.options.length === 0;
+  must(HTMLButtonElement, 'asm-copy-part').disabled = select.options.length === 0;
+}
+
+function copyPartAcross(): void {
+  if (!entity) return;
+  const located = locate();
+  const targetId = must(HTMLSelectElement, 'asm-copy-target').value;
+  const target = entity.stages.find((stage) => stage.id === targetId);
+  if (!located || !target) return;
+  const backup = serializeEntityFile(entity);
+  try {
+    const result = copyPartToStage(target, located.part);
+    serializeEntityFile(entity);
+    fillCopyTargets();
+    setStatus(
+      `已把 ${located.part.id} 复制到 ${target.id}（${result === 'replaced' ? '替换同 id' : '新增'}）。切到 ${target.id} 再改角度`
+    );
+  } catch (error) {
+    entity = parseEntityFile(backup);
+    fail(error);
+  }
+}
+
+function renderAnchors(part: EntityPlacement): void {
+  const box = must(HTMLDivElement, 'asm-anchor-list');
+  box.replaceChildren();
+  const anchors = part.anchors ?? [];
+  if (anchors.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'hint';
+    empty.textContent = '还没有锚点。';
+    box.append(empty);
+  }
+  anchors.forEach((anchor, index) => {
+    const row = document.createElement('div');
+    row.className = 'anchor-row';
+    const kind = document.createElement('select');
+    for (const [value, label] of [
+      ['exhaust', '尾焰'],
+      ['muzzle', '枪口'],
+    ] as const) {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = label;
+      kind.append(option);
+    }
+    kind.value = anchor.kind;
+    kind.title = '锚点用途';
+    kind.addEventListener('change', () => {
+      editAnchor(
+        index,
+        (item) => {
+          item.kind = kind.value === 'muzzle' ? 'muzzle' : 'exhaust';
+        },
+        true
+      );
+    });
+    const id = document.createElement('input');
+    id.type = 'text';
+    id.maxLength = 32;
+    id.value = anchor.id;
+    id.title = '锚点 id：字母、数字、_ 或 -';
+    id.addEventListener('change', () => {
+      editAnchor(
+        index,
+        (item) => {
+          item.id = id.value.trim();
+        },
+        true
+      );
+    });
+    const x = anchorNumber(anchor.x, 'x（相对轴心）', (value) => {
+      editAnchor(
+        index,
+        (item) => {
+          item.x = value;
+        },
+        false
+      );
+    });
+    const y = anchorNumber(anchor.y, 'y（相对轴心）', (value) => {
+      editAnchor(
+        index,
+        (item) => {
+          item.y = value;
+        },
+        false
+      );
+    });
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.textContent = '删';
+    remove.title = '删掉这个锚点';
+    remove.addEventListener('click', () => {
+      editPart((item) => {
+        const next = (item.anchors ?? []).filter((_, at) => at !== index);
+        if (next.length > 0) item.anchors = next;
+        else delete item.anchors;
+      }, true);
+    });
+    row.append(kind, id, x, y, remove);
+    box.append(row);
+  });
+  must(HTMLButtonElement, 'asm-add-exhaust').disabled = anchors.length >= ENTITY_MAX_ANCHORS;
+  must(HTMLButtonElement, 'asm-add-muzzle').disabled = anchors.length >= ENTITY_MAX_ANCHORS;
+}
+
+function anchorNumber(
+  value: number,
+  label: string,
+  apply: (value: number) => void
+): HTMLInputElement {
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.step = '1';
+  input.value = String(value);
+  input.title = label;
+  input.addEventListener('input', () => {
+    try {
+      apply(readInt(input, label, ENTITY_HIT_MIN, ENTITY_HIT_MAX));
+    } catch (error) {
+      fail(error);
+    }
+  });
+  return input;
+}
+
+function editAnchor(index: number, apply: (anchor: EntityAnchor) => void, fill: boolean): void {
+  editPart((part) => {
+    const anchor = part.anchors?.[index];
+    if (!anchor) return;
+    apply(anchor);
+  }, fill);
+}
+
+function addAnchor(kind: EntityAnchorKind): void {
+  editPart((part, grid) => {
+    const anchors = part.anchors ?? [];
+    const x = Math.floor(grid.width / 2) - part.pivot.x;
+    const y = kind === 'exhaust' ? grid.height - part.pivot.y : -part.pivot.y;
+    const id = uniqueId(
+      kind === 'exhaust' ? 'jet' : 'gun',
+      anchors.map((anchor) => anchor.id)
+    );
+    part.anchors = [...anchors, { id, kind, x, y }];
+  }, true);
+}
+
+function stageHasVisibleAnchor(): boolean {
+  const stage = currentStage();
+  if (!stage) return false;
+  return stage.parts.some(
+    (part) => (anchorsOn || part.id === partId) && (part.anchors?.length ?? 0) > 0
+  );
+}
+
+function parseRef(value: string): { width: number; height: number } | null {
+  const match = /^(\d+)x(\d+)$/.exec(value);
+  if (!match) return null;
+  return { width: Number(match[1]), height: Number(match[2]) };
+}
+
+function updateSizeReadout(): void {
+  const out = must(HTMLParagraphElement, 'asm-size');
+  const stage = currentStage();
+  const box = entity && stage ? stageBounds(entity, stage) : null;
+  const screen = '局内逻辑画面 360×640。';
+  if (!box) {
+    out.textContent = `当前阶段还没有零件。${screen}`;
+    return;
+  }
+  const width = Math.round(box.right - box.left);
+  const height = Math.round(box.bottom - box.top);
+  let text = `当前阶段 ${stage?.id ?? ''} 零件包围 ${width}×${height} 像素（不含受击框）。${screen}`;
+  if (refSize) {
+    const wx = (width / refSize.width).toFixed(2);
+    const hy = (height / refSize.height).toFixed(2);
+    text += ` 对照 ${refSize.width}×${refSize.height}：宽 ×${wx}，高 ×${hy}。`;
+  }
+  out.textContent = text;
 }
 
 function currentStage(): EntityStage | null {
@@ -788,6 +1283,14 @@ function paintAssembly(): void {
   let minY = bounds.top;
   let maxX = bounds.right;
   let maxY = bounds.bottom;
+  const ref = refSize ? previewFrameRect(refSize) : null;
+  if (ref) {
+    minX = Math.min(minX, ref.left);
+    minY = Math.min(minY, ref.top);
+    maxX = Math.max(maxX, ref.right);
+    maxY = Math.max(maxY, ref.bottom);
+  }
+  updateSizeReadout();
   if (entity && stage) {
     for (const index of order) {
       const part = stage.parts[index];
@@ -833,15 +1336,26 @@ function paintAssembly(): void {
     }
   }
   strokePreviewFrame(ctx, scale);
+  if (ref) strokeReference(ctx, ref, scale);
   if (!entity || !stage) return;
   const selected = stage.parts.find((part) => part.id === partId);
   const selectedGrid = selected ? entity.grids[selected.grid] : undefined;
   if (selected && selectedGrid) {
+    strokeSelection(ctx, placementCorners(selectedGrid, selected), scale);
     const selectedHit = placedHitLocal(selectedGrid, selected);
     if (selectedHit) strokeHit(ctx, selected, selectedHit, scale, 3);
   }
-  if (!selected || !selectedGrid) return;
-  const corners = placementCorners(selectedGrid, selected);
+  for (const part of stage.parts) {
+    if (!anchorsOn && part.id !== partId) continue;
+    for (const anchor of part.anchors ?? []) drawAnchor(ctx, part, anchor, scale);
+  }
+}
+
+function strokeSelection(
+  ctx: CanvasRenderingContext2D,
+  corners: ReadonlyArray<readonly [number, number]>,
+  scale: number
+): void {
   const mark = PALETTE[COLOR.PLAYER_GOLD_LIGHT];
   if (!mark || corners.length === 0) return;
   ctx.beginPath();
@@ -862,20 +1376,75 @@ function strokeHit(
   viewScale: number,
   pixels: number
 ): void {
-  const color = PALETTE[COLOR.PLAYER_CYAN];
+  const block = hitRole(hit) === 'block';
+  const color = PALETTE[block ? COLOR.LIGHT_GRAY : COLOR.PLAYER_CYAN];
   if (!color) throw new Error('missing hit color');
+  const unit = 1 / (viewScale * part.scale);
   ctx.save();
   ctx.translate(part.x, part.y);
   ctx.rotate(part.angle);
   if (part.scale !== 1) ctx.scale(part.scale, part.scale);
   ctx.strokeStyle = color;
-  ctx.lineWidth = pixels / (viewScale * part.scale);
+  ctx.lineWidth = pixels * unit;
+  if (block) ctx.setLineDash([5 * unit, 4 * unit]);
   if (hit.shape === 'circle') {
     ctx.beginPath();
     ctx.arc(hit.x, hit.y, hit.r, 0, Math.PI * 2);
     ctx.stroke();
   } else {
     ctx.strokeRect(hit.x, hit.y, hit.w, hit.h);
+  }
+  ctx.restore();
+}
+
+function strokeReference(
+  ctx: CanvasRenderingContext2D,
+  rect: { left: number; top: number; right: number; bottom: number },
+  scale: number
+): void {
+  const color = PALETTE[COLOR.BULLET_PINK];
+  if (!color) throw new Error('missing reference color');
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1 / scale;
+  ctx.setLineDash([4 / scale, 3 / scale]);
+  const half = 0.5 / scale;
+  ctx.strokeRect(
+    rect.left - half,
+    rect.top - half,
+    rect.right - rect.left + 2 * half,
+    rect.bottom - rect.top + 2 * half
+  );
+  ctx.restore();
+}
+
+function drawAnchor(
+  ctx: CanvasRenderingContext2D,
+  part: EntityPlacement,
+  anchor: EntityAnchor,
+  scale: number
+): void {
+  const point = placedAnchor(part, anchor);
+  const unit = 1 / scale;
+  ctx.save();
+  if (anchor.kind === 'exhaust') {
+    const color = PALETTE[flickerPhase ? COLOR.EXPLOSION_YELLOW : COLOR.EXPLOSION_ORANGE];
+    if (!color) throw new Error('missing exhaust color');
+    const size = (flickerPhase ? 6 : 4) * unit;
+    ctx.fillStyle = color;
+    ctx.fillRect(point.x - size / 2, point.y - size / 2, size, size);
+  } else {
+    const color = PALETTE[flickerPhase ? COLOR.WHITE : COLOR.PLAYER_PALE_CYAN];
+    if (!color) throw new Error('missing muzzle color');
+    const arm = 4 * unit;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2 * unit;
+    ctx.beginPath();
+    ctx.moveTo(point.x - arm, point.y);
+    ctx.lineTo(point.x + arm, point.y);
+    ctx.moveTo(point.x, point.y - arm);
+    ctx.lineTo(point.x, point.y + arm);
+    ctx.stroke();
   }
   ctx.restore();
 }

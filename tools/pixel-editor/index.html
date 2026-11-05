@@ -61,7 +61,25 @@
             </label>
             <label>
               受击框
-              <input id="asm-hits" type="checkbox" checked title="画出所有零件的受击框。当前选中的零件即使不勾也会画，并且更粗。战斗还不读。" />
+              <input id="asm-hits" type="checkbox" checked title="画出所有零件的受击框。青色实线是可打，灰色虚线是仅阻挡。当前选中的零件即使不勾也会画，并且更粗。战斗还不读。" />
+            </label>
+            <label>
+              锚点
+              <input id="asm-anchors" type="checkbox" checked title="闪烁显示尾焰喷口（黄橙方块）和枪口（白十字）。当前选中的零件即使不勾也会画。" />
+            </label>
+            <label>
+              对照尺寸
+              <select id="asm-ref" title="在画布上叠一个粉色虚线框，对照局内机体大小。不裁切零件。" aria-describedby="hint-ref">
+                <option value="">不对照</option>
+                <option value="28x32">Eagle 28×32</option>
+                <option value="48x32">Mandy 48×32</option>
+                <option value="26x30">Jason 26×30</option>
+                <option value="24x24">小型敌机 24×24</option>
+                <option value="36x36">中型敌机 36×36</option>
+                <option value="80x96">黑曜机身 80×96</option>
+                <option value="200x132">炉心底盘 200×132</option>
+                <option value="220x140">百战 Boss 220×140</option>
+              </select>
             </label>
             <label>
               边界宽
@@ -72,8 +90,14 @@
               <input id="asm-frame-h" type="number" min="1" max="4096" step="1" value="32" title="当前装配的预览边界高度。载入后按零件包围盒重算。" aria-describedby="hint-frame" />
             </label>
             <button id="asm-frame-fit" type="button" title="把边界缩到包住所有阶段的零件，远处再留 8 像素。">框住零件</button>
+            <p id="asm-size" class="hint" aria-live="polite"></p>
+            <details class="hints">
+              <summary>按钮说明</summary>
             <p id="hint-frame" class="hint">
               白框是当前这套装配的编辑边界，中心在原点。局内逻辑画面是 360×640，那是游戏屏幕，不是这个框的默认大小。载入装配、载入示例或移入零件后，按零件包围盒外加 8 像素重算。手改宽高，或点「框住零件」，才写入 <code>previewFrame</code>；没改过不写。文件里若已有这个字段，载入时用文件里的数。战斗不读。
+            </p>
+            <p id="hint-ref" class="hint">
+              「对照尺寸」叠一个粉色虚线框，中心在原点：玩家机约 26×30（Jason）到 48×32（Mandy），Eagle 28×32；Boss 两百像素上下。只作对照，不裁切，也不写进文件。
             </p>
             <p id="hint-asm-example" class="hint">
               「载入装配示例」打开 <code>sample.entity.json</code>：一块机身加一对翼，阶段是 folded（收起）、half（一边张开）、open（两边张开）。用来冒烟，不是现役黑曜。装配里一旦有零件，这个按钮和零件弹窗里的「载入示例」都不可点。点「清空装配」后恢复。点零件后，调参栏从画布右侧滑入，画布大小不变。
@@ -84,6 +108,7 @@
             <p id="hint-entity-file" class="hint">
               「装配文件」读取一份 <code>*.entity.json</code>：多张网格，加上各阶段的位置、轴心、角度、缩放、水平翻转、层和可选受击框。选中后整份换上，用来核对导出再载入。
             </p>
+            </details>
           </div>
           <div id="asm-editor" hidden>
             <div class="toolbar">
@@ -99,16 +124,30 @@
                 阶段 id
                 <input id="asm-stage-id" type="text" maxlength="32" title="这个姿势在文件里的名字。" />
               </label>
+              <label>
+                说明
+                <input id="asm-stage-name" type="text" maxlength="128" placeholder="例如 折叠" title="给人看的阶段说明，写进文件的 name。可以留空。" />
+              </label>
               <button id="asm-add-stage" type="button" title="再加一个空姿势。">新阶段</button>
+              <button id="asm-dup-stage" type="button" title="把当前阶段整份复制成新阶段，零件 id 不变，再去改角度和位移。">复制阶段</button>
+              <button id="asm-del-stage" type="button" title="删掉当前阶段。至少留一个。">删除阶段</button>
+              <button id="asm-bank" type="button" title="玩家机：从当前阶段复制出 t0（平飞）到 t5（右倾到底）。左倾由游戏镜像。" aria-describedby="hint-bank">生成侧倾 t0–t5</button>
+              <button id="asm-play" type="button" aria-pressed="false" title="按顺序轮播各阶段，看姿态切换。再点一次停。">播放阶段</button>
               <button id="asm-export" type="button" title="下载装配文件 *.entity.json。" aria-describedby="hint-entity-export">
                 导出 .entity.json
               </button>
+              <details class="hints">
+                <summary>阶段说明</summary>
               <p id="hint-stage" class="hint">
                 「阶段」是同一架机体的一个姿势。示例里 folded 是收起，half 是一边张开，open 是两边张开。切换时装配画布上的翼会动，零件预览弹窗不动。
               </p>
               <p id="hint-entity-export" class="hint">
                 「导出 .entity.json」下载装配文件。这是过门的锁定稿。现役 Boss 还没有改去读它。<code>previewFrame</code> 只是预览边界，战斗不读。
               </p>
+              <p id="hint-bank" class="hint">
+                一个姿态一个阶段。Boss 用 folded / half / open 这类阶段；玩家机点「生成侧倾 t0–t5」，t0 平飞，t1–t5 逐级向右倾，左倾由游戏镜像，不用画。零件 id 在各阶段相同，「复制到阶段」按 id 对上。
+              </p>
+              </details>
             </div>
           </div>
           <div class="canvas-slot">
@@ -160,9 +199,28 @@
               <button id="asm-layer-down" type="button" title="把当前零件画到更后面。">下移</button>
             </div>
             <p class="hint">「上移」盖住后面的零件，「下移」被别的零件盖住。点过之后图层会重排成 0、1、2…</p>
+            <div id="asm-grid-info">
+              <p id="asm-grid-size" class="hint"></p>
+              <div id="asm-grid-colors" class="swatches"></div>
+              <p id="asm-grid-warn" class="warn" hidden></p>
+            </div>
+            <div class="row">
+              <button id="asm-dup-part" type="button" title="在本阶段复制一份，偏 2 像素，换新 id。多片刃可以这样做。">复制一份</button>
+            </div>
             <label>
-              可受击
-              <input id="asm-hit" type="checkbox" title="给这个零件单独设受击框。可以比零件大。" />
+              复制到阶段
+              <select id="asm-copy-target" title="把这一件按 id 复制到别的阶段。那边有同 id 的零件就替换，没有就新增。"></select>
+            </label>
+            <div class="row">
+              <button id="asm-copy-part" type="button">复制过去</button>
+            </div>
+            <label>
+              受击用途
+              <select id="asm-hit-role" title="可打：会掉血。仅阻挡：挡子弹不掉血。无：子弹穿过。">
+                <option value="none">无</option>
+                <option value="damage">可打</option>
+                <option value="block">仅阻挡</option>
+              </select>
             </label>
             <div id="asm-hit-box">
               <label>
@@ -205,14 +263,25 @@
                 </label>
               </div>
               <p class="hint">
-                方形的 x、y 是左上角，宽高各自可调，所以可以不是正方。圆形是圆心加半径。两者都按精灵像素，可以比零件大，也可以偏到外面。选中的零件始终用粗青线圈出；勾上工具栏「受击框」则其余零件也画细圈。战斗还不读。
+                方形的 x、y 是左上角，宽高各自可调，所以可以不是正方。圆形是圆心加半径。两者都按精灵像素，可以比零件大，也可以偏到外面。可打画青色实线，仅阻挡画灰色虚线。选中的零件始终画粗线；勾上工具栏「受击框」则其余零件也画细线。战斗还不读。
               </p>
+            </div>
+            <h3>锚点</h3>
+            <p class="hint">相对轴心的点，按未翻转的精灵像素。尾焰喷口画黄橙闪烁方块，枪口画白色十字。随翻转、缩放和角度一起动。战斗还不读。</p>
+            <div id="asm-anchor-list"></div>
+            <div class="row">
+              <button id="asm-add-exhaust" type="button" title="在零件下沿中间加一个尾焰喷口。">+ 尾焰喷口</button>
+              <button id="asm-add-muzzle" type="button" title="在零件上沿中间加一个枪口。">+ 枪口</button>
             </div>
             <button id="asm-delete" type="button">删除部件</button>
               </div>
             </aside>
           </div>
-          <div id="asm-parts"></div>
+          <div class="parts-row">
+            <span class="hint" title="列表从左到右是从后往前画。">图层 后 → 前</span>
+            <div id="asm-parts"></div>
+          </div>
+          <p class="hint">选中零件后，方向键每次挪 1 像素，按住 Shift 挪 8 像素。</p>
           <p id="asm-status">尚未装配。点「零件预览」做好一张再移入装配，或点「载入装配示例」。</p>
         </div>
       </section>
@@ -249,6 +318,17 @@
         目标高
         <input id="th" type="number" min="1" max="512" value="32" />
       </label>
+      <label>
+        锁定源比例
+        <input id="lock-ratio" type="checkbox" checked title="改宽时按参考图比例算高，改高时算宽。练习里翼 82×77 被改成 64×30，就是没锁。" />
+      </label>
+      <div class="row">
+        <button id="fit-ratio" type="button" title="保留目标宽，按参考图比例重算目标高。">按源比例</button>
+      </div>
+      <p id="part-aspect" class="hint" aria-live="polite"></p>
+      <p class="hint">
+        目标宽高是这件零件在机体里占的像素。局内玩家机整架约 26×30（Jason）到 48×32（Mandy），Eagle 28×32；小敌机 24×24；Boss 两百像素上下。只作提示，不强制裁切。
+      </p>
       <label>
         取样
         <select id="sample">
@@ -298,6 +378,8 @@
         「移入装配」在这张零件预览好之后，把它加进装配零件列表，并关掉弹窗。要先载入示例或自己的 PNG。
       </p>
       <p id="status">先点「载入示例」，或选一张 PNG。上面是这张零件。</p>
+      <div id="part-colors" class="swatches" aria-label="调色板用量"></div>
+      <p id="part-warn" class="warn" hidden></p>
     </dialog>
     <dialog id="guide" aria-labelledby="guide-title">
       <h2 id="guide-title">使用说明</h2>
@@ -327,6 +409,22 @@
         装配文件是多张网格，加上每个阶段的位置、轴心、角度、缩放（大于 0，可以是 0.5）、水平翻转、层，以及可选的受击框。网格可以内联在同一份文件里。
       </p>
       <p>「载入装配示例」是机身加一对翼的三个阶段，用来冒烟，不是现役黑曜。装配里已有零件时，它和「载入示例」都不可点。点「清空装配」清掉零件后再启用。</p>
+      <h3>Boss（黑曜这类）</h3>
+      <ol>
+        <li>一个姿态一个阶段：先摆好 folded，点「复制阶段」得到下一个姿态，零件 id 不变，再改角度和位移。</li>
+        <li>只想改一件时，选中它，用「复制到阶段」按 id 送到别的阶段（同 id 替换，没有就新增）。多片刃用「复制一份」。</li>
+        <li>每件选「受击用途」：可打（青色实线）、仅阻挡（灰色虚线，挡子弹不掉血）、无。形状选方形或圆形，可以比零件大。</li>
+        <li>图层列表从左到右是从后往前画，按钮上写着 L 编号。「上移」「下移」调前后。</li>
+        <li>「播放阶段」轮播各姿态。</li>
+      </ol>
+      <h3>玩家机</h3>
+      <ol>
+        <li>做零件时看弹窗里的比例行：宽高比和参考图差太多会标黄。默认勾着「锁定源比例」。</li>
+        <li>看颜色统计：暗色占九成以上、或一种颜色占九成以上，会标黄提示，移入装配时状态行也会写出来。</li>
+        <li>工具栏「对照尺寸」选 Jason 26×30、Eagle 28×32 或 Mandy 48×32，画布上出现粉色虚线框，状态行写当前阶段大小和倍数。只对照，不裁切。</li>
+        <li>摆好平飞后点「生成侧倾 t0–t5」：t0 平飞，t1–t5 逐级右倾。左倾由游戏镜像，不用画。</li>
+        <li>选中机身，加「尾焰喷口」和「枪口」锚点。坐标相对轴心，画布上闪烁。方向键挪零件，Shift 一次 8 像素。</li>
+      </ol>
       <p>「网格文件」读一份已经导出的 <code>*.grid.json</code>，加进零件列表。</p>
       <div class="row">
         <button id="guide-try-a" type="button">试路径 A</button>

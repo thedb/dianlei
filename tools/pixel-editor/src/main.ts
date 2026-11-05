@@ -16,7 +16,9 @@ import {
 import { pixelize, type RgbaImage } from '@/game/art/pixelize';
 import { decodePngRgba } from '@/game/art/pngRgba';
 import { blitSprite, renderSprite } from '@/game/art/spriteRenderer';
+import { heightForWidth, widthForHeight } from '@/game/art/gridStats';
 import { mountAssembly } from './assembly';
+import { aspectLine, renderColorStats } from './colorStats';
 import { mountGuide } from './guide';
 
 document.body.style.margin = '0';
@@ -34,6 +36,10 @@ const ditherInput = must(HTMLInputElement, 'dither');
 const exportButton = must(HTMLButtonElement, 'export');
 const status = must(HTMLParagraphElement, 'status');
 const view = must(HTMLCanvasElement, 'view');
+const lockRatio = must(HTMLInputElement, 'lock-ratio');
+const aspectNote = must(HTMLParagraphElement, 'part-aspect');
+const colorBox = must(HTMLDivElement, 'part-colors');
+const colorWarn = must(HTMLParagraphElement, 'part-warn');
 
 let image: RgbaImage | null = null;
 let sourceName = '';
@@ -47,6 +53,27 @@ fileInput.addEventListener('change', () => {
   const file = fileInput.files?.[0];
   if (!file) return;
   loadFile(file).catch((error: unknown) => report(error));
+});
+widthInput.addEventListener('input', () => {
+  if (!lockRatio.checked || !image) return;
+  const width = Number(widthInput.value);
+  if (Number.isInteger(width) && width >= 1) {
+    heightInput.value = String(Math.min(512, heightForWidth(image.width, image.height, width)));
+  }
+});
+heightInput.addEventListener('input', () => {
+  if (!lockRatio.checked || !image) return;
+  const height = Number(heightInput.value);
+  if (Number.isInteger(height) && height >= 1) {
+    widthInput.value = String(Math.min(512, widthForHeight(image.width, image.height, height)));
+  }
+});
+must(HTMLButtonElement, 'fit-ratio').addEventListener('click', () => {
+  if (!image) return;
+  const width = Number(widthInput.value);
+  if (!Number.isInteger(width) || width < 1) return;
+  heightInput.value = String(Math.min(512, heightForWidth(image.width, image.height, width)));
+  redraw();
 });
 for (const input of [
   widthInput,
@@ -143,6 +170,10 @@ function redraw(): void {
         `不透明 ${grid.cells.length - transparent}，透明 ${transparent}`,
         matched ? '与 fixtures/sample.grid.json 一致' : '参数已写入导出',
       ].join('\n');
+      const aspect = aspectLine(image.width, image.height, grid.width, grid.height);
+      aspectNote.textContent = aspect.text;
+      aspectNote.classList.toggle('warn', aspect.skewed);
+      renderColorStats(colorBox, colorWarn, grid.cells);
       exportButton.disabled = false;
     } catch (error) {
       report(error);
@@ -256,5 +287,7 @@ function assetUrl(name: string): string {
 function report(error: unknown): void {
   exportButton.disabled = true;
   grid = null;
+  colorBox.replaceChildren();
+  colorWarn.hidden = true;
   status.textContent = error instanceof Error ? error.message : '像素化失败';
 }
