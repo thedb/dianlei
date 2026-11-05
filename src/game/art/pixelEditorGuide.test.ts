@@ -76,4 +76,29 @@ describe('pixel editor guide', () => {
     expect(page).toContain('游戏里的贴图暂时还不读');
     expect(page).toContain('拉伸、斜切、旋转、移动零件都不会改它的大小和位置');
   });
+
+  it('describes the P3 playback panel and its controls', () => {
+    expect(page).toContain('播放预览');
+    for (const id of [
+      'play-panel',
+      'play-mode',
+      'play-from',
+      'play-to',
+      'play-move',
+      'play-hold',
+      'play-ease',
+      'play-speed',
+      'play-loop',
+      'play-snap',
+      'play-toggle',
+      'play-stop',
+      'play-scrub',
+      'play-frame',
+    ]) {
+      expect(page).toContain(`id="${id}"`);
+    }
+    expect(page).toContain('侧倾循环');
+    expect(page).toContain('阶段 A → B');
+    expect(page).not.toContain('播放阶段');
+  });
 });

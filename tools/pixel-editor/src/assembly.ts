@@ -66,6 +66,15 @@ import {
 import { gridColorStats } from '@/game/art/gridStats';
 import { blitPlacedSprite, renderSprite } from '@/game/art/spriteRenderer';
 import { colorWarnings, renderColorStats } from './colorStats';
+import {
+  closePlaybackPanel,
+  mountPlayback,
+  playbackActive,
+  refreshPlaybackStages,
+  stopPlayback,
+  togglePlaybackPanel,
+  type PlayedFrame,
+} from './playback';
 
 export interface AssemblyHost {
   currentGrid(): PaletteGridFile | null;
@@ -90,7 +99,6 @@ let viewMap: { scale: number; minX: number; minY: number; bleed: number } | null
 const FRAME_BLEED = 2;
 /** Anchor flicker period. Only repaints while a visible anchor exists. */
 const FLICKER_MS = 120;
-const PLAY_MS = 600;
 const BANK_STAGE_IDS = ['t0', 't1', 't2', 't3', 't4', 't5'] as const;
 const NUDGE_STEP = 1;
 const NUDGE_SHIFT_STEP = 8;
@@ -98,7 +106,8 @@ const NUDGE_SHIFT_STEP = 8;
 let anchorsOn = true;
 let refSize: { width: number; height: number } | null = null;
 let flickerPhase = false;
-let playTimer: number | null = null;
+/** Pose drawn instead of the current stage while the playback panel plays or is paused. */
+let playPose: PlayedFrame | null = null;
 /** Cells in the bank strip: left 5 (mirrored t5…t1), t0, right t1…t5. */
 const BANK_CELLS = 11;
 const BANK_PAD = 3;
@@ -235,8 +244,24 @@ export function mountAssembly(next: AssemblyHost): void {
   must(HTMLButtonElement, 'asm-bank').addEventListener('click', () => {
     addBankStages();
   });
+  mountPlayback({
+    entity: () => entity,
+    show: (frame) => {
+      playPose = frame;
+      paintMain();
+    },
+    release: () => {
+      partId = '';
+      fillFields();
+      renderParts();
+    },
+  });
   must(HTMLButtonElement, 'asm-play').addEventListener('click', () => {
-    togglePlay();
+    if (!entity) {
+      setStatus('先载入装配再播放');
+      return;
+    }
+    togglePlaybackPanel();
   });
   must(HTMLButtonElement, 'bank-hide').addEventListener('click', () => {
     bankOpen = false;
@@ -416,6 +441,12 @@ export function mountAssembly(next: AssemblyHost): void {
   view.addEventListener('pointerdown', (event) => {
     keyOwner = 'canvas';
     view.focus({ preventScroll: true });
+    if (playbackActive()) {
+      stopPlay();
+      swallowClick = true;
+      setStatus('已停止播放，回到编辑');
+      return;
+    }
     startDrag(event);
   });
   view.addEventListener('pointermove', (event) => {
@@ -793,7 +824,7 @@ function syncSampleLocks(): void {
 }
 
 function clearAssembly(): void {
-  stopPlay();
+  closePlaybackPanel();
   entity = null;
   bankOpen = false;
   stageId = '';
@@ -838,6 +869,7 @@ function renderStages(): void {
   }
   select.value = stageId;
   fillStageId();
+  refreshPlaybackStages();
 }
 
 function renderParts(): void {
@@ -1327,37 +1359,8 @@ function fillBankControls(): void {
   }
 }
 
-function togglePlay(): void {
-  if (playTimer !== null) {
-    stopPlay();
-    setStatus('已停止播放');
-    return;
-  }
-  if (!entity || entity.stages.length < 2) {
-    setStatus('至少两个阶段才能播放');
-    return;
-  }
-  partId = '';
-  fillFields();
-  must(HTMLButtonElement, 'asm-play').setAttribute('aria-pressed', 'true');
-  must(HTMLButtonElement, 'asm-play').textContent = '停止播放';
-  playTimer = window.setInterval(() => {
-    if (!entity) return;
-    const index = entity.stages.findIndex((stage) => stage.id === stageId);
-    const next = entity.stages[(index + 1) % entity.stages.length];
-    if (next) selectStage(next.id);
-    setStatus(`播放中：${next?.id ?? ''}${next?.name ? ` ${next.name}` : ''}`);
-  }, PLAY_MS);
-  setStatus('播放中');
-}
-
 function stopPlay(): void {
-  if (playTimer === null) return;
-  window.clearInterval(playTimer);
-  playTimer = null;
-  const button = must(HTMLButtonElement, 'asm-play');
-  button.setAttribute('aria-pressed', 'false');
-  button.textContent = '播放阶段';
+  if (playbackActive()) stopPlayback();
 }
 
 function duplicatePart(): void {
@@ -1783,6 +1786,7 @@ function drawPart(
 function paintMain(): void {
   const canvas = must(HTMLCanvasElement, 'asm-view');
   const stage = currentStage();
+  const played = playPose && entity ? playPose : null;
   const order = stage ? stageDrawOrder(stage.parts) : [];
   const bounds = previewFrameRect({ width: frameW, height: frameH });
   const ref = refSize ? previewFrameRect(refSize) : null;
@@ -1816,6 +1820,12 @@ function paintMain(): void {
   viewMap = { scale, minX, minY, bleed: FRAME_BLEED };
   ctx.setTransform(scale, 0, 0, scale, -minX * scale + FRAME_BLEED, -minY * scale + FRAME_BLEED);
   ctx.imageSmoothingEnabled = false;
+  if (played && entity) {
+    paintPlayed(ctx, entity, played, scale);
+    strokePreviewFrame(ctx, scale);
+    if (ref) strokeReference(ctx, ref, scale);
+    return;
+  }
   if (entity && stage) {
     for (const index of order) {
       const part = stage.parts[index];
@@ -1843,6 +1853,28 @@ function paintMain(): void {
     if (!anchorsOn && part.id !== partId) continue;
     for (const anchor of part.anchors ?? []) drawAnchor(ctx, part, anchor, scale);
   }
+}
+
+/** Played pose through the same part blit as editing. Mirrored poses flip about x = 0. */
+function paintPlayed(
+  ctx: CanvasRenderingContext2D,
+  file: EntityFile,
+  played: PlayedFrame,
+  scale: number
+): void {
+  ctx.save();
+  if (played.mirror) ctx.transform(-1, 0, 0, 1, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  for (const part of played.parts) {
+    const grid = file.grids[part.grid];
+    if (grid) drawPart(ctx, grid, part);
+  }
+  if (anchorsOn) {
+    for (const part of played.parts) {
+      for (const anchor of part.anchors ?? []) drawAnchor(ctx, part, anchor, scale);
+    }
+  }
+  ctx.restore();
 }
 
 /** Canvas pixels per CSS pixel of the assembly view (it may be shown smaller than its backing size). */

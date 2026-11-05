@@ -522,3 +522,12 @@ dialog .hint,
   outline: 2px solid #fdb927;
   outline-offset: 2px;
 }
+
+.play-transport input[type='range'] {
+  flex: 1;
+  min-width: 160px;
+}
+
+#play-frame {
+  font-variant-numeric: tabular-nums;
+}

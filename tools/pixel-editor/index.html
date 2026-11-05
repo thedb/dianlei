@@ -132,7 +132,7 @@
               <button id="asm-dup-stage" type="button" title="把当前阶段整份复制成新阶段，零件 id 不变，再去改角度和位移。">复制阶段</button>
               <button id="asm-del-stage" type="button" title="删掉当前阶段。至少留一个。">删除阶段</button>
               <button id="asm-bank" type="button" title="玩家机：以 t0（平飞）为原稿生成 t1–t5（右倾），并在装配下方打开侧倾对比。没有 t0 时先把当前阶段复制成 t0。左倾由游戏镜像。" aria-describedby="hint-bank">侧倾 t0–t5</button>
-              <button id="asm-play" type="button" aria-pressed="false" title="按顺序轮播各阶段，看姿态切换。再点一次停。">播放阶段</button>
+              <button id="asm-play" type="button" aria-pressed="false" title="打开播放预览：阶段之间平滑过渡，或侧倾循环。再点一次停止并收起。" aria-describedby="hint-play">播放预览</button>
               <button id="asm-export" type="button" title="下载装配文件 *.entity.json。" aria-describedby="hint-entity-export">
                 导出 .entity.json
               </button>
@@ -146,6 +146,9 @@
               </p>
               <p id="hint-bank" class="hint">
                 一个姿态一个阶段。Boss 用 folded / half / open 这类阶段。玩家机点「侧倾 t0–t5」：t0 平飞是原稿，t1–t5 由 t0 加每帧参数（角度、横向拉伸、纵向拉伸、透视）算出，在装配下方的「侧倾对比」里调。左倾和局内一样由代码把右倾水平镜像，不进文件。改 t0，t1–t5 跟着重算；直接改某一帧的零件，那一帧变成手调，不再跟 t0。零件 id 在各阶段相同，「复制到阶段」按 id 对上。
+              </p>
+              <p id="hint-play" class="hint">
+                「播放预览」在装配画布上连续播放，不改文件。可以选「阶段 A → B」「全部阶段依次」或「侧倾循环」。阶段之间按零件 id 对上，插值位置、角度（走近的那边）、缩放、拉伸和斜切；翻转、换网格、层和只在一边出现的零件在过渡一半时切换。侧倾循环是 t0 → 右倾 t1–t5 → t0 → 左倾（右倾镜像）→ t0。
               </p>
               </details>
             </div>
@@ -339,6 +342,71 @@
             </div>
             <p id="bank-note" class="hint" aria-live="polite"></p>
           </section>
+          <section id="play-panel" class="bank-panel" hidden aria-labelledby="play-title">
+            <div class="bank-head">
+              <h2 id="play-title">播放预览</h2>
+              <p class="hint">
+                在上面的装配画布上连续播放，画法和静止预览一样。播放或暂停时不能改零件：点画布、切换阶段，或点「停止」回到编辑。侧倾循环时可以边播边拖「侧倾对比」里的滑块。
+              </p>
+              <button id="play-hide" type="button" title="停止并收起。">收起</button>
+            </div>
+            <div class="bank-controls">
+              <label>
+                内容
+                <select id="play-mode" title="播哪一段。">
+                  <option value="pair">阶段 A → B</option>
+                  <option value="chain">全部阶段依次</option>
+                  <option value="bank">侧倾循环</option>
+                </select>
+              </label>
+              <label id="play-from-label">
+                从
+                <select id="play-from" title="起点阶段。"></select>
+              </label>
+              <label id="play-to-label">
+                到
+                <select id="play-to" title="终点阶段。"></select>
+              </label>
+              <label>
+                过渡（秒）
+                <input id="play-move" type="number" min="0.02" max="10" step="0.05" value="0.8" title="两个姿态之间走多久。侧倾循环默认 0.05，五格约 0.25 秒到满倾，接近局内。" />
+              </label>
+              <label>
+                停留（秒）
+                <input id="play-hold" type="number" min="0" max="10" step="0.05" value="0.4" title="每个姿态停多久再走下一段。" />
+              </label>
+              <label>
+                缓动
+                <select id="play-ease">
+                  <option value="smooth">缓入缓出</option>
+                  <option value="linear">匀速</option>
+                </select>
+              </label>
+              <label>
+                速度
+                <select id="play-speed" title="整条时间线的播放倍速，不改过渡和停留的数值。">
+                  <option value="0.25">×0.25</option>
+                  <option value="0.5">×0.5</option>
+                  <option value="1" selected>×1</option>
+                  <option value="2">×2</option>
+                </select>
+              </label>
+              <label id="play-loop-label">
+                循环
+                <input id="play-loop" type="checkbox" checked />
+              </label>
+              <label title="过渡中的位置取整像素，和局内一样。关掉可以看亚像素的走位。">
+                整像素
+                <input id="play-snap" type="checkbox" checked />
+              </label>
+            </div>
+            <div class="bank-controls play-transport">
+              <button id="play-toggle" type="button" aria-pressed="false">播放</button>
+              <button id="play-stop" type="button" title="停止，画布回到当前阶段，可以继续编辑。">停止</button>
+              <input id="play-scrub" type="range" min="0" max="1000" step="1" value="0" aria-label="播放进度" title="拖动定位到任意时刻，会先暂停。" />
+            </div>
+            <p class="hint"><output id="play-frame" aria-live="polite">—</output></p>
+          </section>
           <div class="parts-row">
             <span class="hint" title="列表从左到右是从后往前画。">图层 后 → 前</span>
             <div id="asm-parts"></div>
@@ -519,7 +587,7 @@
         <li>只想改一件时，选中它，用「复制到阶段」按 id 送到别的阶段（同 id 替换，没有就新增）。多片刃用「复制一份」。</li>
         <li>每件选「受击用途」：可打（青色实线）、仅阻挡（灰色虚线，挡子弹不掉血）、无。形状选方形或圆形，可以比零件大。</li>
         <li>图层列表从左到右是从后往前画，按钮上写着 L 编号。「上移」「下移」调前后。</li>
-        <li>「播放阶段」轮播各姿态。</li>
+        <li>「播放预览」（P3）在装配画布上连续播放：「阶段 A → B」或「全部阶段依次」平滑过渡（位置、角度、缩放、拉伸、斜切插值，翻转和层在一半时切换），「侧倾循环」播 t0 → 右倾 → t0 → 左倾镜像 → t0。可调过渡、停留、缓动、倍速、循环、整像素，「播放 / 暂停」「停止」和进度条拖动定位，下方写当前是哪两个姿态、百分比和秒数。点画布或「停止」回到编辑。</li>
       </ol>
       <h3>玩家机</h3>
       <ol>
