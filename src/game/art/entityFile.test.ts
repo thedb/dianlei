@@ -4,7 +4,11 @@ import { describe, expect, it } from 'vitest';
 import { COLOR } from '@/game/palette';
 import {
   createEmptyEntity,
+  defaultPreviewFrame,
   parseEntityFile,
+  previewFrameOf,
+  previewFrameRect,
+  suggestedPreviewFrame,
   placedHit,
   placedHitLocal,
   placedSprite,
@@ -236,5 +240,46 @@ describe('entity file', () => {
     expect(() => serializeEntityFile(entity)).toThrow(/scale/);
     part.scale = -0.5;
     expect(() => serializeEntityFile(entity)).toThrow(/scale/);
+  });
+
+  it('keeps an omitted preview frame off the file and round-trips one that is set', () => {
+    const sample = sampleAssemblyEntity();
+    expect(sample.previewFrame).toBeUndefined();
+    expect(previewFrameOf(sample)).toEqual(defaultPreviewFrame());
+    expect(previewFrameRect(defaultPreviewFrame())).toEqual({
+      left: -180,
+      top: -320,
+      right: 180,
+      bottom: 320,
+    });
+    expect(serializeEntityFile(sample)).not.toContain('previewFrame');
+
+    const fitted = suggestedPreviewFrame(sample);
+    const rect = previewFrameRect(fitted);
+    for (const stage of sample.stages) {
+      for (const part of stage.parts) {
+        const grid = sample.grids[part.grid];
+        if (!grid) throw new Error(`missing grid ${part.grid}`);
+        for (const [x, y] of placementCorners(grid, part)) {
+          expect(x).toBeGreaterThanOrEqual(rect.left);
+          expect(x).toBeLessThanOrEqual(rect.right);
+          expect(y).toBeGreaterThanOrEqual(rect.top);
+          expect(y).toBeLessThanOrEqual(rect.bottom);
+        }
+      }
+    }
+    expect(fitted.width).toBeLessThan(defaultPreviewFrame().width);
+
+    sample.previewFrame = { width: 48, height: 32 };
+    const text = serializeEntityFile(sample);
+    expect(text).toContain('"previewFrame"');
+    expect(parseEntityFile(text).previewFrame).toEqual({ width: 48, height: 32 });
+    const withNote = text.replace('"width": 48', '"width": 48, "note": "screen"');
+    expect(serializeEntityFile(parseEntityFile(withNote))).toBe(text);
+
+    sample.previewFrame = { width: 0, height: 32 };
+    expect(() => serializeEntityFile(sample)).toThrow(/previewFrame\.width/);
+    sample.previewFrame = { width: 48, height: 1.5 };
+    expect(() => serializeEntityFile(sample)).toThrow(/previewFrame\.height/);
   });
 });

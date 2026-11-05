@@ -26,6 +26,9 @@ describe('pixel editor guide', () => {
     expect(page.indexOf('id="asm-fields"')).toBeGreaterThan(page.indexOf('id="asm-inspector"'));
     expect(page).toContain('id="view"');
     expect(page).toContain('id="asm-view"');
+    expect(page).toContain('边界宽');
+    expect(page).toContain('previewFrame');
+    expect(page).toContain('360');
     expect(page).toContain('缩放');
     expect(page).toContain('上移');
     expect(page).toContain('folded');

@@ -19,10 +19,15 @@
  * The live fight still uses its own hit circles until a boss is switched
  * onto this file. Reference PNGs are not stored here.
  *
+ * `previewFrame`, when present, is the editor's reference rectangle in entity
+ * pixels, centered on the origin. It is not a hit box and the fight does not
+ * read it. Missing means the logical screen, 360×640.
+ *
  * `sampleAssemblyEntity` is the editor smoke fixture (folded / half / open).
  * It is not the live Obsidian boss.
  */
 
+import { LOGICAL_H, LOGICAL_W } from '@/game/config';
 import { COLOR } from '@/game/palette';
 import {
   parsePaletteGrid,
@@ -62,6 +67,13 @@ export const ENTITY_SCALE_MAX = 16;
 /** Inclusive range for a hit-box edge, in sprite pixels. Width and height are at least 1. */
 export const ENTITY_HIT_MIN = -1024;
 export const ENTITY_HIT_MAX = 1024;
+
+/** Preview-frame edge length. The default is the logical screen (`LOGICAL_W` × `LOGICAL_H`). */
+export const ENTITY_FRAME_MIN = 1;
+export const ENTITY_FRAME_MAX = 4096;
+
+/** Extra entity pixels outside the farthest part when fitting the preview frame. */
+export const ENTITY_FRAME_PAD = 8;
 
 const NAME_MAX = 128;
 
@@ -118,6 +130,15 @@ export interface EntityStage {
   parts: EntityPlacement[];
 }
 
+/**
+ * Editor reference rectangle, centered on the entity origin.
+ * Width and height are integer entity pixels. The fight does not read this.
+ */
+export interface EntityPreviewFrame {
+  width: number;
+  height: number;
+}
+
 export interface EntityFile {
   format: typeof ENTITY_FORMAT;
   version: typeof ENTITY_FORMAT_VERSION;
@@ -125,6 +146,11 @@ export interface EntityFile {
   /** Inlined locked grids. `source.name` is the original `*.grid.json` file name. */
   grids: Record<string, PaletteGridFile>;
   stages: EntityStage[];
+  /**
+   * Optional preview rectangle. Missing means {@link defaultPreviewFrame}
+   * (the logical screen). Written only after the editor changes it.
+   */
+  previewFrame?: EntityPreviewFrame;
 }
 
 export interface PlacedSprite {
@@ -161,12 +187,63 @@ export function parseEntityFile(json: string): EntityFile {
   if (root.format !== ENTITY_FORMAT) throw new Error('entity format is not dianlei.entity');
   if (root.version !== ENTITY_FORMAT_VERSION) throw new Error('entity version is not supported');
   const grids = parseGrids(root.grids);
-  return {
+  const entity: EntityFile = {
     format: ENTITY_FORMAT,
     version: ENTITY_FORMAT_VERSION,
     name: asName(root.name, 'entity name'),
     grids,
     stages: parseStages(root.stages, grids),
+  };
+  if (root.previewFrame !== undefined) entity.previewFrame = parseFrame(root.previewFrame);
+  return entity;
+}
+
+/** Logical screen. Used when an entity file omits `previewFrame`. */
+export function defaultPreviewFrame(): EntityPreviewFrame {
+  return { width: LOGICAL_W, height: LOGICAL_H };
+}
+
+/** The file's frame, or the logical screen when the field is absent. */
+export function previewFrameOf(entity: EntityFile): EntityPreviewFrame {
+  return entity.previewFrame ?? defaultPreviewFrame();
+}
+
+/** Axis-aligned edges of a frame centered on the origin. +x right, +y down. */
+export function previewFrameRect(frame: EntityPreviewFrame): {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+} {
+  const left = -Math.floor(frame.width / 2);
+  const top = -Math.floor(frame.height / 2);
+  return { left, top, right: left + frame.width, bottom: top + frame.height };
+}
+
+/**
+ * Smallest origin-centered frame that contains every part in every stage,
+ * plus {@link ENTITY_FRAME_PAD} on the far side. An empty entity stays on
+ * the logical screen.
+ */
+export function suggestedPreviewFrame(entity: EntityFile): EntityPreviewFrame {
+  let reachX = 0;
+  let reachY = 0;
+  let any = false;
+  for (const stage of entity.stages) {
+    for (const part of stage.parts) {
+      const grid = entity.grids[part.grid];
+      if (!grid) continue;
+      for (const [x, y] of placementCorners(grid, part)) {
+        any = true;
+        reachX = Math.max(reachX, Math.abs(x));
+        reachY = Math.max(reachY, Math.abs(y));
+      }
+    }
+  }
+  if (!any) return defaultPreviewFrame();
+  return {
+    width: clampFrame(Math.ceil((reachX + ENTITY_FRAME_PAD) * 2)),
+    height: clampFrame(Math.ceil((reachY + ENTITY_FRAME_PAD) * 2)),
   };
 }
 
@@ -407,13 +484,20 @@ function shapeEntity(entity: EntityFile): EntityFile {
     if (!grid) continue;
     grids[id] = embeddedGrid(grid);
   }
-  return {
+  const shaped: EntityFile = {
     format: ENTITY_FORMAT,
     version: ENTITY_FORMAT_VERSION,
     name: entity.name,
     grids,
     stages: entity.stages.map(shapeStage),
   };
+  if (entity.previewFrame) {
+    shaped.previewFrame = {
+      width: entity.previewFrame.width,
+      height: entity.previewFrame.height,
+    };
+  }
+  return shaped;
 }
 
 /** Same field order as a standalone `*.grid.json`, so the embed stays diffable. */
@@ -539,6 +623,18 @@ function parsePlacement(value: unknown, grids: Record<string, PaletteGridFile>):
   };
   if (raw.hit !== undefined) part.hit = parseHit(raw.hit);
   return part;
+}
+
+function parseFrame(value: unknown): EntityPreviewFrame {
+  const raw = asObject(value, 'previewFrame');
+  return {
+    width: asInt(raw.width, 'previewFrame.width', ENTITY_FRAME_MIN, ENTITY_FRAME_MAX),
+    height: asInt(raw.height, 'previewFrame.height', ENTITY_FRAME_MIN, ENTITY_FRAME_MAX),
+  };
+}
+
+function clampFrame(value: number): number {
+  return Math.min(ENTITY_FRAME_MAX, Math.max(ENTITY_FRAME_MIN, value));
 }
 
 function parseHit(value: unknown): EntityHitBox {

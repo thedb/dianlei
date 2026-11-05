@@ -4,12 +4,14 @@
  * Selecting a part opens the inspector; Esc, its close button, or a miss on the canvas leaves it.
  */
 
-import { LOGICAL_W } from '@/game/config';
+import { LOGICAL_H, LOGICAL_W } from '@/game/config';
 import { EXTERIOR_VOID } from '@/engine/exterior';
 import { COLOR, PALETTE } from '@/game/palette';
 import {
   ENTITY_ANGLE_MAX,
   ENTITY_FILE_EXTENSION,
+  ENTITY_FRAME_MAX,
+  ENTITY_FRAME_MIN,
   ENTITY_HIT_MAX,
   ENTITY_HIT_MIN,
   ENTITY_LAYER_MAX,
@@ -25,8 +27,10 @@ import {
   placedSprite,
   placementContains,
   placementCorners,
+  previewFrameRect,
   serializeEntityFile,
   stageDrawOrder,
+  suggestedPreviewFrame,
   type EntityFile,
   type EntityPlacement,
   type EntityStage,
@@ -45,7 +49,12 @@ let entity: EntityFile | null = null;
 let stageId = '';
 let partId = '';
 let hitsOn = true;
-let viewMap: { scale: number; minX: number; minY: number } | null = null;
+let frameW = LOGICAL_W;
+let frameH = LOGICAL_H;
+let frameDirty = false;
+let viewMap: { scale: number; minX: number; minY: number; bleed: number } | null = null;
+
+const FRAME_BLEED = 2;
 
 export function mountAssembly(next: AssemblyHost): void {
   host = next;
@@ -109,6 +118,17 @@ export function mountAssembly(next: AssemblyHost): void {
   hits.addEventListener('change', () => {
     hitsOn = hits.checked;
     paintAssembly();
+  });
+  const frameWidth = must(HTMLInputElement, 'asm-frame-w');
+  const frameHeight = must(HTMLInputElement, 'asm-frame-h');
+  frameWidth.addEventListener('input', () => {
+    commitFrame(frameWidth, frameHeight);
+  });
+  frameHeight.addEventListener('input', () => {
+    commitFrame(frameWidth, frameHeight);
+  });
+  must(HTMLButtonElement, 'asm-frame-fit').addEventListener('click', () => {
+    fitFrame();
   });
   nameInput.addEventListener('change', () => {
     renameEntity(nameInput.value);
@@ -200,6 +220,7 @@ export function mountAssembly(next: AssemblyHost): void {
   bindHit('asm-hw', 'w', '受击宽');
   bindHit('asm-hh', 'h', '受击高');
   hitsOn = hits.checked;
+  syncFrameInputs();
   setStatus('尚未装配。点「零件预览」做好一张再移入装配，或点「载入装配示例」。');
   paintAssembly();
 }
@@ -258,6 +279,16 @@ function adopt(next: EntityFile): void {
   entity = next;
   stageId = next.stages[0]?.id ?? '';
   partId = '';
+  if (next.previewFrame) {
+    frameW = next.previewFrame.width;
+    frameH = next.previewFrame.height;
+    frameDirty = true;
+  } else {
+    frameW = LOGICAL_W;
+    frameH = LOGICAL_H;
+    frameDirty = false;
+  }
+  syncFrameInputs();
   showEditor();
 }
 
@@ -405,6 +436,7 @@ function ensure(name: string): EntityFile {
     entity = createEmptyEntity(name);
     stageId = entity.stages[0]?.id ?? '';
     partId = '';
+    rememberFrame();
   }
   return entity;
 }
@@ -602,8 +634,8 @@ function selectAt(event: MouseEvent): void {
   if (rect.width === 0 || rect.height === 0) return;
   const sx = ((event.clientX - rect.left) * canvas.width) / rect.width;
   const sy = ((event.clientY - rect.top) * canvas.height) / rect.height;
-  const x = sx / viewMap.scale + viewMap.minX;
-  const y = sy / viewMap.scale + viewMap.minY;
+  const x = (sx - viewMap.bleed) / viewMap.scale + viewMap.minX;
+  const y = (sy - viewMap.bleed) / viewMap.scale + viewMap.minY;
   const stage = currentStage();
   if (!stage) return;
   const order = stageDrawOrder(stage.parts);
@@ -646,37 +678,29 @@ function paintAssembly(): void {
   const canvas = must(HTMLCanvasElement, 'asm-view');
   const stage = currentStage();
   const order = stage ? stageDrawOrder(stage.parts) : [];
-  let minX = 0;
-  let minY = 0;
-  let maxX = 1;
-  let maxY = 1;
-  let seeded = false;
+  const bounds = previewFrameRect({ width: frameW, height: frameH });
+  let minX = bounds.left;
+  let minY = bounds.top;
+  let maxX = bounds.right;
+  let maxY = bounds.bottom;
   if (entity && stage) {
     for (const index of order) {
       const part = stage.parts[index];
       const gridFile = part ? entity.grids[part.grid] : undefined;
       if (!part || !gridFile) continue;
       for (const [px, py] of placementCorners(gridFile, part)) {
-        if (!seeded) {
-          minX = px;
-          minY = py;
-          maxX = px;
-          maxY = py;
-          seeded = true;
-        } else {
-          minX = Math.min(minX, px);
-          minY = Math.min(minY, py);
-          maxX = Math.max(maxX, px);
-          maxY = Math.max(maxY, py);
-        }
+        minX = Math.min(minX, px);
+        minY = Math.min(minY, py);
+        maxX = Math.max(maxX, px);
+        maxY = Math.max(maxY, py);
       }
     }
   }
   const spanX = Math.max(1, maxX - minX);
   const spanY = Math.max(1, maxY - minY);
-  const scale = seeded ? Math.max(1, Math.floor(LOGICAL_W / Math.max(spanX, spanY))) : 1;
-  canvas.width = seeded ? Math.max(1, Math.ceil(spanX * scale)) : 160;
-  canvas.height = seeded ? Math.max(1, Math.ceil(spanY * scale)) : 120;
+  const scale = Math.max(1, Math.floor(LOGICAL_W / Math.max(spanX, spanY)));
+  canvas.width = Math.max(1, Math.ceil(spanX * scale)) + FRAME_BLEED * 2;
+  canvas.height = Math.max(1, Math.ceil(spanY * scale)) + FRAME_BLEED * 2;
   canvas.style.imageRendering = 'pixelated';
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Failed to get 2D context');
@@ -684,36 +708,36 @@ function paintAssembly(): void {
   ctx.imageSmoothingEnabled = false;
   ctx.fillStyle = EXTERIOR_VOID;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  if (!seeded || !entity || !stage) {
-    viewMap = null;
-    return;
-  }
-  viewMap = { scale, minX, minY };
-  ctx.setTransform(scale, 0, 0, scale, -minX * scale, -minY * scale);
+  viewMap = { scale, minX, minY, bleed: FRAME_BLEED };
+  ctx.setTransform(scale, 0, 0, scale, -minX * scale + FRAME_BLEED, -minY * scale + FRAME_BLEED);
   ctx.imageSmoothingEnabled = false;
-  for (const index of order) {
-    const part = stage.parts[index];
-    const gridFile = part ? entity.grids[part.grid] : undefined;
-    if (!part || !gridFile) continue;
-    const placed = placedSprite(gridFile, part);
-    const frame = renderSprite(placed.data);
-    frame.anchorX = placed.anchorX;
-    frame.anchorY = placed.anchorY;
-    blitPlacedSprite(ctx, frame, part.x, part.y, part.angle, part.scale);
-    if (!hitsOn) continue;
-    const hit = placedHitLocal(gridFile, part);
-    if (!hit) continue;
-    ctx.save();
-    ctx.translate(part.x, part.y);
-    ctx.rotate(part.angle);
-    if (part.scale !== 1) ctx.scale(part.scale, part.scale);
-    const hitColor = PALETTE[COLOR.PLAYER_CYAN];
-    if (!hitColor) throw new Error('missing hit color');
-    ctx.strokeStyle = hitColor;
-    ctx.lineWidth = 1 / (scale * part.scale);
-    ctx.strokeRect(hit.x, hit.y, hit.w, hit.h);
-    ctx.restore();
+  if (entity && stage) {
+    for (const index of order) {
+      const part = stage.parts[index];
+      const gridFile = part ? entity.grids[part.grid] : undefined;
+      if (!part || !gridFile) continue;
+      const placed = placedSprite(gridFile, part);
+      const frame = renderSprite(placed.data);
+      frame.anchorX = placed.anchorX;
+      frame.anchorY = placed.anchorY;
+      blitPlacedSprite(ctx, frame, part.x, part.y, part.angle, part.scale);
+      if (!hitsOn) continue;
+      const hit = placedHitLocal(gridFile, part);
+      if (!hit) continue;
+      ctx.save();
+      ctx.translate(part.x, part.y);
+      ctx.rotate(part.angle);
+      if (part.scale !== 1) ctx.scale(part.scale, part.scale);
+      const hitColor = PALETTE[COLOR.PLAYER_CYAN];
+      if (!hitColor) throw new Error('missing hit color');
+      ctx.strokeStyle = hitColor;
+      ctx.lineWidth = 1 / (scale * part.scale);
+      ctx.strokeRect(hit.x, hit.y, hit.w, hit.h);
+      ctx.restore();
+    }
   }
+  strokePreviewFrame(ctx, scale);
+  if (!entity || !stage) return;
   const selected = stage.parts.find((part) => part.id === partId);
   const selectedGrid = selected ? entity.grids[selected.grid] : undefined;
   if (!selected || !selectedGrid) return;
@@ -729,6 +753,55 @@ function paintAssembly(): void {
   ctx.strokeStyle = mark;
   ctx.lineWidth = 1 / scale;
   ctx.stroke();
+}
+
+function strokePreviewFrame(ctx: CanvasRenderingContext2D, scale: number): void {
+  const rect = previewFrameRect({ width: frameW, height: frameH });
+  const color = PALETTE[COLOR.WHITE];
+  if (!color) throw new Error('missing frame color');
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2 / scale;
+  ctx.strokeRect(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top);
+  ctx.restore();
+}
+
+function commitFrame(widthInput: HTMLInputElement, heightInput: HTMLInputElement): void {
+  try {
+    const width = readInt(widthInput, '边界宽', ENTITY_FRAME_MIN, ENTITY_FRAME_MAX);
+    const height = readInt(heightInput, '边界高', ENTITY_FRAME_MIN, ENTITY_FRAME_MAX);
+    frameW = width;
+    frameH = height;
+    frameDirty = true;
+    rememberFrame();
+    if (entity) serializeEntityFile(entity);
+    paintAssembly();
+    setStatus(`边界 ${width}×${height}`);
+  } catch (error) {
+    syncFrameInputs();
+    fail(error);
+  }
+}
+
+function fitFrame(): void {
+  const next = entity ? suggestedPreviewFrame(entity) : { width: LOGICAL_W, height: LOGICAL_H };
+  frameW = next.width;
+  frameH = next.height;
+  frameDirty = true;
+  rememberFrame();
+  syncFrameInputs();
+  paintAssembly();
+  setStatus(`边界 ${frameW}×${frameH}`);
+}
+
+function rememberFrame(): void {
+  if (!entity || !frameDirty) return;
+  entity.previewFrame = { width: frameW, height: frameH };
+}
+
+function syncFrameInputs(): void {
+  must(HTMLInputElement, 'asm-frame-w').value = String(frameW);
+  must(HTMLInputElement, 'asm-frame-h').value = String(frameH);
 }
 
 function setStatus(message: string): void {

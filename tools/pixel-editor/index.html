@@ -55,6 +55,18 @@
               受击框
               <input id="asm-hits" type="checkbox" checked title="在装配预览上描出可受击的矩形。现役战斗仍用圆。" />
             </label>
+            <label>
+              边界宽
+              <input id="asm-frame-w" type="number" min="1" max="4096" step="1" value="360" title="预览边界的宽度。默认 360，和局内逻辑画面一样。中心在原点。" aria-describedby="hint-frame" />
+            </label>
+            <label>
+              边界高
+              <input id="asm-frame-h" type="number" min="1" max="4096" step="1" value="640" title="预览边界的高度。默认 640。" aria-describedby="hint-frame" />
+            </label>
+            <button id="asm-frame-fit" type="button" title="把边界缩到包住所有阶段的零件，远处再留 8 像素。">框住零件</button>
+            <p id="hint-frame" class="hint">
+              白框是编辑边界，中心在原点。默认宽 360、高 640，和局内逻辑画面一样。改数字立刻重画；改过才写入装配文件的 <code>previewFrame</code>，没改过不写。战斗不读这个框。「框住零件」缩到零件外面。
+            </p>
             <p id="hint-asm-example" class="hint">
               「载入装配示例」打开 <code>sample.entity.json</code>：一块机身加一对翼，阶段是 folded（收起）、half（一边张开）、open（两边张开）。用来冒烟，不是现役黑曜。点零件后在右侧调参。
             </p>
@@ -87,7 +99,7 @@
                 「阶段」是同一架机体的一个姿势。示例里 folded 是收起，half 是一边张开，open 是两边张开。切换时装配画布上的翼会动，零件预览弹窗不动。
               </p>
               <p id="hint-entity-export" class="hint">
-                「导出 .entity.json」下载装配文件。这是过门的锁定稿。现役 Boss 还没有改去读它。
+                「导出 .entity.json」下载装配文件。这是过门的锁定稿。现役 Boss 还没有改去读它。<code>previewFrame</code> 只是预览边界，战斗不读。
               </p>
             </div>
           </div>
@@ -256,7 +268,7 @@
     <dialog id="guide" aria-labelledby="guide-title">
       <h2 id="guide-title">使用说明</h2>
       <p>
-        主界面是装配预览，画布是 <code>#asm-view</code>。零件预览是弹窗，点页头「零件预览」打开，画布是 <code>#view</code>。两块画布不会互相替换。关掉弹窗后，屏幕上只留装配。
+        主界面是装配预览，画布是 <code>#asm-view</code>。零件预览是弹窗，点页头「零件预览」打开，画布是 <code>#view</code>。两块画布不会互相替换。关掉弹窗后，屏幕上只留装配。白框是编辑边界，默认 360×640（局内逻辑画面），改宽高记入 <code>previewFrame</code>，只作预览参考。
       </p>
       <p>
         参考 PNG 只是原料。游戏以后只认导出的 JSON，不要按着预览再仿画一张。现役机体和 Boss（Eagle、黑曜等）还没有改去读这些文件。
