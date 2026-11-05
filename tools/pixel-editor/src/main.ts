@@ -26,6 +26,7 @@ import { pixelize, type RgbaImage } from '@/game/art/pixelize';
 import { decodePngRgba } from '@/game/art/pngRgba';
 import { blitPlacedSprite, blitSprite, renderSprite } from '@/game/art/spriteRenderer';
 import { assemblyPreview, mountAssembly, type AssemblyPreview } from './assembly';
+import { mountGuide } from './guide';
 
 document.body.style.margin = '0';
 document.body.style.backgroundColor = EXTERIOR_VOID;
@@ -77,6 +78,7 @@ mountAssembly({
   download,
   assetUrl,
 });
+mountGuide();
 
 loadFixtureText().catch(() => {
   fixtureText = null;

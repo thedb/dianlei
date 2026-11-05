@@ -14,7 +14,7 @@ npm install
 npm run dev
 ```
 
-浏览器打开 `http://localhost:5190`。`npm run typecheck` 和 `npm run build` 只检查这个工具，不进根目录的 `lint` / `typecheck` / `test` / `build:h5`。
+浏览器打开 `http://localhost:5190`。第一次会弹出「使用说明」，之后点页头的「使用说明」可以再看。按钮旁边的短句和这一页讲的是同一件事；给第一次用的人看的正文在编辑器里，不在这份 README。`npm run typecheck` 和 `npm run build` 只检查这个工具，不进根目录的 `lint` / `typecheck` / `test` / `build:h5`。
 
 ## 像素化
 

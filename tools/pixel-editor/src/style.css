@@ -22,6 +22,35 @@ h1 {
   font-size: 18px;
 }
 
+.title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.title-row h1,
+.title-row button {
+  margin: 0;
+}
+
+h2,
+h3 {
+  margin: 16px 0 4px;
+  font-size: 15px;
+}
+
+.hint {
+  margin: 0 0 10px;
+  color: #9ec4d4;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+code {
+  font-size: 0.95em;
+}
+
 header p,
 fieldset p {
   margin: 0 0 8px;
@@ -93,6 +122,25 @@ fieldset {
     max-height: 100vh;
     overflow: auto;
   }
+}
+
+dialog {
+  width: min(640px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  border: 1px solid #7ee0f0;
+  background: #0a1828;
+  color: #e8f4f8;
+  padding: 20px 24px;
+}
+
+dialog::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+dialog ol {
+  margin: 8px 0;
+  padding-left: 1.3em;
 }
 
 @media (max-width: 800px) {

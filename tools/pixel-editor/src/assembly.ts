@@ -174,7 +174,7 @@ export function mountAssembly(next: AssemblyHost): void {
   bindHit('asm-hw', 'w', '受击宽');
   bindHit('asm-hh', 'h', '受击高');
   hitsOn = hits.checked;
-  setStatus('尚未装配。载入示例，或把当前网格加进来。');
+  setStatus('尚未装配。点「载入装配示例」，或把当前这张网格加进来。');
 }
 
 export function assemblyPreview(): AssemblyPreview | null {
