@@ -31,6 +31,14 @@
             >
               载入装配示例
             </button>
+            <button
+              id="asm-clear"
+              type="button"
+              disabled
+              title="清掉当前装配，之后可以再点「载入示例」和「载入装配示例」。"
+            >
+              清空装配
+            </button>
             <label>
               网格文件
               <input
@@ -68,7 +76,7 @@
               白框是当前这套装配的编辑边界，中心在原点。局内逻辑画面是 360×640，那是游戏屏幕，不是这个框的默认大小。载入装配、载入示例或移入零件后，按零件包围盒外加 8 像素重算。手改宽高，或点「框住零件」，才写入 <code>previewFrame</code>；没改过不写。文件里若已有这个字段，载入时用文件里的数。战斗不读。
             </p>
             <p id="hint-asm-example" class="hint">
-              「载入装配示例」打开 <code>sample.entity.json</code>：一块机身加一对翼，阶段是 folded（收起）、half（一边张开）、open（两边张开）。用来冒烟，不是现役黑曜。点零件后在右侧调参。
+              「载入装配示例」打开 <code>sample.entity.json</code>：一块机身加一对翼，阶段是 folded（收起）、half（一边张开）、open（两边张开）。用来冒烟，不是现役黑曜。装配里一旦有零件，这个按钮和零件弹窗里的「载入示例」都不可点。点「清空装配」后恢复。点零件后，调参栏从画布右侧滑入，画布大小不变。
             </p>
             <p id="hint-grid-file" class="hint">
               「网格文件」读取一份已经导出的 <code>*.grid.json</code>（一张调色板像素图，像一张精灵锁定稿），把它加进零件列表。
@@ -105,17 +113,13 @@
           </div>
           <div class="canvas-slot">
             <canvas id="asm-view" width="160" height="120"></canvas>
-          </div>
-          <div id="asm-parts"></div>
-          <p id="asm-status">尚未装配。点「零件预览」做好一张再移入装配，或点「载入装配示例」。</p>
-        </div>
-        <aside id="asm-inspector" hidden aria-labelledby="asm-inspector-title">
-          <div class="inspector-head">
-            <h2 id="asm-inspector-title">选中零件</h2>
-            <button id="asm-inspector-close" type="button" title="退出调参。也可以按 Esc，或点画布空白处。">关闭</button>
-          </div>
-          <p class="hint">只调这一件。装配画布留在旁边，不用翻整页。Esc、关闭，或点画布空白处退出。</p>
-          <div id="asm-fields">
+            <aside id="asm-inspector" aria-hidden="true" inert aria-labelledby="asm-inspector-title">
+              <div class="inspector-head">
+                <h2 id="asm-inspector-title">选中零件</h2>
+                <button id="asm-inspector-close" type="button" title="退出调参。也可以按 Esc，或点画布空白处。">关闭</button>
+              </div>
+              <p class="hint">只调这一件。这一栏从画布右侧滑入，装配画布的大小不变。Esc、关闭，或点画布空白处滑出。</p>
+              <div id="asm-fields">
             <label>
               x
               <input id="asm-x" type="number" step="1" title="轴心在机体上的横向位置。向右为正。" />
@@ -205,8 +209,12 @@
               </p>
             </div>
             <button id="asm-delete" type="button">删除部件</button>
+              </div>
+            </aside>
           </div>
-        </aside>
+          <div id="asm-parts"></div>
+          <p id="asm-status">尚未装配。点「零件预览」做好一张再移入装配，或点「载入装配示例」。</p>
+        </div>
       </section>
     </main>
     <dialog id="part-dialog" aria-labelledby="part-title">
@@ -231,7 +239,7 @@
         </button>
       </div>
       <p id="hint-fixture" class="hint">
-        「载入示例」打开仓库自带的 8×8 样例（透明角、黑边、青底、白心），用来练手，不是游戏正式资产。
+        「载入示例」打开仓库自带的 8×8 样例（透明角、黑边、青底、白心），用来练手，不是游戏正式资产。它只换弹窗里的这张零件，不改装配。装配里一旦有零件，这个按钮和「载入装配示例」一起不可点，点「清空装配」后恢复。自己的 PNG 仍可载入。
       </p>
       <label>
         目标宽
@@ -310,7 +318,7 @@
       <h3>路径 B · 主界面装配 → 装配文件</h3>
       <ol>
         <li>点「载入装配示例」，或在零件弹窗里「移入装配」。</li>
-        <li>点装配画布上的零件，或点下方列表。选中的描金边，右侧打开「选中零件」。</li>
+        <li>点装配画布上的零件，或点下方列表。选中的描金边，「选中零件」从画布右侧滑入，画布大小不变。再点空白处，这一栏滑出。</li>
         <li>在这一栏改角度、缩放（大于 0，可以是 0.5）、上移或下移图层。位移、轴心、水平翻转也在这一栏。受击框选方形或圆形，尺寸可以大于零件。不用翻整页。</li>
         <li>按 Esc、点「关闭」，或点画布空白处，退出调参。阶段选 folded、half、open，看翼动。零件弹窗不动。</li>
         <li>点「导出 .entity.json」。再用「装配文件」把刚导出的文件载入，阶段和零件还在。</li>
@@ -318,7 +326,7 @@
       <p>
         装配文件是多张网格，加上每个阶段的位置、轴心、角度、缩放（大于 0，可以是 0.5）、水平翻转、层，以及可选的受击框。网格可以内联在同一份文件里。
       </p>
-      <p>「载入装配示例」是机身加一对翼的三个阶段，用来冒烟，不是现役黑曜。</p>
+      <p>「载入装配示例」是机身加一对翼的三个阶段，用来冒烟，不是现役黑曜。装配里已有零件时，它和「载入示例」都不可点。点「清空装配」清掉零件后再启用。</p>
       <p>「网格文件」读一份已经导出的 <code>*.grid.json</code>，加进零件列表。</p>
       <div class="row">
         <button id="guide-try-a" type="button">试路径 A</button>

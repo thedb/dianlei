@@ -75,7 +75,11 @@ export function mountAssembly(next: AssemblyHost): void {
   const hitInput = must(HTMLInputElement, 'asm-hit');
 
   exampleButton.addEventListener('click', () => {
+    if (exampleButton.disabled) return;
     loadExample().catch((error: unknown) => fail(error));
+  });
+  must(HTMLButtonElement, 'asm-clear').addEventListener('click', () => {
+    clearAssembly();
   });
   moveButton.addEventListener('click', () => {
     const grid = next.currentGrid();
@@ -252,6 +256,7 @@ export function mountAssembly(next: AssemblyHost): void {
   hitsOn = hits.checked;
   syncFrameInputs();
   setStatus('尚未装配。点「零件预览」做好一张再移入装配，或点「载入装配示例」。');
+  syncSampleLocks();
   paintAssembly();
 }
 
@@ -327,6 +332,7 @@ function adopt(next: EntityFile): void {
   }
   syncFrameInputs();
   showEditor();
+  syncSampleLocks();
 }
 
 function renameEntity(name: string): void {
@@ -392,6 +398,7 @@ function addStage(): void {
     return;
   }
   showEditor();
+  syncSampleLocks();
   setStatus('已新建阶段');
   paintAssembly();
 }
@@ -403,6 +410,7 @@ function deletePart(): void {
   partId = '';
   renderParts();
   fillFields();
+  syncSampleLocks();
   setStatus(stage.parts.length === 0 ? '这个阶段没有部件' : '已删除部件');
   paintAssembly();
 }
@@ -484,6 +492,41 @@ function ensure(name: string): EntityFile {
   return entity;
 }
 
+function assemblyHasParts(): boolean {
+  return entity?.stages.some((stage) => stage.parts.length > 0) ?? false;
+}
+
+function syncSampleLocks(): void {
+  const busy = assemblyHasParts();
+  const example = must(HTMLButtonElement, 'asm-example');
+  const fixture = must(HTMLButtonElement, 'fixture');
+  example.disabled = busy;
+  fixture.disabled = busy;
+  must(HTMLButtonElement, 'asm-clear').disabled = entity === null;
+  example.title = busy
+    ? '装配里已有零件。先点「清空装配」再载入装配示例。'
+    : '打开样例装配：机身加一对翼，三个阶段 folded / half / open。用来冒烟，不是现役 Boss。';
+  fixture.title = busy
+    ? '装配里已有零件。先点「清空装配」再载入示例。'
+    : '打开仓库自带的 8×8 样例图，练手用，不是游戏正式资产。';
+}
+
+function clearAssembly(): void {
+  entity = null;
+  stageId = '';
+  partId = '';
+  frameW = FRAME_PLACEHOLDER;
+  frameH = FRAME_PLACEHOLDER;
+  frameDirty = false;
+  syncFrameInputs();
+  hideEditor();
+  must(HTMLDivElement, 'asm-parts').replaceChildren();
+  fillFields();
+  syncSampleLocks();
+  paintAssembly();
+  setStatus('已清空装配。可以再载入示例。');
+}
+
 function showEditor(): void {
   const editor = must(HTMLDivElement, 'asm-editor');
   editor.hidden = entity === null;
@@ -492,10 +535,12 @@ function showEditor(): void {
   renderStages();
   renderParts();
   fillFields();
+  syncSampleLocks();
 }
 
 function hideEditor(): void {
   must(HTMLDivElement, 'asm-editor').hidden = true;
+  syncSampleLocks();
 }
 
 function renderStages(): void {
@@ -535,10 +580,16 @@ function renderParts(): void {
   }
 }
 
-function fillFields(): void {
+function setInspectorOpen(open: boolean): void {
   const inspector = must(HTMLElement, 'asm-inspector');
+  inspector.classList.toggle('is-open', open);
+  inspector.toggleAttribute('inert', !open);
+  inspector.setAttribute('aria-hidden', open ? 'false' : 'true');
+}
+
+function fillFields(): void {
   const located = locate();
-  inspector.hidden = located === null;
+  setInspectorOpen(located !== null);
   if (!located) return;
   const { part, grid } = located;
   must(HTMLHeadingElement, 'asm-inspector-title').textContent = `选中 ${part.id}`;
