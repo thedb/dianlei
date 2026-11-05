@@ -11,99 +11,18 @@
       <header>
         <div class="title-row">
           <h1>电雷像素化</h1>
-          <button id="guide-open" type="button">使用说明</button>
+          <div class="row">
+            <button id="part-open" type="button" title="打开零件预览弹窗。主界面仍是装配。">零件预览</button>
+            <button id="guide-open" type="button">使用说明</button>
+          </div>
         </div>
         <p>
-          左边是零件预览，右边是装配预览，两块画布互不相干。参考 PNG 只是原料。游戏以后只认导出的 JSON。
+          主界面是装配预览。零件在「零件预览」弹窗里做，两块画布互不相干。参考 PNG 只是原料。游戏以后只认导出的 JSON。
         </p>
       </header>
-      <div class="panes">
-        <section id="part-pane" class="pane">
-          <h2>零件预览</h2>
-          <p class="hint">路径 A。这里只画当前这一张网格，不会被右边的装配盖住。</p>
-          <canvas id="view" width="160" height="120"></canvas>
-          <div class="row">
-            <label>
-              PNG
-              <input id="file" type="file" accept="image/png,.png" title="自己的参考图。只作输入，不会进游戏包。" />
-            </label>
-            <button
-              id="fixture"
-              type="button"
-              title="打开仓库自带的 8×8 样例图，练手用，不是游戏正式资产。"
-              aria-describedby="hint-fixture"
-            >
-              载入示例
-            </button>
-          </div>
-          <p id="hint-fixture" class="hint">
-            「载入示例」打开仓库自带的 8×8 样例（透明角、黑边、青底、白心），用来练手，不是游戏正式资产。
-          </p>
-          <label>
-            目标宽
-            <input id="tw" type="number" min="1" max="512" value="32" />
-          </label>
-          <label>
-            目标高
-            <input id="th" type="number" min="1" max="512" value="32" />
-          </label>
-          <label>
-            取样
-            <select id="sample">
-              <option value="nearest">nearest</option>
-              <option value="box">box</option>
-            </select>
-          </label>
-          <label>
-            量化
-            <select id="quantize">
-              <option value="nearest">nearest</option>
-              <option value="dither">dither</option>
-            </select>
-          </label>
-          <label>
-            透明阈值
-            <input id="alpha" type="number" min="0" max="255" value="0" />
-          </label>
-          <label>
-            抖动强度
-            <input id="dither" type="number" min="0" max="1" step="0.05" value="1" />
-          </label>
-          <p class="hint">宽高和取样决定每个格子取参考图的哪一块。同一张图、同一组参数，导出的格子永远一样。</p>
-          <div class="row">
-            <button
-              id="export"
-              type="button"
-              disabled
-              title="下载网格文件 *.grid.json。这是过门的锁定稿。"
-              aria-describedby="hint-export"
-            >
-              导出 .grid.json
-            </button>
-            <button
-              id="asm-move"
-              type="button"
-              title="把左边这张已经预览好的网格，放进右边的装配零件列表。"
-              aria-describedby="hint-move"
-            >
-              移入装配
-            </button>
-          </div>
-          <p id="hint-export" class="hint">
-            「导出 .grid.json」下载网格文件：宽、高，和每个格子的颜色编号。这是过门的锁定稿。游戏日后只 import 这份字节，不要按预览另仿画。
-          </p>
-          <p id="hint-move" class="hint">
-            「移入装配」在左边这张零件预览好之后，把它加进右边的零件列表。要先载入示例或自己的 PNG。
-          </p>
-          <p id="status">先点「载入示例」，或选一张 PNG。上面是这张零件。</p>
-        </section>
-        <section id="assembly-pane" class="pane">
-          <h2>装配预览</h2>
-          <p class="hint">
-            路径 B。这里只画当前阶段的整架。点画布上的零件可以选中，选中的描金边。画布整体放大只为了看得清，不写进文件。
-          </p>
-          <canvas id="asm-view" width="160" height="120"></canvas>
-          <div class="row">
+      <section id="assembly-pane" class="stage">
+        <div class="stage-main">
+          <div class="toolbar">
             <button
               id="asm-example"
               type="button"
@@ -112,165 +31,250 @@
             >
               载入装配示例
             </button>
-          </div>
-          <p id="hint-asm-example" class="hint">
-            「载入装配示例」打开 <code>sample.entity.json</code>：一块机身加一对翼，阶段是 folded（收起）、half（一边张开）、open（两边张开）。用来冒烟，不是现役黑曜。
-          </p>
-          <label>
-            网格文件
-            <input
-              id="asm-grid-file"
-              type="file"
-              accept=".json,application/json"
-              title="读取一份已经导出的 *.grid.json，加进零件列表。"
-              aria-describedby="hint-grid-file"
-            />
-          </label>
-          <p id="hint-grid-file" class="hint">
-            「网格文件」读取一份已经导出的 <code>*.grid.json</code>（一张调色板像素图，像一张精灵锁定稿），把它加进零件列表。
-          </p>
-          <label>
-            装配文件
-            <input
-              id="asm-entity-file"
-              type="file"
-              accept=".json,application/json"
-              title="读取一份 *.entity.json，整份换上。"
-              aria-describedby="hint-entity-file"
-            />
-          </label>
-          <p id="hint-entity-file" class="hint">
-            「装配文件」读取一份 <code>*.entity.json</code>：多张网格，加上各阶段的位置、轴心、角度、缩放、水平翻转、层和可选受击框。选中后整份换上，用来核对导出再载入。
-          </p>
-          <label>
-            受击框
-            <input id="asm-hits" type="checkbox" checked title="在装配预览上描出可受击的矩形。现役战斗仍用圆。" />
-          </label>
-          <p class="hint">「受击框」用青色描在零件上。现役战斗仍用圆，这里只预览。</p>
-          <div id="asm-editor" hidden>
             <label>
-              名称
-              <input id="asm-name" type="text" maxlength="128" title="导出文件名用这个名字。" />
+              网格文件
+              <input
+                id="asm-grid-file"
+                type="file"
+                accept=".json,application/json"
+                title="读取一份已经导出的 *.grid.json，加进零件列表。"
+                aria-describedby="hint-grid-file"
+              />
             </label>
             <label>
-              阶段
-              <select id="asm-stage" title="同一架机体的一个姿势。" aria-describedby="hint-stage"></select>
+              装配文件
+              <input
+                id="asm-entity-file"
+                type="file"
+                accept=".json,application/json"
+                title="读取一份 *.entity.json，整份换上。"
+                aria-describedby="hint-entity-file"
+              />
             </label>
-            <p id="hint-stage" class="hint">
-              「阶段」是同一架机体的一个姿势。示例里 folded 是收起，half 是一边张开，open 是两边张开。切换时右边画布上的翼会动，左边的零件预览不动。
+            <label>
+              受击框
+              <input id="asm-hits" type="checkbox" checked title="在装配预览上描出可受击的矩形。现役战斗仍用圆。" />
+            </label>
+            <p id="hint-asm-example" class="hint">
+              「载入装配示例」打开 <code>sample.entity.json</code>：一块机身加一对翼，阶段是 folded（收起）、half（一边张开）、open（两边张开）。用来冒烟，不是现役黑曜。点零件后在右侧调参。
             </p>
-            <label>
-              阶段 id
-              <input id="asm-stage-id" type="text" maxlength="32" title="这个姿势在文件里的名字。" />
-            </label>
-            <div class="row">
+            <p id="hint-grid-file" class="hint">
+              「网格文件」读取一份已经导出的 <code>*.grid.json</code>（一张调色板像素图，像一张精灵锁定稿），把它加进零件列表。
+            </p>
+            <p id="hint-entity-file" class="hint">
+              「装配文件」读取一份 <code>*.entity.json</code>：多张网格，加上各阶段的位置、轴心、角度、缩放、水平翻转、层和可选受击框。选中后整份换上，用来核对导出再载入。
+            </p>
+          </div>
+          <div id="asm-editor" hidden>
+            <div class="toolbar">
+              <label>
+                名称
+                <input id="asm-name" type="text" maxlength="128" title="导出文件名用这个名字。" />
+              </label>
+              <label>
+                阶段
+                <select id="asm-stage" title="同一架机体的一个姿势。" aria-describedby="hint-stage"></select>
+              </label>
+              <label>
+                阶段 id
+                <input id="asm-stage-id" type="text" maxlength="32" title="这个姿势在文件里的名字。" />
+              </label>
               <button id="asm-add-stage" type="button" title="再加一个空姿势。">新阶段</button>
-              <button
-                id="asm-export"
-                type="button"
-                title="下载装配文件 *.entity.json。"
-                aria-describedby="hint-entity-export"
-              >
+              <button id="asm-export" type="button" title="下载装配文件 *.entity.json。" aria-describedby="hint-entity-export">
                 导出 .entity.json
               </button>
-            </div>
-            <p id="hint-entity-export" class="hint">
-              「导出 .entity.json」下载装配文件。这是过门的锁定稿。现役 Boss 还没有改去读它。
-            </p>
-            <div id="asm-parts"></div>
-            <p class="hint">零件按层从后往前排。点列表或点画布上的零件，金边标出当前件。</p>
-            <div id="asm-fields" hidden>
-              <label>
-                x
-                <input id="asm-x" type="number" step="1" title="轴心在机体上的横向位置。向右为正。" />
-              </label>
-              <label>
-                y
-                <input id="asm-y" type="number" step="1" title="轴心在机体上的纵向位置。向下为正。" />
-              </label>
-              <label>
-                轴心 x
-                <input id="asm-px" type="number" step="1" title="钉在放置点上的那一格。" />
-              </label>
-              <label>
-                轴心 y
-                <input id="asm-py" type="number" step="1" title="钉在放置点上的那一格。" />
-              </label>
-              <label>
-                角度（度）
-                <input id="asm-angle" type="number" step="0.1" title="绕轴心转动。0 是不旋转。顺时针为正。" />
-              </label>
-              <label>
-                缩放
-                <input id="asm-scale" type="number" min="0.1" max="16" step="0.1" value="1" title="大于 0，最大 16。0.5 是缩小到一半。1 是原像素。" aria-describedby="hint-scale" />
-              </label>
-              <p id="hint-scale" class="hint">
-                「缩放」大于 0、不超过 16，可以填 0.5。绕轴心缩放，写进装配文件。1 仍是一格一像素，走整像素贴图。小于 1 时按最近邻缩小，不取平均。不是整数、或者转了角度时，边可以盖住半个屏幕像素，不吸附、不模糊。
+              <p id="hint-stage" class="hint">
+                「阶段」是同一架机体的一个姿势。示例里 folded 是收起，half 是一边张开，open 是两边张开。切换时装配画布上的翼会动，零件预览弹窗不动。
               </p>
-              <label>
-                水平翻转
-                <input id="asm-flip" type="checkbox" title="左右镜像。没有上下翻转。" />
-              </label>
-              <label>
-                层
-                <input id="asm-layer" type="number" step="1" title="数字小的画在后面。" />
-              </label>
-              <div class="row">
-                <button id="asm-layer-up" type="button" title="把当前零件画到更前面。">上移</button>
-                <button id="asm-layer-down" type="button" title="把当前零件画到更后面。">下移</button>
-              </div>
-              <p class="hint">「上移」盖住后面的零件，「下移」被别的零件盖住。点过之后图层会重排成 0、1、2…</p>
-              <label>
-                可受击
-                <input id="asm-hit" type="checkbox" title="给这个零件标一块可受击的矩形。" />
-              </label>
-              <div id="asm-hit-box">
-                <label>
-                  受击 x
-                  <input id="asm-hx" type="number" step="1" />
-                </label>
-                <label>
-                  受击 y
-                  <input id="asm-hy" type="number" step="1" />
-                </label>
-                <label>
-                  受击宽
-                  <input id="asm-hw" type="number" step="1" />
-                </label>
-                <label>
-                  受击高
-                  <input id="asm-hh" type="number" step="1" />
-                </label>
-              </div>
-              <button id="asm-delete" type="button">删除部件</button>
+              <p id="hint-entity-export" class="hint">
+                「导出 .entity.json」下载装配文件。这是过门的锁定稿。现役 Boss 还没有改去读它。
+              </p>
             </div>
           </div>
-          <p id="asm-status">尚未装配。在左边做好零件后点「移入装配」，或点「载入装配示例」。</p>
-        </section>
-      </div>
+          <div class="canvas-slot">
+            <canvas id="asm-view" width="160" height="120"></canvas>
+          </div>
+          <div id="asm-parts"></div>
+          <p id="asm-status">尚未装配。点「零件预览」做好一张再移入装配，或点「载入装配示例」。</p>
+        </div>
+        <aside id="asm-inspector" hidden aria-labelledby="asm-inspector-title">
+          <div class="inspector-head">
+            <h2 id="asm-inspector-title">选中零件</h2>
+            <button id="asm-inspector-close" type="button" title="退出调参。也可以按 Esc，或点画布空白处。">关闭</button>
+          </div>
+          <p class="hint">只调这一件。装配画布留在旁边，不用翻整页。Esc、关闭，或点画布空白处退出。</p>
+          <div id="asm-fields">
+            <label>
+              x
+              <input id="asm-x" type="number" step="1" title="轴心在机体上的横向位置。向右为正。" />
+            </label>
+            <label>
+              y
+              <input id="asm-y" type="number" step="1" title="轴心在机体上的纵向位置。向下为正。" />
+            </label>
+            <label>
+              轴心 x
+              <input id="asm-px" type="number" step="1" title="钉在放置点上的那一格。" />
+            </label>
+            <label>
+              轴心 y
+              <input id="asm-py" type="number" step="1" title="钉在放置点上的那一格。" />
+            </label>
+            <label>
+              角度（度）
+              <input id="asm-angle" type="number" step="0.1" title="绕轴心转动。0 是不旋转。顺时针为正。" />
+            </label>
+            <label>
+              缩放
+              <input id="asm-scale" type="number" min="0.1" max="16" step="0.1" value="1" title="大于 0，最大 16。0.5 是缩小到一半。1 是原像素。" aria-describedby="hint-scale" />
+            </label>
+            <p id="hint-scale" class="hint">
+              「缩放」大于 0、不超过 16，可以填 0.5。绕轴心缩放，写进装配文件。1 仍是一格一像素，走整像素贴图。小于 1 时按最近邻缩小，不取平均。不是整数、或者转了角度时，边可以盖住半个屏幕像素，不吸附、不模糊。
+            </p>
+            <label>
+              水平翻转
+              <input id="asm-flip" type="checkbox" title="左右镜像。没有上下翻转。" />
+            </label>
+            <label>
+              层
+              <input id="asm-layer" type="number" step="1" title="数字小的画在后面。" />
+            </label>
+            <div class="row">
+              <button id="asm-layer-up" type="button" title="把当前零件画到更前面。">上移</button>
+              <button id="asm-layer-down" type="button" title="把当前零件画到更后面。">下移</button>
+            </div>
+            <p class="hint">「上移」盖住后面的零件，「下移」被别的零件盖住。点过之后图层会重排成 0、1、2…</p>
+            <label>
+              可受击
+              <input id="asm-hit" type="checkbox" title="给这个零件标一块可受击的矩形。" />
+            </label>
+            <div id="asm-hit-box">
+              <label>
+                受击 x
+                <input id="asm-hx" type="number" step="1" />
+              </label>
+              <label>
+                受击 y
+                <input id="asm-hy" type="number" step="1" />
+              </label>
+              <label>
+                受击宽
+                <input id="asm-hw" type="number" step="1" />
+              </label>
+              <label>
+                受击高
+                <input id="asm-hh" type="number" step="1" />
+              </label>
+            </div>
+            <button id="asm-delete" type="button">删除部件</button>
+          </div>
+        </aside>
+      </section>
     </main>
+    <dialog id="part-dialog" aria-labelledby="part-title">
+      <div class="inspector-head">
+        <h2 id="part-title">零件预览</h2>
+        <button id="part-close" type="button">关闭</button>
+      </div>
+      <p class="hint">路径 A。弹窗里只画当前这一张网格，关掉后主界面仍是装配。不会盖住装配画布的内容。</p>
+      <canvas id="view" width="160" height="120"></canvas>
+      <div class="row">
+        <label>
+          PNG
+          <input id="file" type="file" accept="image/png,.png" title="自己的参考图。只作输入，不会进游戏包。" />
+        </label>
+        <button
+          id="fixture"
+          type="button"
+          title="打开仓库自带的 8×8 样例图，练手用，不是游戏正式资产。"
+          aria-describedby="hint-fixture"
+        >
+          载入示例
+        </button>
+      </div>
+      <p id="hint-fixture" class="hint">
+        「载入示例」打开仓库自带的 8×8 样例（透明角、黑边、青底、白心），用来练手，不是游戏正式资产。
+      </p>
+      <label>
+        目标宽
+        <input id="tw" type="number" min="1" max="512" value="32" />
+      </label>
+      <label>
+        目标高
+        <input id="th" type="number" min="1" max="512" value="32" />
+      </label>
+      <label>
+        取样
+        <select id="sample">
+          <option value="nearest">nearest</option>
+          <option value="box">box</option>
+        </select>
+      </label>
+      <label>
+        量化
+        <select id="quantize">
+          <option value="nearest">nearest</option>
+          <option value="dither">dither</option>
+        </select>
+      </label>
+      <label>
+        透明阈值
+        <input id="alpha" type="number" min="0" max="255" value="0" />
+      </label>
+      <label>
+        抖动强度
+        <input id="dither" type="number" min="0" max="1" step="0.05" value="1" />
+      </label>
+      <p class="hint">宽高和取样决定每个格子取参考图的哪一块。同一张图、同一组参数，导出的格子永远一样。</p>
+      <div class="row">
+        <button
+          id="export"
+          type="button"
+          disabled
+          title="下载网格文件 *.grid.json。这是过门的锁定稿。"
+          aria-describedby="hint-export"
+        >
+          导出 .grid.json
+        </button>
+        <button
+          id="asm-move"
+          type="button"
+          title="把这张已经预览好的网格，放进装配零件列表。"
+          aria-describedby="hint-move"
+        >
+          移入装配
+        </button>
+      </div>
+      <p id="hint-export" class="hint">
+        「导出 .grid.json」下载网格文件：宽、高，和每个格子的颜色编号。这是过门的锁定稿。游戏日后只 import 这份字节，不要按预览另仿画。
+      </p>
+      <p id="hint-move" class="hint">
+        「移入装配」在这张零件预览好之后，把它加进装配零件列表，并关掉弹窗。要先载入示例或自己的 PNG。
+      </p>
+      <p id="status">先点「载入示例」，或选一张 PNG。上面是这张零件。</p>
+    </dialog>
     <dialog id="guide" aria-labelledby="guide-title">
       <h2 id="guide-title">使用说明</h2>
       <p>
-        屏幕分成左右两块。左边「零件预览」只画一张网格。右边「装配预览」只画当前阶段的整架。两块画布不会互相替换。
+        主界面是装配预览，画布是 <code>#asm-view</code>。零件预览是弹窗，点页头「零件预览」打开，画布是 <code>#view</code>。两块画布不会互相替换。关掉弹窗后，屏幕上只留装配。
       </p>
       <p>
         参考 PNG 只是原料。游戏以后只认导出的 JSON，不要按着预览再仿画一张。现役机体和 Boss（Eagle、黑曜等）还没有改去读这些文件。
       </p>
-      <h3>路径 A · 左边一张零件 → 网格文件</h3>
+      <h3>路径 A · 弹窗里一张零件 → 网格文件</h3>
       <ol>
-        <li>点「载入示例」，或自己选一张 PNG。左边出现这张零件。</li>
+        <li>点「零件预览」，再点「载入示例」，或自己选一张 PNG。弹窗里出现这张零件。</li>
         <li>点「导出 .grid.json」得到网格文件：宽、高和每个格子的颜色编号。</li>
-        <li>零件满意后点「移入装配」，它会出现在右边的零件列表里。</li>
+        <li>零件满意后点「移入装配」。弹窗关掉，它出现在装配的零件列表里。</li>
       </ol>
       <p>「载入示例」是仓库自带的 8×8 样例，用来练手，不是游戏正式资产。</p>
-      <p>怎么验证：载入示例后，状态行应写「与 fixtures/sample.grid.json 一致」。右边的装配画布保持原样。</p>
-      <h3>路径 B · 右边多张网格 → 装配文件</h3>
+      <p>怎么验证：载入示例后，弹窗里的状态行应写「与 fixtures/sample.grid.json 一致」。装配画布保持原样。</p>
+      <h3>路径 B · 主界面装配 → 装配文件</h3>
       <ol>
-        <li>点「载入装配示例」，或把左边的零件「移入装配」。</li>
-        <li>点右边画布上的零件，或点列表。选中的描金边。</li>
-        <li>改角度、缩放（大于 0，可以是 0.5）、上移或下移图层。位移、轴心、水平翻转、受击框也在这一栏。</li>
-        <li>阶段选 folded、half、open，看翼动。左边的零件预览不动。</li>
+        <li>点「载入装配示例」，或在零件弹窗里「移入装配」。</li>
+        <li>点装配画布上的零件，或点下方列表。选中的描金边，右侧打开「选中零件」。</li>
+        <li>在这一栏改角度、缩放（大于 0，可以是 0.5）、上移或下移图层。位移、轴心、水平翻转、受击框也在这一栏。不用翻整页。</li>
+        <li>按 Esc、点「关闭」，或点画布空白处，退出调参。阶段选 folded、half、open，看翼动。零件弹窗不动。</li>
         <li>点「导出 .entity.json」。再用「装配文件」把刚导出的文件载入，阶段和零件还在。</li>
       </ol>
       <p>

@@ -1,6 +1,6 @@
 /**
- * Part pixelizer. The left canvas is only the current grid (`renderSprite` + `blitSprite`).
- * The assembly canvas lives in `assembly.ts` and is never this one.
+ * Part pixelizer. Its canvas lives in the part dialog and only draws the current grid
+ * (`renderSprite` + `blitSprite`). The assembly canvas lives in `assembly.ts`.
  */
 
 import { LOGICAL_W } from '@/game/config';
@@ -69,11 +69,25 @@ mountAssembly({
   assetUrl,
 });
 mountGuide();
+mountPartDialog();
 paint(null);
 
 loadFixtureText().catch(() => {
   fixtureText = null;
 });
+
+function mountPartDialog(): void {
+  const dialog = must(HTMLDialogElement, 'part-dialog');
+  must(HTMLButtonElement, 'part-open').addEventListener('click', () => {
+    if (!dialog.open) dialog.showModal();
+  });
+  must(HTMLButtonElement, 'part-close').addEventListener('click', () => {
+    dialog.close();
+  });
+  dialog.addEventListener('click', (event) => {
+    if (event.target === dialog) dialog.close();
+  });
+}
 
 function must<T extends HTMLElement>(ctor: new () => T, id: string): T {
   const el = document.getElementById(id);

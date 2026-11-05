@@ -17,6 +17,13 @@ describe('pixel editor guide', () => {
     expect(page).toContain('装配文件');
     expect(page).toContain('零件预览');
     expect(page).toContain('装配预览');
+    expect(page).toContain('id="part-dialog"');
+    expect(page).toContain('id="part-open"');
+    expect(page).toContain('id="asm-inspector"');
+    expect(page).toContain('选中零件');
+    expect(page.indexOf('id="asm-view"')).toBeLessThan(page.indexOf('id="part-dialog"'));
+    expect(page.indexOf('id="view"')).toBeGreaterThan(page.indexOf('id="part-dialog"'));
+    expect(page.indexOf('id="asm-fields"')).toBeGreaterThan(page.indexOf('id="asm-inspector"'));
     expect(page).toContain('id="view"');
     expect(page).toContain('id="asm-view"');
     expect(page).toContain('缩放');

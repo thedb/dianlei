@@ -1,51 +1,32 @@
 :root {
   font: 14px/1.45 ui-sans-serif, sans-serif;
+  color-scheme: dark;
+}
+
+html,
+body {
+  height: 100%;
 }
 
 body {
   margin: 0;
+  overflow: hidden;
 }
 
 main {
-  min-height: 100vh;
-}
-
-.panes {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  align-items: start;
-}
-
-.pane {
-  min-width: 0;
-  max-height: calc(100vh - 88px);
-  overflow: auto;
-  padding: 8px 20px 32px;
-}
-
-.pane + .pane {
-  border-left: 1px solid #1a3050;
-}
-
-.pane canvas {
-  display: block;
-  max-width: 100%;
-  height: auto;
-  margin: 8px 0 12px;
-  background: #0a1828;
-}
-
-#asm-view {
-  cursor: crosshair;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 header {
-  grid-column: 1 / -1;
-  padding: 16px 20px 0;
+  flex: none;
+  padding: 12px 16px 0;
 }
 
 h1 {
-  margin: 0 0 4px;
+  margin: 0;
   font-size: 18px;
 }
 
@@ -57,18 +38,20 @@ h1 {
 }
 
 .title-row h1,
-.title-row button {
+.title-row button,
+.toolbar button,
+.inspector-head button {
   margin: 0;
 }
 
 h2,
 h3 {
-  margin: 16px 0 4px;
+  margin: 0;
   font-size: 15px;
 }
 
 .hint {
-  margin: 0 0 10px;
+  margin: 0;
   color: #9ec4d4;
   font-size: 12px;
   line-height: 1.45;
@@ -78,14 +61,76 @@ code {
   font-size: 0.95em;
 }
 
-header p,
-fieldset p {
-  margin: 0 0 8px;
+header p {
+  margin: 6px 0 8px;
 }
 
-.controls,
-.preview {
-  padding: 16px 20px 24px;
+.stage {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.stage:has(#asm-inspector:not([hidden])) {
+  grid-template-columns: minmax(0, 1fr) min(320px, 38vw);
+}
+
+.stage-main {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 16px 12px;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  flex: none;
+}
+
+.toolbar .hint {
+  flex-basis: 100%;
+}
+
+.canvas-slot {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#asm-view {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  margin: 0;
+  background: #0a1828;
+  cursor: crosshair;
+}
+
+#asm-inspector {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 16px 24px;
+  border-left: 1px solid #7ee0f0;
+  background: #071422;
+}
+
+.inspector-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
 }
 
 .row {
@@ -104,6 +149,12 @@ label {
   margin: 8px 0;
 }
 
+.toolbar label {
+  margin: 0;
+  width: auto;
+  gap: 6px;
+}
+
 input,
 select,
 button {
@@ -118,45 +169,38 @@ canvas {
   image-rendering: pixelated;
 }
 
-fieldset {
-  margin-top: 20px;
+#part-dialog canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 8px 0 12px;
+  background: #0a1828;
 }
 
 #status,
 #asm-status {
-  min-height: 3em;
+  flex: none;
+  min-height: 1.4em;
+  margin: 0;
   white-space: pre-wrap;
 }
 
 #asm-parts {
+  flex: none;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: nowrap;
   gap: 4px;
-  margin-top: 8px;
+  overflow-x: auto;
 }
 
 #asm-parts button {
   margin-top: 0;
-  text-align: left;
+  white-space: nowrap;
 }
 
 #asm-parts button[aria-pressed='true'] {
   outline: 2px solid #fdb927;
-}
-
-@media (max-width: 800px) {
-  .panes {
-    grid-template-columns: 1fr;
-  }
-
-  .pane {
-    max-height: none;
-  }
-
-  .pane + .pane {
-    border-left: 0;
-    border-top: 1px solid #1a3050;
-  }
 }
 
 dialog {
@@ -169,6 +213,10 @@ dialog {
   padding: 20px 24px;
 }
 
+#part-dialog {
+  width: min(520px, calc(100vw - 32px));
+}
+
 dialog::backdrop {
   background: rgba(0, 0, 0, 0.55);
 }
@@ -178,3 +226,19 @@ dialog ol {
   padding-left: 1.3em;
 }
 
+dialog .hint,
+#asm-inspector .hint {
+  margin: 0 0 10px;
+}
+
+@media (max-width: 800px) {
+  .stage:has(#asm-inspector:not([hidden])) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) min(46vh, 420px);
+  }
+
+  #asm-inspector {
+    border-left: 0;
+    border-top: 1px solid #7ee0f0;
+  }
+}

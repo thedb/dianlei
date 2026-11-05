@@ -15,6 +15,8 @@ export function mountGuide(): void {
   });
   must(HTMLButtonElement, 'guide-try-a').addEventListener('click', () => {
     dialog.close();
+    const part = must(HTMLDialogElement, 'part-dialog');
+    if (!part.open) part.showModal();
     must(HTMLButtonElement, 'fixture').click();
   });
   must(HTMLButtonElement, 'guide-try-b').addEventListener('click', () => {

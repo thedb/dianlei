@@ -1,6 +1,7 @@
 /**
- * Stage assembly. The right-hand canvas is independent of the part preview.
+ * Stage assembly on the main screen. The part canvas is a separate dialog.
  * Sprites go through `blitPlacedSprite`. Hit boxes and the selection outline are strokes after that.
+ * Selecting a part opens the inspector; Esc, its close button, or a miss on the canvas leaves it.
  */
 
 import { LOGICAL_W } from '@/game/config';
@@ -68,13 +69,17 @@ export function mountAssembly(next: AssemblyHost): void {
   moveButton.addEventListener('click', () => {
     const grid = next.currentGrid();
     if (!grid) {
-      setStatus('先在左边做好一张零件');
+      const message = '先在零件预览里载入一张零件';
+      setStatus(message);
+      notePart(message);
       return;
     }
     try {
       addGrid(grid);
+      closePartDialog();
     } catch (error) {
       fail(error);
+      notePart(error instanceof Error ? error.message : '移入失败');
     }
   });
   gridFile.addEventListener('change', () => {
@@ -110,8 +115,8 @@ export function mountAssembly(next: AssemblyHost): void {
   });
   stageSelect.addEventListener('change', () => {
     stageId = stageSelect.value;
+    partId = '';
     const stage = currentStage();
-    partId = stage?.parts[0]?.id ?? '';
     renderParts();
     fillFields();
     setStatus(stage && stage.parts.length === 0 ? '这个阶段没有部件' : '已切换阶段');
@@ -161,6 +166,15 @@ export function mountAssembly(next: AssemblyHost): void {
   must(HTMLCanvasElement, 'asm-view').addEventListener('click', (event) => {
     selectAt(event);
   });
+  must(HTMLButtonElement, 'asm-inspector-close').addEventListener('click', () => {
+    clearSelection();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    const target = event.target;
+    if (target instanceof Element && target.closest('dialog')) return;
+    clearSelection();
+  });
   const angleInput = must(HTMLInputElement, 'asm-angle');
   angleInput.addEventListener('input', () => {
     editPart((part) => {
@@ -186,7 +200,7 @@ export function mountAssembly(next: AssemblyHost): void {
   bindHit('asm-hw', 'w', '受击宽');
   bindHit('asm-hh', 'h', '受击高');
   hitsOn = hits.checked;
-  setStatus('尚未装配。在左边做好零件后点「移入装配」，或点「载入装配示例」。');
+  setStatus('尚未装配。点「零件预览」做好一张再移入装配，或点「载入装配示例」。');
   paintAssembly();
 }
 
@@ -243,7 +257,7 @@ function addGrid(grid: PaletteGridFile): void {
 function adopt(next: EntityFile): void {
   entity = next;
   stageId = next.stages[0]?.id ?? '';
-  partId = next.stages[0]?.parts[0]?.id ?? '';
+  partId = '';
   showEditor();
 }
 
@@ -318,7 +332,7 @@ function deletePart(): void {
   const stage = currentStage();
   if (!stage) return;
   stage.parts = stage.parts.filter((part) => part.id !== partId);
-  partId = stage.parts[0]?.id ?? '';
+  partId = '';
   renderParts();
   fillFields();
   setStatus(stage.parts.length === 0 ? '这个阶段没有部件' : '已删除部件');
@@ -440,17 +454,19 @@ function renderParts(): void {
       renderParts();
       fillFields();
       paintAssembly();
+      setStatus(`已选中 ${part.id}`);
     });
     box.append(button);
   }
 }
 
 function fillFields(): void {
-  const fields = must(HTMLDivElement, 'asm-fields');
+  const inspector = must(HTMLElement, 'asm-inspector');
   const located = locate();
-  fields.hidden = located === null;
+  inspector.hidden = located === null;
   if (!located) return;
   const { part, grid } = located;
+  must(HTMLHeadingElement, 'asm-inspector-title').textContent = `选中 ${part.id}`;
   must(HTMLInputElement, 'asm-x').value = String(part.x);
   must(HTMLInputElement, 'asm-y').value = String(part.y);
   must(HTMLInputElement, 'asm-px').value = String(part.pivot.x);
@@ -604,6 +620,26 @@ function selectAt(event: MouseEvent): void {
     setStatus(`已选中 ${part.id}`);
     return;
   }
+  clearSelection();
+}
+
+function clearSelection(): void {
+  if (!partId) return;
+  partId = '';
+  renderParts();
+  fillFields();
+  paintAssembly();
+  setStatus('已退出调参');
+}
+
+function closePartDialog(): void {
+  const dialog = document.getElementById('part-dialog');
+  if (dialog instanceof HTMLDialogElement && dialog.open) dialog.close();
+}
+
+function notePart(message: string): void {
+  const status = document.getElementById('status');
+  if (status) status.textContent = message;
 }
 
 function paintAssembly(): void {
