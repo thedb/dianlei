@@ -146,9 +146,12 @@ export function mountAssembly(next: AssemblyHost): void {
   bindNumber('asm-layer', (part, value) => {
     part.layer = value;
   }, '层', ENTITY_LAYER_MIN, ENTITY_LAYER_MAX);
-  bindNumber('asm-scale', (part, value) => {
-    part.scale = value;
-  }, '缩放', ENTITY_SCALE_MIN, ENTITY_SCALE_MAX);
+  const scaleInput = must(HTMLInputElement, 'asm-scale');
+  scaleInput.addEventListener('input', () => {
+    editPart((part) => {
+      part.scale = readScale(scaleInput);
+    }, false);
+  });
   must(HTMLButtonElement, 'asm-layer-up').addEventListener('click', () => {
     moveLayer(1);
   });
@@ -528,6 +531,14 @@ function readInt(input: HTMLInputElement, label: string, min: number, max: numbe
   const value = Number(input.value);
   if (!Number.isInteger(value) || value < min || value > max) {
     throw new Error(`${label}需为 ${min}–${max} 的整数`);
+  }
+  return value;
+}
+
+function readScale(input: HTMLInputElement): number {
+  const value = Number(input.value);
+  if (!Number.isFinite(value) || value <= ENTITY_SCALE_MIN || value > ENTITY_SCALE_MAX) {
+    throw new Error(`缩放需大于 ${ENTITY_SCALE_MIN}，且不超过 ${ENTITY_SCALE_MAX}`);
   }
   return value;
 }

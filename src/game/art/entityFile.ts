@@ -2,12 +2,17 @@
  * Entity assembly files (`*.entity.json`).
  *
  * A stage is a list of parts. Each part places one locked palette grid
- * (`gridFile.ts`) by an integer pivot. The blit matches `drawPartSprite`:
- * angle 0 is the straight floored blit; any other angle translates to the
- * pivot and rotates (canvas y-down, positive clockwise). `scale` is an integer
- * pixel multiplier: each cell becomes a `scale`×`scale` block, nearest-neighbor,
- * with smoothing off. Angle 0 enlarges through the floored blit. A rotated edge
- * may cover part of a screen pixel; it is not snapped and not filtered.
+ * (`gridFile.ts`) by an integer pivot. A nonzero angle matches `drawPartSprite`:
+ * translate to the pivot and rotate (canvas y-down, positive clockwise).
+ * `scale` is a finite
+ * multiplier in `(0, 16]`: each cell becomes a `scale`×`scale` block, nearest-neighbor,
+ * with smoothing off, about the pivot. 1 is one cell per pixel. Values below 1 shrink.
+ * Angle 0 and scale 1 use the straight floored blit. Angle 0 and any other integer
+ * scale enlarge through that same blit with a destination size. Any other scale,
+ * including a shrink, and any nonzero angle, scale about the pivot with a transform.
+ * A scaled or rotated edge may cover part of a screen pixel; it is not snapped
+ * and not filtered. Shrinking does not box-average: several source cells can land
+ * in one screen pixel, and the sample is the nearest source cell.
  * `flipX` mirrors the grid in pixel indices before that blit. There is no vertical flip.
  *
  * `hit`, when present, is an axis-aligned box in unflipped sprite pixels.
@@ -47,10 +52,11 @@ export const ENTITY_LAYER_MAX = 999;
 export const ENTITY_ANGLE_MAX = 64;
 
 /**
- * Integer pixel multiplier. 1 is the grid at 1 cell = 1 pixel.
+ * Scale must be greater than `ENTITY_SCALE_MIN` and at most `ENTITY_SCALE_MAX`.
+ * 1 is the grid at 1 cell = 1 pixel. Fractions such as 0.5 shrink about the pivot.
  * The editor preview zoom is not this value and is not stored.
  */
-export const ENTITY_SCALE_MIN = 1;
+export const ENTITY_SCALE_MIN = 0;
 export const ENTITY_SCALE_MAX = 16;
 
 /** Inclusive range for a hit-box edge, in sprite pixels. Width and height are at least 1. */
@@ -96,8 +102,9 @@ export interface EntityPlacement {
   /** Horizontal mirror of the grid. The pivot pixel stays on `(x, y)`. */
   flipX: boolean;
   /**
-   * Integer pixel multiplier around the pivot. Missing on older files means 1.
-   * Angle 0 uses the floored enlarged blit. Rotation stays nearest-neighbor.
+   * Pixel multiplier around the pivot, in `(0, 16]`. Missing on older files means 1.
+   * Angle 0 and an integer scale use the floored blit. Any other scale, and any
+   * rotation, stay nearest-neighbor and may cover a partial screen pixel.
    */
   scale: number;
   /** Lower draws further back. Ties keep file order. */
@@ -546,7 +553,17 @@ function parseHit(value: unknown): EntityHitBox {
 
 function asScale(value: unknown): number {
   if (value === undefined) return 1;
-  return asInt(value, 'scale', ENTITY_SCALE_MIN, ENTITY_SCALE_MAX);
+  if (
+    typeof value !== 'number' ||
+    !Number.isFinite(value) ||
+    value <= ENTITY_SCALE_MIN ||
+    value > ENTITY_SCALE_MAX
+  ) {
+    throw new Error(
+      `scale must be a finite number greater than ${ENTITY_SCALE_MIN} and at most ${ENTITY_SCALE_MAX}`
+    );
+  }
+  return value;
 }
 
 function asAngle(value: unknown): number {

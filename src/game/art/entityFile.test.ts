@@ -202,7 +202,7 @@ describe('entity file', () => {
     expect(() => createEmptyEntity('a/b')).toThrow(/path/);
   });
 
-  it('defaults a missing scale to 1 and rejects a fractional scale', () => {
+  it('defaults a missing scale to 1 and accepts a fraction in (0, 16]', () => {
     const text = serializeEntityFile(sampleAssemblyEntity());
     const stripped = text.split('\n          "scale": 1,').join('');
     expect(stripped).not.toContain('"scale"');
@@ -211,9 +211,30 @@ describe('entity file', () => {
     expect(serializeEntityFile(parsed)).toBe(text);
 
     const entity = sampleAssemblyEntity();
+    const bodyGrid = entity.grids.body;
     const part = entity.stages[0]?.parts[0];
-    if (!part) throw new Error('fixture missing body');
+    if (!bodyGrid || !part) throw new Error('fixture missing body');
+    part.scale = 0.5;
+    const halved = serializeEntityFile(entity);
+    expect(halved).toContain('"scale": 0.5');
+    expect(parseEntityFile(halved).stages[0]?.parts[0]?.scale).toBe(0.5);
+    expect(placementCorners(bodyGrid, part)).toEqual([
+      [-2, -2.5],
+      [2, -2.5],
+      [2, 2.5],
+      [-2, 2.5],
+    ]);
+    expect(placementContains(bodyGrid, part, 0, 0)).toBe(true);
+    expect(placementContains(bodyGrid, part, 1.9, 2.4)).toBe(true);
+    expect(placementContains(bodyGrid, part, 2, 0)).toBe(false);
+
+    part.scale = 16;
+    expect(parseEntityFile(serializeEntityFile(entity)).stages[0]?.parts[0]?.scale).toBe(16);
     part.scale = 0;
+    expect(() => serializeEntityFile(entity)).toThrow(/scale/);
+    part.scale = 16.1;
+    expect(() => serializeEntityFile(entity)).toThrow(/scale/);
+    part.scale = -0.5;
     expect(() => serializeEntityFile(entity)).toThrow(/scale/);
   });
 });

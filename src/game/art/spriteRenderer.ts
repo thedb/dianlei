@@ -104,14 +104,19 @@ export function blitSprite(
 }
 
 /**
- * Place a baked frame the way a boss part is drawn (`drawPartSprite`), then optionally enlarge it.
- * The pivot is `frame.anchorX/Y` in source pixels. `scale` is an integer ≥ 1: each source
- * pixel becomes a `scale`×`scale` block. Smoothing stays off.
- * Angle 0 uses the straight floored blit (enlarged with a destination size when `scale` ≠ 1),
- * so a zero angle does not shift by a subpixel.
- * Any other angle translates to `(x, y)`, rotates (canvas y-down, positive clockwise),
- * scales about that pivot, then blits at `-anchor`. A rotated edge may cover part of a
- * screen pixel; it is not snapped onto the grid and it is not filtered.
+ * Place a baked frame the way a boss part is drawn (`drawPartSprite`), then scale it
+ * about the pivot. The pivot is `frame.anchorX/Y` in source pixels. `scale` is finite
+ * and greater than 0: each source pixel becomes a `scale`×`scale` block. Smoothing stays off.
+ * Angle 0 and scale 1 use the straight floored blit, with no destination size, so a
+ * zero angle does not shift by a subpixel.
+ * Angle 0 and any other integer scale use that same blit with a floored origin at
+ * `x - anchor * scale` and a destination of `width * scale` by `height * scale`.
+ * The pivot stays on an integer pixel.
+ * Any other scale (including a shrink such as 0.5), and any nonzero angle, translate
+ * to `(x, y)`, rotate only when the angle is nonzero (canvas y-down, positive clockwise),
+ * then `ctx.scale` about that pivot and blit at `-anchor`. The fractional edge is not
+ * snapped onto the pixel grid and it is not filtered. Below 1, nearest-neighbor sampling
+ * can fold several source cells into one screen pixel; it does not average them.
  */
 export function blitPlacedSprite(
   ctx: CanvasRenderingContext2D,
@@ -121,12 +126,12 @@ export function blitPlacedSprite(
   angle: number,
   scale = 1
 ): void {
-  if (!Number.isInteger(scale) || scale < 1) throw new Error('scale must be an integer >= 1');
+  if (!Number.isFinite(scale) || scale <= 0) throw new Error('scale must be a finite number > 0');
   if (angle === 0 && scale === 1) {
     blitSprite(ctx, frame, x - frame.anchorX, y - frame.anchorY);
     return;
   }
-  if (angle === 0) {
+  if (angle === 0 && Number.isInteger(scale)) {
     blitSprite(
       ctx,
       frame,
@@ -140,7 +145,7 @@ export function blitPlacedSprite(
   ctx.save();
   ctx.imageSmoothingEnabled = false;
   ctx.translate(x, y);
-  ctx.rotate(angle);
+  if (angle !== 0) ctx.rotate(angle);
   if (scale !== 1) ctx.scale(scale, scale);
   blitSprite(ctx, frame, -frame.anchorX, -frame.anchorY);
   ctx.restore();

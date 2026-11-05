@@ -36,9 +36,9 @@ PNG 需为 8-bit、不交错。支持灰、灰+透明、RGB、RGBA、索引色�
 
 左边「零件预览」和右边「装配预览」是两块画布。左边只画当前这一张网格，右边只画当前阶段。
 
-试示例：点「载入装配示例」。它读 `fixtures/sample.entity.json`。阶段下拉有 `folded`、`half`、`open`（机身加一对翼，用来冒烟，不是现役黑曜）。点右边画布上的零件，或点列表，选中的描金边。可改 x / y、轴心、角度（界面是度，文件里是弧度）、缩放（整数 1–16）、水平翻转、层（上移 / 下移），以及可选受击框。然后「导出 .entity.json」。
+试示例：点「载入装配示例」。它读 `fixtures/sample.entity.json`。阶段下拉有 `folded`、`half`、`open`（机身加一对翼，用来冒烟，不是现役黑曜）。点右边画布上的零件，或点列表，选中的描金边。可改 x / y、轴心、角度（界面是度，文件里是弧度）、缩放（大于 0、不超过 16，步进 0.1，例如 0.5）、水平翻转、层（上移 / 下移），以及可选受击框。然后「导出 .entity.json」。
 
-把自己的图加进去：先在左边像素化，再点「移入装配」。也可以直接载入一份 `*.grid.json` 或 `*.entity.json`。角度为 0 时走不旋转的取整贴图；其它角度先移到轴心再旋转，和 `drawPartSprite` 一样。`scale` 是绕轴心的整数倍：每个格子变成 `scale`×`scale`，最近邻、不模糊。旋转后的边可能盖住半个屏幕像素，不吸附、不滤波。画布为了看清而做的整体放大不写进文件。水平翻转按像素下标镜像。没有垂直翻转。受击框是翻转前的精灵像素矩形，预览里用青色描边盖在贴图上，不另做一套光栅。
+把自己的图加进去：先在左边像素化，再点「移入装配」。也可以直接载入一份 `*.grid.json` 或 `*.entity.json`。角度为 0 且 `scale` 为 1 时走不旋转的取整贴图。角度为 0 且 `scale` 为其它整数时，同样取整原点再按目标尺寸放大。小于 1，或任何非整数，以及任何非 0 角度，都绕轴心做最近邻缩放（不取平均、不模糊）。这时边可以盖住半个屏幕像素，不吸附、不滤波。画布为了看清而做的整体放大不写进文件。水平翻转按像素下标镜像。没有垂直翻转。受击框是翻转前的精灵像素矩形，预览里用青色描边盖在贴图上，不另做一套光栅。
 
 从仓库根目录重写装配示例：
 
@@ -46,7 +46,7 @@ PNG 需为 8-bit、不交错。支持灰、灰+透明、RGB、RGBA、索引色�
 npx vite-node tools/pixel-editor/scripts/build-entity-fixture.ts
 ```
 
-扩展名 `*.entity.json`。`format` 是 `dianlei.entity`，`version` 是 `1`。`grids` 把锁定的 `*.grid.json` 内联进来，键是部件引用的 id。`stages` 保持作者顺序。每个部件有 `id`、`grid`、`x`、`y`、`pivot`、`angle`（弧度，顺时针为正）、`flipX`、`layer`，以及可选的 `hit`（`x,y,w,h`）。层小的画在后面，同层保持文件顺序。轴心必须落在未翻转网格的像素内。
+扩展名 `*.entity.json`。`format` 是 `dianlei.entity`，`version` 是 `1`。`grids` 把锁定的 `*.grid.json` 内联进来，键是部件引用的 id。`stages` 保持作者顺序。每个部件有 `id`、`grid`、`x`、`y`、`pivot`、`angle`（弧度，顺时针为正）、`flipX`、`scale`（大于 0、不超过 16；缺省按 1）、`layer`，以及可选的 `hit`（`x,y,w,h`）。层小的画在后面，同层保持文件顺序。轴心必须落在未翻转网格的像素内。
 
 ## 游戏里的导入路径
 
@@ -85,7 +85,7 @@ if (stage) {
     const frame = renderSprite(placed.data);
     frame.anchorX = placed.anchorX;
     frame.anchorY = placed.anchorY;
-    blitPlacedSprite(ctx, frame, part.x, part.y, part.angle);
+    blitPlacedSprite(ctx, frame, part.x, part.y, part.angle, part.scale);
   }
 }
 ```
@@ -93,5 +93,5 @@ if (stage) {
 ## 还没接上的
 
 - 现役机体和 Boss 仍用原来的精灵，战斗碰撞仍是圆，不读这里的受击框
-- 没有垂直翻转，没有部件任意缩放，也没有关卡波次编辑
+- 没有垂直翻转，也没有关卡波次编辑
 - 编辑器不进 H5 / 微信包，也不上 CDN
