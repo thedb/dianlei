@@ -12,6 +12,7 @@ import {
   bankParts,
   cloneStage,
   defaultBank,
+  partLinear,
   partScaleX,
   copyPartToStage,
   hitRole,
@@ -489,5 +490,28 @@ describe('entity file', () => {
     expect(() => serializeEntityFile(entity)).toThrow(/bank.from/);
     open.bank = { ...defaultBank('folded', 1), taper: 0.9 };
     expect(() => serializeEntityFile(entity)).toThrow(/taper/);
+  });
+
+  it('skews a part in its own frame and round-trips the skew', () => {
+    const entity = sampleAssemblyEntity();
+    const body = entity.stages[0]?.parts[0];
+    const grid = entity.grids.body;
+    if (!body || !grid) throw new Error('fixture missing body');
+    body.skewX = Math.PI / 4;
+    expect(partLinear(body).map((value) => Math.round(value * 1000) / 1000)).toEqual([1, 0, 1, 1]);
+    expect(placementCorners(grid, body)[0]?.map((value) => Math.round(value))).toEqual([-9, -5]);
+    expect(placementCorners(grid, body)[2]?.map((value) => Math.round(value))).toEqual([9, 5]);
+    expect(placementContains(grid, body, 8, 4.5)).toBe(true);
+    expect(placementContains(grid, body, -7, 4.5)).toBe(false);
+    expect(placedAnchor(body, { id: 'a', kind: 'exhaust', x: 0, y: 4 }).x).toBeCloseTo(4);
+    body.skewY = -0.25;
+    const back = parseEntityFile(serializeEntityFile(entity)).stages[0]?.parts[0];
+    expect(back?.skewX).toBeCloseTo(Math.PI / 4);
+    expect(back?.skewY).toBe(-0.25);
+    body.skewX = 0;
+    body.skewY = 0;
+    expect(serializeEntityFile(entity)).not.toContain('"skew');
+    body.skewX = 1.2;
+    expect(() => serializeEntityFile(entity)).toThrow(/skewX/);
   });
 });

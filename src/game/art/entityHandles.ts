@@ -1,14 +1,19 @@
 /**
  * Selection-box handles for one placed part, in entity pixels.
  *
- * Handles only write fields the entity file already has: edges and corners set
- * `stretchX` / `stretchY` (about the pivot, the same origin the file scales
- * around), the rotate handle sets `angle`. There is no skew field. Stretch snaps
- * so the drawn width and height land on whole entity pixels.
+ * Handles only write fields of the part: edges and corners set `stretchX` /
+ * `stretchY` (about the pivot, the same origin the file scales around), an edge
+ * in skew mode sets `skewX` (top / bottom) or `skewY` (left / right), the rotate
+ * handle sets `angle`. Stretch snaps so the drawn width and height land on whole
+ * entity pixels; skew and angle snap to degree steps.
+ *
+ * "Part local" here is the scaled box before skew and rotation
+ * ({@link placementLocalBox}), so stretch ratios stay per axis under skew.
  */
 
 import {
   ENTITY_ANGLE_MAX,
+  ENTITY_SKEW_MAX,
   ENTITY_STRETCH_MAX,
   ENTITY_STRETCH_MIN,
   placementLocalBox,
@@ -45,22 +50,35 @@ const BOX_HANDLES: ReadonlyArray<readonly [PartHandleKind, -1 | 0 | 1, -1 | 0 | 
 /** A handle closer than this to the pivot on its axis cannot stretch that axis. */
 const PIVOT_DEAD_ZONE = 0.5;
 
+/** Entity point to the part frame after scale, before skew and rotation. */
 export function toPartLocal(part: EntityPlacement, x: number, y: number): { x: number; y: number } {
-  const dx = x - part.x;
-  const dy = y - part.y;
-  const c = Math.cos(part.angle);
-  const s = Math.sin(part.angle);
-  return { x: dx * c + dy * s, y: -dx * s + dy * c };
+  const turned = unrotate(part, x, y);
+  const tx = Math.tan(part.skewX ?? 0);
+  const ty = Math.tan(part.skewY ?? 0);
+  return { x: turned.x - tx * turned.y, y: -ty * turned.x + (1 + tx * ty) * turned.y };
 }
 
+/** Part-frame point (after scale, before skew and rotation) to entity pixels. */
 export function fromPartLocal(
   part: EntityPlacement,
   lx: number,
   ly: number
 ): { x: number; y: number } {
+  const tx = Math.tan(part.skewX ?? 0);
+  const ty = Math.tan(part.skewY ?? 0);
+  const kx = (1 + tx * ty) * lx + tx * ly;
+  const ky = ty * lx + ly;
   const c = Math.cos(part.angle);
   const s = Math.sin(part.angle);
-  return { x: part.x + lx * c - ly * s, y: part.y + lx * s + ly * c };
+  return { x: part.x + kx * c - ky * s, y: part.y + kx * s + ky * c };
+}
+
+function unrotate(part: EntityPlacement, x: number, y: number): { x: number; y: number } {
+  const dx = x - part.x;
+  const dy = y - part.y;
+  const c = Math.cos(part.angle);
+  const s = Math.sin(part.angle);
+  return { x: dx * c + dy * s, y: -dx * s + dy * c };
 }
 
 /** Eight box handles, then the rotate handle `rotateOffset` entity pixels above the top edge. */
@@ -161,4 +179,41 @@ export function dragAngle(
   const degrees = Math.round(wrapped / step) * step;
   const rad = (degrees * Math.PI) / 180;
   return Math.max(-ENTITY_ANGLE_MAX, Math.min(ENTITY_ANGLE_MAX, rad)) + 0;
+}
+
+/**
+ * Skew after dragging an edge handle of `start` to the entity point, snapped to
+ * `stepDeg` degrees and clamped to the skew range. Top / bottom edges set
+ * `skewX` so that edge's midpoint follows the pointer sideways; left / right
+ * edges set `skewY` so it follows up and down. Corners and the rotate handle,
+ * and an edge sitting on the pivot, leave both unchanged.
+ */
+export function dragSkew(
+  start: EntityPlacement,
+  handle: PartHandle,
+  x: number,
+  y: number,
+  stepDeg: number
+): { skewX: number; skewY: number } {
+  const skewX = start.skewX ?? 0;
+  const skewY = start.skewY ?? 0;
+  const turned = unrotate(start, x, y);
+  const ty = Math.tan(skewY);
+  if (handle.ax === 0 && handle.ay !== 0) {
+    const reach = ty * handle.lx + handle.ly;
+    if (Math.abs(reach) < PIVOT_DEAD_ZONE) return { skewX, skewY };
+    return { skewX: snapSkew(Math.atan((turned.x - handle.lx) / reach), stepDeg), skewY };
+  }
+  if (handle.ay === 0 && handle.ax !== 0) {
+    if (Math.abs(handle.lx) < PIVOT_DEAD_ZONE) return { skewX, skewY };
+    return { skewX, skewY: snapSkew(Math.atan((turned.y - handle.ly) / handle.lx), stepDeg) };
+  }
+  return { skewX, skewY };
+}
+
+function snapSkew(rad: number, stepDeg: number): number {
+  const step = Math.max(0.1, stepDeg);
+  const degrees = Math.round((rad * 180) / Math.PI / step) * step;
+  const snapped = (degrees * Math.PI) / 180;
+  return Math.max(-ENTITY_SKEW_MAX, Math.min(ENTITY_SKEW_MAX, snapped)) + 0;
 }

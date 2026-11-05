@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { sampleAssemblyEntity, type EntityPlacement } from './entityFile';
 import {
   dragAngle,
+  dragSkew,
   dragStretch,
   fromPartLocal,
   handleAt,
@@ -86,5 +87,37 @@ describe('entity handles', () => {
     expect(dragAngle(part, 0, -10, 10, -9, 1)).toBeCloseTo((48 * Math.PI) / 180);
     expect(dragAngle(part, 0, -10, 10, -9, 15)).toBeCloseTo((45 * Math.PI) / 180);
     expect(dragAngle({ ...part, angle: Math.PI }, 0, -10, 10, 0, 1)).toBeCloseTo(-Math.PI / 2);
+  });
+
+  it('skews from edge handles and keeps stretch per axis under skew', () => {
+    const { part, grid } = body();
+    const handles = partHandles(grid, part, 3);
+    const north = handles.find((handle) => handle.kind === 'n');
+    const east = handles.find((handle) => handle.kind === 'e');
+    const corner = handles.find((handle) => handle.kind === 'se');
+    if (!north || !east || !corner) throw new Error('missing handles');
+
+    const top = dragSkew(part, north, -5, -5, 1);
+    expect((top.skewX * 180) / Math.PI).toBeCloseTo(45);
+    expect(top.skewY).toBe(0);
+    const side = dragSkew(part, east, 4, 2, 1);
+    expect((side.skewY * 180) / Math.PI).toBeCloseTo(27);
+    expect(side.skewX).toBe(0);
+    expect(dragSkew(part, corner, 9, 9, 1)).toEqual({ skewX: 0, skewY: 0 });
+    expect((dragSkew(part, north, -50, -5, 1).skewX * 180) / Math.PI).toBeCloseTo(60);
+
+    const skewed = { ...part, skewX: Math.PI / 4 };
+    const moved = partHandles(grid, skewed, 3).find((handle) => handle.kind === 'n');
+    expect(moved?.x).toBeCloseTo(-5);
+    const back = toPartLocal(skewed, moved?.x ?? 0, moved?.y ?? 0);
+    expect(back.x).toBeCloseTo(0);
+    expect(back.y).toBeCloseTo(-5);
+    const skewedEast = partHandles(grid, skewed, 3).find((handle) => handle.kind === 'e');
+    if (!skewedEast) throw new Error('missing east');
+    const far = fromPartLocal(skewed, 8, 0);
+    expect(dragStretch(grid, skewed, skewedEast, far.x, far.y, false)).toEqual({
+      stretchX: 2,
+      stretchY: 1,
+    });
   });
 });

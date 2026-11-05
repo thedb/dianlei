@@ -29,6 +29,12 @@
  *
  * `stretchX` / `stretchY`, when present, multiply `scale` on one axis in the
  * part's own frame, after `flipX` and before `angle`. Missing means 1.
+ * `skewX` / `skewY`, when present, are shear angles in radians in that same frame:
+ * skewX slides the top and bottom edges sideways (x += tan(skewX)·y), skewY slides
+ * the left and right edges up and down (y += tan(skewY)·x). The full part map is
+ * rotate · skewX · skewY · scale about the pivot, the same order as Fabric.js
+ * (see {@link partLinear}). Missing means 0. The live sprite blit does not read
+ * skew yet; the editor preview does.
  *
  * One stage per pose. A boss uses stages such as folded / half / open. A player
  * ship uses t0 (level) through t5 (full right bank); the game mirrors the left,
@@ -90,6 +96,8 @@ export const ENTITY_SCALE_MAX = 16;
 /** Per-axis stretch on a part or a bank, inclusive. */
 export const ENTITY_STRETCH_MIN = 0.1;
 export const ENTITY_STRETCH_MAX = 4;
+/** Part skew, inclusive magnitude in radians (60°). */
+export const ENTITY_SKEW_MAX = Math.PI / 3;
 /** Bank perspective taper, inclusive magnitude. */
 export const ENTITY_TAPER_MAX = 0.5;
 
@@ -190,6 +198,10 @@ export interface EntityPlacement {
   stretchX?: number;
   /** Extra vertical multiplier in the part frame. Omitted when 1. */
   stretchY?: number;
+  /** Horizontal shear in radians (top and bottom edges slide). Omitted when 0. */
+  skewX?: number;
+  /** Vertical shear in radians (left and right edges slide). Omitted when 0. */
+  skewY?: number;
   /** Lower draws further back. Ties keep file order. */
   layer: number;
   hit?: EntityHitBox;
@@ -406,11 +418,40 @@ export function placedAnchor(
   part: EntityPlacement,
   anchor: EntityAnchor
 ): { x: number; y: number } {
-  const lx = (part.flipX ? -anchor.x : anchor.x) * partScaleX(part);
-  const ly = anchor.y * partScaleY(part);
-  const c = Math.cos(part.angle);
-  const s = Math.sin(part.angle);
-  return { x: part.x + lx * c - ly * s, y: part.y + lx * s + ly * c };
+  return applyLinear(part, partLinear(part), part.flipX ? -anchor.x : anchor.x, anchor.y);
+}
+
+/**
+ * Linear part map `[a, b, c, d]` from sprite pixels (relative to the pivot, after
+ * `flipX`) to entity offsets: `x' = a·x + c·y`, `y' = b·x + d·y`. It is
+ * rotate · skewX · skewY · scale, in the order of canvas `transform(a, b, c, d, 0, 0)`.
+ */
+export function partLinear(part: EntityPlacement): [number, number, number, number] {
+  const sx = partScaleX(part);
+  const sy = partScaleY(part);
+  const tx = Math.tan(part.skewX ?? 0);
+  const ty = Math.tan(part.skewY ?? 0);
+  const k11 = (1 + tx * ty) * sx;
+  const k12 = tx * sy;
+  const k21 = ty * sx;
+  const k22 = sy;
+  const cos = Math.cos(part.angle);
+  const sin = Math.sin(part.angle);
+  return [
+    cos * k11 - sin * k21,
+    sin * k11 + cos * k21,
+    cos * k12 - sin * k22,
+    sin * k12 + cos * k22,
+  ];
+}
+
+function applyLinear(
+  part: EntityPlacement,
+  m: readonly [number, number, number, number],
+  x: number,
+  y: number
+): { x: number; y: number } {
+  return { x: part.x + m[0] * x + m[2] * y, y: part.y + m[1] * x + m[3] * y };
 }
 
 /** Canonical deep copy of one part. */
@@ -529,7 +570,7 @@ function clampInt(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value)) + 0;
 }
 
-/** Sprite rectangle around the pivot, in entity pixels, before rotation. Includes scale and stretch. */
+/** Sprite rectangle around the pivot, in entity pixels, before skew and rotation. Includes scale and stretch. */
 export function placementLocalBox(
   grid: PaletteGridFile,
   part: EntityPlacement
@@ -550,16 +591,22 @@ export function placementCorners(
   grid: PaletteGridFile,
   part: EntityPlacement
 ): Array<[number, number]> {
-  const box = placementLocalBox(grid, part);
+  const placed = placedSprite(grid, part);
+  const left = -placed.anchorX;
+  const top = -placed.anchorY;
+  const right = grid.width - placed.anchorX;
+  const bottom = grid.height - placed.anchorY;
+  const m = partLinear(part);
   const local: Array<[number, number]> = [
-    [box.left, box.top],
-    [box.right, box.top],
-    [box.right, box.bottom],
-    [box.left, box.bottom],
+    [left, top],
+    [right, top],
+    [right, bottom],
+    [left, bottom],
   ];
-  const c = Math.cos(part.angle);
-  const s = Math.sin(part.angle);
-  return local.map(([x, y]) => [part.x + x * c - y * s, part.y + x * s + y * c]);
+  return local.map(([x, y]) => {
+    const point = applyLinear(part, m, x, y);
+    return [point.x, point.y];
+  });
 }
 
 /** True when the entity-space point lies in the scaled, rotated sprite rectangle. */
@@ -569,14 +616,15 @@ export function placementContains(
   x: number,
   y: number
 ): boolean {
-  const box = placementLocalBox(grid, part);
+  const placed = placedSprite(grid, part);
+  const [a, b, c, d] = partLinear(part);
+  const det = a * d - b * c;
+  if (Math.abs(det) < 1e-9) return false;
   const dx = x - part.x;
   const dy = y - part.y;
-  const c = Math.cos(part.angle);
-  const s = Math.sin(part.angle);
-  const lx = dx * c + dy * s;
-  const ly = -dx * s + dy * c;
-  return lx >= box.left && lx < box.right && ly >= box.top && ly < box.bottom;
+  const lx = (d * dx - c * dy) / det + placed.anchorX;
+  const ly = (-b * dx + a * dy) / det + placed.anchorY;
+  return lx >= 0 && lx < grid.width && ly >= 0 && ly < grid.height;
 }
 
 /**
@@ -819,6 +867,8 @@ function shapePlacement(part: EntityPlacement): EntityPlacement {
   };
   if (part.stretchX !== undefined && part.stretchX !== 1) shaped.stretchX = part.stretchX;
   if (part.stretchY !== undefined && part.stretchY !== 1) shaped.stretchY = part.stretchY;
+  if (part.skewX !== undefined && part.skewX !== 0) shaped.skewX = part.skewX;
+  if (part.skewY !== undefined && part.skewY !== 0) shaped.skewY = part.skewY;
   if (part.hit?.shape === 'circle') {
     shaped.hit = withRole(
       { shape: 'circle', x: part.hit.x, y: part.hit.y, r: part.hit.r },
@@ -897,6 +947,14 @@ function parseBank(value: unknown): EntityBank {
   };
 }
 
+function asSkew(value: unknown, label: string): number {
+  if (value === undefined) return 0;
+  if (typeof value !== 'number' || !Number.isFinite(value) || Math.abs(value) > ENTITY_SKEW_MAX) {
+    throw new Error(`${label} must be radians from -${ENTITY_SKEW_MAX} to ${ENTITY_SKEW_MAX}`);
+  }
+  return value + 0;
+}
+
 function asStretch(value: unknown, label: string): number {
   if (value === undefined) return 1;
   if (
@@ -950,6 +1008,10 @@ function parsePlacement(value: unknown, grids: Record<string, PaletteGridFile>):
   const stretchY = asStretch(raw.stretchY, 'stretchY');
   if (stretchX !== 1) part.stretchX = stretchX;
   if (stretchY !== 1) part.stretchY = stretchY;
+  const skewX = asSkew(raw.skewX, 'skewX');
+  const skewY = asSkew(raw.skewY, 'skewY');
+  if (skewX !== 0) part.skewX = skewX;
+  if (skewY !== 0) part.skewY = skewY;
   if (raw.hit !== undefined) part.hit = parseHit(raw.hit);
   if (raw.anchors !== undefined) {
     const anchors = parseAnchors(raw.anchors);
