@@ -27,8 +27,17 @@
  * sprite pixels: `exhaust` for a tail flame, `muzzle` for a gun. They move with
  * `flipX` (x negates), `scale`, and `angle`. The fight does not read them yet.
  *
+ * `stretchX` / `stretchY`, when present, multiply `scale` on one axis in the
+ * part's own frame, after `flipX` and before `angle`. Missing means 1.
+ *
  * One stage per pose. A boss uses stages such as folded / half / open. A player
- * ship uses t0 (level) through t5 (full right bank); the game mirrors the left.
+ * ship uses t0 (level) through t5 (full right bank); the game mirrors the left,
+ * so a file never holds left-bank stages. A stage with `bank` is rebuilt from
+ * stage `bank.from` (which has no `bank` itself): every part position is
+ * stretched about the origin, `taper` narrows the +x side more than the -x side
+ * (the dipping wing), then the whole pose turns by `bank.angle`. Each part takes
+ * the same turn and stretch. That is exact for parts at angle 0; a part already
+ * turned in the source keeps its own axes and is only approximated.
  *
  * `previewFrame`, when present, is a saved editor rectangle in entity pixels,
  * centered on the origin. The fight does not read it. The editor does not
@@ -78,6 +87,12 @@ export const ENTITY_SCALE_MIN = 0;
 export const ENTITY_SCALE_MAX = 16;
 
 /** Inclusive range for a hit-box edge, in sprite pixels. Width and height are at least 1. */
+/** Per-axis stretch on a part or a bank, inclusive. */
+export const ENTITY_STRETCH_MIN = 0.1;
+export const ENTITY_STRETCH_MAX = 4;
+/** Bank perspective taper, inclusive magnitude. */
+export const ENTITY_TAPER_MAX = 0.5;
+
 export const ENTITY_HIT_MIN = -1024;
 export const ENTITY_HIT_MAX = 1024;
 
@@ -171,6 +186,10 @@ export interface EntityPlacement {
    * rotation, stay nearest-neighbor and may cover a partial screen pixel.
    */
   scale: number;
+  /** Extra horizontal multiplier in the part frame. Omitted when 1. */
+  stretchX?: number;
+  /** Extra vertical multiplier in the part frame. Omitted when 1. */
+  stretchY?: number;
   /** Lower draws further back. Ties keep file order. */
   layer: number;
   hit?: EntityHitBox;
@@ -178,10 +197,22 @@ export interface EntityPlacement {
   anchors?: EntityAnchor[];
 }
 
+/** Bank pose rebuilt from another stage. Angle in radians, positive clockwise. */
+export interface EntityBank {
+  from: string;
+  angle: number;
+  stretchX: number;
+  stretchY: number;
+  /** Positive narrows the +x side and widens the -x side, by up to this share at the edge. */
+  taper: number;
+}
+
 export interface EntityStage {
   id: string;
   name?: string;
   parts: EntityPlacement[];
+  /** When set, `parts` are the result of {@link bankParts} on stage `bank.from`. */
+  bank?: EntityBank;
 }
 
 /**
@@ -375,8 +406,8 @@ export function placedAnchor(
   part: EntityPlacement,
   anchor: EntityAnchor
 ): { x: number; y: number } {
-  const lx = (part.flipX ? -anchor.x : anchor.x) * part.scale;
-  const ly = anchor.y * part.scale;
+  const lx = (part.flipX ? -anchor.x : anchor.x) * partScaleX(part);
+  const ly = anchor.y * partScaleY(part);
   const c = Math.cos(part.angle);
   const s = Math.sin(part.angle);
   return { x: part.x + lx * c - ly * s, y: part.y + lx * s + ly * c };
@@ -392,6 +423,7 @@ export function cloneStage(stage: EntityStage, id: string): EntityStage {
   if (!isEntityId(id)) throw new Error(`stage id ${id} is invalid`);
   const copy: EntityStage = { id, parts: stage.parts.map(clonePlacement) };
   if (stage.name !== undefined) copy.name = stage.name;
+  if (stage.bank) copy.bank = { ...stage.bank };
   return copy;
 }
 
@@ -432,18 +464,84 @@ export function stageBounds(
   return box;
 }
 
-/** Sprite rectangle around the pivot, in entity pixels, before rotation. Includes `scale`. */
+/** Horizontal pixel multiplier of a part: `scale` times `stretchX`. */
+export function partScaleX(part: EntityPlacement): number {
+  return part.scale * (part.stretchX ?? 1);
+}
+
+/** Vertical pixel multiplier of a part: `scale` times `stretchY`. */
+export function partScaleY(part: EntityPlacement): number {
+  return part.scale * (part.stretchY ?? 1);
+}
+
+/** Starting bank for right-bank frame `level` (1–5): narrower, with a little taper. */
+export function defaultBank(from: string, level: number): EntityBank {
+  return {
+    from,
+    angle: 0,
+    stretchX: roundStretch(1 - 0.06 * level),
+    stretchY: 1,
+    taper: roundStretch(0.04 * level),
+  };
+}
+
+/**
+ * Parts of a bank pose: `source` parts stretched about the origin (with `taper`
+ * on x), then turned by `bank.angle`. Positions round to whole entity pixels;
+ * stretches round to 0.001 and clamp to the stretch range.
+ */
+export function bankParts(
+  entity: EntityFile,
+  source: EntityStage,
+  bank: EntityBank
+): EntityPlacement[] {
+  const box = stageBounds(entity, source);
+  const half = box ? Math.max(1, Math.abs(box.left), Math.abs(box.right)) : 1;
+  const c = Math.cos(bank.angle);
+  const s = Math.sin(bank.angle);
+  return source.parts.map((from) => {
+    const part = clonePlacement(from);
+    const side = Math.max(-1, Math.min(1, from.x / half));
+    const kx = bank.stretchX * (1 - bank.taper * side);
+    const ky = bank.stretchY;
+    const sx = from.x * kx;
+    const sy = from.y * ky;
+    part.x = clampInt(Math.round(sx * c - sy * s), ENTITY_POS_MIN, ENTITY_POS_MAX);
+    part.y = clampInt(Math.round(sx * s + sy * c), ENTITY_POS_MIN, ENTITY_POS_MAX);
+    part.angle = Math.max(-ENTITY_ANGLE_MAX, Math.min(ENTITY_ANGLE_MAX, from.angle + bank.angle));
+    setStretch(part, 'stretchX', (from.stretchX ?? 1) * kx);
+    setStretch(part, 'stretchY', (from.stretchY ?? 1) * ky);
+    return part;
+  });
+}
+
+function setStretch(part: EntityPlacement, key: 'stretchX' | 'stretchY', value: number): void {
+  const next = Math.max(ENTITY_STRETCH_MIN, Math.min(ENTITY_STRETCH_MAX, roundStretch(value)));
+  if (next === 1) delete part[key];
+  else part[key] = next;
+}
+
+function roundStretch(value: number): number {
+  return Math.round(value * 1000) / 1000;
+}
+
+function clampInt(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value)) + 0;
+}
+
+/** Sprite rectangle around the pivot, in entity pixels, before rotation. Includes scale and stretch. */
 export function placementLocalBox(
   grid: PaletteGridFile,
   part: EntityPlacement
 ): { left: number; top: number; right: number; bottom: number } {
   const placed = placedSprite(grid, part);
-  const scale = part.scale;
+  const sx = partScaleX(part);
+  const sy = partScaleY(part);
   return {
-    left: -placed.anchorX * scale,
-    top: -placed.anchorY * scale,
-    right: (grid.width - placed.anchorX) * scale,
-    bottom: (grid.height - placed.anchorY) * scale,
+    left: -placed.anchorX * sx,
+    top: -placed.anchorY * sy,
+    right: (grid.width - placed.anchorX) * sx,
+    bottom: (grid.height - placed.anchorY) * sy,
   };
 }
 
@@ -693,9 +791,18 @@ function embeddedGrid(grid: PaletteGridFile): PaletteGridFile {
 }
 
 function shapeStage(stage: EntityStage): EntityStage {
-  const parts = stage.parts.map(shapePlacement);
-  if (stage.name !== undefined) return { id: stage.id, name: stage.name, parts };
-  return { id: stage.id, parts };
+  const shaped: EntityStage = { id: stage.id, parts: stage.parts.map(shapePlacement) };
+  if (stage.name !== undefined) shaped.name = stage.name;
+  if (stage.bank) {
+    shaped.bank = {
+      from: stage.bank.from,
+      angle: stage.bank.angle,
+      stretchX: stage.bank.stretchX,
+      stretchY: stage.bank.stretchY,
+      taper: stage.bank.taper,
+    };
+  }
+  return shaped;
 }
 
 function shapePlacement(part: EntityPlacement): EntityPlacement {
@@ -710,6 +817,8 @@ function shapePlacement(part: EntityPlacement): EntityPlacement {
     scale: part.scale,
     layer: part.layer,
   };
+  if (part.stretchX !== undefined && part.stretchX !== 1) shaped.stretchX = part.stretchX;
+  if (part.stretchY !== undefined && part.stretchY !== 1) shaped.stretchY = part.stretchY;
   if (part.hit?.shape === 'circle') {
     shaped.hit = withRole(
       { shape: 'circle', x: part.hit.x, y: part.hit.y, r: part.hit.r },
@@ -746,12 +855,20 @@ function parseStages(value: unknown, grids: Record<string, PaletteGridFile>): En
     throw new Error(`stages must be a list of 1 to ${ENTITY_MAX_STAGES}`);
   }
   const seen = new Set<string>();
-  return value.map((item) => {
+  const stages = value.map((item) => {
     const stage = parseStage(item, grids);
     if (seen.has(stage.id)) throw new Error(`duplicate stage id ${stage.id}`);
     seen.add(stage.id);
     return stage;
   });
+  for (const stage of stages) {
+    if (!stage.bank) continue;
+    const from = stages.find((item) => item.id === stage.bank?.from);
+    if (!from || from === stage || from.bank) {
+      throw new Error(`stage ${stage.id} bank.from must name another stage without bank`);
+    }
+  }
+  return stages;
 }
 
 function parseStage(value: unknown, grids: Record<string, PaletteGridFile>): EntityStage {
@@ -761,7 +878,38 @@ function parseStage(value: unknown, grids: Record<string, PaletteGridFile>): Ent
     parts: parseParts(raw.parts, grids),
   };
   if (raw.name !== undefined) stage.name = asName(raw.name, 'stage name');
+  if (raw.bank !== undefined) stage.bank = parseBank(raw.bank);
   return stage;
+}
+
+function parseBank(value: unknown): EntityBank {
+  const raw = asObject(value, 'bank');
+  const taper = raw.taper === undefined ? 0 : raw.taper;
+  if (typeof taper !== 'number' || !Number.isFinite(taper) || Math.abs(taper) > ENTITY_TAPER_MAX) {
+    throw new Error(`bank.taper must be a number from -${ENTITY_TAPER_MAX} to ${ENTITY_TAPER_MAX}`);
+  }
+  return {
+    from: asId(raw.from, 'bank.from'),
+    angle: asAngle(raw.angle),
+    stretchX: asStretch(raw.stretchX, 'bank.stretchX'),
+    stretchY: asStretch(raw.stretchY, 'bank.stretchY'),
+    taper,
+  };
+}
+
+function asStretch(value: unknown, label: string): number {
+  if (value === undefined) return 1;
+  if (
+    typeof value !== 'number' ||
+    !Number.isFinite(value) ||
+    value < ENTITY_STRETCH_MIN ||
+    value > ENTITY_STRETCH_MAX
+  ) {
+    throw new Error(
+      `${label} must be a number from ${ENTITY_STRETCH_MIN} to ${ENTITY_STRETCH_MAX}`
+    );
+  }
+  return value;
 }
 
 function parseParts(value: unknown, grids: Record<string, PaletteGridFile>): EntityPlacement[] {
@@ -798,6 +946,10 @@ function parsePlacement(value: unknown, grids: Record<string, PaletteGridFile>):
     scale: asScale(raw.scale),
     layer: asInt(raw.layer, 'layer', ENTITY_LAYER_MIN, ENTITY_LAYER_MAX),
   };
+  const stretchX = asStretch(raw.stretchX, 'stretchX');
+  const stretchY = asStretch(raw.stretchY, 'stretchY');
+  if (stretchX !== 1) part.stretchX = stretchX;
+  if (stretchY !== 1) part.stretchY = stretchY;
   if (raw.hit !== undefined) part.hit = parseHit(raw.hit);
   if (raw.anchors !== undefined) {
     const anchors = parseAnchors(raw.anchors);

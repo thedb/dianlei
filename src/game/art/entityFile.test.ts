@@ -9,7 +9,10 @@ import {
   previewFrameOf,
   previewFrameRect,
   suggestedPreviewFrame,
+  bankParts,
   cloneStage,
+  defaultBank,
+  partScaleX,
   copyPartToStage,
   hitRole,
   placedAnchor,
@@ -414,5 +417,77 @@ describe('entity file', () => {
     const bodyOnly = { id: 'solo', parts: folded.parts.slice(0, 1) };
     expect(stageBounds(entity, bodyOnly)).toEqual({ left: -4, top: -5, right: 4, bottom: 5 });
     expect(stageBounds(entity, { id: 'none', parts: [] })).toBeNull();
+  });
+
+  it('stretches a part per axis and round-trips the stretch', () => {
+    const entity = sampleAssemblyEntity();
+    const body = entity.stages[0]?.parts[0];
+    const grid = entity.grids.body;
+    if (!body || !grid) throw new Error('fixture missing body');
+    body.stretchX = 0.5;
+    body.stretchY = 2;
+    expect(partScaleX(body)).toBe(0.5);
+    expect(placementCorners(grid, body)[2]).toEqual([2, 10]);
+    expect(placedAnchor(body, { id: 'a', kind: 'exhaust', x: 4, y: 3 })).toEqual({ x: 2, y: 6 });
+    const back = parseEntityFile(serializeEntityFile(entity)).stages[0]?.parts[0];
+    expect(back?.stretchX).toBe(0.5);
+    expect(back?.stretchY).toBe(2);
+    body.stretchX = 1;
+    expect(serializeEntityFile(entity)).not.toContain('"stretchX"');
+    body.stretchX = 5;
+    expect(() => serializeEntityFile(entity)).toThrow(/stretchX/);
+  });
+
+  it('rebuilds a bank pose from its source stage', () => {
+    const entity = sampleAssemblyEntity();
+    const source = entity.stages[0];
+    if (!source) throw new Error('fixture missing folded');
+    const xs = source.parts.map((part) => part.x);
+
+    const narrow = bankParts(entity, source, { ...defaultBank(source.id, 0), stretchX: 0.5 });
+    expect(narrow.map((part) => part.x)).toEqual(xs.map((x) => Math.round(x * 0.5)));
+    expect(narrow.every((part) => part.stretchX === 0.5 && part.stretchY === undefined)).toBe(true);
+
+    const turned = bankParts(entity, source, { ...defaultBank(source.id, 0), angle: Math.PI / 2 });
+    source.parts.forEach((part, index) => {
+      expect(turned[index]?.x).toBe(Math.round(-part.y) || 0);
+      expect(turned[index]?.y).toBe(Math.round(part.x));
+      expect(turned[index]?.angle).toBeCloseTo(part.angle + Math.PI / 2);
+    });
+
+    const tapered = bankParts(entity, source, { ...defaultBank(source.id, 0), taper: 0.4 });
+    const right = source.parts.findIndex((part) => part.x > 0);
+    const left = source.parts.findIndex((part) => part.x < 0);
+    expect(tapered[right]?.stretchX ?? 1).toBeLessThan(1);
+    expect(tapered[left]?.stretchX ?? 1).toBeGreaterThan(1);
+    expect(source.parts.map((part) => part.x)).toEqual(xs);
+
+    expect(defaultBank('t0', 5)).toEqual({
+      from: 't0',
+      angle: 0,
+      stretchX: 0.7,
+      stretchY: 1,
+      taper: 0.2,
+    });
+  });
+
+  it('checks bank.from on load', () => {
+    const entity = sampleAssemblyEntity();
+    const half = entity.stages[1];
+    if (!half) throw new Error('fixture missing half');
+    half.bank = defaultBank('folded', 2);
+    const back = parseEntityFile(serializeEntityFile(entity));
+    expect(back.stages[1]?.bank).toEqual(defaultBank('folded', 2));
+    half.bank = defaultBank('half', 2);
+    expect(() => serializeEntityFile(entity)).toThrow(/bank.from/);
+    half.bank = defaultBank('missing', 2);
+    expect(() => serializeEntityFile(entity)).toThrow(/bank.from/);
+    half.bank = defaultBank('folded', 2);
+    const open = entity.stages[2];
+    if (!open) throw new Error('fixture missing open');
+    open.bank = defaultBank('half', 1);
+    expect(() => serializeEntityFile(entity)).toThrow(/bank.from/);
+    open.bank = { ...defaultBank('folded', 1), taper: 0.9 };
+    expect(() => serializeEntityFile(entity)).toThrow(/taper/);
   });
 });
