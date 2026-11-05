@@ -190,7 +190,21 @@
             "y": 0,
             "w": 8,
             "h": 10
-          }
+          },
+          "anchors": [
+            {
+              "id": "jet",
+              "kind": "exhaust",
+              "x": 0,
+              "y": 5
+            },
+            {
+              "id": "gun",
+              "kind": "muzzle",
+              "x": 0,
+              "y": -5
+            }
+          ]
         },
         {
           "id": "wingL",
@@ -243,7 +257,21 @@
             "y": 0,
             "w": 8,
             "h": 10
-          }
+          },
+          "anchors": [
+            {
+              "id": "jet",
+              "kind": "exhaust",
+              "x": 0,
+              "y": 5
+            },
+            {
+              "id": "gun",
+              "kind": "muzzle",
+              "x": 0,
+              "y": -5
+            }
+          ]
         },
         {
           "id": "wingL",
@@ -296,7 +324,21 @@
             "y": 0,
             "w": 8,
             "h": 10
-          }
+          },
+          "anchors": [
+            {
+              "id": "jet",
+              "kind": "exhaust",
+              "x": 0,
+              "y": 5
+            },
+            {
+              "id": "gun",
+              "kind": "muzzle",
+              "x": 0,
+              "y": -5
+            }
+          ]
         },
         {
           "id": "wingL",
@@ -315,7 +357,8 @@
             "x": 0,
             "y": 0,
             "w": 4,
-            "h": 8
+            "h": 8,
+            "role": "block"
           }
         },
         {

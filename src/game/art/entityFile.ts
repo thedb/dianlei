@@ -18,8 +18,17 @@
  * `hit`, when present, is in unflipped sprite pixels, before `flipX`, `scale`,
  * and `angle`. A missing `shape` is a rectangle (`x,y` top-left, `w,h`).
  * `shape: "circle"` is a center (`x,y`) and radius `r`. Either one may sit
- * outside the sprite and may be larger than it. The live fight still uses its
- * own hit circles until a boss is switched onto this file.
+ * outside the sprite and may be larger than it. `role: "block"` marks a shape
+ * that only stops shots; a missing role takes damage. A part with no `hit`
+ * neither takes damage nor blocks. The live fight still uses its own hit
+ * circles until a boss is switched onto this file.
+ *
+ * `anchors`, when present, are named points relative to the pivot in unflipped
+ * sprite pixels: `exhaust` for a tail flame, `muzzle` for a gun. They move with
+ * `flipX` (x negates), `scale`, and `angle`. The fight does not read them yet.
+ *
+ * One stage per pose. A boss uses stages such as folded / half / open. A player
+ * ship uses t0 (level) through t5 (full right bank); the game mirrors the left.
  *
  * `previewFrame`, when present, is a saved editor rectangle in entity pixels,
  * centered on the origin. The fight does not read it. The editor does not
@@ -47,6 +56,7 @@ export const ENTITY_FILE_EXTENSION = '.entity.json';
 export const ENTITY_MAX_GRIDS = 32;
 export const ENTITY_MAX_STAGES = 16;
 export const ENTITY_MAX_PARTS = 32;
+export const ENTITY_MAX_ANCHORS = 16;
 
 /** Inclusive integer range for a part's entity-space origin. */
 export const ENTITY_POS_MIN = -4096;
@@ -106,6 +116,8 @@ export interface EntityRectHit {
   y: number;
   w: number;
   h: number;
+  /** `block` only stops shots. Missing takes damage. */
+  role?: 'block';
 }
 
 /**
@@ -118,9 +130,28 @@ export interface EntityCircleHit {
   x: number;
   y: number;
   r: number;
+  /** `block` only stops shots. Missing takes damage. */
+  role?: 'block';
 }
 
 export type EntityHitBox = EntityRectHit | EntityCircleHit;
+
+/** `damage` takes hits. `block` only stops shots. */
+export type EntityHitRole = 'damage' | 'block';
+
+export function hitRole(hit: EntityHitBox): EntityHitRole {
+  return hit.role === 'block' ? 'block' : 'damage';
+}
+
+export type EntityAnchorKind = 'exhaust' | 'muzzle';
+
+/** A point relative to the pivot, in unflipped sprite pixels. */
+export interface EntityAnchor {
+  id: string;
+  kind: EntityAnchorKind;
+  x: number;
+  y: number;
+}
 
 export interface EntityPlacement {
   id: string;
@@ -143,6 +174,8 @@ export interface EntityPlacement {
   /** Lower draws further back. Ties keep file order. */
   layer: number;
   hit?: EntityHitBox;
+  /** Omitted when empty. At most {@link ENTITY_MAX_ANCHORS}; ids are unique per part. */
+  anchors?: EntityAnchor[];
 }
 
 export interface EntityStage {
@@ -305,20 +338,98 @@ export function placedHit(grid: PaletteGridFile, part: EntityPlacement): EntityH
   const hit = part.hit;
   if (!hit) return null;
   if (hit.shape === 'circle') {
-    return {
-      shape: 'circle',
-      x: part.flipX ? grid.width - hit.x : hit.x,
-      y: hit.y,
-      r: hit.r,
-    };
+    return withRole(
+      {
+        shape: 'circle',
+        x: part.flipX ? grid.width - hit.x : hit.x,
+        y: hit.y,
+        r: hit.r,
+      },
+      hit
+    );
   }
-  if (!part.flipX) return { x: hit.x, y: hit.y, w: hit.w, h: hit.h };
-  return {
-    x: grid.width - hit.x - hit.w,
-    y: hit.y,
-    w: hit.w,
-    h: hit.h,
-  };
+  return withRole(
+    {
+      x: part.flipX ? grid.width - hit.x - hit.w : hit.x,
+      y: hit.y,
+      w: hit.w,
+      h: hit.h,
+    },
+    hit
+  );
+}
+
+function withRole<T extends EntityHitBox>(
+  shape: T,
+  from: { readonly role?: 'block' | undefined }
+): T {
+  if (from.role === 'block') shape.role = 'block';
+  return shape;
+}
+
+/**
+ * Anchor in entity pixels after `flipX`, `scale`, and `angle`.
+ * Flip negates x because the pivot cell mirrors with the grid.
+ */
+export function placedAnchor(
+  part: EntityPlacement,
+  anchor: EntityAnchor
+): { x: number; y: number } {
+  const lx = (part.flipX ? -anchor.x : anchor.x) * part.scale;
+  const ly = anchor.y * part.scale;
+  const c = Math.cos(part.angle);
+  const s = Math.sin(part.angle);
+  return { x: part.x + lx * c - ly * s, y: part.y + lx * s + ly * c };
+}
+
+/** Canonical deep copy of one part. */
+export function clonePlacement(part: EntityPlacement): EntityPlacement {
+  return JSON.parse(JSON.stringify(shapePlacement(part))) as EntityPlacement;
+}
+
+/** Copy of a stage under a new id. Parts keep their ids so poses line up across stages. */
+export function cloneStage(stage: EntityStage, id: string): EntityStage {
+  if (!isEntityId(id)) throw new Error(`stage id ${id} is invalid`);
+  const copy: EntityStage = { id, parts: stage.parts.map(clonePlacement) };
+  if (stage.name !== undefined) copy.name = stage.name;
+  return copy;
+}
+
+/**
+ * Put a copy of `part` into `target`. A part with the same id there is replaced
+ * in place, keeping its list position; otherwise the copy is appended.
+ */
+export function copyPartToStage(target: EntityStage, part: EntityPlacement): 'replaced' | 'added' {
+  const copy = clonePlacement(part);
+  const index = target.parts.findIndex((item) => item.id === part.id);
+  if (index >= 0) {
+    target.parts[index] = copy;
+    return 'replaced';
+  }
+  if (target.parts.length >= ENTITY_MAX_PARTS)
+    throw new Error(`parts must be at most ${ENTITY_MAX_PARTS}`);
+  target.parts.push(copy);
+  return 'added';
+}
+
+/** Sprite bounds of one stage in entity pixels, or null when it has no parts. Hits are not included. */
+export function stageBounds(
+  entity: EntityFile,
+  stage: EntityStage
+): { left: number; top: number; right: number; bottom: number } | null {
+  let box: { left: number; top: number; right: number; bottom: number } | null = null;
+  for (const part of stage.parts) {
+    const grid = entity.grids[part.grid];
+    if (!grid) continue;
+    for (const [x, y] of placementCorners(grid, part)) {
+      if (!box) box = { left: x, top: y, right: x, bottom: y };
+      box.left = Math.min(box.left, x);
+      box.top = Math.min(box.top, y);
+      box.right = Math.max(box.right, x);
+      box.bottom = Math.max(box.bottom, y);
+    }
+  }
+  return box;
 }
 
 /** Sprite rectangle around the pivot, in entity pixels, before rotation. Includes `scale`. */
@@ -379,19 +490,25 @@ export function placedHitLocal(grid: PaletteGridFile, part: EntityPlacement): En
   if (!hit) return null;
   const placed = placedSprite(grid, part);
   if (hit.shape === 'circle') {
-    return {
-      shape: 'circle',
+    return withRole(
+      {
+        shape: 'circle',
+        x: hit.x - placed.anchorX,
+        y: hit.y - placed.anchorY,
+        r: hit.r,
+      },
+      hit
+    );
+  }
+  return withRole(
+    {
       x: hit.x - placed.anchorX,
       y: hit.y - placed.anchorY,
-      r: hit.r,
-    };
-  }
-  return {
-    x: hit.x - placed.anchorX,
-    y: hit.y - placed.anchorY,
-    w: hit.w,
-    h: hit.h,
-  };
+      w: hit.w,
+      h: hit.h,
+    },
+    hit
+  );
 }
 
 /**
@@ -420,24 +537,24 @@ export function sampleAssemblyEntity(): EntityFile {
           id: 'folded',
           parts: [
             bodyPart(),
-            wingPart('wingL', -4, 0, false, false),
-            wingPart('wingR', 4, 0, true, false),
+            wingPart('wingL', -4, 0, false, null),
+            wingPart('wingR', 4, 0, true, null),
           ],
         },
         {
           id: 'half',
           parts: [
             bodyPart(),
-            wingPart('wingL', -4, 0, false, false),
-            wingPart('wingR', 4, open, true, false),
+            wingPart('wingL', -4, 0, false, null),
+            wingPart('wingR', 4, open, true, null),
           ],
         },
         {
           id: 'open',
           parts: [
             bodyPart(),
-            wingPart('wingL', -4, -open, false, true),
-            wingPart('wingR', 4, open, true, true),
+            wingPart('wingL', -4, -open, false, 'block'),
+            wingPart('wingR', 4, open, true, 'damage'),
           ],
         },
       ],
@@ -457,6 +574,10 @@ function bodyPart(): EntityPlacement {
     scale: 1,
     layer: 0,
     hit: { x: 0, y: 0, w: 8, h: 10 },
+    anchors: [
+      { id: 'jet', kind: 'exhaust', x: 0, y: 5 },
+      { id: 'gun', kind: 'muzzle', x: 0, y: -5 },
+    ],
   };
 }
 
@@ -465,7 +586,7 @@ function wingPart(
   x: number,
   angle: number,
   flipX: boolean,
-  hit: boolean
+  hit: EntityHitRole | null
 ): EntityPlacement {
   const part: EntityPlacement = {
     id,
@@ -478,7 +599,8 @@ function wingPart(
     scale: 1,
     layer: 1,
   };
-  if (hit) part.hit = { x: 0, y: 0, w: 4, h: 8 };
+  if (hit === 'damage') part.hit = { x: 0, y: 0, w: 4, h: 8 };
+  if (hit === 'block') part.hit = { x: 0, y: 0, w: 4, h: 8, role: 'block' };
   return part;
 }
 
@@ -589,9 +711,20 @@ function shapePlacement(part: EntityPlacement): EntityPlacement {
     layer: part.layer,
   };
   if (part.hit?.shape === 'circle') {
-    shaped.hit = { shape: 'circle', x: part.hit.x, y: part.hit.y, r: part.hit.r };
+    shaped.hit = withRole(
+      { shape: 'circle', x: part.hit.x, y: part.hit.y, r: part.hit.r },
+      part.hit
+    );
   } else if (part.hit) {
-    shaped.hit = { x: part.hit.x, y: part.hit.y, w: part.hit.w, h: part.hit.h };
+    shaped.hit = withRole({ x: part.hit.x, y: part.hit.y, w: part.hit.w, h: part.hit.h }, part.hit);
+  }
+  if (part.anchors && part.anchors.length > 0) {
+    shaped.anchors = part.anchors.map((anchor) => ({
+      id: anchor.id,
+      kind: anchor.kind,
+      x: anchor.x,
+      y: anchor.y,
+    }));
   }
   return shaped;
 }
@@ -666,7 +799,33 @@ function parsePlacement(value: unknown, grids: Record<string, PaletteGridFile>):
     layer: asInt(raw.layer, 'layer', ENTITY_LAYER_MIN, ENTITY_LAYER_MAX),
   };
   if (raw.hit !== undefined) part.hit = parseHit(raw.hit);
+  if (raw.anchors !== undefined) {
+    const anchors = parseAnchors(raw.anchors);
+    if (anchors.length > 0) part.anchors = anchors;
+  }
   return part;
+}
+
+function parseAnchors(value: unknown): EntityAnchor[] {
+  if (!Array.isArray(value) || value.length > ENTITY_MAX_ANCHORS) {
+    throw new Error(`anchors must be a list of at most ${ENTITY_MAX_ANCHORS}`);
+  }
+  const seen = new Set<string>();
+  return value.map((item) => {
+    const raw = asObject(item, 'anchor');
+    const id = asId(raw.id, 'anchor id');
+    if (seen.has(id)) throw new Error(`duplicate anchor id ${id}`);
+    seen.add(id);
+    if (raw.kind !== 'exhaust' && raw.kind !== 'muzzle') {
+      throw new Error('anchor.kind must be exhaust or muzzle');
+    }
+    return {
+      id,
+      kind: raw.kind,
+      x: asInt(raw.x, 'anchor.x', ENTITY_HIT_MIN, ENTITY_HIT_MAX),
+      y: asInt(raw.y, 'anchor.y', ENTITY_HIT_MIN, ENTITY_HIT_MAX),
+    };
+  });
 }
 
 function parseFrame(value: unknown): EntityPreviewFrame {
@@ -686,16 +845,23 @@ function parseHit(value: unknown): EntityHitBox {
   const shape = raw.shape === undefined ? 'rect' : raw.shape;
   const x = asInt(raw.x, 'hit.x', ENTITY_HIT_MIN, ENTITY_HIT_MAX);
   const y = asInt(raw.y, 'hit.y', ENTITY_HIT_MIN, ENTITY_HIT_MAX);
+  if (raw.role !== undefined && raw.role !== 'damage' && raw.role !== 'block') {
+    throw new Error('hit.role must be damage or block');
+  }
+  const role: { role?: 'block' } = raw.role === 'block' ? { role: 'block' } : {};
   if (shape === 'circle') {
-    return { shape: 'circle', x, y, r: asInt(raw.r, 'hit.r', 1, ENTITY_HIT_MAX) };
+    return withRole({ shape: 'circle', x, y, r: asInt(raw.r, 'hit.r', 1, ENTITY_HIT_MAX) }, role);
   }
   if (shape !== 'rect') throw new Error('hit.shape must be rect or circle');
-  return {
-    x,
-    y,
-    w: asInt(raw.w, 'hit.w', 1, ENTITY_HIT_MAX),
-    h: asInt(raw.h, 'hit.h', 1, ENTITY_HIT_MAX),
-  };
+  return withRole(
+    {
+      x,
+      y,
+      w: asInt(raw.w, 'hit.w', 1, ENTITY_HIT_MAX),
+      h: asInt(raw.h, 'hit.h', 1, ENTITY_HIT_MAX),
+    },
+    role
+  );
 }
 
 function asScale(value: unknown): number {

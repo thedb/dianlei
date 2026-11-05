@@ -9,8 +9,13 @@ import {
   previewFrameOf,
   previewFrameRect,
   suggestedPreviewFrame,
+  cloneStage,
+  copyPartToStage,
+  hitRole,
+  placedAnchor,
   placedHit,
   placedHitLocal,
+  stageBounds,
   placedSprite,
   placementContains,
   placementCorners,
@@ -56,7 +61,13 @@ describe('entity file', () => {
     expect(half?.parts[2]?.angle).toBe(Math.PI / 2);
     expect(open?.parts[1]?.angle).toBe(-Math.PI / 2);
     expect(open?.parts[2]?.angle).toBe(Math.PI / 2);
-    expect(open?.parts[1]?.hit).toEqual({ x: 0, y: 0, w: 4, h: 8 });
+    expect(open?.parts[1]?.hit).toEqual({ x: 0, y: 0, w: 4, h: 8, role: 'block' });
+    expect(open?.parts[2]?.hit).toEqual({ x: 0, y: 0, w: 4, h: 8 });
+    expect(folded?.parts[0]?.anchors).toEqual([
+      { id: 'jet', kind: 'exhaust', x: 0, y: 5 },
+      { id: 'gun', kind: 'muzzle', x: 0, y: -5 },
+    ]);
+    expect(folded?.parts[1]?.anchors).toBeUndefined();
     expect(file).not.toContain('flipY');
   });
 
@@ -319,5 +330,89 @@ describe('entity file', () => {
 
     body.hit = { shape: 'circle', x: 0, y: 0, r: 0 };
     expect(() => serializeEntityFile(entity)).toThrow(/hit\.r/);
+  });
+
+  it('keeps a block role, drops an explicit damage role, and rejects others', () => {
+    const entity = sampleAssemblyEntity();
+    const wing = entity.grids.wing;
+    const body = entity.stages[0]?.parts[0];
+    const right = entity.stages[0]?.parts.find((part) => part.id === 'wingR');
+    if (!wing || !body || !right) throw new Error('fixture missing parts');
+
+    body.hit = { shape: 'circle', x: 4, y: 5, r: 30, role: 'block' };
+    const text = serializeEntityFile(entity);
+    expect(text).toContain('"role": "block"');
+    const back = parseEntityFile(text).stages[0]?.parts[0]?.hit;
+    expect(back).toEqual({ shape: 'circle', x: 4, y: 5, r: 30, role: 'block' });
+    if (!back) throw new Error('hit lost');
+    expect(hitRole(back)).toBe('block');
+    expect(placedHit(wing, { ...right, hit: { x: 0, y: 0, w: 1, h: 2, role: 'block' } })).toEqual({
+      x: 3,
+      y: 0,
+      w: 1,
+      h: 2,
+      role: 'block',
+    });
+
+    const explicit = text.split('"role": "block"').join('"role": "damage"');
+    const damage = parseEntityFile(explicit).stages[0]?.parts[0]?.hit;
+    expect(damage).toEqual({ shape: 'circle', x: 4, y: 5, r: 30 });
+    if (!damage) throw new Error('hit lost');
+    expect(hitRole(damage)).toBe('damage');
+    expect(serializeEntityFile(parseEntityFile(explicit))).not.toContain('"role"');
+
+    const bad = text.split('"role": "block"').join('"role": "armor"');
+    expect(() => parseEntityFile(bad)).toThrow(/hit\.role/);
+  });
+
+  it('places anchors through flip, scale, and rotation, and checks their ids', () => {
+    const entity = sampleAssemblyEntity();
+    const body = entity.stages[0]?.parts[0];
+    const jet = body?.anchors?.[0];
+    if (!body || !jet) throw new Error('fixture missing jet');
+
+    expect(placedAnchor(body, jet)).toEqual({ x: 0, y: 5 });
+    const side = { id: 'side', kind: 'muzzle' as const, x: 3, y: -2 };
+    expect(placedAnchor({ ...body, flipX: true }, side)).toEqual({ x: -3, y: -2 });
+    expect(placedAnchor({ ...body, x: 10, y: 20, scale: 2 }, side)).toEqual({ x: 16, y: 16 });
+    const turned = placedAnchor({ ...body, angle: Math.PI / 2 }, side);
+    expect(turned.x).toBeCloseTo(2, 6);
+    expect(turned.y).toBeCloseTo(3, 6);
+
+    body.anchors = [jet, { ...jet }];
+    expect(() => serializeEntityFile(entity)).toThrow(/duplicate anchor id/);
+    body.anchors = [{ ...jet, kind: 'flame' as 'exhaust' }];
+    expect(() => serializeEntityFile(entity)).toThrow(/anchor\.kind/);
+    body.anchors = [];
+    expect(serializeEntityFile(entity)).not.toContain('"anchors": []');
+  });
+
+  it('clones a stage and copies one part across stages by id', () => {
+    const entity = sampleAssemblyEntity();
+    const folded = entity.stages[0];
+    const open = entity.stages[2];
+    if (!folded || !open) throw new Error('fixture missing stages');
+
+    const copy = cloneStage(open, 'open-2');
+    expect(copy.parts.map((part) => part.id)).toEqual(['body', 'wingL', 'wingR']);
+    const copyLeft = copy.parts[1];
+    if (!copyLeft) throw new Error('copy missing wingL');
+    copyLeft.angle = 0;
+    expect(open.parts[1]?.angle).toBe(-Math.PI / 2);
+    expect(() => cloneStage(open, 'bad id')).toThrow(/invalid/);
+
+    const openLeft = open.parts[1];
+    if (!openLeft) throw new Error('fixture missing wingL');
+    expect(copyPartToStage(folded, openLeft)).toBe('replaced');
+    expect(folded.parts[1]?.angle).toBe(-Math.PI / 2);
+    expect(folded.parts[1]?.hit).toEqual({ x: 0, y: 0, w: 4, h: 8, role: 'block' });
+    expect(copyPartToStage(folded, { ...openLeft, id: 'blade' })).toBe('added');
+    expect(folded.parts.map((part) => part.id)).toEqual(['body', 'wingL', 'wingR', 'blade']);
+    entity.stages.push(copy);
+    expect(() => serializeEntityFile(entity)).not.toThrow();
+
+    const bodyOnly = { id: 'solo', parts: folded.parts.slice(0, 1) };
+    expect(stageBounds(entity, bodyOnly)).toEqual({ left: -4, top: -5, right: 4, bottom: 5 });
+    expect(stageBounds(entity, { id: 'none', parts: [] })).toBeNull();
   });
 });
