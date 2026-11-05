@@ -344,3 +344,62 @@ dialog .hint,
     transition: none;
   }
 }
+
+.bank-panel {
+  flex: none;
+  margin-top: 6px;
+  padding: 6px 0 2px;
+  border-top: 1px solid #23415a;
+}
+
+.bank-head {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.bank-head h2 {
+  flex: none;
+  margin: 0;
+  font-size: 14px;
+}
+
+.bank-head .hint {
+  flex: 1;
+  margin: 0;
+}
+
+.bank-head button {
+  flex: none;
+  margin-top: 0;
+}
+
+#bank-view {
+  display: block;
+  max-width: 100%;
+  margin: 6px 0;
+  image-rendering: pixelated;
+  cursor: pointer;
+}
+
+.bank-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  align-items: center;
+}
+
+.bank-controls label {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.bank-controls output {
+  min-width: 3.5em;
+  font-variant-numeric: tabular-nums;
+}
+
+.bank-controls button {
+  margin-top: 0;
+}

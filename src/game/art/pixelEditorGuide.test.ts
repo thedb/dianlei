@@ -40,4 +40,18 @@ describe('pixel editor guide', () => {
     expect(page).toContain('id="guide"');
     expect(page).toContain('id="guide-open"');
   });
+
+  it('puts the bank comparison under the assembly and says only the right bank is edited', () => {
+    const panel = page.indexOf('id="bank-panel"');
+    expect(panel).toBeGreaterThan(page.indexOf('id="asm-view"'));
+    expect(panel).toBeLessThan(page.indexOf('id="asm-parts"'));
+    expect(page).toContain('侧倾对比');
+    expect(page).toContain('只编右倾');
+    expect(page).toContain('文件里没有左倾阶段');
+    for (const id of ['bank-view', 'bank-angle', 'bank-sx', 'bank-sy', 'bank-taper', 'bank-mode']) {
+      expect(page).toContain(`id="${id}"`);
+    }
+    expect(page).toContain('改成手调');
+    expect(page).toContain('横向拉伸');
+  });
 });

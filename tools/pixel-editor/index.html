@@ -131,7 +131,7 @@
               <button id="asm-add-stage" type="button" title="再加一个空姿势。">新阶段</button>
               <button id="asm-dup-stage" type="button" title="把当前阶段整份复制成新阶段，零件 id 不变，再去改角度和位移。">复制阶段</button>
               <button id="asm-del-stage" type="button" title="删掉当前阶段。至少留一个。">删除阶段</button>
-              <button id="asm-bank" type="button" title="玩家机：从当前阶段复制出 t0（平飞）到 t5（右倾到底）。左倾由游戏镜像。" aria-describedby="hint-bank">生成侧倾 t0–t5</button>
+              <button id="asm-bank" type="button" title="玩家机：以 t0（平飞）为原稿生成 t1–t5（右倾），并在装配下方打开侧倾对比。没有 t0 时先把当前阶段复制成 t0。左倾由游戏镜像。" aria-describedby="hint-bank">侧倾 t0–t5</button>
               <button id="asm-play" type="button" aria-pressed="false" title="按顺序轮播各阶段，看姿态切换。再点一次停。">播放阶段</button>
               <button id="asm-export" type="button" title="下载装配文件 *.entity.json。" aria-describedby="hint-entity-export">
                 导出 .entity.json
@@ -145,7 +145,7 @@
                 「导出 .entity.json」下载装配文件。这是过门的锁定稿。现役 Boss 还没有改去读它。<code>previewFrame</code> 只是预览边界，战斗不读。
               </p>
               <p id="hint-bank" class="hint">
-                一个姿态一个阶段。Boss 用 folded / half / open 这类阶段；玩家机点「生成侧倾 t0–t5」，t0 平飞，t1–t5 逐级向右倾，左倾由游戏镜像，不用画。零件 id 在各阶段相同，「复制到阶段」按 id 对上。
+                一个姿态一个阶段。Boss 用 folded / half / open 这类阶段。玩家机点「侧倾 t0–t5」：t0 平飞是原稿，t1–t5 由 t0 加每帧参数（角度、横向拉伸、纵向拉伸、透视）算出，在装配下方的「侧倾对比」里调。左倾和局内一样由代码把右倾水平镜像，不进文件。改 t0，t1–t5 跟着重算；直接改某一帧的零件，那一帧变成手调，不再跟 t0。零件 id 在各阶段相同，「复制到阶段」按 id 对上。
               </p>
               </details>
             </div>
@@ -186,6 +186,14 @@
             <p id="hint-scale" class="hint">
               「缩放」大于 0、不超过 16，可以填 0.5。绕轴心缩放，写进装配文件。1 仍是一格一像素，走整像素贴图。小于 1 时按最近邻缩小，不取平均。不是整数、或者转了角度时，边可以盖住半个屏幕像素，不吸附、不模糊。
             </p>
+            <label>
+              横向拉伸
+              <input id="asm-sx" type="number" min="0.1" max="4" step="0.01" value="1" title="只拉宽或压窄这一件，乘在缩放上。1 是不拉伸。" />
+            </label>
+            <label>
+              纵向拉伸
+              <input id="asm-sy" type="number" min="0.1" max="4" step="0.01" value="1" title="只拉长或压短这一件，乘在缩放上。1 是不拉伸。" />
+            </label>
             <label>
               水平翻转
               <input id="asm-flip" type="checkbox" title="左右镜像。没有上下翻转。" />
@@ -277,6 +285,42 @@
               </div>
             </aside>
           </div>
+          <section id="bank-panel" class="bank-panel" hidden aria-labelledby="bank-title">
+            <div class="bank-head">
+              <h2 id="bank-title">侧倾对比</h2>
+              <p class="hint">
+                和局内一样：只编右倾。t0 平飞，t1–t5 逐级向右倾。左边五格是代码把 t1–t5 水平镜像出来的，文件里没有左倾阶段，也不用画。点右边任一格（或它的镜像）调这一帧。
+              </p>
+              <button id="bank-hide" type="button" title="收起对比。再点「侧倾 t0–t5」打开。">收起</button>
+            </div>
+            <canvas id="bank-view" width="11" height="1" title="左 5 格是镜像，中间 t0，右 5 格是 t1–t5。点一格选中它。"></canvas>
+            <div class="bank-controls">
+              <strong id="bank-frame">t1</strong>
+              <label>
+                角度（度）
+                <input id="bank-angle" type="range" min="-30" max="30" step="0.5" value="0" title="整个姿态绕原点转。顺时针为正。" />
+                <output id="bank-angle-out">0</output>
+              </label>
+              <label>
+                横向拉伸
+                <input id="bank-sx" type="range" min="0.3" max="1.5" step="0.01" value="1" title="整机左右压窄或拉宽，位置和零件一起。侧倾越大通常越窄。" />
+                <output id="bank-sx-out">1</output>
+              </label>
+              <label>
+                纵向拉伸
+                <input id="bank-sy" type="range" min="0.5" max="1.5" step="0.01" value="1" title="整机上下拉长或压短。" />
+                <output id="bank-sy-out">1</output>
+              </label>
+              <label>
+                透视
+                <input id="bank-taper" type="range" min="-0.5" max="0.5" step="0.01" value="0" title="正数：右侧（下沉的那边）比左侧更窄，左侧略宽。0 是左右一样。" />
+                <output id="bank-taper-out">0</output>
+              </label>
+              <button id="bank-reset" type="button" title="把这一帧的四个参数放回默认。">恢复默认</button>
+              <button id="bank-mode" type="button">改成手调</button>
+            </div>
+            <p id="bank-note" class="hint" aria-live="polite"></p>
+          </section>
           <div class="parts-row">
             <span class="hint" title="列表从左到右是从后往前画。">图层 后 → 前</span>
             <div id="asm-parts"></div>
@@ -422,7 +466,10 @@
         <li>做零件时看弹窗里的比例行：宽高比和参考图差太多会标黄。默认勾着「锁定源比例」。</li>
         <li>看颜色统计：暗色占九成以上、或一种颜色占九成以上，会标黄提示，移入装配时状态行也会写出来。</li>
         <li>工具栏「对照尺寸」选 Jason 26×30、Eagle 28×32 或 Mandy 48×32，画布上出现粉色虚线框，状态行写当前阶段大小和倍数。只对照，不裁切。</li>
-        <li>摆好平飞后点「生成侧倾 t0–t5」：t0 平飞，t1–t5 逐级右倾。左倾由游戏镜像，不用画。</li>
+        <li>摆好平飞后点「侧倾 t0–t5」。和局内一样只编右倾：t0 平飞是原稿，t1–t5 逐级向右倾；左倾由代码把 t1–t5 水平镜像，文件里没有左倾阶段，也不用画。</li>
+        <li>生成后装配下方出现「侧倾对比」：左五格是镜像，中间 t0，右五格是 t1–t5，和局内 11 帧一样排。点一格，装配画布也切到那一帧。</li>
+        <li>在对比里拖「角度」「横向拉伸」「纵向拉伸」「透视」，结果写回那一帧的零件。透视为正时，右侧（下沉的那边）更窄。改 t0，跟参数走的帧会一起重算。</li>
+        <li>想一件件细调某一帧，点「改成手调」，或直接在装配里改那一帧的零件（会自动变成手调）。「按参数重算」再回到跟 t0 走。单个零件也有「横向拉伸」「纵向拉伸」。</li>
         <li>选中机身，加「尾焰喷口」和「枪口」锚点。坐标相对轴心，画布上闪烁。方向键挪零件，Shift 一次 8 像素。</li>
       </ol>
       <p>「网格文件」读一份已经导出的 <code>*.grid.json</code>，加进零件列表。</p>

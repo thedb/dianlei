@@ -22,13 +22,19 @@ import {
   ENTITY_POS_MIN,
   ENTITY_SCALE_MAX,
   ENTITY_SCALE_MIN,
+  ENTITY_STRETCH_MAX,
+  ENTITY_STRETCH_MIN,
+  bankParts,
   clonePlacement,
   cloneStage,
   copyPartToStage,
   createEmptyEntity,
+  defaultBank,
   hitRole,
   isEntityId,
   parseEntityFile,
+  partScaleX,
+  partScaleY,
   placedAnchor,
   placedHitLocal,
   placedSprite,
@@ -41,6 +47,7 @@ import {
   suggestedPreviewFrame,
   type EntityAnchor,
   type EntityAnchorKind,
+  type EntityBank,
   type EntityFile,
   type EntityPlacement,
   type EntityStage,
@@ -80,6 +87,15 @@ let anchorsOn = true;
 let refSize: { width: number; height: number } | null = null;
 let flickerPhase = false;
 let playTimer: number | null = null;
+/** Cells in the bank strip: left 5 (mirrored t5…t1), t0, right t1…t5. */
+const BANK_CELLS = 11;
+const BANK_PAD = 3;
+const BANK_MAX_H = 84;
+const BANK_LABEL_H = 14;
+let bankOpen = false;
+let bankFrameId = 't1';
+/** Last source and result written into each bank stage, to spot hand edits. */
+const bankApplied = new WeakMap<EntityStage, { input: string; output: string }>();
 
 export function mountAssembly(next: AssemblyHost): void {
   host = next;
@@ -174,6 +190,31 @@ export function mountAssembly(next: AssemblyHost): void {
   });
   must(HTMLButtonElement, 'asm-play').addEventListener('click', () => {
     togglePlay();
+  });
+  must(HTMLButtonElement, 'bank-hide').addEventListener('click', () => {
+    bankOpen = false;
+    paintBank();
+  });
+  must(HTMLCanvasElement, 'bank-view').addEventListener('click', (event) => {
+    pickBankFrame(event);
+  });
+  bindBankRange('bank-angle', (bank, value) => {
+    bank.angle = (value * Math.PI) / 180;
+  });
+  bindBankRange('bank-sx', (bank, value) => {
+    bank.stretchX = value;
+  });
+  bindBankRange('bank-sy', (bank, value) => {
+    bank.stretchY = value;
+  });
+  bindBankRange('bank-taper', (bank, value) => {
+    bank.taper = value;
+  });
+  must(HTMLButtonElement, 'bank-reset').addEventListener('click', () => {
+    resetBank();
+  });
+  must(HTMLButtonElement, 'bank-mode').addEventListener('click', () => {
+    toggleBankMode();
   });
   must(HTMLButtonElement, 'asm-dup-part').addEventListener('click', () => {
     duplicatePart();
@@ -281,6 +322,19 @@ export function mountAssembly(next: AssemblyHost): void {
       part.scale = readScale(scaleInput);
     }, false);
   });
+  for (const [id, key] of [
+    ['asm-sx', 'stretchX'],
+    ['asm-sy', 'stretchY'],
+  ] as const) {
+    const input = must(HTMLInputElement, id);
+    input.addEventListener('input', () => {
+      editPart((part) => {
+        const value = readStretch(input);
+        if (value === 1) delete part[key];
+        else part[key] = value;
+      }, false);
+    });
+  }
   must(HTMLButtonElement, 'asm-layer-up').addEventListener('click', () => {
     moveLayer(1);
   });
@@ -442,6 +496,7 @@ function addGrid(grid: PaletteGridFile): void {
 function adopt(next: EntityFile): void {
   stopPlay();
   entity = next;
+  bankOpen = next.stages.some((stage) => stage.bank !== undefined);
   stageId = next.stages[0]?.id ?? '';
   partId = '';
   if (next.previewFrame) {
@@ -489,7 +544,11 @@ function renameStage(next: string): void {
     return;
   }
   const backup = serializeEntityFile(entity);
+  const previous = stage.id;
   stage.id = next;
+  for (const item of entity.stages) {
+    if (item.bank?.from === previous) item.bank.from = next;
+  }
   try {
     serializeEntityFile(entity);
   } catch (error) {
@@ -544,6 +603,7 @@ function deletePart(): void {
 
 function exportEntity(): void {
   if (!entity) return;
+  syncBanks();
   try {
     const text = serializeEntityFile(entity);
     host?.download(`${entity.name}${ENTITY_FILE_EXTENSION}`, text);
@@ -641,6 +701,7 @@ function syncSampleLocks(): void {
 function clearAssembly(): void {
   stopPlay();
   entity = null;
+  bankOpen = false;
   stageId = '';
   partId = '';
   frameW = FRAME_PLACEHOLDER;
@@ -730,6 +791,8 @@ function fillFields(): void {
   must(HTMLInputElement, 'asm-angle').value = formatDeg(part.angle);
   must(HTMLInputElement, 'asm-flip').checked = part.flipX;
   must(HTMLInputElement, 'asm-scale').value = String(part.scale);
+  must(HTMLInputElement, 'asm-sx').value = String(part.stretchX ?? 1);
+  must(HTMLInputElement, 'asm-sy').value = String(part.stretchY ?? 1);
   must(HTMLInputElement, 'asm-layer').value = String(part.layer);
   must(HTMLParagraphElement, 'asm-grid-size').textContent =
     `网格 ${part.grid}：${grid.width}×${grid.height}，源 ${grid.source.params.sourceWidth}×${grid.source.params.sourceHeight}`;
@@ -834,37 +897,320 @@ function deleteStage(): void {
   stopPlay();
   const index = entity.stages.indexOf(stage);
   entity.stages.splice(index, 1);
+  const freed: string[] = [];
+  for (const item of entity.stages) {
+    if (item.bank?.from !== stage.id) continue;
+    delete item.bank;
+    freed.push(item.id);
+  }
   const next = entity.stages[Math.max(0, index - 1)];
   partId = '';
   selectStage(next?.id ?? '');
   syncSampleLocks();
-  setStatus(`已删除阶段 ${stage.id}`);
+  setStatus(
+    freed.length > 0
+      ? `已删除阶段 ${stage.id}。${freed.join('、')} 改成手调，零件留着`
+      : `已删除阶段 ${stage.id}`
+  );
 }
 
 function addBankStages(): void {
   if (!entity) return;
-  const stage = currentStage();
-  if (!stage) return;
-  const used = entity.stages.map((item) => item.id);
-  const missing = BANK_STAGE_IDS.filter((id) => !used.includes(id));
-  if (missing.length === 0) {
-    setStatus('t0–t5 都已经有了');
-    return;
-  }
+  const current = currentStage();
+  if (!current) return;
+  stopPlay();
+  const missing = BANK_STAGE_IDS.filter((id) => !entity?.stages.some((item) => item.id === id));
   if (entity.stages.length + missing.length > ENTITY_MAX_STAGES) {
     setStatus(`阶段最多 ${ENTITY_MAX_STAGES} 个，放不下 ${missing.length} 个侧倾阶段`);
     return;
   }
-  for (const id of missing) {
-    const copy = cloneStage(stage, id);
-    copy.name = id === 't0' ? '平飞' : `右倾 ${id.slice(1)}`;
-    entity.stages.push(copy);
+  const backup = serializeEntityFile(entity);
+  const added: string[] = [];
+  let source = entity.stages.find((item) => item.id === 't0');
+  if (!source) {
+    const origin = current.bank
+      ? (entity.stages.find((item) => item.id === current.bank?.from) ?? current)
+      : current;
+    source = cloneStage(origin, 't0');
+    delete source.bank;
+    source.name = '平飞';
+    entity.stages.push(source);
+    added.push('t0');
   }
-  serializeEntityFile(entity);
-  selectStage(missing[0] ?? stage.id);
+  if (source.bank) {
+    setStatus('t0 自己带着侧倾参数，不能当原稿。先在侧倾对比里把 t0 改成手调');
+    return;
+  }
+  for (let level = 1; level < BANK_STAGE_IDS.length; level++) {
+    const id = `t${level}`;
+    if (entity.stages.some((item) => item.id === id)) continue;
+    const bank = defaultBank(source.id, level);
+    entity.stages.push({ id, name: `右倾 ${level}`, parts: bankParts(entity, source, bank), bank });
+    added.push(id);
+  }
+  try {
+    serializeEntityFile(entity);
+  } catch (error) {
+    entity = parseEntityFile(backup);
+    fail(error);
+    return;
+  }
+  bankOpen = true;
+  bankFrameId = 't1';
+  selectStage(entity.stages.some((item) => item.id === 't1') ? 't1' : source.id);
   setStatus(
-    `已从 ${stage.id} 复制出 ${missing.join('、')}。t0 平飞，t1–t5 逐级右倾，左倾由游戏镜像`
+    added.length > 0
+      ? `已生成 ${added.join('、')}，并打开下方「侧倾对比」。左五格是代码镜像，右五格是 t1–t5，点一格调角度和拉伸`
+      : '侧倾帧都已经有了，已打开下方「侧倾对比」'
   );
+}
+
+/**
+ * Rebuild every bank stage whose source or parameters changed.
+ * A bank stage whose parts no longer match the last rebuild was edited by hand:
+ * it drops `bank` and keeps those parts. Returns the ids that dropped it.
+ */
+function syncBanks(): string[] {
+  if (!entity) return [];
+  const freed: string[] = [];
+  for (const stage of entity.stages) {
+    const bank = stage.bank;
+    if (!bank) continue;
+    const source = entity.stages.find((item) => item.id === bank.from);
+    const last = bankApplied.get(stage);
+    if (!source || source.bank || (last && last.output !== JSON.stringify(stage.parts))) {
+      delete stage.bank;
+      bankApplied.delete(stage);
+      freed.push(stage.id);
+      continue;
+    }
+    const input = JSON.stringify([source.parts, bank]);
+    if (last?.input === input) continue;
+    stage.parts = bankParts(entity, source, bank);
+    bankApplied.set(stage, { input, output: JSON.stringify(stage.parts) });
+  }
+  return freed;
+}
+
+function bankStage(): EntityStage | null {
+  return entity?.stages.find((stage) => stage.id === bankFrameId) ?? null;
+}
+
+function bankLevel(id: string): number {
+  const index = (BANK_STAGE_IDS as readonly string[]).indexOf(id);
+  return index;
+}
+
+function bindBankRange(id: string, apply: (bank: EntityBank, value: number) => void): void {
+  const input = must(HTMLInputElement, id);
+  input.addEventListener('input', () => {
+    const stage = bankStage();
+    if (!entity || !stage?.bank) return;
+    const value = Number(input.value);
+    if (!Number.isFinite(value)) return;
+    const backup = { ...stage.bank };
+    apply(stage.bank, value);
+    try {
+      serializeEntityFile(entity);
+    } catch (error) {
+      stage.bank = backup;
+      fail(error);
+      return;
+    }
+    paintAssembly();
+    setStatus(`${stage.id}：${describeBank(stage.bank)}，已写回 ${stage.id} 的零件`);
+  });
+}
+
+function describeBank(bank: EntityBank): string {
+  return `角度 ${formatDeg(bank.angle)}°，横向 ×${bank.stretchX}，纵向 ×${bank.stretchY}，透视 ${bank.taper}`;
+}
+
+function resetBank(): void {
+  const stage = bankStage();
+  if (!stage?.bank) return;
+  stage.bank = defaultBank(stage.bank.from, Math.max(1, bankLevel(stage.id)));
+  paintAssembly();
+  setStatus(`${stage.id} 已恢复默认：${describeBank(stage.bank)}`);
+}
+
+function toggleBankMode(): void {
+  if (!entity) return;
+  const stage = bankStage();
+  if (!stage || stage.id === 't0') return;
+  if (stage.bank) {
+    delete stage.bank;
+    bankApplied.delete(stage);
+    paintAssembly();
+    setStatus(`${stage.id} 改成手调，零件留着，不再跟 t0 重算`);
+    return;
+  }
+  const source = entity.stages.find((item) => item.id === 't0');
+  if (!source || source.bank) {
+    setStatus('没有可用的 t0 原稿');
+    return;
+  }
+  if (
+    stage.parts.length > 0 &&
+    !window.confirm(`用参数从 t0 重新生成 ${stage.id}，会盖掉这一帧的手调。继续？`)
+  ) {
+    return;
+  }
+  stage.bank = defaultBank(source.id, Math.max(1, bankLevel(stage.id)));
+  paintAssembly();
+  renderParts();
+  setStatus(`${stage.id} 改成跟 t0 重算：${describeBank(stage.bank)}`);
+}
+
+function pickBankFrame(event: MouseEvent): void {
+  const canvas = must(HTMLCanvasElement, 'bank-view');
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width <= 0) return;
+  const cell = Math.floor(((event.clientX - rect.left) / rect.width) * BANK_CELLS);
+  if (cell < 0 || cell >= BANK_CELLS) return;
+  const level = Math.abs(cell - 5);
+  const id = `t${level}`;
+  stopPlay();
+  bankFrameId = id;
+  if (entity?.stages.some((stage) => stage.id === id)) {
+    selectStage(id);
+    setStatus(
+      cell < 5 ? `左 ${level} 是 ${id} 的镜像，已选中 ${id}` : `已选中 ${id}，装配画布也切到 ${id}`
+    );
+  } else {
+    paintBank();
+    setStatus(`还没有 ${id}，点「侧倾 t0–t5」补上`);
+  }
+}
+
+function paintBank(): void {
+  const panel = must(HTMLElement, 'bank-panel');
+  if (!bankOpen || !entity) {
+    panel.hidden = true;
+    return;
+  }
+  panel.hidden = false;
+  if ((BANK_STAGE_IDS as readonly string[]).includes(stageId)) bankFrameId = stageId;
+  const stages = BANK_STAGE_IDS.map(
+    (id) => entity?.stages.find((stage) => stage.id === id) ?? null
+  );
+  let half = 4;
+  let top = -4;
+  let bottom = 4;
+  for (const stage of stages) {
+    const box = stage ? stageBounds(entity, stage) : null;
+    if (!box) continue;
+    half = Math.max(half, Math.abs(box.left), Math.abs(box.right));
+    top = Math.min(top, box.top);
+    bottom = Math.max(bottom, box.bottom);
+  }
+  const cellW = Math.ceil(half * 2) + BANK_PAD * 2;
+  const cellH = Math.ceil(bottom - top) + BANK_PAD * 2;
+  const canvas = must(HTMLCanvasElement, 'bank-view');
+  const avail = Math.max(220, (canvas.parentElement?.clientWidth ?? 0) - 4);
+  const scale = Math.max(
+    1,
+    Math.min(Math.floor(avail / (BANK_CELLS * cellW)), Math.floor(BANK_MAX_H / cellH))
+  );
+  const cellPx = cellW * scale;
+  canvas.width = BANK_CELLS * cellPx;
+  canvas.height = cellH * scale + BANK_LABEL_H;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Failed to get 2D context');
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = EXTERIOR_VOID;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const mark = PALETTE[COLOR.PLAYER_GOLD_LIGHT] ?? '#fdb927';
+  for (let cell = 0; cell < BANK_CELLS; cell++) {
+    const level = Math.abs(cell - 5);
+    const mirrored = cell < 5;
+    const stage = stages[level] ?? null;
+    const x0 = cell * cellPx;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = mirrored ? '#0c1420' : '#102236';
+    ctx.fillRect(x0 + 1, 0, cellPx - 2, cellH * scale);
+    const picked = `t${level}` === bankFrameId;
+    if (picked) {
+      ctx.strokeStyle = mark;
+      ctx.globalAlpha = mirrored ? 0.5 : 1;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x0 + 2, 1, cellPx - 4, cellH * scale - 2);
+      ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = mirrored ? '#6e7f90' : '#cfe3ee';
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    const name = level === 0 ? 't0 平飞' : mirrored ? `左${level} 镜像` : `t${level}`;
+    ctx.fillText(stage ? name : `${name} 无`, x0 + cellPx / 2, cellH * scale + 2);
+    if (!stage) continue;
+    ctx.setTransform(
+      mirrored ? -scale : scale,
+      0,
+      0,
+      scale,
+      x0 + cellPx / 2,
+      (BANK_PAD - top) * scale
+    );
+    ctx.imageSmoothingEnabled = false;
+    for (const index of stageDrawOrder(stage.parts)) {
+      const part = stage.parts[index];
+      const grid = part ? entity.grids[part.grid] : undefined;
+      if (!part || !grid) continue;
+      drawPart(ctx, grid, part);
+    }
+    if (!anchorsOn) continue;
+    for (const part of stage.parts) {
+      for (const anchor of part.anchors ?? []) {
+        if (anchor.kind !== 'exhaust') continue;
+        const point = placedAnchor(part, anchor);
+        ctx.fillStyle = PALETTE[COLOR.EXPLOSION_YELLOW] ?? '#ffff00';
+        ctx.fillRect(point.x - 0.5, point.y - 0.5, 1, 1);
+      }
+    }
+  }
+  fillBankControls();
+}
+
+function fillBankControls(): void {
+  const stage = bankStage();
+  const bank = stage?.bank;
+  const ranges = ['bank-angle', 'bank-sx', 'bank-sy', 'bank-taper'].map((id) =>
+    must(HTMLInputElement, id)
+  );
+  for (const input of ranges) input.disabled = !bank;
+  must(HTMLButtonElement, 'bank-reset').disabled = !bank;
+  const mode = must(HTMLButtonElement, 'bank-mode');
+  mode.disabled = !stage || stage.id === 't0';
+  mode.textContent = bank ? '改成手调' : '按参数重算';
+  mode.title = bank
+    ? '保留现在的零件，以后不跟 t0 重算，可以在装配里一件件改。'
+    : '用默认参数从 t0 重新生成这一帧，会盖掉手调。';
+  must(HTMLElement, 'bank-frame').textContent = stage
+    ? `${stage.id}${stage.name ? ` ${stage.name}` : ''}`
+    : `${bankFrameId}（无）`;
+  const [angle, sx, sy, taper] = ranges;
+  if (bank && angle && sx && sy && taper) {
+    angle.value = formatDeg(bank.angle);
+    sx.value = String(bank.stretchX);
+    sy.value = String(bank.stretchY);
+    taper.value = String(bank.taper);
+  }
+  must(HTMLOutputElement, 'bank-angle-out').textContent = bank ? `${formatDeg(bank.angle)}°` : '—';
+  must(HTMLOutputElement, 'bank-sx-out').textContent = bank ? `×${bank.stretchX}` : '—';
+  must(HTMLOutputElement, 'bank-sy-out').textContent = bank ? `×${bank.stretchY}` : '—';
+  must(HTMLOutputElement, 'bank-taper-out').textContent = bank ? String(bank.taper) : '—';
+  const note = must(HTMLParagraphElement, 'bank-note');
+  if (!stage) {
+    note.textContent = `还没有 ${bankFrameId}。点「侧倾 t0–t5」补上缺的帧。`;
+  } else if (stage.id === 't0') {
+    note.textContent = 't0 是平飞原稿，在上面的装配画布里改。t1–t5 里跟参数走的帧会跟着重算。';
+  } else if (bank) {
+    note.textContent = `${stage.id} 由 ${bank.from} 加这四个参数算出，拖动就写回 ${stage.id} 的零件。直接在装配里改 ${stage.id} 的零件，这一帧会变成手调。`;
+  } else {
+    note.textContent = `${stage.id} 是手调帧，不跟 t0 重算。点「按参数重算」用参数从 t0 重新生成（会盖掉手调）。`;
+  }
 }
 
 function togglePlay(): void {
@@ -1183,6 +1529,14 @@ function readInt(input: HTMLInputElement, label: string, min: number, max: numbe
   return value;
 }
 
+function readStretch(input: HTMLInputElement): number {
+  const value = Number(input.value);
+  if (!Number.isFinite(value) || value < ENTITY_STRETCH_MIN || value > ENTITY_STRETCH_MAX) {
+    throw new Error(`拉伸要在 ${ENTITY_STRETCH_MIN} 到 ${ENTITY_STRETCH_MAX} 之间`);
+  }
+  return Math.round(value * 1000) / 1000;
+}
+
 function readScale(input: HTMLInputElement): number {
   const value = Number(input.value);
   if (!Number.isFinite(value) || value <= ENTITY_SCALE_MIN || value > ENTITY_SCALE_MAX) {
@@ -1275,6 +1629,39 @@ function notePart(message: string): void {
 }
 
 function paintAssembly(): void {
+  const freed = syncBanks();
+  if (freed.length > 0) {
+    renderParts();
+    setStatus(`${freed.join('、')} 手调过，改成手调帧，不再跟 t0 重算`);
+  }
+  paintMain();
+  paintBank();
+}
+
+function drawPart(
+  ctx: CanvasRenderingContext2D,
+  grid: PaletteGridFile,
+  part: EntityPlacement
+): void {
+  const placed = placedSprite(grid, part);
+  const frame = renderSprite(placed.data);
+  frame.anchorX = placed.anchorX;
+  frame.anchorY = placed.anchorY;
+  const sx = partScaleX(part);
+  const sy = partScaleY(part);
+  if (sx === sy) {
+    blitPlacedSprite(ctx, frame, part.x, part.y, part.angle, sx);
+    return;
+  }
+  ctx.save();
+  ctx.translate(part.x, part.y);
+  if (part.angle !== 0) ctx.rotate(part.angle);
+  ctx.scale(sx, sy);
+  blitPlacedSprite(ctx, frame, 0, 0, 0, 1);
+  ctx.restore();
+}
+
+function paintMain(): void {
   const canvas = must(HTMLCanvasElement, 'asm-view');
   const stage = currentStage();
   const order = stage ? stageDrawOrder(stage.parts) : [];
@@ -1324,11 +1711,7 @@ function paintAssembly(): void {
       const part = stage.parts[index];
       const gridFile = part ? entity.grids[part.grid] : undefined;
       if (!part || !gridFile) continue;
-      const placed = placedSprite(gridFile, part);
-      const frame = renderSprite(placed.data);
-      frame.anchorX = placed.anchorX;
-      frame.anchorY = placed.anchorY;
-      blitPlacedSprite(ctx, frame, part.x, part.y, part.angle, part.scale);
+      drawPart(ctx, gridFile, part);
       if (!hitsOn || part.id === partId) continue;
       const hit = placedHitLocal(gridFile, part);
       if (!hit) continue;
@@ -1379,11 +1762,13 @@ function strokeHit(
   const block = hitRole(hit) === 'block';
   const color = PALETTE[block ? COLOR.LIGHT_GRAY : COLOR.PLAYER_CYAN];
   if (!color) throw new Error('missing hit color');
-  const unit = 1 / (viewScale * part.scale);
+  const sx = partScaleX(part);
+  const sy = partScaleY(part);
+  const unit = 1 / (viewScale * Math.min(sx, sy));
   ctx.save();
   ctx.translate(part.x, part.y);
   ctx.rotate(part.angle);
-  if (part.scale !== 1) ctx.scale(part.scale, part.scale);
+  if (sx !== 1 || sy !== 1) ctx.scale(sx, sy);
   ctx.strokeStyle = color;
   ctx.lineWidth = pixels * unit;
   if (block) ctx.setLineDash([5 * unit, 4 * unit]);
