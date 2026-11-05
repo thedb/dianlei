@@ -40,13 +40,22 @@ const lockRatio = must(HTMLInputElement, 'lock-ratio');
 const aspectNote = must(HTMLParagraphElement, 'part-aspect');
 const colorBox = must(HTMLDivElement, 'part-colors');
 const colorWarn = must(HTMLParagraphElement, 'part-warn');
+const moveButton = must(HTMLButtonElement, 'asm-move');
+const clearButton = must(HTMLButtonElement, 'part-clear');
+const emptyNote = must(HTMLParagraphElement, 'part-empty');
+const EMPTY_STATUS = '先点「载入示例」，或选一张 PNG。上面是这张零件。';
 
 let image: RgbaImage | null = null;
 let sourceName = '';
 let grid: PaletteGridFile | null = null;
 let fixtureText: string | null = null;
+let assemblyBusy = false;
 
+clearButton.addEventListener('click', () => {
+  clearMaterial();
+});
 fixtureButton.addEventListener('click', () => {
+  if (fixtureButton.disabled) return;
   loadFixture().catch((error: unknown) => report(error));
 });
 fileInput.addEventListener('change', () => {
@@ -94,10 +103,15 @@ mountAssembly({
   currentGrid: () => grid,
   download,
   assetUrl,
+  assemblyBusy: (busy) => {
+    assemblyBusy = busy;
+    syncPartButtons();
+  },
 });
 mountGuide();
 mountPartDialog();
 paint(null);
+syncPartButtons();
 
 loadFixtureText().catch(() => {
   fixtureText = null;
@@ -174,25 +188,53 @@ function redraw(): void {
       aspectNote.textContent = aspect.text;
       aspectNote.classList.toggle('warn', aspect.skewed);
       renderColorStats(colorBox, colorWarn, grid.cells);
-      exportButton.disabled = false;
     } catch (error) {
       report(error);
     }
   }
   paint(grid);
+  syncPartButtons();
+}
+
+/**
+ * 载入示例 only while the dialog holds no material and the assembly has no parts.
+ * Export and 移入装配 only once a grid exists. 清空当前素材 once anything is loaded.
+ */
+function syncPartButtons(): void {
+  const hasMaterial = image !== null;
+  fixtureButton.disabled = hasMaterial || assemblyBusy;
+  fixtureButton.title = hasMaterial
+    ? '弹窗里已有素材。先点「清空当前素材」再载入示例。'
+    : assemblyBusy
+      ? '装配里已有零件。先点「清空装配」再载入示例。'
+      : '打开仓库自带的 8×8 样例图，练手用，不是游戏正式资产。';
+  exportButton.disabled = grid === null;
+  moveButton.disabled = grid === null;
+  clearButton.disabled = !hasMaterial;
+}
+
+function clearMaterial(): void {
+  image = null;
+  grid = null;
+  sourceName = '';
+  fileInput.value = '';
+  aspectNote.textContent = '';
+  aspectNote.classList.remove('warn');
+  colorBox.replaceChildren();
+  colorWarn.hidden = true;
+  status.textContent = EMPTY_STATUS;
+  paint(null);
+  syncPartButtons();
 }
 
 function paint(next: PaletteGridFile | null): void {
   const ctx = view.getContext('2d');
   if (!ctx) throw new Error('Failed to get 2D context');
+  view.hidden = next === null;
+  emptyNote.hidden = next !== null || image !== null;
   if (!next) {
-    view.width = 160;
-    view.height = 120;
-    view.style.imageRendering = 'pixelated';
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.imageSmoothingEnabled = false;
-    ctx.fillStyle = EXTERIOR_VOID;
-    ctx.fillRect(0, 0, view.width, view.height);
+    view.width = 1;
+    view.height = 1;
     return;
   }
   const frame = renderSprite(gridToSpriteData(next));
@@ -285,9 +327,10 @@ function assetUrl(name: string): string {
 }
 
 function report(error: unknown): void {
-  exportButton.disabled = true;
   grid = null;
   colorBox.replaceChildren();
   colorWarn.hidden = true;
   status.textContent = error instanceof Error ? error.message : '像素化失败';
+  paint(null);
+  syncPartButtons();
 }

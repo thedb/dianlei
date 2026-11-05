@@ -10,6 +10,10 @@ describe('pixel editor guide', () => {
     expect(page).toContain('路径 A');
     expect(page).toContain('路径 B');
     expect(page).toContain('载入示例');
+    expect(page).toContain('id="part-clear"');
+    expect(page).toContain('清空当前素材');
+    expect(page).toMatch(/id="export"[^>]*disabled/);
+    expect(page).toMatch(/id="asm-move"[^>]*disabled/);
     expect(page).toContain('不是游戏正式资产');
     expect(page).toContain('载入装配示例');
     expect(page).toContain('移入装配');

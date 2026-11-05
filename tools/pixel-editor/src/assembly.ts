@@ -71,6 +71,8 @@ export interface AssemblyHost {
   currentGrid(): PaletteGridFile | null;
   download(filename: string, text: string): void;
   assetUrl(name: string): string;
+  /** Called whenever the assembly gains its first part or loses its last one. */
+  assemblyBusy(busy: boolean): void;
 }
 
 let host: AssemblyHost | null = null;
@@ -782,16 +784,12 @@ function assemblyHasParts(): boolean {
 function syncSampleLocks(): void {
   const busy = assemblyHasParts();
   const example = must(HTMLButtonElement, 'asm-example');
-  const fixture = must(HTMLButtonElement, 'fixture');
   example.disabled = busy;
-  fixture.disabled = busy;
   must(HTMLButtonElement, 'asm-clear').disabled = entity === null;
   example.title = busy
     ? '装配里已有零件。先点「清空装配」再载入装配示例。'
     : '打开样例装配：机身加一对翼，三个阶段 folded / half / open。用来冒烟，不是现役 Boss。';
-  fixture.title = busy
-    ? '装配里已有零件。先点「清空装配」再载入示例。'
-    : '打开仓库自带的 8×8 样例图，练手用，不是游戏正式资产。';
+  host?.assemblyBusy(busy);
 }
 
 function clearAssembly(): void {
