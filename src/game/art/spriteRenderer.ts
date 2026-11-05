@@ -3,8 +3,31 @@
  * Design doc §10.1: sprites rendered at boot to be used like bitmaps
  */
 
-import { PALETTE } from '@/game/palette';
+import { PALETTE, paletteRgb } from '@/game/palette';
 import type { SpriteData, SpriteFrame } from './types';
+
+/**
+ * Write one palette-index sprite into an RGBA buffer.
+ * The buffer must already be zeroed: -1 and out-of-range indices stay transparent.
+ * Bytes match `paletteRgb` (the locked `#rrggbb` entries, alpha 255).
+ */
+export function writePalettePixels(data: SpriteData, pixels: Uint8ClampedArray): void {
+  const height = data.length;
+  const width = data[0]?.length ?? 0;
+  for (let y = 0; y < height; y++) {
+    const row = data[y]!;
+    for (let x = 0; x < width; x++) {
+      const colorIndex = row[x];
+      if (colorIndex === undefined || colorIndex < 0 || colorIndex >= PALETTE.length) continue;
+      const [r, g, b] = paletteRgb(colorIndex);
+      const pixelIndex = (y * width + x) * 4;
+      pixels[pixelIndex] = r;
+      pixels[pixelIndex + 1] = g;
+      pixels[pixelIndex + 2] = b;
+      pixels[pixelIndex + 3] = 255;
+    }
+  }
+}
 
 /**
  * Create an offscreen canvas, fallback to regular canvas for non-browser environments
@@ -20,6 +43,18 @@ function createCanvas(width: number, height: number): OffscreenCanvas | HTMLCanv
 }
 
 /**
+ * `getContext('2d')` on `OffscreenCanvas | HTMLCanvasElement` is a wide union.
+ * Keep the branch that can actually bake palette pixels.
+ */
+function context2d(
+  canvas: OffscreenCanvas | HTMLCanvasElement
+): CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D {
+  const ctx = canvas.getContext('2d');
+  if (ctx && 'createImageData' in ctx) return ctx;
+  throw new Error('Failed to get 2D context');
+}
+
+/**
  * Render sprite data to an offscreen canvas
  * @param data 2D array of palette indices (-1 = transparent)
  * @param anchorX X anchor point (0-1, default 0.5 = center)
@@ -30,36 +65,10 @@ export function renderSprite(data: SpriteData, anchorX = 0.5, anchorY = 0.5): Sp
   const width = data[0]?.length ?? 0;
 
   const canvas = createCanvas(width, height);
-  const ctx = canvas.getContext('2d');
-  if (!ctx) {
-    throw new Error('Failed to get 2D context');
-  }
+  const ctx = context2d(canvas);
 
   const imageData = ctx.createImageData(width, height);
-  const pixels = imageData.data;
-
-  for (let y = 0; y < height; y++) {
-    const row = data[y]!;
-    for (let x = 0; x < width; x++) {
-      const colorIndex = row[x]!;
-      if (colorIndex >= 0 && colorIndex < PALETTE.length) {
-        const color = PALETTE[colorIndex]!;
-        const pixelIndex = (y * width + x) * 4;
-
-        // Parse hex color
-        const r = parseInt(color.slice(1, 3), 16);
-        const g = parseInt(color.slice(3, 5), 16);
-        const b = parseInt(color.slice(5, 7), 16);
-
-        pixels[pixelIndex] = r;
-        pixels[pixelIndex + 1] = g;
-        pixels[pixelIndex + 2] = b;
-        pixels[pixelIndex + 3] = 255;
-      }
-      // else transparent (alpha = 0, already initialized)
-    }
-  }
-
+  writePalettePixels(data, imageData.data);
   ctx.putImageData(imageData, 0, 0);
 
   return {
@@ -69,6 +78,29 @@ export function renderSprite(data: SpriteData, anchorX = 0.5, anchorY = 0.5): Sp
     anchorX: Math.floor(width * anchorX),
     anchorY: Math.floor(height * anchorY),
   };
+}
+
+/**
+ * Nearest-neighbor sprite blit.
+ * Matches `Renderer.drawImage`: smoothing stays off, and the origin is floored.
+ * The game canvas also sets `imageRendering = 'pixelated'` on the element.
+ */
+export function blitSprite(
+  ctx: CanvasRenderingContext2D,
+  frame: SpriteFrame,
+  x: number,
+  y: number,
+  w?: number,
+  h?: number
+): void {
+  ctx.imageSmoothingEnabled = false;
+  const dx = Math.floor(x);
+  const dy = Math.floor(y);
+  if (w !== undefined && h !== undefined) {
+    ctx.drawImage(frame.canvas, dx, dy, w, h);
+  } else {
+    ctx.drawImage(frame.canvas, dx, dy);
+  }
 }
 
 /**
@@ -85,10 +117,7 @@ export function renderSpriteMirrored(data: SpriteData, anchorX = 0.5, anchorY = 
  */
 export function createHitFlashSprite(frame: SpriteFrame): SpriteFrame {
   const canvas = createCanvas(frame.width, frame.height);
-  const ctx = canvas.getContext('2d');
-  if (!ctx) {
-    throw new Error('Failed to get 2D context');
-  }
+  const ctx = context2d(canvas);
 
   // Draw original
   ctx.drawImage(frame.canvas, 0, 0);
@@ -129,10 +158,7 @@ export function createTintedSprite(
   valMul = 1
 ): SpriteFrame {
   const canvas = createCanvas(frame.width, frame.height);
-  const ctx = canvas.getContext('2d');
-  if (!ctx) {
-    throw new Error('Failed to get 2D context');
-  }
+  const ctx = context2d(canvas);
 
   ctx.drawImage(frame.canvas, 0, 0);
   const imageData = ctx.getImageData(0, 0, frame.width, frame.height);

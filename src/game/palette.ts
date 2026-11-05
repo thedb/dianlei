@@ -186,3 +186,17 @@ export const COLOR = {
 export function getColor(index: number): string {
   return PALETTE[index] ?? PALETTE[0];
 }
+
+const PALETTE_RGB: ReadonlyArray<readonly [number, number, number]> = PALETTE.map((hex) => [
+  Number.parseInt(hex.slice(1, 3), 16),
+  Number.parseInt(hex.slice(3, 5), 16),
+  Number.parseInt(hex.slice(5, 7), 16),
+]);
+
+/**
+ * RGB bytes for a palette index. Sprite baking writes these same bytes.
+ * An out-of-range index falls back to black, matching `getColor`.
+ */
+export function paletteRgb(index: number): readonly [number, number, number] {
+  return PALETTE_RGB[index] ?? PALETTE_RGB[0]!;
+}

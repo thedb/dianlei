@@ -89,6 +89,12 @@ This document defines the coding conventions and constraints for all AI agents w
 - Bank animation: 11 frames (5 left + center + 5 right), right half mirrored for left
 - Bank timing: ~0.2s to full bank, ~0.15s return to center
 
+### Palette grids (local pixel editor, P0)
+- An entity that uses this path ships an exported `*.grid.json`. Do not keep a second hand-drawn sprite for the same asset. Reference PNGs are inputs only
+- Those PNGs stay in `tools/pixel-editor/` (or the artist's disk). They do not go in `public/`, the WeChat package, or the CDN. The editor itself is local-only and is not part of `build:h5` or `build:wx`
+- Schema and loader: `src/game/art/gridFile.ts` (`parsePaletteGrid`, `gridToSpriteData`). Pixelize: `src/game/art/pixelize.ts` (same bytes in, same cells out). Preview blit is `renderSprite` / `writePalettePixels` / `blitSprite` in `src/game/art/spriteRenderer.ts`
+- Run it with `cd tools/pixel-editor && npm install && npm run dev`. Stage assembly, hitboxes, and pivots are P1. P0 does not switch any live entity off its current sprite
+
 ## Code Organization
 
 ### Configuration

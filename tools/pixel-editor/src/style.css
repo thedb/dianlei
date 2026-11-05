@@ -1,0 +1,78 @@
+:root {
+  font: 14px/1.45 ui-sans-serif, sans-serif;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  min-height: 100vh;
+}
+
+header {
+  grid-column: 1 / -1;
+  padding: 16px 20px 0;
+}
+
+h1 {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+
+header p,
+fieldset p {
+  margin: 0;
+}
+
+.controls,
+.preview {
+  padding: 16px 20px 24px;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+label {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin: 8px 0;
+}
+
+input,
+select,
+button {
+  font: inherit;
+}
+
+button {
+  margin-top: 8px;
+}
+
+canvas {
+  image-rendering: pixelated;
+}
+
+fieldset {
+  margin-top: 20px;
+}
+
+#status {
+  min-height: 3em;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 800px) {
+  main {
+    grid-template-columns: 1fr;
+  }
+}
