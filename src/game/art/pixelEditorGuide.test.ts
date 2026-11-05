@@ -101,4 +101,38 @@ describe('pixel editor guide', () => {
     expect(page).toContain('阶段 A → B');
     expect(page).not.toContain('播放阶段');
   });
+
+  it('describes P2 presets, batch pixelize, and the compare view', () => {
+    expect(page).toContain('参数预设');
+    expect(page).toContain('批量量化');
+    expect(page).toContain('对照并排');
+    expect(page).toContain('只标不同');
+    expect(page).toContain('Eagle 28×32');
+    expect(page).toContain('Boss 零件');
+    for (const id of [
+      'preset',
+      'preset-apply',
+      'preset-save',
+      'preset-delete',
+      'preset-name',
+      'compare-on',
+      'compare-overlay',
+      'compare-ref',
+      'compare-pix',
+      'compare-kind',
+      'compare-preset',
+      'compare-grid',
+      'compare-diff',
+      'batch-open',
+      'batch-dialog',
+      'batch-preset',
+      'batch-files',
+      'batch-dir',
+      'batch-run',
+      'batch-zip',
+      'batch-list',
+    ]) {
+      expect(page).toContain(`id="${id}"`);
+    }
+  });
 });

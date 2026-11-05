@@ -13,6 +13,7 @@
           <h1>电雷像素化</h1>
           <div class="row">
             <button id="part-open" type="button" title="打开零件预览弹窗。主界面仍是装配。">零件预览</button>
+            <button id="batch-open" type="button" title="用同一套参数把多张 PNG 收成网格，打成一个 zip。">批量量化</button>
             <button id="guide-open" type="button">使用说明</button>
           </div>
         </div>
@@ -455,6 +456,20 @@
           清空当前素材
         </button>
       </div>
+      <div class="row part-source">
+        <label>
+          参数预设
+          <select id="preset" data-presets data-blank="1" title="选一套参数再点套用。调色板固定为游戏的 52 色。取样 nearest 是格子中心对齐，box 是区域平均。"></select>
+        </label>
+        <button id="preset-apply" type="button" title="把选中的预设写进下面的宽高和取样，并重新像素化。同一张图、同一套预设，格子永远一样。">套用</button>
+        <label>
+          名称
+          <input id="preset-name" type="text" maxlength="32" placeholder="预设名" title="保存当前宽高、取样、量化、透明阈值、抖动和锁定源比例。" />
+        </label>
+        <button id="preset-save" type="button" title="把当前参数存成自己的预设。只存在这台浏览器。">保存</button>
+        <button id="preset-delete" type="button" disabled title="删除自己保存的预设。内置预设不能删。">删除</button>
+      </div>
+      <p id="preset-note" class="hint" aria-live="polite">内置预设按局内尺寸。套用后可以再改数字。自己的预设点「保存」，只存在这台浏览器。</p>
       <div class="part-fields">
         <label>
           目标宽
@@ -551,7 +566,81 @@
           「移入装配」在这张零件预览好之后，把它加进装配零件列表，并关掉弹窗。没有素材时不可点，要先载入示例或自己的
           PNG。
         </p>
+        <p class="hint">
+          「参数预设」一次写好目标宽高、取样、量化、透明阈值、抖动和锁定源比例。取样 nearest 按格子中心对齐，box 按覆盖面积平均。调色板固定为游戏的 52 色，预设不能换。内置有 Eagle 28×32、Mandy 48×32、Jason 26×30、小零件 24×24、界面图标 16×16、地砖 16×16、Boss 零件（宽 64，锁比例）。「保存」只存在这台浏览器。「对照并排」左边是参考图，右边是当前网格，画法和单张预览一样；可以再对照另一套预设或另一份网格，勾「只标不同」标出格子不一样的地方。
+        </p>
       </details>
+      <div class="row">
+        <label>
+          <input id="compare-on" type="checkbox" />
+          对照并排
+        </label>
+        <label>
+          <input id="compare-overlay" type="checkbox" />
+          叠加
+        </label>
+      </div>
+      <div id="compare-box" hidden>
+        <div class="compare-row">
+          <figure>
+            <canvas id="compare-ref" width="1" height="1"></canvas>
+            <figcaption id="compare-ref-cap">参考图</figcaption>
+          </figure>
+          <figure>
+            <canvas id="compare-pix" width="1" height="1"></canvas>
+            <figcaption>当前网格</figcaption>
+          </figure>
+          <figure id="compare-b-fig" hidden>
+            <canvas id="compare-b" width="1" height="1"></canvas>
+            <figcaption id="compare-b-cap">对照</figcaption>
+          </figure>
+        </div>
+        <div class="row">
+          <label>
+            第二份
+            <select id="compare-kind" title="再并排一份，用来比较两套参数或两份已经导出的网格。">
+              <option value="none">不对照第二份</option>
+              <option value="preset">另一套预设</option>
+              <option value="file">另一份网格</option>
+            </select>
+          </label>
+          <select id="compare-preset" data-presets hidden title="用这套预设把同一张参考图再像素化一次。"></select>
+          <input id="compare-grid" type="file" accept=".json,application/json" hidden title="载入一份已经导出的 *.grid.json 来对照。" />
+          <label id="compare-diff-label" hidden>
+            <input id="compare-diff" type="checkbox" />
+            只标不同
+          </label>
+        </div>
+      </div>
+    </dialog>
+    <dialog id="batch-dialog" aria-labelledby="batch-title">
+      <div class="inspector-head">
+        <h2 id="batch-title">批量量化</h2>
+        <button id="batch-close" type="button">关闭</button>
+      </div>
+      <p class="hint">
+        多张 PNG 用同一套参数收成网格。每张一个 <code>*.grid.json</code>，成功的打进一个 zip。字节和零件预览里导出的一样。勾着锁定源比例时，每张按自己的比例算高。调色板固定为游戏的 52 色。
+      </p>
+      <div class="row">
+        <label>
+          参数
+          <select id="batch-preset" data-presets data-form="1" title="内置预设、自己的预设，或零件预览里现在的数字。"></select>
+        </label>
+      </div>
+      <div class="row">
+        <label>
+          多张 PNG
+          <input id="batch-files" type="file" accept="image/png,.png" multiple title="一次选多张参考图。" />
+        </label>
+        <label>
+          文件夹
+          <input id="batch-dir" type="file" accept="image/png,.png" webkitdirectory title="选一个文件夹。不是 PNG 的会跳过。" />
+        </label>
+        <button id="batch-run" type="button">开始</button>
+        <button id="batch-zip" type="button" disabled title="下载成功的网格。失败和跳过的不在里面。">下载 zip</button>
+      </div>
+      <p id="batch-progress" class="hint" aria-live="polite">先选文件，再点「开始」。</p>
+      <ul id="batch-list"></ul>
     </dialog>
     <dialog id="guide" aria-labelledby="guide-title">
       <h2 id="guide-title">使用说明</h2>
@@ -569,6 +658,12 @@
       </ol>
       <p>「载入示例」是仓库自带的 8×8 样例，用来练手，不是游戏正式资产。</p>
       <p>怎么验证：载入示例后，弹窗里的状态行应写「与 fixtures/sample.grid.json 一致」。装配画布保持原样。</p>
+      <h3>批量（P2）</h3>
+      <ol>
+        <li>零件预览里选「参数预设」再点「套用」。内置有 Eagle 28×32、Mandy 48×32、Jason 26×30、小零件 24×24、界面图标 16×16、地砖 16×16、Boss 零件（宽 64，锁定源比例）。取样 nearest 是格子中心对齐，box 是区域平均。调色板固定为游戏的 52 色。「保存」把当前参数存成自己的预设，只存在这台浏览器；内置的不能删。</li>
+        <li>页头「批量量化」：选一套预设，或「零件预览里的当前参数」。多选 PNG，或选一个文件夹。每张用同一套参数像素化，下面一行一个结果。成功的打进一个 zip，每张一个 <code>*.grid.json</code>，字节和单张导出一样。锁定源比例时，每张按自己的比例算高。</li>
+        <li>勾「对照并排」：左边参考图（最近邻放大到和网格一样大），右边当前网格（游戏同一条贴图）。「叠加」把网格半透明盖在参考图上。第二份可以是另一套预设，或另一份网格；「只标不同」标出格子不一样的地方，尺寸不同会写明。</li>
+      </ol>
       <h3>路径 B · 主界面装配 → 装配文件</h3>
       <ol>
         <li>点「载入装配示例」，或在零件弹窗里「移入装配」。</li>

@@ -14,12 +14,16 @@ import {
   type PaletteGridFile,
 } from '@/game/art/gridFile';
 import { pixelize, type RgbaImage } from '@/game/art/pixelize';
+import type { PixelizePreset } from '@/game/art/pixelizePreset';
 import { decodePngRgba } from '@/game/art/pngRgba';
 import { blitSprite, renderSprite } from '@/game/art/spriteRenderer';
 import { heightForWidth, widthForHeight } from '@/game/art/gridStats';
 import { mountAssembly } from './assembly';
+import { mountBatch } from './batch';
 import { aspectLine, renderColorStats } from './colorStats';
+import { mountCompare, refreshCompare } from './compare';
 import { mountGuide } from './guide';
+import { mountPresets } from './presets';
 
 document.body.style.margin = '0';
 document.body.style.backgroundColor = EXTERIOR_VOID;
@@ -108,6 +112,38 @@ mountAssembly({
     syncPartButtons();
   },
 });
+const pixelHost = {
+  image: () => image,
+  sourceName: () => sourceName,
+  grid: () => grid,
+  readDraft: () => ({
+    targetWidth: readInt(widthInput, '目标宽', 1, 512),
+    targetHeight: readInt(heightInput, '目标高', 1, 512),
+    sample: readSample(sampleInput.value),
+    quantize: readQuantize(quantizeInput.value),
+    alphaCutoff: readInt(alphaInput, '透明阈值', 0, 255),
+    ditherStrength: readUnit(ditherInput.value),
+    lockRatio: lockRatio.checked,
+  }),
+  write: (preset: PixelizePreset, size: { width: number; height: number }) => {
+    widthInput.value = String(size.width);
+    heightInput.value = String(size.height);
+    sampleInput.value = preset.sample;
+    quantizeInput.value = preset.quantize;
+    alphaInput.value = String(preset.alphaCutoff);
+    ditherInput.value = String(preset.ditherStrength);
+    lockRatio.checked = preset.lockRatio;
+  },
+  redraw: () => {
+    redraw();
+  },
+  decode,
+  downloadText: download,
+  downloadBytes,
+};
+mountPresets(pixelHost);
+mountCompare(pixelHost);
+mountBatch(pixelHost);
 mountGuide();
 mountPartDialog();
 paint(null);
@@ -235,6 +271,7 @@ function paint(next: PaletteGridFile | null): void {
   if (!next) {
     view.width = 1;
     view.height = 1;
+    refreshCompare();
     return;
   }
   const frame = renderSprite(gridToSpriteData(next));
@@ -248,6 +285,7 @@ function paint(next: PaletteGridFile | null): void {
   ctx.fillStyle = EXTERIOR_VOID;
   ctx.fillRect(0, 0, view.width, view.height);
   blitSprite(ctx, frame, 0, 0, frame.width * scale, frame.height * scale);
+  refreshCompare();
 }
 
 function readParams(source: RgbaImage): GridPixelizeParams {
@@ -309,7 +347,13 @@ async function inflateZlib(zlib: Uint8Array): Promise<Uint8Array> {
 }
 
 function download(filename: string, text: string): void {
-  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  downloadBytes(filename, new TextEncoder().encode(text), 'application/json');
+}
+
+function downloadBytes(filename: string, bytes: Uint8Array, type: string): void {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  const url = URL.createObjectURL(new Blob([copy], { type }));
   const link = document.createElement('a');
   link.href = url;
   link.download = filename;
