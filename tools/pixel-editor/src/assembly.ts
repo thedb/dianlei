@@ -22,6 +22,7 @@ import {
   ENTITY_POS_MIN,
   ENTITY_SCALE_MAX,
   ENTITY_SCALE_MIN,
+  ENTITY_SKEW_MAX,
   ENTITY_STRETCH_MAX,
   ENTITY_STRETCH_MIN,
   bankParts,
@@ -33,6 +34,7 @@ import {
   hitRole,
   isEntityId,
   parseEntityFile,
+  partLinear,
   partScaleX,
   partScaleY,
   placedAnchor,
@@ -55,6 +57,7 @@ import {
 import { parsePaletteGrid, serializePaletteGrid, type PaletteGridFile } from '@/game/art/gridFile';
 import {
   dragAngle,
+  dragSkew,
   dragStretch,
   handleAt,
   partHandles,
@@ -111,8 +114,12 @@ const HANDLE_HIT_PX = 8;
 const ROTATE_STEM_PX = 18;
 const ANGLE_STEP_DEG = 1;
 const ANGLE_SHIFT_STEP_DEG = 15;
+/** View margin around the frame, in entity pixels: at least this, or a quarter of the longer side. */
+const VIEW_MARGIN_MIN = 8;
+const VIEW_MARGIN_SHARE = 0.25;
+let viewOverflow = false;
 interface PartDrag {
-  mode: 'move' | 'stretch' | 'rotate';
+  mode: 'move' | 'stretch' | 'skew' | 'rotate';
   handle: PartHandle | null;
   start: EntityPlacement;
   fromX: number;
@@ -364,6 +371,25 @@ export function mountAssembly(next: AssemblyHost): void {
     editPart((part) => {
       part.scale = readScale(scaleInput);
     }, false);
+  });
+  for (const [id, key] of [
+    ['asm-kx', 'skewX'],
+    ['asm-ky', 'skewY'],
+  ] as const) {
+    const input = must(HTMLInputElement, id);
+    input.addEventListener('input', () => {
+      editPart((part) => {
+        const value = readSkew(input);
+        if (value === 0) delete part[key];
+        else part[key] = value;
+      }, false);
+    });
+  }
+  must(HTMLSelectElement, 'asm-handle-mode').addEventListener('change', () => {
+    paintAssembly();
+    setStatus(
+      skewMode() ? '边点改成斜切：拖上下边点左右斜，拖左右边点上下斜。角点仍是拉伸' : '边点改回拉伸'
+    );
   });
   for (const [id, key] of [
     ['asm-sx', 'stretchX'],
@@ -863,6 +889,8 @@ function fillFields(): void {
   must(HTMLInputElement, 'asm-scale').value = String(part.scale);
   must(HTMLInputElement, 'asm-sx').value = String(part.stretchX ?? 1);
   must(HTMLInputElement, 'asm-sy').value = String(part.stretchY ?? 1);
+  must(HTMLInputElement, 'asm-kx').value = formatDeg(part.skewX ?? 0);
+  must(HTMLInputElement, 'asm-ky').value = formatDeg(part.skewY ?? 0);
   must(HTMLInputElement, 'asm-layer').value = String(part.layer);
   must(HTMLParagraphElement, 'asm-grid-size').textContent =
     `网格 ${part.grid}：${grid.width}×${grid.height}，源 ${grid.source.params.sourceWidth}×${grid.source.params.sourceHeight}`;
@@ -1555,6 +1583,7 @@ function updateSizeReadout(): void {
     const hy = (height / refSize.height).toFixed(2);
     text += ` 对照 ${refSize.width}×${refSize.height}：宽 ×${wx}，高 ×${hy}。`;
   }
+  if (viewOverflow) text += ' 有零件超出视图，边界不会自己变；要看全就改边界宽高或点「框住零件」。';
   out.textContent = text;
 }
 
@@ -1726,6 +1755,12 @@ function paintAssembly(): void {
   paintBank();
 }
 
+function applyPartTransform(ctx: CanvasRenderingContext2D, part: EntityPlacement): void {
+  const [a, b, c, d] = partLinear(part);
+  ctx.translate(part.x, part.y);
+  ctx.transform(a, b, c, d, 0, 0);
+}
+
 function drawPart(
   ctx: CanvasRenderingContext2D,
   grid: PaletteGridFile,
@@ -1737,14 +1772,12 @@ function drawPart(
   frame.anchorY = placed.anchorY;
   const sx = partScaleX(part);
   const sy = partScaleY(part);
-  if (sx === sy) {
+  if (sx === sy && !part.skewX && !part.skewY) {
     blitPlacedSprite(ctx, frame, part.x, part.y, part.angle, sx);
     return;
   }
   ctx.save();
-  ctx.translate(part.x, part.y);
-  if (part.angle !== 0) ctx.rotate(part.angle);
-  ctx.scale(sx, sy);
+  applyPartTransform(ctx, part);
   blitPlacedSprite(ctx, frame, 0, 0, 0, 1);
   ctx.restore();
 }
@@ -1754,31 +1787,22 @@ function paintMain(): void {
   const stage = currentStage();
   const order = stage ? stageDrawOrder(stage.parts) : [];
   const bounds = previewFrameRect({ width: frameW, height: frameH });
-  let minX = bounds.left;
-  let minY = bounds.top;
-  let maxX = bounds.right;
-  let maxY = bounds.bottom;
   const ref = refSize ? previewFrameRect(refSize) : null;
-  if (ref) {
-    minX = Math.min(minX, ref.left);
-    minY = Math.min(minY, ref.top);
-    maxX = Math.max(maxX, ref.right);
-    maxY = Math.max(maxY, ref.bottom);
-  }
+  const margin = Math.max(
+    VIEW_MARGIN_MIN,
+    Math.round(
+      VIEW_MARGIN_SHARE * Math.max(frameW, frameH, refSize?.width ?? 0, refSize?.height ?? 0)
+    )
+  );
+  const minX = Math.min(bounds.left, ref?.left ?? bounds.left) - margin;
+  const minY = Math.min(bounds.top, ref?.top ?? bounds.top) - margin;
+  const maxX = Math.max(bounds.right, ref?.right ?? bounds.right) + margin;
+  const maxY = Math.max(bounds.bottom, ref?.bottom ?? bounds.bottom) + margin;
+  const content = entity && stage ? stageBounds(entity, stage) : null;
+  viewOverflow =
+    content !== null &&
+    (content.left < minX || content.top < minY || content.right > maxX || content.bottom > maxY);
   updateSizeReadout();
-  if (entity && stage) {
-    for (const index of order) {
-      const part = stage.parts[index];
-      const gridFile = part ? entity.grids[part.grid] : undefined;
-      if (!part || !gridFile) continue;
-      for (const [px, py] of placementCorners(gridFile, part)) {
-        minX = Math.min(minX, px);
-        minY = Math.min(minY, py);
-        maxX = Math.max(maxX, px);
-        maxY = Math.max(maxY, py);
-      }
-    }
-  }
   const spanX = Math.max(1, maxX - minX);
   const spanY = Math.max(1, maxY - minY);
   const scale = Math.max(1, Math.floor(LOGICAL_W / Math.max(spanX, spanY)));
@@ -1866,6 +1890,18 @@ function drawHandles(
       ctx.stroke();
       continue;
     }
+    if (skewMode() && (handle.ax === 0) !== (handle.ay === 0)) {
+      const r = size * 0.75;
+      ctx.beginPath();
+      ctx.moveTo(handle.x, handle.y - r);
+      ctx.lineTo(handle.x + r, handle.y);
+      ctx.lineTo(handle.x, handle.y + r);
+      ctx.lineTo(handle.x - r, handle.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      continue;
+    }
     ctx.fillRect(handle.x - size / 2, handle.y - size / 2, size, size);
     ctx.strokeRect(handle.x - size / 2, handle.y - size / 2, size, size);
   }
@@ -1909,7 +1945,13 @@ function startDrag(event: PointerEvent): void {
   const inside = placementContains(grid, part, point.x, point.y);
   if (!handle && !inside) return;
   drag = {
-    mode: handle ? (handle.kind === 'rotate' ? 'rotate' : 'stretch') : 'move',
+    mode: handle
+      ? handle.kind === 'rotate'
+        ? 'rotate'
+        : skewMode() && (handle.ax === 0) !== (handle.ay === 0)
+          ? 'skew'
+          : 'stretch'
+      : 'move',
     handle,
     start: clonePlacement(part),
     fromX: point.x,
@@ -1959,6 +2001,20 @@ function moveDrag(event: PointerEvent): void {
       return;
     }
     if (!active.handle) return;
+    if (active.mode === 'skew') {
+      const skew = dragSkew(
+        start,
+        active.handle,
+        point.x,
+        point.y,
+        event.shiftKey ? ANGLE_SHIFT_STEP_DEG : ANGLE_STEP_DEG
+      );
+      for (const key of ['skewX', 'skewY'] as const) {
+        if (skew[key] === 0) delete part[key];
+        else part[key] = skew[key];
+      }
+      return;
+    }
     const next = dragStretch(grid, start, active.handle, point.x, point.y, event.shiftKey);
     for (const key of ['stretchX', 'stretchY'] as const) {
       if (next[key] === 1) delete part[key];
@@ -1985,7 +2041,9 @@ function endDrag(event: PointerEvent): void {
       ? `位置 (${part.x}, ${part.y})`
       : active.mode === 'rotate'
         ? `角度 ${formatDeg(part.angle)}°`
-        : `横向拉伸 ×${part.stretchX ?? 1}，纵向拉伸 ×${part.stretchY ?? 1}`;
+        : active.mode === 'skew'
+          ? `斜切 X ${formatDeg(part.skewX ?? 0)}°，斜切 Y ${formatDeg(part.skewY ?? 0)}°`
+          : `横向拉伸 ×${part.stretchX ?? 1}，纵向拉伸 ×${part.stretchY ?? 1}`;
   const stage = currentStage();
   const freed =
     stage &&
@@ -1993,6 +2051,19 @@ function endDrag(event: PointerEvent): void {
     (BANK_STAGE_IDS as readonly string[]).includes(stage.id) &&
     stage.id !== 't0';
   setStatus(`${part.id}：${text}${freed ? `。${stage.id} 是手调帧` : ''}`);
+}
+
+function skewMode(): boolean {
+  return must(HTMLSelectElement, 'asm-handle-mode').value === 'skew';
+}
+
+function readSkew(input: HTMLInputElement): number {
+  const degrees = Number(input.value);
+  const limit = (ENTITY_SKEW_MAX * 180) / Math.PI;
+  if (!Number.isFinite(degrees) || Math.abs(degrees) > limit + 1e-9) {
+    throw new Error(`斜切要在 -${Math.round(limit)}° 到 ${Math.round(limit)}° 之间`);
+  }
+  return Math.max(-ENTITY_SKEW_MAX, Math.min(ENTITY_SKEW_MAX, (degrees * Math.PI) / 180)) + 0;
 }
 
 function arrowOwner(target: EventTarget | null): 'canvas' | 'bank' | null {
@@ -2036,9 +2107,7 @@ function strokeHit(
   const sy = partScaleY(part);
   const unit = 1 / (viewScale * Math.min(sx, sy));
   ctx.save();
-  ctx.translate(part.x, part.y);
-  ctx.rotate(part.angle);
-  if (sx !== 1 || sy !== 1) ctx.scale(sx, sy);
+  applyPartTransform(ctx, part);
   ctx.strokeStyle = color;
   ctx.lineWidth = pixels * unit;
   if (block) ctx.setLineDash([5 * unit, 4 * unit]);

@@ -62,4 +62,14 @@ describe('pixel editor guide', () => {
     expect(page).toMatch(/id="asm-view"[^>]*tabindex="0"/);
     expect(page).toMatch(/id="bank-view"[^>]*tabindex="0"/);
   });
+
+  it('names skew and says the frame does not follow part edits', () => {
+    expect(page).toContain('id="asm-kx"');
+    expect(page).toContain('id="asm-ky"');
+    expect(page).toContain('id="asm-handle-mode"');
+    expect(page).toContain('斜切 X');
+    expect(page).toContain('skewX');
+    expect(page).toContain('游戏里的贴图暂时还不读');
+    expect(page).toContain('拉伸、斜切、旋转、移动零件都不会改它的大小和位置');
+  });
 });
