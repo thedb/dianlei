@@ -3,7 +3,8 @@
  *
  * This is the import the game will use for art that comes out of
  * `tools/pixel-editor/`. Reference PNGs are not stored in the file.
- * P0 is one rectangular grid. Stages, hitboxes, and pivots are P1.
+ * One file is one rectangular grid. Stages, pivots, and hit boxes are
+ * `*.entity.json` in `entityFile.ts`, and those files embed these grids.
  */
 
 import { PALETTE } from '@/game/palette';

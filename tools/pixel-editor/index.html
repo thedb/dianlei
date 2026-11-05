@@ -10,7 +10,7 @@
     <main>
       <header>
         <h1>电雷像素化</h1>
-        <p>本地工具。参考 PNG 只作为输入，导出的网格才是游戏会导入的像素。</p>
+        <p>本地工具。参考 PNG 只作为输入。导出的网格和装配文件才是游戏会导入的像素。</p>
       </header>
       <section class="controls">
         <div class="row">
@@ -52,9 +52,102 @@
         </label>
         <button id="export" type="button" disabled>导出 .grid.json</button>
         <p id="status">载入一张 PNG。</p>
-        <fieldset disabled>
-          <legend>P1 装配</legend>
-          <p>关卡、受击部件和轴心不在这一版。</p>
+        <fieldset>
+          <legend>装配</legend>
+          <p>阶段由部件拼成。位移、轴心、旋转和水平翻转与游戏贴图一致。受击框是精灵像素上的矩形。</p>
+          <div class="row">
+            <button id="asm-example" type="button">载入装配示例</button>
+            <button id="asm-add" type="button">当前网格加入</button>
+          </div>
+          <label>
+            网格文件
+            <input id="asm-grid-file" type="file" accept=".json,application/json" />
+          </label>
+          <label>
+            装配文件
+            <input id="asm-entity-file" type="file" accept=".json,application/json" />
+          </label>
+          <label>
+            装配预览
+            <input id="asm-preview" type="checkbox" />
+          </label>
+          <label>
+            受击框
+            <input id="asm-hits" type="checkbox" checked />
+          </label>
+          <div id="asm-editor" hidden>
+            <label>
+              名称
+              <input id="asm-name" type="text" maxlength="128" />
+            </label>
+            <label>
+              阶段
+              <select id="asm-stage"></select>
+            </label>
+            <label>
+              阶段 id
+              <input id="asm-stage-id" type="text" maxlength="32" />
+            </label>
+            <div class="row">
+              <button id="asm-add-stage" type="button">新阶段</button>
+              <button id="asm-export" type="button">导出 .entity.json</button>
+            </div>
+            <div id="asm-parts"></div>
+            <div id="asm-fields" hidden>
+              <label>
+                x
+                <input id="asm-x" type="number" step="1" />
+              </label>
+              <label>
+                y
+                <input id="asm-y" type="number" step="1" />
+              </label>
+              <label>
+                轴心 x
+                <input id="asm-px" type="number" step="1" />
+              </label>
+              <label>
+                轴心 y
+                <input id="asm-py" type="number" step="1" />
+              </label>
+              <label>
+                角度（度）
+                <input id="asm-angle" type="number" step="0.1" />
+              </label>
+              <label>
+                水平翻转
+                <input id="asm-flip" type="checkbox" />
+              </label>
+              <label>
+                层
+                <input id="asm-layer" type="number" step="1" />
+              </label>
+              <label>
+                可受击
+                <input id="asm-hit" type="checkbox" />
+              </label>
+              <div id="asm-hit-box">
+                <label>
+                  受击 x
+                  <input id="asm-hx" type="number" step="1" />
+                </label>
+                <label>
+                  受击 y
+                  <input id="asm-hy" type="number" step="1" />
+                </label>
+                <label>
+                  受击宽
+                  <input id="asm-hw" type="number" step="1" />
+                </label>
+                <label>
+                  受击高
+                  <input id="asm-hh" type="number" step="1" />
+                </label>
+              </div>
+              <button id="asm-delete" type="button">删除部件</button>
+            </div>
+          </div>
+          <p id="asm-status">尚未装配。载入示例，或把当前网格加进来。</p>
         </fieldset>
       </section>
       <section class="preview">

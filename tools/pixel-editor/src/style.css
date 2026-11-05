@@ -8,7 +8,7 @@ body {
 
 main {
   display: grid;
-  grid-template-columns: 300px 1fr;
+  grid-template-columns: minmax(280px, 360px) 1fr;
   min-height: 100vh;
 }
 
@@ -24,7 +24,7 @@ h1 {
 
 header p,
 fieldset p {
-  margin: 0;
+  margin: 0 0 8px;
 }
 
 .controls,
@@ -66,9 +66,33 @@ fieldset {
   margin-top: 20px;
 }
 
-#status {
+#status,
+#asm-status {
   min-height: 3em;
   white-space: pre-wrap;
+}
+
+#asm-parts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+#asm-parts button {
+  margin-top: 0;
+  text-align: left;
+}
+
+#asm-parts button[aria-pressed='true'] {
+  outline: 1px solid #7ee0f0;
+}
+
+@media (min-width: 801px) {
+  .controls {
+    max-height: 100vh;
+    overflow: auto;
+  }
 }
 
 @media (max-width: 800px) {

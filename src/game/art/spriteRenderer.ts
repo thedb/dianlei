@@ -104,6 +104,32 @@ export function blitSprite(
 }
 
 /**
+ * Place a baked frame the way a boss part is drawn (`drawPartSprite`).
+ * The pivot is `frame.anchorX/Y` in sprite pixels.
+ * Angle 0 uses the straight floored blit, so a zero angle does not shift by a subpixel.
+ * Any other angle translates to `(x, y)`, rotates (canvas y-down, positive clockwise),
+ * then blits at `-anchor`. `Renderer.drawImage` floors that local origin.
+ */
+export function blitPlacedSprite(
+  ctx: CanvasRenderingContext2D,
+  frame: SpriteFrame,
+  x: number,
+  y: number,
+  angle: number
+): void {
+  if (angle === 0) {
+    blitSprite(ctx, frame, x - frame.anchorX, y - frame.anchorY);
+    return;
+  }
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  blitSprite(ctx, frame, -frame.anchorX, -frame.anchorY);
+  ctx.restore();
+}
+
+/**
  * Render sprite with horizontal mirror (for left bank frames)
  */
 export function renderSpriteMirrored(data: SpriteData, anchorX = 0.5, anchorY = 0.5): SpriteFrame {
