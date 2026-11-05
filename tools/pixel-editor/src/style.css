@@ -7,9 +7,36 @@ body {
 }
 
 main {
-  display: grid;
-  grid-template-columns: minmax(280px, 360px) 1fr;
   min-height: 100vh;
+}
+
+.panes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: start;
+}
+
+.pane {
+  min-width: 0;
+  max-height: calc(100vh - 88px);
+  overflow: auto;
+  padding: 8px 20px 32px;
+}
+
+.pane + .pane {
+  border-left: 1px solid #1a3050;
+}
+
+.pane canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 8px 0 12px;
+  background: #0a1828;
+}
+
+#asm-view {
+  cursor: crosshair;
 }
 
 header {
@@ -114,13 +141,21 @@ fieldset {
 }
 
 #asm-parts button[aria-pressed='true'] {
-  outline: 1px solid #7ee0f0;
+  outline: 2px solid #fdb927;
 }
 
-@media (min-width: 801px) {
-  .controls {
-    max-height: 100vh;
-    overflow: auto;
+@media (max-width: 800px) {
+  .panes {
+    grid-template-columns: 1fr;
+  }
+
+  .pane {
+    max-height: none;
+  }
+
+  .pane + .pane {
+    border-left: 0;
+    border-top: 1px solid #1a3050;
   }
 }
 
@@ -143,8 +178,3 @@ dialog ol {
   padding-left: 1.3em;
 }
 
-@media (max-width: 800px) {
-  main {
-    grid-template-columns: 1fr;
-  }
-}

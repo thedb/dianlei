@@ -104,27 +104,44 @@ export function blitSprite(
 }
 
 /**
- * Place a baked frame the way a boss part is drawn (`drawPartSprite`).
- * The pivot is `frame.anchorX/Y` in sprite pixels.
- * Angle 0 uses the straight floored blit, so a zero angle does not shift by a subpixel.
+ * Place a baked frame the way a boss part is drawn (`drawPartSprite`), then optionally enlarge it.
+ * The pivot is `frame.anchorX/Y` in source pixels. `scale` is an integer ≥ 1: each source
+ * pixel becomes a `scale`×`scale` block. Smoothing stays off.
+ * Angle 0 uses the straight floored blit (enlarged with a destination size when `scale` ≠ 1),
+ * so a zero angle does not shift by a subpixel.
  * Any other angle translates to `(x, y)`, rotates (canvas y-down, positive clockwise),
- * then blits at `-anchor`. `Renderer.drawImage` floors that local origin.
+ * scales about that pivot, then blits at `-anchor`. A rotated edge may cover part of a
+ * screen pixel; it is not snapped onto the grid and it is not filtered.
  */
 export function blitPlacedSprite(
   ctx: CanvasRenderingContext2D,
   frame: SpriteFrame,
   x: number,
   y: number,
-  angle: number
+  angle: number,
+  scale = 1
 ): void {
-  if (angle === 0) {
+  if (!Number.isInteger(scale) || scale < 1) throw new Error('scale must be an integer >= 1');
+  if (angle === 0 && scale === 1) {
     blitSprite(ctx, frame, x - frame.anchorX, y - frame.anchorY);
+    return;
+  }
+  if (angle === 0) {
+    blitSprite(
+      ctx,
+      frame,
+      x - frame.anchorX * scale,
+      y - frame.anchorY * scale,
+      frame.width * scale,
+      frame.height * scale
+    );
     return;
   }
   ctx.save();
   ctx.imageSmoothingEnabled = false;
   ctx.translate(x, y);
   ctx.rotate(angle);
+  if (scale !== 1) ctx.scale(scale, scale);
   blitSprite(ctx, frame, -frame.anchorX, -frame.anchorY);
   ctx.restore();
 }

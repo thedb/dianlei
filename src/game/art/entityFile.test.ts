@@ -6,7 +6,9 @@ import {
   createEmptyEntity,
   parseEntityFile,
   placedHit,
+  placedHitLocal,
   placedSprite,
+  placementContains,
   placementCorners,
   sampleAssemblyEntity,
   serializeEntityFile,
@@ -44,6 +46,7 @@ describe('entity file', () => {
     expect(folded?.parts[1]?.hit).toBeUndefined();
     expect(folded?.parts[1]?.flipX).toBe(false);
     expect(folded?.parts[2]?.flipX).toBe(true);
+    expect(folded?.parts[0]?.scale).toBe(1);
     expect(folded?.parts[1]?.angle).toBe(0);
     expect(folded?.parts[2]?.angle).toBe(0);
     expect(half?.parts[2]?.angle).toBe(Math.PI / 2);
@@ -106,6 +109,19 @@ describe('entity file', () => {
     const [x, y] = placementCorners(wing, left)[0] ?? [Number.NaN, Number.NaN];
     expect(x).toBeCloseTo(-5, 6);
     expect(y).toBeCloseTo(3, 6);
+    expect(placedHitLocal(bodyGrid, body)).toEqual({ x: -4, y: -5, w: 8, h: 10 });
+
+    const doubled = { ...body, scale: 2 };
+    expect(placementCorners(bodyGrid, doubled)).toEqual([
+      [-8, -10],
+      [8, -10],
+      [8, 10],
+      [-8, 10],
+    ]);
+    expect(placementContains(bodyGrid, body, 0, 0)).toBe(true);
+    expect(placementContains(bodyGrid, body, 4, 0)).toBe(false);
+    expect(placementContains(bodyGrid, doubled, 7, 9)).toBe(true);
+    expect(placementContains(bodyGrid, doubled, 8, 0)).toBe(false);
   });
 
   it('draws lower layers first and keeps file order on a tie', () => {
@@ -159,6 +175,7 @@ describe('entity file', () => {
       pivot: { x: part.pivot.x, y: part.pivot.y },
       angle: part.angle,
       flipX: part.flipX,
+      scale: part.scale,
       layer: part.layer,
     };
     if (part.hit) duplicate.hit = { x: part.hit.x, y: part.hit.y, w: part.hit.w, h: part.hit.h };
@@ -183,5 +200,20 @@ describe('entity file', () => {
       serializeEntityFile(empty)
     );
     expect(() => createEmptyEntity('a/b')).toThrow(/path/);
+  });
+
+  it('defaults a missing scale to 1 and rejects a fractional scale', () => {
+    const text = serializeEntityFile(sampleAssemblyEntity());
+    const stripped = text.split('\n          "scale": 1,').join('');
+    expect(stripped).not.toContain('"scale"');
+    const parsed = parseEntityFile(stripped);
+    expect(parsed.stages[0]?.parts[0]?.scale).toBe(1);
+    expect(serializeEntityFile(parsed)).toBe(text);
+
+    const entity = sampleAssemblyEntity();
+    const part = entity.stages[0]?.parts[0];
+    if (!part) throw new Error('fixture missing body');
+    part.scale = 0;
+    expect(() => serializeEntityFile(entity)).toThrow(/scale/);
   });
 });

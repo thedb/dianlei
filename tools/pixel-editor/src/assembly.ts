@@ -1,8 +1,11 @@
 /**
- * Stage assembly on top of the current palette grid.
- * The preview itself is painted by main.ts with `blitPlacedSprite`.
+ * Stage assembly. The right-hand canvas is independent of the part preview.
+ * Sprites go through `blitPlacedSprite`. Hit boxes and the selection outline are strokes after that.
  */
 
+import { LOGICAL_W } from '@/game/config';
+import { EXTERIOR_VOID } from '@/engine/exterior';
+import { COLOR, PALETTE } from '@/game/palette';
 import {
   ENTITY_ANGLE_MAX,
   ENTITY_FILE_EXTENSION,
@@ -12,9 +15,15 @@ import {
   ENTITY_LAYER_MIN,
   ENTITY_POS_MAX,
   ENTITY_POS_MIN,
+  ENTITY_SCALE_MAX,
+  ENTITY_SCALE_MIN,
   createEmptyEntity,
   isEntityId,
   parseEntityFile,
+  placedHitLocal,
+  placedSprite,
+  placementContains,
+  placementCorners,
   serializeEntityFile,
   stageDrawOrder,
   type EntityFile,
@@ -22,16 +31,10 @@ import {
   type EntityStage,
 } from '@/game/art/entityFile';
 import { parsePaletteGrid, serializePaletteGrid, type PaletteGridFile } from '@/game/art/gridFile';
-
-export interface AssemblyPreview {
-  stage: EntityStage;
-  grids: EntityFile['grids'];
-  hits: boolean;
-}
+import { blitPlacedSprite, renderSprite } from '@/game/art/spriteRenderer';
 
 export interface AssemblyHost {
   currentGrid(): PaletteGridFile | null;
-  repaint(): void;
   download(filename: string, text: string): void;
   assetUrl(name: string): string;
 }
@@ -40,16 +43,15 @@ let host: AssemblyHost | null = null;
 let entity: EntityFile | null = null;
 let stageId = '';
 let partId = '';
-let previewOn = false;
 let hitsOn = true;
+let viewMap: { scale: number; minX: number; minY: number } | null = null;
 
 export function mountAssembly(next: AssemblyHost): void {
   host = next;
   const exampleButton = must(HTMLButtonElement, 'asm-example');
-  const addButton = must(HTMLButtonElement, 'asm-add');
+  const moveButton = must(HTMLButtonElement, 'asm-move');
   const gridFile = must(HTMLInputElement, 'asm-grid-file');
   const entityFile = must(HTMLInputElement, 'asm-entity-file');
-  const preview = must(HTMLInputElement, 'asm-preview');
   const hits = must(HTMLInputElement, 'asm-hits');
   const nameInput = must(HTMLInputElement, 'asm-name');
   const stageSelect = must(HTMLSelectElement, 'asm-stage');
@@ -63,10 +65,10 @@ export function mountAssembly(next: AssemblyHost): void {
   exampleButton.addEventListener('click', () => {
     loadExample().catch((error: unknown) => fail(error));
   });
-  addButton.addEventListener('click', () => {
+  moveButton.addEventListener('click', () => {
     const grid = next.currentGrid();
     if (!grid) {
-      setStatus('先像素化一张图');
+      setStatus('先在左边做好一张零件');
       return;
     }
     try {
@@ -94,19 +96,14 @@ export function mountAssembly(next: AssemblyHost): void {
       .text()
       .then((text) => {
         adopt(parseEntityFile(text));
-        showPreview();
         setStatus(`已载入 ${entity?.name ?? '装配'}`);
-        repaint();
+        paintAssembly();
       })
       .catch((error: unknown) => fail(error));
   });
-  preview.addEventListener('change', () => {
-    previewOn = preview.checked;
-    repaint();
-  });
   hits.addEventListener('change', () => {
     hitsOn = hits.checked;
-    repaint();
+    paintAssembly();
   });
   nameInput.addEventListener('change', () => {
     renameEntity(nameInput.value);
@@ -118,7 +115,7 @@ export function mountAssembly(next: AssemblyHost): void {
     renderParts();
     fillFields();
     setStatus(stage && stage.parts.length === 0 ? '这个阶段没有部件' : '已切换阶段');
-    repaint();
+    paintAssembly();
   });
   stageIdInput.addEventListener('change', () => {
     renameStage(stageIdInput.value.trim());
@@ -149,6 +146,18 @@ export function mountAssembly(next: AssemblyHost): void {
   bindNumber('asm-layer', (part, value) => {
     part.layer = value;
   }, '层', ENTITY_LAYER_MIN, ENTITY_LAYER_MAX);
+  bindNumber('asm-scale', (part, value) => {
+    part.scale = value;
+  }, '缩放', ENTITY_SCALE_MIN, ENTITY_SCALE_MAX);
+  must(HTMLButtonElement, 'asm-layer-up').addEventListener('click', () => {
+    moveLayer(1);
+  });
+  must(HTMLButtonElement, 'asm-layer-down').addEventListener('click', () => {
+    moveLayer(-1);
+  });
+  must(HTMLCanvasElement, 'asm-view').addEventListener('click', (event) => {
+    selectAt(event);
+  });
   const angleInput = must(HTMLInputElement, 'asm-angle');
   angleInput.addEventListener('input', () => {
     editPart((part) => {
@@ -174,14 +183,8 @@ export function mountAssembly(next: AssemblyHost): void {
   bindHit('asm-hw', 'w', '受击宽');
   bindHit('asm-hh', 'h', '受击高');
   hitsOn = hits.checked;
-  setStatus('尚未装配。点「载入装配示例」，或把当前这张网格加进来。');
-}
-
-export function assemblyPreview(): AssemblyPreview | null {
-  if (!previewOn || !entity) return null;
-  const stage = entity.stages.find((item) => item.id === stageId) ?? entity.stages[0];
-  if (!stage) return null;
-  return { stage, grids: entity.grids, hits: hitsOn };
+  setStatus('尚未装配。在左边做好零件后点「移入装配」，或点「载入装配示例」。');
+  paintAssembly();
 }
 
 function loadExample(): Promise<void> {
@@ -190,9 +193,8 @@ function loadExample(): Promise<void> {
   return fetch(current.assetUrl('sample.entity.json')).then(async (response) => {
     if (!response.ok) throw new Error('装配示例读取失败');
     adopt(parseEntityFile(await response.text()));
-    showPreview();
     setStatus('已载入 folded / half / open 示例');
-    repaint();
+    paintAssembly();
   });
 }
 
@@ -217,6 +219,7 @@ function addGrid(grid: PaletteGridFile): void {
       pivot: { x: Math.floor(stored.width / 2), y: Math.floor(stored.height / 2) },
       angle: 0,
       flipX: false,
+      scale: 1,
       layer: nextLayer(stage.parts),
     };
     stage.parts.push(part);
@@ -229,10 +232,9 @@ function addGrid(grid: PaletteGridFile): void {
     else showEditor();
     throw error;
   }
-  showPreview();
   showEditor();
-  setStatus(`已加入 ${partId}`);
-  repaint();
+  setStatus(`已移入装配 ${partId}`);
+  paintAssembly();
 }
 
 function adopt(next: EntityFile): void {
@@ -284,7 +286,7 @@ function renameStage(next: string): void {
   stageId = next;
   renderStages();
   setStatus('已更新阶段');
-  repaint();
+  paintAssembly();
 }
 
 function addStage(): void {
@@ -306,7 +308,7 @@ function addStage(): void {
   }
   showEditor();
   setStatus('已新建阶段');
-  repaint();
+  paintAssembly();
 }
 
 function deletePart(): void {
@@ -317,7 +319,7 @@ function deletePart(): void {
   renderParts();
   fillFields();
   setStatus(stage.parts.length === 0 ? '这个阶段没有部件' : '已删除部件');
-  repaint();
+  paintAssembly();
 }
 
 function exportEntity(): void {
@@ -378,7 +380,7 @@ function editPart(
   setStatus('已更新');
   renderParts();
   if (fill) fillFields();
-  repaint();
+  paintAssembly();
 }
 
 function ensure(name: string): EntityFile {
@@ -402,11 +404,6 @@ function showEditor(): void {
 
 function hideEditor(): void {
   must(HTMLDivElement, 'asm-editor').hidden = true;
-}
-
-function showPreview(): void {
-  previewOn = true;
-  must(HTMLInputElement, 'asm-preview').checked = true;
 }
 
 function renderStages(): void {
@@ -439,7 +436,7 @@ function renderParts(): void {
       partId = part.id;
       renderParts();
       fillFields();
-      repaint();
+      paintAssembly();
     });
     box.append(button);
   }
@@ -457,6 +454,7 @@ function fillFields(): void {
   must(HTMLInputElement, 'asm-py').value = String(part.pivot.y);
   must(HTMLInputElement, 'asm-angle').value = formatDeg(part.angle);
   must(HTMLInputElement, 'asm-flip').checked = part.flipX;
+  must(HTMLInputElement, 'asm-scale').value = String(part.scale);
   must(HTMLInputElement, 'asm-layer').value = String(part.layer);
   must(HTMLInputElement, 'asm-hit').checked = part.hit !== undefined;
   must(HTMLInputElement, 'asm-hx').value = String(part.hit?.x ?? 0);
@@ -547,8 +545,143 @@ function formatDeg(rad: number): string {
   return String(Math.round(deg * 1000) / 1000);
 }
 
-function repaint(): void {
-  host?.repaint();
+function moveLayer(dir: 1 | -1): void {
+  const stage = currentStage();
+  if (!stage) return;
+  const order = stageDrawOrder(stage.parts);
+  const pos = order.findIndex((index) => stage.parts[index]?.id === partId);
+  const nextPos = pos + dir;
+  if (pos < 0 || nextPos < 0 || nextPos >= order.length) return;
+  const swapped = order.slice();
+  const current = swapped[pos];
+  const other = swapped[nextPos];
+  if (current === undefined || other === undefined) return;
+  swapped[pos] = other;
+  swapped[nextPos] = current;
+  swapped.forEach((partIndex, layer) => {
+    const part = stage.parts[partIndex];
+    if (part) part.layer = layer;
+  });
+  renderParts();
+  fillFields();
+  paintAssembly();
+  setStatus(dir > 0 ? '已上移，画到更前面' : '已下移，画到更后面');
+}
+
+function selectAt(event: MouseEvent): void {
+  if (!viewMap || !entity) return;
+  const canvas = must(HTMLCanvasElement, 'asm-view');
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) return;
+  const sx = ((event.clientX - rect.left) * canvas.width) / rect.width;
+  const sy = ((event.clientY - rect.top) * canvas.height) / rect.height;
+  const x = sx / viewMap.scale + viewMap.minX;
+  const y = sy / viewMap.scale + viewMap.minY;
+  const stage = currentStage();
+  if (!stage) return;
+  const order = stageDrawOrder(stage.parts);
+  for (let i = order.length - 1; i >= 0; i--) {
+    const index = order[i];
+    const part = index === undefined ? undefined : stage.parts[index];
+    if (!part) continue;
+    const grid = entity.grids[part.grid];
+    if (!grid || !placementContains(grid, part, x, y)) continue;
+    partId = part.id;
+    renderParts();
+    fillFields();
+    paintAssembly();
+    setStatus(`已选中 ${part.id}`);
+    return;
+  }
+}
+
+function paintAssembly(): void {
+  const canvas = must(HTMLCanvasElement, 'asm-view');
+  const stage = currentStage();
+  const order = stage ? stageDrawOrder(stage.parts) : [];
+  let minX = 0;
+  let minY = 0;
+  let maxX = 1;
+  let maxY = 1;
+  let seeded = false;
+  if (entity && stage) {
+    for (const index of order) {
+      const part = stage.parts[index];
+      const gridFile = part ? entity.grids[part.grid] : undefined;
+      if (!part || !gridFile) continue;
+      for (const [px, py] of placementCorners(gridFile, part)) {
+        if (!seeded) {
+          minX = px;
+          minY = py;
+          maxX = px;
+          maxY = py;
+          seeded = true;
+        } else {
+          minX = Math.min(minX, px);
+          minY = Math.min(minY, py);
+          maxX = Math.max(maxX, px);
+          maxY = Math.max(maxY, py);
+        }
+      }
+    }
+  }
+  const spanX = Math.max(1, maxX - minX);
+  const spanY = Math.max(1, maxY - minY);
+  const scale = seeded ? Math.max(1, Math.floor(LOGICAL_W / Math.max(spanX, spanY))) : 1;
+  canvas.width = seeded ? Math.max(1, Math.ceil(spanX * scale)) : 160;
+  canvas.height = seeded ? Math.max(1, Math.ceil(spanY * scale)) : 120;
+  canvas.style.imageRendering = 'pixelated';
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Failed to get 2D context');
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = EXTERIOR_VOID;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (!seeded || !entity || !stage) {
+    viewMap = null;
+    return;
+  }
+  viewMap = { scale, minX, minY };
+  ctx.setTransform(scale, 0, 0, scale, -minX * scale, -minY * scale);
+  ctx.imageSmoothingEnabled = false;
+  for (const index of order) {
+    const part = stage.parts[index];
+    const gridFile = part ? entity.grids[part.grid] : undefined;
+    if (!part || !gridFile) continue;
+    const placed = placedSprite(gridFile, part);
+    const frame = renderSprite(placed.data);
+    frame.anchorX = placed.anchorX;
+    frame.anchorY = placed.anchorY;
+    blitPlacedSprite(ctx, frame, part.x, part.y, part.angle, part.scale);
+    if (!hitsOn) continue;
+    const hit = placedHitLocal(gridFile, part);
+    if (!hit) continue;
+    ctx.save();
+    ctx.translate(part.x, part.y);
+    ctx.rotate(part.angle);
+    if (part.scale !== 1) ctx.scale(part.scale, part.scale);
+    const hitColor = PALETTE[COLOR.PLAYER_CYAN];
+    if (!hitColor) throw new Error('missing hit color');
+    ctx.strokeStyle = hitColor;
+    ctx.lineWidth = 1 / (scale * part.scale);
+    ctx.strokeRect(hit.x, hit.y, hit.w, hit.h);
+    ctx.restore();
+  }
+  const selected = stage.parts.find((part) => part.id === partId);
+  const selectedGrid = selected ? entity.grids[selected.grid] : undefined;
+  if (!selected || !selectedGrid) return;
+  const corners = placementCorners(selectedGrid, selected);
+  const mark = PALETTE[COLOR.PLAYER_GOLD_LIGHT];
+  if (!mark || corners.length === 0) return;
+  ctx.beginPath();
+  corners.forEach(([x, y], index) => {
+    if (index === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.closePath();
+  ctx.strokeStyle = mark;
+  ctx.lineWidth = 1 / scale;
+  ctx.stroke();
 }
 
 function setStatus(message: string): void {

@@ -12,10 +12,15 @@ describe('pixel editor guide', () => {
     expect(page).toContain('载入示例');
     expect(page).toContain('不是游戏正式资产');
     expect(page).toContain('载入装配示例');
-    expect(page).toContain('当前网格加入');
+    expect(page).toContain('移入装配');
     expect(page).toContain('网格文件');
     expect(page).toContain('装配文件');
+    expect(page).toContain('零件预览');
     expect(page).toContain('装配预览');
+    expect(page).toContain('id="view"');
+    expect(page).toContain('id="asm-view"');
+    expect(page).toContain('缩放');
+    expect(page).toContain('上移');
     expect(page).toContain('folded');
     expect(page).toContain('half');
     expect(page).toContain('open');

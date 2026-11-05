@@ -4,8 +4,11 @@
  * A stage is a list of parts. Each part places one locked palette grid
  * (`gridFile.ts`) by an integer pivot. The blit matches `drawPartSprite`:
  * angle 0 is the straight floored blit; any other angle translates to the
- * pivot and rotates (canvas y-down, positive clockwise). `flipX` mirrors the
- * grid in pixel indices before that blit. There is no vertical flip.
+ * pivot and rotates (canvas y-down, positive clockwise). `scale` is an integer
+ * pixel multiplier: each cell becomes a `scale`×`scale` block, nearest-neighbor,
+ * with smoothing off. Angle 0 enlarges through the floored blit. A rotated edge
+ * may cover part of a screen pixel; it is not snapped and not filtered.
+ * `flipX` mirrors the grid in pixel indices before that blit. There is no vertical flip.
  *
  * `hit`, when present, is an axis-aligned box in unflipped sprite pixels.
  * The live fight still uses its own hit circles until a boss is switched
@@ -42,6 +45,13 @@ export const ENTITY_LAYER_MAX = 999;
 
 /** Inclusive radian range (about ten turns either way). */
 export const ENTITY_ANGLE_MAX = 64;
+
+/**
+ * Integer pixel multiplier. 1 is the grid at 1 cell = 1 pixel.
+ * The editor preview zoom is not this value and is not stored.
+ */
+export const ENTITY_SCALE_MIN = 1;
+export const ENTITY_SCALE_MAX = 16;
 
 /** Inclusive range for a hit-box edge, in sprite pixels. Width and height are at least 1. */
 export const ENTITY_HIT_MIN = -1024;
@@ -85,6 +95,11 @@ export interface EntityPlacement {
   angle: number;
   /** Horizontal mirror of the grid. The pivot pixel stays on `(x, y)`. */
   flipX: boolean;
+  /**
+   * Integer pixel multiplier around the pivot. Missing on older files means 1.
+   * Angle 0 uses the floored enlarged blit. Rotation stays nearest-neighbor.
+   */
+  scale: number;
   /** Lower draws further back. Ties keep file order. */
   layer: number;
   hit?: EntityHitBox;
@@ -190,25 +205,69 @@ export function placedHit(grid: PaletteGridFile, part: EntityPlacement): EntityH
   };
 }
 
-/** Bitmap corners in entity pixels, after flip and rotation around the pivot. */
+/** Sprite rectangle around the pivot, in entity pixels, before rotation. Includes `scale`. */
+export function placementLocalBox(
+  grid: PaletteGridFile,
+  part: EntityPlacement
+): { left: number; top: number; right: number; bottom: number } {
+  const placed = placedSprite(grid, part);
+  const scale = part.scale;
+  return {
+    left: -placed.anchorX * scale,
+    top: -placed.anchorY * scale,
+    right: (grid.width - placed.anchorX) * scale,
+    bottom: (grid.height - placed.anchorY) * scale,
+  };
+}
+
+/** Bitmap corners in entity pixels, after flip, scale, and rotation around the pivot. */
 export function placementCorners(
   grid: PaletteGridFile,
   part: EntityPlacement
 ): Array<[number, number]> {
-  const placed = placedSprite(grid, part);
-  const left = -placed.anchorX;
-  const top = -placed.anchorY;
-  const right = grid.width - placed.anchorX;
-  const bottom = grid.height - placed.anchorY;
+  const box = placementLocalBox(grid, part);
   const local: Array<[number, number]> = [
-    [left, top],
-    [right, top],
-    [right, bottom],
-    [left, bottom],
+    [box.left, box.top],
+    [box.right, box.top],
+    [box.right, box.bottom],
+    [box.left, box.bottom],
   ];
   const c = Math.cos(part.angle);
   const s = Math.sin(part.angle);
   return local.map(([x, y]) => [part.x + x * c - y * s, part.y + x * s + y * c]);
+}
+
+/** True when the entity-space point lies in the scaled, rotated sprite rectangle. */
+export function placementContains(
+  grid: PaletteGridFile,
+  part: EntityPlacement,
+  x: number,
+  y: number
+): boolean {
+  const box = placementLocalBox(grid, part);
+  const dx = x - part.x;
+  const dy = y - part.y;
+  const c = Math.cos(part.angle);
+  const s = Math.sin(part.angle);
+  const lx = dx * c + dy * s;
+  const ly = -dx * s + dy * c;
+  return lx >= box.left && lx < box.right && ly >= box.top && ly < box.bottom;
+}
+
+/**
+ * Hit box relative to the pivot, after `flipX` and before `scale` and `angle`.
+ * Draw it in that local space, then scale and rotate with the sprite.
+ */
+export function placedHitLocal(grid: PaletteGridFile, part: EntityPlacement): EntityHitBox | null {
+  const hit = placedHit(grid, part);
+  if (!hit) return null;
+  const placed = placedSprite(grid, part);
+  return {
+    x: hit.x - placed.anchorX,
+    y: hit.y - placed.anchorY,
+    w: hit.w,
+    h: hit.h,
+  };
 }
 
 /**
@@ -271,6 +330,7 @@ function bodyPart(): EntityPlacement {
     pivot: { x: 4, y: 5 },
     angle: 0,
     flipX: false,
+    scale: 1,
     layer: 0,
     hit: { x: 0, y: 0, w: 8, h: 10 },
   };
@@ -291,6 +351,7 @@ function wingPart(
     pivot: { x: 3, y: 1 },
     angle,
     flipX,
+    scale: 1,
     layer: 1,
   };
   if (hit) part.hit = { x: 0, y: 0, w: 4, h: 8 };
@@ -393,6 +454,7 @@ function shapePlacement(part: EntityPlacement): EntityPlacement {
     pivot: { x: part.pivot.x, y: part.pivot.y },
     angle: part.angle,
     flipX: part.flipX,
+    scale: part.scale,
     layer: part.layer,
   };
   if (part.hit) shaped.hit = { x: part.hit.x, y: part.hit.y, w: part.hit.w, h: part.hit.h };
@@ -465,6 +527,7 @@ function parsePlacement(value: unknown, grids: Record<string, PaletteGridFile>):
     },
     angle: asAngle(raw.angle),
     flipX: asBool(raw.flipX, 'flipX'),
+    scale: asScale(raw.scale),
     layer: asInt(raw.layer, 'layer', ENTITY_LAYER_MIN, ENTITY_LAYER_MAX),
   };
   if (raw.hit !== undefined) part.hit = parseHit(raw.hit);
@@ -479,6 +542,11 @@ function parseHit(value: unknown): EntityHitBox {
     w: asInt(raw.w, 'hit.w', 1, ENTITY_HIT_MAX),
     h: asInt(raw.h, 'hit.h', 1, ENTITY_HIT_MAX),
   };
+}
+
+function asScale(value: unknown): number {
+  if (value === undefined) return 1;
+  return asInt(value, 'scale', ENTITY_SCALE_MIN, ENTITY_SCALE_MAX);
 }
 
 function asAngle(value: unknown): number {

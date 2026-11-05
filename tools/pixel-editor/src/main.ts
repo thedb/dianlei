@@ -1,19 +1,10 @@
 /**
- * Local pixelizer and assembly preview.
- * A single grid uses `renderSprite` + `blitSprite`.
- * A stage uses `blitPlacedSprite`, the same placement as `drawPartSprite`.
- * The hit rectangle is an editor overlay drawn after that blit.
+ * Part pixelizer. The left canvas is only the current grid (`renderSprite` + `blitSprite`).
+ * The assembly canvas lives in `assembly.ts` and is never this one.
  */
 
 import { LOGICAL_W } from '@/game/config';
 import { EXTERIOR_VOID } from '@/engine/exterior';
-import { COLOR, PALETTE } from '@/game/palette';
-import {
-  placedHit,
-  placedSprite,
-  placementCorners,
-  stageDrawOrder,
-} from '@/game/art/entityFile';
 import {
   gridToSpriteData,
   serializePaletteGrid,
@@ -24,8 +15,8 @@ import {
 } from '@/game/art/gridFile';
 import { pixelize, type RgbaImage } from '@/game/art/pixelize';
 import { decodePngRgba } from '@/game/art/pngRgba';
-import { blitPlacedSprite, blitSprite, renderSprite } from '@/game/art/spriteRenderer';
-import { assemblyPreview, mountAssembly, type AssemblyPreview } from './assembly';
+import { blitSprite, renderSprite } from '@/game/art/spriteRenderer';
+import { mountAssembly } from './assembly';
 import { mountGuide } from './guide';
 
 document.body.style.margin = '0';
@@ -74,11 +65,11 @@ exportButton.addEventListener('click', () => {
 });
 mountAssembly({
   currentGrid: () => grid,
-  repaint: () => redraw(),
   download,
   assetUrl,
 });
 mountGuide();
+paint(null);
 
 loadFixtureText().catch(() => {
   fixtureText = null;
@@ -143,96 +134,33 @@ function redraw(): void {
       report(error);
     }
   }
-  const preview = assemblyPreview();
-  if (preview) {
-    paintAssembly(preview);
-    return;
-  }
-  if (grid) paint(grid);
+  paint(grid);
 }
 
-function paint(next: PaletteGridFile): void {
+function paint(next: PaletteGridFile | null): void {
+  const ctx = view.getContext('2d');
+  if (!ctx) throw new Error('Failed to get 2D context');
+  if (!next) {
+    view.width = 160;
+    view.height = 120;
+    view.style.imageRendering = 'pixelated';
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = EXTERIOR_VOID;
+    ctx.fillRect(0, 0, view.width, view.height);
+    return;
+  }
   const frame = renderSprite(gridToSpriteData(next));
   const long = Math.max(frame.width, frame.height);
   const scale = Math.max(1, Math.floor(LOGICAL_W / long));
   view.width = frame.width * scale;
   view.height = frame.height * scale;
   view.style.imageRendering = 'pixelated';
-  const ctx = view.getContext('2d');
-  if (!ctx) throw new Error('Failed to get 2D context');
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.imageSmoothingEnabled = false;
   ctx.fillStyle = EXTERIOR_VOID;
   ctx.fillRect(0, 0, view.width, view.height);
   blitSprite(ctx, frame, 0, 0, frame.width * scale, frame.height * scale);
-}
-
-/**
- * Compose one stage with the game's placed blit.
- * The hit stroke is an editor overlay drawn after the sprites.
- */
-function paintAssembly(preview: AssemblyPreview): void {
-  const order = stageDrawOrder(preview.stage.parts);
-  let minX = 0;
-  let minY = 0;
-  let maxX = 1;
-  let maxY = 1;
-  let seeded = false;
-  for (const index of order) {
-    const part = preview.stage.parts[index];
-    const gridFile = part ? preview.grids[part.grid] : undefined;
-    if (!part || !gridFile) throw new Error(`缺少网格 ${part?.grid ?? ''}`);
-    for (const [x, y] of placementCorners(gridFile, part)) {
-      if (!seeded) {
-        minX = x;
-        minY = y;
-        maxX = x;
-        maxY = y;
-        seeded = true;
-      } else {
-        minX = Math.min(minX, x);
-        minY = Math.min(minY, y);
-        maxX = Math.max(maxX, x);
-        maxY = Math.max(maxY, y);
-      }
-    }
-  }
-  const spanX = Math.max(1, maxX - minX);
-  const spanY = Math.max(1, maxY - minY);
-  const scale = Math.max(1, Math.floor(LOGICAL_W / Math.max(spanX, spanY)));
-  view.width = Math.max(1, Math.ceil(spanX * scale));
-  view.height = Math.max(1, Math.ceil(spanY * scale));
-  view.style.imageRendering = 'pixelated';
-  const ctx = view.getContext('2d');
-  if (!ctx) throw new Error('Failed to get 2D context');
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.imageSmoothingEnabled = false;
-  ctx.fillStyle = EXTERIOR_VOID;
-  ctx.fillRect(0, 0, view.width, view.height);
-  ctx.setTransform(scale, 0, 0, scale, -minX * scale, -minY * scale);
-  ctx.imageSmoothingEnabled = false;
-  for (const index of order) {
-    const part = preview.stage.parts[index];
-    const gridFile = part ? preview.grids[part.grid] : undefined;
-    if (!part || !gridFile) continue;
-    const placed = placedSprite(gridFile, part);
-    const frame = renderSprite(placed.data);
-    frame.anchorX = placed.anchorX;
-    frame.anchorY = placed.anchorY;
-    blitPlacedSprite(ctx, frame, part.x, part.y, part.angle);
-    if (!preview.hits) continue;
-    const hit = placedHit(gridFile, part);
-    if (!hit) continue;
-    ctx.save();
-    ctx.translate(part.x, part.y);
-    ctx.rotate(part.angle);
-    const hitColor = PALETTE[COLOR.PLAYER_CYAN];
-    if (!hitColor) throw new Error('missing hit color');
-    ctx.strokeStyle = hitColor;
-    ctx.lineWidth = 1 / scale;
-    ctx.strokeRect(hit.x, hit.y, hit.w, hit.h);
-    ctx.restore();
-  }
 }
 
 function readParams(source: RgbaImage): GridPixelizeParams {
