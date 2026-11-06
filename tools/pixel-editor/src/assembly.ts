@@ -65,6 +65,15 @@ import {
 } from '@/game/art/entityHandles';
 import { gridColorStats } from '@/game/art/gridStats';
 import { blitPlacedSprite, renderSprite } from '@/game/art/spriteRenderer';
+import { BANK_STAGE_IDS, clearBankData, hasBankData } from './bankData';
+import {
+  BANK_STRIP_CELLS,
+  bankFrameTitle,
+  bankStripLabel,
+  bankStripLevel,
+  bankStripMirrored,
+  bankStripSelected,
+} from './bankStrip';
 import { colorWarnings, renderColorStats } from './colorStats';
 import {
   closePlaybackPanel,
@@ -99,7 +108,6 @@ let viewMap: { scale: number; minX: number; minY: number; bleed: number } | null
 const FRAME_BLEED = 2;
 /** Anchor flicker period. Only repaints while a visible anchor exists. */
 const FLICKER_MS = 120;
-const BANK_STAGE_IDS = ['t0', 't1', 't2', 't3', 't4', 't5'] as const;
 const NUDGE_STEP = 1;
 const NUDGE_SHIFT_STEP = 8;
 
@@ -108,8 +116,6 @@ let refSize: { width: number; height: number } | null = null;
 let flickerPhase = false;
 /** Pose drawn instead of the current stage while the playback panel plays or is paused. */
 let playPose: PlayedFrame | null = null;
-/** Cells in the bank strip: left 5 (mirrored t5…t1), t0, right t1…t5. */
-const BANK_CELLS = 11;
 const BANK_PAD = 3;
 const BANK_MAX_H = 84;
 const BANK_LABEL_H = 14;
@@ -243,6 +249,9 @@ export function mountAssembly(next: AssemblyHost): void {
   });
   must(HTMLButtonElement, 'asm-bank').addEventListener('click', () => {
     addBankStages();
+  });
+  must(HTMLButtonElement, 'asm-bank-clear').addEventListener('click', () => {
+    clearBankStages();
   });
   mountPlayback({
     entity: () => entity,
@@ -860,6 +869,7 @@ function hideEditor(): void {
 function renderStages(): void {
   const select = must(HTMLSelectElement, 'asm-stage');
   select.replaceChildren();
+  syncBankActions();
   if (!entity) return;
   for (const stage of entity.stages) {
     const option = document.createElement('option');
@@ -870,6 +880,14 @@ function renderStages(): void {
   select.value = stageId;
   fillStageId();
   refreshPlaybackStages();
+}
+
+function syncBankActions(): void {
+  const button = must(HTMLButtonElement, 'asm-bank-clear');
+  button.disabled = !hasBankData(entity);
+  button.title = button.disabled
+    ? '当前没有可清除的侧倾帧。'
+    : '删除 t1–t5 侧倾帧及 bank 参数；保留 t0、其他阶段、网格和装配零件。';
 }
 
 function renderParts(): void {
@@ -1094,6 +1112,47 @@ function addBankStages(): void {
   );
 }
 
+function clearBankStages(): void {
+  if (!entity || !hasBankData(entity)) return;
+  const bankIds = entity.stages
+    .filter((stage) => stage.id !== 't0' && (stage.bank || bankLevel(stage.id) > 0))
+    .map((stage) => stage.id);
+  const named = bankIds.length > 0 ? bankIds.join('、') : 'bank 参数';
+  if (
+    !window.confirm(
+      `清除侧倾数据 ${named}？\n\n会保留 t0、其他阶段、网格和装配零件。清除后可修改 t0，再用「侧倾 t0–t5」重新生成。此操作不能撤销。`
+    )
+  ) {
+    return;
+  }
+
+  const backup = serializeEntityFile(entity);
+  closePlaybackPanel();
+  const result = clearBankData(entity);
+  try {
+    serializeEntityFile(entity);
+  } catch (error) {
+    entity = parseEntityFile(backup);
+    showEditor();
+    fail(error);
+    return;
+  }
+
+  bankOpen = false;
+  bankFrameId = 't1';
+  bankCell = 6;
+  partId = '';
+  const next = entity.stages.find((stage) => stage.id === 't0') ?? entity.stages[0];
+  stageId = next?.id ?? '';
+  showEditor();
+  paintBank();
+  paintAssembly();
+  const removed = result.removedStageIds.length > 0 ? result.removedStageIds.join('、') : 'bank 参数';
+  setStatus(
+    `已清除侧倾数据 ${removed}。t0、其他阶段和装配零件已保留；修改 t0 后可重新生成侧倾`
+  );
+}
+
 /**
  * Rebuild every bank stage whose source or parameters changed.
  * A bank stage whose parts no longer match the last rebuild was edited by hand:
@@ -1195,14 +1254,14 @@ function pickBankFrame(event: MouseEvent): void {
   const canvas = must(HTMLCanvasElement, 'bank-view');
   const rect = canvas.getBoundingClientRect();
   if (rect.width <= 0) return;
-  const cell = Math.floor(((event.clientX - rect.left) / rect.width) * BANK_CELLS);
-  if (cell < 0 || cell >= BANK_CELLS) return;
+  const cell = Math.floor(((event.clientX - rect.left) / rect.width) * BANK_STRIP_CELLS);
+  if (cell < 0 || cell >= BANK_STRIP_CELLS) return;
   selectBankCell(cell);
 }
 
 function stepBankCell(dir: -1 | 1): void {
   if (!bankOpen || !entity) return;
-  const next = Math.max(0, Math.min(BANK_CELLS - 1, bankCell + dir));
+  const next = Math.max(0, Math.min(BANK_STRIP_CELLS - 1, bankCell + dir));
   if (next === bankCell) {
     setStatus(next === 0 ? '已经是最左一格（左 5 镜像）' : '已经是最右一格（t5）');
     return;
@@ -1256,10 +1315,10 @@ function paintBank(): void {
   const avail = Math.max(220, (canvas.parentElement?.clientWidth ?? 0) - 4);
   const scale = Math.max(
     1,
-    Math.min(Math.floor(avail / (BANK_CELLS * cellW)), Math.floor(BANK_MAX_H / cellH))
+    Math.min(Math.floor(avail / (BANK_STRIP_CELLS * cellW)), Math.floor(BANK_MAX_H / cellH))
   );
   const cellPx = cellW * scale;
-  canvas.width = BANK_CELLS * cellPx;
+  canvas.width = BANK_STRIP_CELLS * cellPx;
   canvas.height = cellH * scale + BANK_LABEL_H;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Failed to get 2D context');
@@ -1268,29 +1327,27 @@ function paintBank(): void {
   ctx.fillStyle = EXTERIOR_VOID;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   const mark = PALETTE[COLOR.PLAYER_GOLD_LIGHT] ?? '#fdb927';
-  for (let cell = 0; cell < BANK_CELLS; cell++) {
-    const level = Math.abs(cell - 5);
-    const mirrored = cell < 5;
+  for (let cell = 0; cell < BANK_STRIP_CELLS; cell++) {
+    const level = bankStripLevel(cell);
+    const mirrored = bankStripMirrored(cell);
     const stage = stages[level] ?? null;
     const x0 = cell * cellPx;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = mirrored ? '#0c1420' : '#102236';
     ctx.fillRect(x0 + 1, 0, cellPx - 2, cellH * scale);
-    const picked = `t${level}` === bankFrameId;
-    if (picked) {
+    if (bankStripSelected(cell, bankCell)) {
       ctx.strokeStyle = mark;
-      ctx.globalAlpha = cell === bankCell ? 1 : 0.4;
       ctx.lineWidth = 2;
       ctx.strokeRect(x0 + 2, 1, cellPx - 4, cellH * scale - 2);
-      ctx.globalAlpha = 1;
     }
     ctx.fillStyle = mirrored ? '#6e7f90' : '#cfe3ee';
     ctx.font = '11px system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    const name = level === 0 ? 't0 平飞' : mirrored ? `左${level} 镜像` : `t${level}`;
+    const name = bankStripLabel(cell);
     ctx.fillText(stage ? name : `${name} 无`, x0 + cellPx / 2, cellH * scale + 2);
     if (!stage) continue;
+    // Negative scaleX is the horizontal mirror of this level. The nose stays up.
     ctx.setTransform(
       mirrored ? -scale : scale,
       0,
@@ -1333,9 +1390,10 @@ function fillBankControls(): void {
   mode.title = bank
     ? '保留现在的零件，以后不跟 t0 重算，可以在装配里一件件改。'
     : '用默认参数从 t0 重新生成这一帧，会盖掉手调。';
-  must(HTMLElement, 'bank-frame').textContent = stage
+  const stageLabel = stage
     ? `${stage.id}${stage.name ? ` ${stage.name}` : ''}`
     : `${bankFrameId}（无）`;
+  must(HTMLElement, 'bank-frame').textContent = bankFrameTitle(bankCell, stageLabel);
   const [angle, sx, sy, taper] = ranges;
   if (bank && angle && sx && sy && taper) {
     angle.value = formatDeg(bank.angle);

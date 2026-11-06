@@ -130,6 +130,16 @@ export function stopPlayback(): void {
 export function refreshPlaybackStages(): void {
   const entity = host?.entity();
   const ids = entity?.stages.map((stage) => ({ id: stage.id, name: stage.name })) ?? [];
+  const bankOption = must(HTMLOptionElement, 'play-bank-option');
+  const bankAvailable = entity !== null && entity !== undefined && bankDepth(entity) > 0;
+  bankOption.disabled = !bankAvailable;
+  bankOption.title = bankAvailable ? '' : '先生成 t1–t5 侧倾帧后再播放侧倾循环。';
+  const mode = must(HTMLSelectElement, 'play-mode');
+  if (!bankAvailable && mode.value === 'bank') {
+    mode.value = 'pair';
+    timeline = null;
+    syncModeFields();
+  }
   const from = must(HTMLSelectElement, 'play-from');
   const to = must(HTMLSelectElement, 'play-to');
   const keepFrom = from.value;
