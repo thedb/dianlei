@@ -1,0 +1,576 @@
+:root {
+  font:
+    14px/1.45 ui-sans-serif,
+    sans-serif;
+  color-scheme: dark;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+}
+
+main {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+header {
+  flex: none;
+  padding: 12px 16px 0;
+}
+
+h1 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.title-row h1,
+.title-row button,
+.toolbar button,
+.inspector-head button {
+  margin: 0;
+}
+
+h2,
+h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.hint {
+  margin: 0;
+  color: #9ec4d4;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+code {
+  font-size: 0.95em;
+}
+
+header p {
+  margin: 6px 0 8px;
+}
+
+.stage {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.stage-main {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 16px 12px;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  flex: none;
+}
+
+.toolbar .hint,
+.toolbar .hints {
+  flex-basis: 100%;
+}
+
+.hints summary {
+  cursor: pointer;
+  color: #9ec4d4;
+  font-size: 12px;
+}
+
+.hints[open] {
+  max-height: 30vh;
+  overflow: auto;
+}
+
+.hints .hint {
+  margin: 4px 0;
+}
+
+.canvas-slot {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+#asm-view {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  margin: 0;
+  background: #0a1828;
+  cursor: crosshair;
+}
+
+#asm-inspector {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(320px, 38vw);
+  box-sizing: border-box;
+  overflow: auto;
+  padding: 12px 16px 24px;
+  border-left: 1px solid #7ee0f0;
+  background: #071422;
+  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.35);
+  transform: translateX(100%);
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    transform 200ms ease,
+    visibility 0s linear 200ms;
+}
+
+#asm-inspector.is-open {
+  transform: translateX(0);
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    transform 200ms ease,
+    visibility 0s linear 0s;
+}
+
+.inspector-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+label {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin: 8px 0;
+}
+
+.toolbar label {
+  margin: 0;
+  width: auto;
+  gap: 6px;
+}
+
+input,
+select,
+button {
+  font: inherit;
+}
+
+button {
+  margin-top: 8px;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+canvas {
+  image-rendering: pixelated;
+}
+
+.part-view {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 56px;
+  margin: 6px 0 8px;
+  border: 1px dashed #23415a;
+  background: #0a1828;
+}
+
+#part-dialog canvas {
+  display: block;
+  max-width: 100%;
+  max-height: min(34vh, 280px);
+  width: auto;
+  height: auto;
+  margin: 0;
+}
+
+#part-dialog canvas[hidden] {
+  display: none;
+}
+
+.part-empty {
+  margin: 0;
+  padding: 12px;
+  font-size: 13px;
+  color: #8fb4c4;
+  text-align: center;
+}
+
+.part-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 14px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.part-fields label {
+  margin: 2px 0;
+}
+
+.part-fields input[type='number'],
+.part-fields select {
+  width: 6.5em;
+}
+
+.part-fields button {
+  margin-top: 0;
+}
+
+.part-source label {
+  margin: 0;
+}
+
+.part-source input[type='file'] {
+  max-width: 13em;
+}
+
+.part-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 8px 0;
+}
+
+button.primary {
+  margin-top: 0;
+  padding: 10px 14px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+button.primary:not(:disabled) {
+  border-color: #7ee0f0;
+  background: #12465a;
+  color: #ffffff;
+}
+
+details.hints {
+  margin-top: 6px;
+}
+
+details.hints summary {
+  cursor: pointer;
+  color: #8fb4c4;
+  margin-bottom: 6px;
+}
+
+#status,
+#asm-status {
+  flex: none;
+  min-height: 1.4em;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.parts-row {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.parts-row > .hint {
+  flex: none;
+}
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: center;
+  margin: 4px 0;
+  font-size: 12px;
+}
+
+.swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.swatch i {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 1px solid #9ec4d4;
+}
+
+.warn {
+  margin: 4px 0 8px;
+  color: #ffc040;
+  font-size: 12px;
+}
+
+.hint.warn {
+  color: #ffc040;
+}
+
+.anchor-row {
+  display: grid;
+  grid-template-columns: 4.5em minmax(0, 1fr) 4em 4em auto;
+  gap: 4px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.anchor-row input,
+.anchor-row select {
+  min-width: 0;
+}
+
+.anchor-row button {
+  margin-top: 0;
+}
+
+#asm-inspector h3 {
+  margin: 12px 0 4px;
+}
+
+#asm-parts {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 4px;
+  overflow-x: auto;
+}
+
+#asm-parts button {
+  margin-top: 0;
+  white-space: nowrap;
+}
+
+#asm-parts button[aria-pressed='true'] {
+  outline: 2px solid #fdb927;
+}
+
+dialog {
+  width: min(640px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  border: 1px solid #7ee0f0;
+  background: #0a1828;
+  color: #e8f4f8;
+  padding: 20px 24px;
+}
+
+#part-dialog,
+#batch-dialog {
+  width: min(480px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  box-sizing: border-box;
+  padding: 12px 16px;
+}
+
+.compare-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 6px 0;
+}
+
+.compare-row figure {
+  margin: 0;
+}
+
+.compare-row canvas {
+  display: block;
+  max-width: 100%;
+  max-height: 22vh;
+  width: auto;
+  height: auto;
+  background: #0a1828;
+}
+
+.compare-row figcaption {
+  font-size: 12px;
+  color: #8fb4c4;
+}
+
+#batch-list {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  max-height: 28vh;
+  overflow: auto;
+  font-size: 13px;
+}
+
+#batch-list .ok {
+  color: #b7e3c2;
+}
+
+#batch-list .bad {
+  color: #ffb0b0;
+}
+
+#part-dialog h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+@media (max-width: 420px) {
+  .part-fields,
+  .part-actions {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-height: 640px) {
+  #part-dialog canvas {
+    max-height: 26vh;
+  }
+
+  #part-dialog > .hint {
+    display: none;
+  }
+}
+
+dialog::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+dialog ol {
+  margin: 8px 0;
+  padding-left: 1.3em;
+}
+
+dialog .hint,
+#asm-inspector .hint {
+  margin: 0 0 10px;
+}
+
+@media (max-width: 800px) {
+  #asm-inspector {
+    width: min(320px, 86vw);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #asm-inspector {
+    transition: none;
+  }
+}
+
+.bank-panel {
+  flex: none;
+  margin-top: 6px;
+  padding: 6px 0 2px;
+  border-top: 1px solid #23415a;
+}
+
+.bank-head {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.bank-head h2 {
+  flex: none;
+  margin: 0;
+  font-size: 14px;
+}
+
+.bank-head .hint {
+  flex: 1;
+  margin: 0;
+}
+
+.bank-head button {
+  flex: none;
+  margin-top: 0;
+}
+
+#bank-view {
+  display: block;
+  max-width: 100%;
+  margin: 6px 0;
+  image-rendering: pixelated;
+  cursor: pointer;
+}
+
+.bank-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  align-items: center;
+}
+
+.bank-controls label {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.bank-controls output {
+  min-width: 3.5em;
+  font-variant-numeric: tabular-nums;
+}
+
+.bank-controls button {
+  margin-top: 0;
+}
+
+#asm-view:focus-visible,
+#bank-view:focus-visible {
+  outline: 2px solid #fdb927;
+  outline-offset: 2px;
+}
+
+.play-transport input[type='range'] {
+  flex: 1;
+  min-width: 160px;
+}
+
+#play-frame {
+  font-variant-numeric: tabular-nums;
+}

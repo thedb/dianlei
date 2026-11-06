@@ -1,0 +1,17 @@
+{
+  "name": "dianlei-pixel-editor",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Local palette pixelizer for 电雷. Not part of the game package.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.2",
+    "vite": "^5.0.2"
+  }
+}

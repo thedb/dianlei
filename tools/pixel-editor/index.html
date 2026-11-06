@@ -1,0 +1,708 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>电雷像素化</title>
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="title-row">
+          <h1>电雷像素化</h1>
+          <div class="row">
+            <button id="part-open" type="button" title="打开零件预览弹窗。主界面仍是装配。">零件预览</button>
+            <button id="batch-open" type="button" title="用同一套参数把多张 PNG 收成网格，打成一个 zip。">批量量化</button>
+            <button id="guide-open" type="button">使用说明</button>
+          </div>
+        </div>
+        <p>
+          主界面是装配预览。零件在「零件预览」弹窗里做，两块画布互不相干。参考 PNG 只是原料。游戏以后只认导出的 JSON。
+        </p>
+      </header>
+      <section id="assembly-pane" class="stage">
+        <div class="stage-main">
+          <div class="toolbar">
+            <button
+              id="asm-example"
+              type="button"
+              title="打开样例装配：机身加一对翼，三个阶段 folded / half / open。用来冒烟，不是现役 Boss。"
+              aria-describedby="hint-asm-example"
+            >
+              载入装配示例
+            </button>
+            <button
+              id="asm-clear"
+              type="button"
+              disabled
+              title="清掉当前装配，之后可以再点「载入示例」和「载入装配示例」。"
+            >
+              清空装配
+            </button>
+            <label>
+              网格文件
+              <input
+                id="asm-grid-file"
+                type="file"
+                accept=".json,application/json"
+                title="读取一份已经导出的 *.grid.json，加进零件列表。"
+                aria-describedby="hint-grid-file"
+              />
+            </label>
+            <label>
+              装配文件
+              <input
+                id="asm-entity-file"
+                type="file"
+                accept=".json,application/json"
+                title="读取一份 *.entity.json，整份换上。"
+                aria-describedby="hint-entity-file"
+              />
+            </label>
+            <label>
+              受击框
+              <input id="asm-hits" type="checkbox" checked title="画出所有零件的受击框。青色实线是可打，灰色虚线是仅阻挡。当前选中的零件即使不勾也会画，并且更粗。战斗还不读。" />
+            </label>
+            <label>
+              锚点
+              <input id="asm-anchors" type="checkbox" checked title="闪烁显示尾焰喷口（黄橙方块）和枪口（白十字）。当前选中的零件即使不勾也会画。" />
+            </label>
+            <label>
+              对照尺寸
+              <select id="asm-ref" title="在画布上叠一个粉色虚线框，对照局内机体大小。不裁切零件。" aria-describedby="hint-ref">
+                <option value="">不对照</option>
+                <option value="28x32">Eagle 28×32</option>
+                <option value="48x32">Mandy 48×32</option>
+                <option value="26x30">Jason 26×30</option>
+                <option value="24x24">小型敌机 24×24</option>
+                <option value="36x36">中型敌机 36×36</option>
+                <option value="80x96">黑曜机身 80×96</option>
+                <option value="200x132">炉心底盘 200×132</option>
+                <option value="220x140">百战 Boss 220×140</option>
+              </select>
+            </label>
+            <label>
+              边界宽
+              <input id="asm-frame-w" type="number" min="1" max="4096" step="1" value="32" title="当前装配的预览边界宽度。载入后按零件包围盒重算。中心在原点。" aria-describedby="hint-frame" />
+            </label>
+            <label>
+              边界高
+              <input id="asm-frame-h" type="number" min="1" max="4096" step="1" value="32" title="当前装配的预览边界高度。载入后按零件包围盒重算。" aria-describedby="hint-frame" />
+            </label>
+            <button id="asm-frame-fit" type="button" title="把边界缩到包住所有阶段的零件，远处再留 8 像素。">框住零件</button>
+            <p id="asm-size" class="hint" aria-live="polite"></p>
+            <details class="hints">
+              <summary>按钮说明</summary>
+            <p id="hint-frame" class="hint">
+              白框是当前这套装配的编辑边界，中心在原点。拉伸、斜切、旋转、移动零件都不会改它的大小和位置，视图也不跟着零件缩放；只有「边界宽」「边界高」「框住零件」会改。局内逻辑画面是 360×640，那是游戏屏幕，不是这个框的默认大小。载入装配、载入示例或移入零件后，按零件包围盒外加 8 像素重算。手改宽高，或点「框住零件」，才写入 <code>previewFrame</code>；没改过不写。文件里若已有这个字段，载入时用文件里的数。战斗不读。
+            </p>
+            <p id="hint-ref" class="hint">
+              「对照尺寸」叠一个粉色虚线框，中心在原点：玩家机约 26×30（Jason）到 48×32（Mandy），Eagle 28×32；Boss 两百像素上下。只作对照，不裁切，也不写进文件。
+            </p>
+            <p id="hint-asm-example" class="hint">
+              「载入装配示例」打开 <code>sample.entity.json</code>：一块机身加一对翼，阶段是 folded（收起）、half（一边张开）、open（两边张开）。用来冒烟，不是现役黑曜。装配里一旦有零件，这个按钮和零件弹窗里的「载入示例」都不可点。点「清空装配」后恢复。点零件后，调参栏从画布右侧滑入，画布大小不变。
+            </p>
+            <p id="hint-grid-file" class="hint">
+              「网格文件」读取一份已经导出的 <code>*.grid.json</code>（一张调色板像素图，像一张精灵锁定稿），把它加进零件列表。
+            </p>
+            <p id="hint-entity-file" class="hint">
+              「装配文件」读取一份 <code>*.entity.json</code>：多张网格，加上各阶段的位置、轴心、角度、缩放、水平翻转、层和可选受击框。选中后整份换上，用来核对导出再载入。
+            </p>
+            </details>
+          </div>
+          <div id="asm-editor" hidden>
+            <div class="toolbar">
+              <label>
+                名称
+                <input id="asm-name" type="text" maxlength="128" title="导出文件名用这个名字。" />
+              </label>
+              <label>
+                阶段
+                <select id="asm-stage" title="同一架机体的一个姿势。" aria-describedby="hint-stage"></select>
+              </label>
+              <label>
+                阶段 id
+                <input id="asm-stage-id" type="text" maxlength="32" title="这个姿势在文件里的名字。" />
+              </label>
+              <label>
+                说明
+                <input id="asm-stage-name" type="text" maxlength="128" placeholder="例如 折叠" title="给人看的阶段说明，写进文件的 name。可以留空。" />
+              </label>
+              <button id="asm-add-stage" type="button" title="再加一个空姿势。">新阶段</button>
+              <button id="asm-dup-stage" type="button" title="把当前阶段整份复制成新阶段，零件 id 不变，再去改角度和位移。">复制阶段</button>
+              <button id="asm-del-stage" type="button" title="删掉当前阶段。至少留一个。">删除阶段</button>
+              <button id="asm-bank" type="button" title="玩家机：以 t0（平飞）为原稿生成 t1–t5（右倾），并在装配下方打开侧倾对比。没有 t0 时先把当前阶段复制成 t0。左倾由游戏镜像。" aria-describedby="hint-bank">侧倾 t0–t5</button>
+              <button id="asm-play" type="button" aria-pressed="false" title="打开播放预览：阶段之间平滑过渡，或侧倾循环。再点一次停止并收起。" aria-describedby="hint-play">播放预览</button>
+              <button id="asm-export" type="button" title="下载装配文件 *.entity.json。" aria-describedby="hint-entity-export">
+                导出 .entity.json
+              </button>
+              <details class="hints">
+                <summary>阶段说明</summary>
+              <p id="hint-stage" class="hint">
+                「阶段」是同一架机体的一个姿势。示例里 folded 是收起，half 是一边张开，open 是两边张开。切换时装配画布上的翼会动，零件预览弹窗不动。
+              </p>
+              <p id="hint-entity-export" class="hint">
+                「导出 .entity.json」下载装配文件。这是过门的锁定稿。现役 Boss 还没有改去读它。<code>previewFrame</code> 只是预览边界，战斗不读。
+              </p>
+              <p id="hint-bank" class="hint">
+                一个姿态一个阶段。Boss 用 folded / half / open 这类阶段。玩家机点「侧倾 t0–t5」：t0 平飞是原稿，t1–t5 由 t0 加每帧参数（角度、横向拉伸、纵向拉伸、透视）算出，在装配下方的「侧倾对比」里调。左倾和局内一样由代码把右倾水平镜像，不进文件。改 t0，t1–t5 跟着重算；直接改某一帧的零件，那一帧变成手调，不再跟 t0。零件 id 在各阶段相同，「复制到阶段」按 id 对上。
+              </p>
+              <p id="hint-play" class="hint">
+                「播放预览」在装配画布上连续播放，不改文件。可以选「阶段 A → B」「全部阶段依次」或「侧倾循环」。阶段之间按零件 id 对上，插值位置、角度（走近的那边）、缩放、拉伸和斜切；翻转、换网格、层和只在一边出现的零件在过渡一半时切换。侧倾循环是 t0 → 右倾 t1–t5 → t0 → 左倾（右倾镜像）→ t0。
+              </p>
+              </details>
+            </div>
+          </div>
+          <div class="canvas-slot">
+            <canvas id="asm-view" width="160" height="120" tabindex="0" aria-label="装配画布。选中零件后拖角点或边点拉伸，拖顶上圆点旋转，拖零件内部移动；方向键挪位置。"></canvas>
+            <aside id="asm-inspector" aria-hidden="true" inert aria-labelledby="asm-inspector-title">
+              <div class="inspector-head">
+                <h2 id="asm-inspector-title">选中零件</h2>
+                <button id="asm-inspector-close" type="button" title="退出调参。也可以按 Esc，或点画布空白处。">关闭</button>
+              </div>
+              <p class="hint">只调这一件。这一栏从画布右侧滑入，装配画布的大小不变。Esc、关闭，或点画布空白处滑出。</p>
+              <div id="asm-fields">
+            <label>
+              x
+              <input id="asm-x" type="number" step="1" title="轴心在机体上的横向位置。向右为正。" />
+            </label>
+            <label>
+              y
+              <input id="asm-y" type="number" step="1" title="轴心在机体上的纵向位置。向下为正。" />
+            </label>
+            <label>
+              轴心 x
+              <input id="asm-px" type="number" step="1" title="钉在放置点上的那一格。" />
+            </label>
+            <label>
+              轴心 y
+              <input id="asm-py" type="number" step="1" title="钉在放置点上的那一格。" />
+            </label>
+            <label>
+              角度（度）
+              <input id="asm-angle" type="number" step="0.1" title="绕轴心转动。0 是不旋转。顺时针为正。" />
+            </label>
+            <label>
+              缩放
+              <input id="asm-scale" type="number" min="0.1" max="16" step="0.1" value="1" title="大于 0，最大 16。0.5 是缩小到一半。1 是原像素。" aria-describedby="hint-scale" />
+            </label>
+            <p id="hint-scale" class="hint">
+              「缩放」大于 0、不超过 16，可以填 0.5。绕轴心缩放，写进装配文件。1 仍是一格一像素，走整像素贴图。小于 1 时按最近邻缩小，不取平均。不是整数、或者转了角度时，边可以盖住半个屏幕像素，不吸附、不模糊。
+            </p>
+            <label>
+              横向拉伸
+              <input id="asm-sx" type="number" min="0.1" max="4" step="0.01" value="1" title="只拉宽或压窄这一件，乘在缩放上。1 是不拉伸。" />
+            </label>
+            <label>
+              纵向拉伸
+              <input id="asm-sy" type="number" min="0.1" max="4" step="0.01" value="1" title="只拉长或压短这一件，乘在缩放上。1 是不拉伸。" />
+            </label>
+            <label>
+              斜切 X（度）
+              <input id="asm-kx" type="number" min="-60" max="60" step="1" value="0" title="上下两条边左右错开：正数时下边往右、上边往左。-60 到 60。" />
+            </label>
+            <label>
+              斜切 Y（度）
+              <input id="asm-ky" type="number" min="-60" max="60" step="1" value="0" title="左右两条边上下错开：正数时右边往下、左边往上。-60 到 60。" />
+            </label>
+            <label>
+              边点拖动
+              <select id="asm-handle-mode" title="画布上四个边点（菱形）拖动时做什么。角点始终是拉伸。">
+                <option value="stretch">拉伸</option>
+                <option value="skew">斜切</option>
+              </select>
+            </label>
+            <p class="hint">
+              斜切绕轴心，按 Fabric.js 的顺序：先缩放，再斜切，再旋转。「边点拖动」选「斜切」后，四个边点变成菱形：拖上下边点左右斜（斜切 X），拖左右边点上下斜（斜切 Y），1° 一档，Shift 15°。斜切写进装配文件的 <code>skewX</code> / <code>skewY</code>（弧度）；编辑器预览画出来，游戏里的贴图暂时还不读。
+            </p>
+            <label>
+              水平翻转
+              <input id="asm-flip" type="checkbox" title="左右镜像。没有上下翻转。" />
+            </label>
+            <label>
+              层
+              <input id="asm-layer" type="number" step="1" title="数字小的画在后面。" />
+            </label>
+            <div class="row">
+              <button id="asm-layer-up" type="button" title="把当前零件画到更前面。">上移</button>
+              <button id="asm-layer-down" type="button" title="把当前零件画到更后面。">下移</button>
+            </div>
+            <p class="hint">「上移」盖住后面的零件，「下移」被别的零件盖住。点过之后图层会重排成 0、1、2…</p>
+            <div id="asm-grid-info">
+              <p id="asm-grid-size" class="hint"></p>
+              <div id="asm-grid-colors" class="swatches"></div>
+              <p id="asm-grid-warn" class="warn" hidden></p>
+            </div>
+            <div class="row">
+              <button id="asm-dup-part" type="button" title="在本阶段复制一份，偏 2 像素，换新 id。多片刃可以这样做。">复制一份</button>
+            </div>
+            <label>
+              复制到阶段
+              <select id="asm-copy-target" title="把这一件按 id 复制到别的阶段。那边有同 id 的零件就替换，没有就新增。"></select>
+            </label>
+            <div class="row">
+              <button id="asm-copy-part" type="button">复制过去</button>
+            </div>
+            <label>
+              受击用途
+              <select id="asm-hit-role" title="可打：会掉血。仅阻挡：挡子弹不掉血。无：子弹穿过。">
+                <option value="none">无</option>
+                <option value="damage">可打</option>
+                <option value="block">仅阻挡</option>
+              </select>
+            </label>
+            <div id="asm-hit-box">
+              <label>
+                形状
+                <select id="asm-hit-shape" title="方形是矩形，宽高分开。圆形用圆心和半径。">
+                  <option value="rect">方形</option>
+                  <option value="circle">圆形</option>
+                </select>
+              </label>
+              <div id="asm-hit-rect">
+                <label>
+                  受击 x
+                  <input id="asm-hx" type="number" step="1" title="方形左上角。可以在零件外面。" />
+                </label>
+                <label>
+                  受击 y
+                  <input id="asm-hy" type="number" step="1" title="方形左上角。可以在零件外面。" />
+                </label>
+                <label>
+                  受击宽
+                  <input id="asm-hw" type="number" step="1" title="可以大于零件宽度。" />
+                </label>
+                <label>
+                  受击高
+                  <input id="asm-hh" type="number" step="1" title="可以大于零件高度。" />
+                </label>
+              </div>
+              <div id="asm-hit-circle" hidden>
+                <label>
+                  圆心 x
+                  <input id="asm-hcx" type="number" step="1" title="圆心可以在零件外面。" />
+                </label>
+                <label>
+                  圆心 y
+                  <input id="asm-hcy" type="number" step="1" title="圆心可以在零件外面。" />
+                </label>
+                <label>
+                  半径
+                  <input id="asm-hr" type="number" min="1" step="1" title="可以大于零件。" />
+                </label>
+              </div>
+              <p class="hint">
+                方形的 x、y 是左上角，宽高各自可调，所以可以不是正方。圆形是圆心加半径。两者都按精灵像素，可以比零件大，也可以偏到外面。可打画青色实线，仅阻挡画灰色虚线。选中的零件始终画粗线；勾上工具栏「受击框」则其余零件也画细线。战斗还不读。
+              </p>
+            </div>
+            <h3>锚点</h3>
+            <p class="hint">相对轴心的点，按未翻转的精灵像素。尾焰喷口画黄橙闪烁方块，枪口画白色十字。随翻转、缩放和角度一起动。战斗还不读。</p>
+            <div id="asm-anchor-list"></div>
+            <div class="row">
+              <button id="asm-add-exhaust" type="button" title="在零件下沿中间加一个尾焰喷口。">+ 尾焰喷口</button>
+              <button id="asm-add-muzzle" type="button" title="在零件上沿中间加一个枪口。">+ 枪口</button>
+            </div>
+            <button id="asm-delete" type="button">删除部件</button>
+              </div>
+            </aside>
+          </div>
+          <section id="bank-panel" class="bank-panel" hidden aria-labelledby="bank-title">
+            <div class="bank-head">
+              <h2 id="bank-title">侧倾对比</h2>
+              <p class="hint">
+                和局内一样：只编右倾。t0 平飞，t1–t5 逐级向右倾。左边五格是代码把 t1–t5 水平镜像出来的，文件里没有左倾阶段，也不用画。点右边任一格（或它的镜像）调这一帧；点过之后 ← → 在格子之间切换。
+              </p>
+              <button id="bank-hide" type="button" title="收起对比。再点「侧倾 t0–t5」打开。">收起</button>
+            </div>
+            <canvas id="bank-view" width="11" height="1" tabindex="0" title="左 5 格是镜像，中间 t0，右 5 格是 t1–t5。点一格选中它；选中后 ← → 切换格子。" aria-label="侧倾对比。← → 在左 5 镜像、t0、t1–t5 之间切换。"></canvas>
+            <div class="bank-controls">
+              <strong id="bank-frame">t1</strong>
+              <label>
+                角度（度）
+                <input id="bank-angle" type="range" min="-30" max="30" step="0.5" value="0" title="整个姿态绕原点转。顺时针为正。" />
+                <output id="bank-angle-out">0</output>
+              </label>
+              <label>
+                横向拉伸
+                <input id="bank-sx" type="range" min="0.3" max="1.5" step="0.01" value="1" title="整机左右压窄或拉宽，位置和零件一起。侧倾越大通常越窄。" />
+                <output id="bank-sx-out">1</output>
+              </label>
+              <label>
+                纵向拉伸
+                <input id="bank-sy" type="range" min="0.5" max="1.5" step="0.01" value="1" title="整机上下拉长或压短。" />
+                <output id="bank-sy-out">1</output>
+              </label>
+              <label>
+                透视
+                <input id="bank-taper" type="range" min="-0.5" max="0.5" step="0.01" value="0" title="正数：右侧（下沉的那边）比左侧更窄，左侧略宽。0 是左右一样。" />
+                <output id="bank-taper-out">0</output>
+              </label>
+              <button id="bank-reset" type="button" title="把这一帧的四个参数放回默认。">恢复默认</button>
+              <button id="bank-mode" type="button">改成手调</button>
+            </div>
+            <p id="bank-note" class="hint" aria-live="polite"></p>
+          </section>
+          <section id="play-panel" class="bank-panel" hidden aria-labelledby="play-title">
+            <div class="bank-head">
+              <h2 id="play-title">播放预览</h2>
+              <p class="hint">
+                在上面的装配画布上连续播放，画法和静止预览一样。播放或暂停时不能改零件：点画布、切换阶段，或点「停止」回到编辑。侧倾循环时可以边播边拖「侧倾对比」里的滑块。
+              </p>
+              <button id="play-hide" type="button" title="停止并收起。">收起</button>
+            </div>
+            <div class="bank-controls">
+              <label>
+                内容
+                <select id="play-mode" title="播哪一段。">
+                  <option value="pair">阶段 A → B</option>
+                  <option value="chain">全部阶段依次</option>
+                  <option value="bank">侧倾循环</option>
+                </select>
+              </label>
+              <label id="play-from-label">
+                从
+                <select id="play-from" title="起点阶段。"></select>
+              </label>
+              <label id="play-to-label">
+                到
+                <select id="play-to" title="终点阶段。"></select>
+              </label>
+              <label>
+                过渡（秒）
+                <input id="play-move" type="number" min="0.02" max="10" step="0.05" value="0.8" title="两个姿态之间走多久。侧倾循环默认 0.05，五格约 0.25 秒到满倾，接近局内。" />
+              </label>
+              <label>
+                停留（秒）
+                <input id="play-hold" type="number" min="0" max="10" step="0.05" value="0.4" title="每个姿态停多久再走下一段。" />
+              </label>
+              <label>
+                缓动
+                <select id="play-ease">
+                  <option value="smooth">缓入缓出</option>
+                  <option value="linear">匀速</option>
+                </select>
+              </label>
+              <label>
+                速度
+                <select id="play-speed" title="整条时间线的播放倍速，不改过渡和停留的数值。">
+                  <option value="0.25">×0.25</option>
+                  <option value="0.5">×0.5</option>
+                  <option value="1" selected>×1</option>
+                  <option value="2">×2</option>
+                </select>
+              </label>
+              <label id="play-loop-label">
+                循环
+                <input id="play-loop" type="checkbox" checked />
+              </label>
+              <label title="过渡中的位置取整像素，和局内一样。关掉可以看亚像素的走位。">
+                整像素
+                <input id="play-snap" type="checkbox" checked />
+              </label>
+            </div>
+            <div class="bank-controls play-transport">
+              <button id="play-toggle" type="button" aria-pressed="false">播放</button>
+              <button id="play-stop" type="button" title="停止，画布回到当前阶段，可以继续编辑。">停止</button>
+              <input id="play-scrub" type="range" min="0" max="1000" step="1" value="0" aria-label="播放进度" title="拖动定位到任意时刻，会先暂停。" />
+            </div>
+            <p class="hint"><output id="play-frame" aria-live="polite">—</output></p>
+          </section>
+          <div class="parts-row">
+            <span class="hint" title="列表从左到右是从后往前画。">图层 后 → 前</span>
+            <div id="asm-parts"></div>
+          </div>
+          <p class="hint">选中零件后：拖白色角点同时拉宽高，拖边点只拉一边（按住 Shift 保持比例），拖顶上圆点旋转（每次 1°，Shift 15°），拖零件内部移动。拉伸绕轴心，宽高吸附到整像素，写进检查栏的「横向拉伸」「纵向拉伸」「角度」。检查栏「边点拖动」换成「斜切」后，拖菱形边点斜切。白框和视图不跟着零件变。焦点在装配画布上时，方向键每次挪 1 像素，Shift 挪 8 像素；焦点在「侧倾对比」上时，← → 切换格子，不挪零件。</p>
+          <p id="asm-status">尚未装配。点「零件预览」做好一张再移入装配，或点「载入装配示例」。</p>
+        </div>
+      </section>
+    </main>
+    <dialog id="part-dialog" aria-labelledby="part-title">
+      <div class="inspector-head">
+        <h2 id="part-title">零件预览</h2>
+        <button id="part-close" type="button">关闭</button>
+      </div>
+      <p class="hint">
+        路径 A。弹窗里只画当前这一张网格，关掉后主界面仍是装配。不会盖住装配画布的内容。
+      </p>
+      <div class="part-view">
+        <canvas id="view" width="160" height="120" hidden></canvas>
+        <p id="part-empty" class="part-empty">还没有素材。选一张 PNG，或点「载入示例」。</p>
+      </div>
+      <div class="row part-source">
+        <label>
+          PNG
+          <input
+            id="file"
+            type="file"
+            accept="image/png,.png"
+            title="自己的参考图。只作输入，不会进游戏包。"
+          />
+        </label>
+        <button
+          id="fixture"
+          type="button"
+          title="打开仓库自带的 8×8 样例图，练手用，不是游戏正式资产。"
+          aria-describedby="hint-fixture"
+        >
+          载入示例
+        </button>
+        <button
+          id="part-clear"
+          type="button"
+          disabled
+          title="清掉弹窗里的参考图和网格，回到空白，可以再载入示例或另一张 PNG。不动装配。"
+        >
+          清空当前素材
+        </button>
+      </div>
+      <div class="row part-source">
+        <label>
+          参数预设
+          <select id="preset" data-presets data-blank="1" title="选一套参数再点套用。调色板固定为游戏的 52 色。取样 nearest 是格子中心对齐，box 是区域平均。"></select>
+        </label>
+        <button id="preset-apply" type="button" title="把选中的预设写进下面的宽高和取样，并重新像素化。同一张图、同一套预设，格子永远一样。">套用</button>
+        <label>
+          名称
+          <input id="preset-name" type="text" maxlength="32" placeholder="预设名" title="保存当前宽高、取样、量化、透明阈值、抖动和锁定源比例。" />
+        </label>
+        <button id="preset-save" type="button" title="把当前参数存成自己的预设。只存在这台浏览器。">保存</button>
+        <button id="preset-delete" type="button" disabled title="删除自己保存的预设。内置预设不能删。">删除</button>
+      </div>
+      <p id="preset-note" class="hint" aria-live="polite">内置预设按局内尺寸。套用后可以再改数字。自己的预设点「保存」，只存在这台浏览器。</p>
+      <div class="part-fields">
+        <label>
+          目标宽
+          <input id="tw" type="number" min="1" max="512" value="32" />
+        </label>
+        <label>
+          目标高
+          <input id="th" type="number" min="1" max="512" value="32" />
+        </label>
+        <label>
+          锁定源比例
+          <input
+            id="lock-ratio"
+            type="checkbox"
+            checked
+            title="改宽时按参考图比例算高，改高时算宽。练习里翼 82×77 被改成 64×30，就是没锁。"
+          />
+        </label>
+        <button id="fit-ratio" type="button" title="保留目标宽，按参考图比例重算目标高。">
+          按源比例
+        </button>
+      </div>
+      <p id="part-aspect" class="hint" aria-live="polite"></p>
+      <div class="part-fields">
+        <label>
+          取样
+          <select id="sample">
+            <option value="nearest">nearest</option>
+            <option value="box">box</option>
+          </select>
+        </label>
+        <label>
+          量化
+          <select id="quantize">
+            <option value="nearest">nearest</option>
+            <option value="dither">dither</option>
+          </select>
+        </label>
+        <label>
+          透明阈值
+          <input id="alpha" type="number" min="0" max="255" value="0" />
+        </label>
+        <label>
+          抖动强度
+          <input id="dither" type="number" min="0" max="1" step="0.05" value="1" />
+        </label>
+      </div>
+      <div class="row part-actions">
+        <button
+          id="export"
+          class="primary"
+          type="button"
+          disabled
+          title="下载网格文件 *.grid.json。这是过门的锁定稿。先载入素材。"
+          aria-describedby="hint-export"
+        >
+          导出 .grid.json
+        </button>
+        <button
+          id="asm-move"
+          class="primary"
+          type="button"
+          disabled
+          title="把这张已经预览好的网格，放进装配零件列表。先载入素材。"
+          aria-describedby="hint-move"
+        >
+          移入装配
+        </button>
+      </div>
+      <p id="status">先点「载入示例」，或选一张 PNG。上面是这张零件。</p>
+      <div id="part-colors" class="swatches" aria-label="调色板用量"></div>
+      <p id="part-warn" class="warn" hidden></p>
+      <details class="hints">
+        <summary>按钮说明</summary>
+        <p id="hint-fixture" class="hint">
+          「载入示例」打开仓库自带的 8×8
+          样例（透明角、黑边、青底、白心），用来练手，不是游戏正式资产。它只换弹窗里的这张零件，不改装配。只在弹窗里没有素材时可点：载入了
+          PNG
+          或示例之后它变灰，点「清空当前素材」后恢复。装配里一旦有零件，它和「载入装配示例」也一起不可点，点「清空装配」后恢复。自己的
+          PNG 随时可以换。
+        </p>
+        <p class="hint">「清空当前素材」清掉弹窗里的参考图和网格，不动装配。</p>
+        <p class="hint">
+          目标宽高是这件零件在机体里占的像素。局内玩家机整架约 26×30（Jason）到
+          48×32（Mandy），Eagle 28×32；小敌机 24×24；Boss
+          两百像素上下。只作提示，不强制裁切。宽高和取样决定每个格子取参考图的哪一块。同一张图、同一组参数，导出的格子永远一样。
+        </p>
+        <p id="hint-export" class="hint">
+          「导出
+          .grid.json」下载网格文件：宽、高，和每个格子的颜色编号。这是过门的锁定稿。游戏日后只
+          import 这份字节，不要按预览另仿画。没有素材时不可点。
+        </p>
+        <p id="hint-move" class="hint">
+          「移入装配」在这张零件预览好之后，把它加进装配零件列表，并关掉弹窗。没有素材时不可点，要先载入示例或自己的
+          PNG。
+        </p>
+        <p class="hint">
+          「参数预设」一次写好目标宽高、取样、量化、透明阈值、抖动和锁定源比例。取样 nearest 按格子中心对齐，box 按覆盖面积平均。调色板固定为游戏的 52 色，预设不能换。内置有 Eagle 28×32、Mandy 48×32、Jason 26×30、小零件 24×24、界面图标 16×16、地砖 16×16、Boss 零件（宽 64，锁比例）。「保存」只存在这台浏览器。「对照并排」左边是参考图，右边是当前网格，画法和单张预览一样；可以再对照另一套预设或另一份网格，勾「只标不同」标出格子不一样的地方。
+        </p>
+      </details>
+      <div class="row">
+        <label>
+          <input id="compare-on" type="checkbox" />
+          对照并排
+        </label>
+        <label>
+          <input id="compare-overlay" type="checkbox" />
+          叠加
+        </label>
+      </div>
+      <div id="compare-box" hidden>
+        <div class="compare-row">
+          <figure>
+            <canvas id="compare-ref" width="1" height="1"></canvas>
+            <figcaption id="compare-ref-cap">参考图</figcaption>
+          </figure>
+          <figure>
+            <canvas id="compare-pix" width="1" height="1"></canvas>
+            <figcaption>当前网格</figcaption>
+          </figure>
+          <figure id="compare-b-fig" hidden>
+            <canvas id="compare-b" width="1" height="1"></canvas>
+            <figcaption id="compare-b-cap">对照</figcaption>
+          </figure>
+        </div>
+        <div class="row">
+          <label>
+            第二份
+            <select id="compare-kind" title="再并排一份，用来比较两套参数或两份已经导出的网格。">
+              <option value="none">不对照第二份</option>
+              <option value="preset">另一套预设</option>
+              <option value="file">另一份网格</option>
+            </select>
+          </label>
+          <select id="compare-preset" data-presets hidden title="用这套预设把同一张参考图再像素化一次。"></select>
+          <input id="compare-grid" type="file" accept=".json,application/json" hidden title="载入一份已经导出的 *.grid.json 来对照。" />
+          <label id="compare-diff-label" hidden>
+            <input id="compare-diff" type="checkbox" />
+            只标不同
+          </label>
+        </div>
+      </div>
+    </dialog>
+    <dialog id="batch-dialog" aria-labelledby="batch-title">
+      <div class="inspector-head">
+        <h2 id="batch-title">批量量化</h2>
+        <button id="batch-close" type="button">关闭</button>
+      </div>
+      <p class="hint">
+        多张 PNG 用同一套参数收成网格。每张一个 <code>*.grid.json</code>，成功的打进一个 zip。字节和零件预览里导出的一样。勾着锁定源比例时，每张按自己的比例算高。调色板固定为游戏的 52 色。
+      </p>
+      <div class="row">
+        <label>
+          参数
+          <select id="batch-preset" data-presets data-form="1" title="内置预设、自己的预设，或零件预览里现在的数字。"></select>
+        </label>
+      </div>
+      <div class="row">
+        <label>
+          多张 PNG
+          <input id="batch-files" type="file" accept="image/png,.png" multiple title="一次选多张参考图。" />
+        </label>
+        <label>
+          文件夹
+          <input id="batch-dir" type="file" accept="image/png,.png" webkitdirectory title="选一个文件夹。不是 PNG 的会跳过。" />
+        </label>
+        <button id="batch-run" type="button">开始</button>
+        <button id="batch-zip" type="button" disabled title="下载成功的网格。失败和跳过的不在里面。">下载 zip</button>
+      </div>
+      <p id="batch-progress" class="hint" aria-live="polite">先选文件，再点「开始」。</p>
+      <ul id="batch-list"></ul>
+    </dialog>
+    <dialog id="guide" aria-labelledby="guide-title">
+      <h2 id="guide-title">使用说明</h2>
+      <p>
+        主界面是装配预览，画布是 <code>#asm-view</code>。零件预览是弹窗，点页头「零件预览」打开，画布是 <code>#view</code>。两块画布不会互相替换。关掉弹窗后，屏幕上只留装配。局内逻辑画面是 360×640，那只是游戏屏幕。白框按载入的零件包围盒来，手改宽高才写入 <code>previewFrame</code>。受击框可以是方形或圆形，尺寸可以大于零件。
+      </p>
+      <p>
+        参考 PNG 只是原料。游戏以后只认导出的 JSON，不要按着预览再仿画一张。现役机体和 Boss（Eagle、黑曜等）还没有改去读这些文件。
+      </p>
+      <h3>路径 A · 弹窗里一张零件 → 网格文件</h3>
+      <ol>
+        <li>点「零件预览」，再点「载入示例」，或自己选一张 PNG。弹窗里出现这张零件。没有素材时「导出 .grid.json」「移入装配」是灰的；有了素材「载入示例」变灰，点「清空当前素材」可以重来。</li>
+        <li>点「导出 .grid.json」得到网格文件：宽、高和每个格子的颜色编号。</li>
+        <li>零件满意后点「移入装配」。弹窗关掉，它出现在装配的零件列表里。</li>
+      </ol>
+      <p>「载入示例」是仓库自带的 8×8 样例，用来练手，不是游戏正式资产。</p>
+      <p>怎么验证：载入示例后，弹窗里的状态行应写「与 fixtures/sample.grid.json 一致」。装配画布保持原样。</p>
+      <h3>批量（P2）</h3>
+      <ol>
+        <li>零件预览里选「参数预设」再点「套用」。内置有 Eagle 28×32、Mandy 48×32、Jason 26×30、小零件 24×24、界面图标 16×16、地砖 16×16、Boss 零件（宽 64，锁定源比例）。取样 nearest 是格子中心对齐，box 是区域平均。调色板固定为游戏的 52 色。「保存」把当前参数存成自己的预设，只存在这台浏览器；内置的不能删。</li>
+        <li>页头「批量量化」：选一套预设，或「零件预览里的当前参数」。多选 PNG，或选一个文件夹。每张用同一套参数像素化，下面一行一个结果。成功的打进一个 zip，每张一个 <code>*.grid.json</code>，字节和单张导出一样。锁定源比例时，每张按自己的比例算高。</li>
+        <li>勾「对照并排」：左边参考图（最近邻放大到和网格一样大），右边当前网格（游戏同一条贴图）。「叠加」把网格半透明盖在参考图上。第二份可以是另一套预设，或另一份网格；「只标不同」标出格子不一样的地方，尺寸不同会写明。</li>
+      </ol>
+      <h3>路径 B · 主界面装配 → 装配文件</h3>
+      <ol>
+        <li>点「载入装配示例」，或在零件弹窗里「移入装配」。</li>
+        <li>点装配画布上的零件，或点下方列表。选中的描金边，「选中零件」从画布右侧滑入，画布大小不变。再点空白处，这一栏滑出。</li>
+        <li>在这一栏改角度、缩放（大于 0，可以是 0.5）、上移或下移图层。位移、轴心、水平翻转也在这一栏。受击框选方形或圆形，尺寸可以大于零件。不用翻整页。</li>
+        <li>按 Esc、点「关闭」，或点画布空白处，退出调参。阶段选 folded、half、open，看翼动。零件弹窗不动。</li>
+        <li>点「导出 .entity.json」。再用「装配文件」把刚导出的文件载入，阶段和零件还在。</li>
+      </ol>
+      <p>
+        装配文件是多张网格，加上每个阶段的位置、轴心、角度、缩放（大于 0，可以是 0.5）、水平翻转、层，以及可选的受击框。网格可以内联在同一份文件里。
+      </p>
+      <p>「载入装配示例」是机身加一对翼的三个阶段，用来冒烟，不是现役黑曜。装配里已有零件时，它和「载入示例」都不可点。点「清空装配」清掉零件后再启用。</p>
+      <h3>Boss（黑曜这类）</h3>
+      <ol>
+        <li>一个姿态一个阶段：先摆好 folded，点「复制阶段」得到下一个姿态，零件 id 不变，再改角度和位移。</li>
+        <li>只想改一件时，选中它，用「复制到阶段」按 id 送到别的阶段（同 id 替换，没有就新增）。多片刃用「复制一份」。</li>
+        <li>每件选「受击用途」：可打（青色实线）、仅阻挡（灰色虚线，挡子弹不掉血）、无。形状选方形或圆形，可以比零件大。</li>
+        <li>图层列表从左到右是从后往前画，按钮上写着 L 编号。「上移」「下移」调前后。</li>
+        <li>「播放预览」（P3）在装配画布上连续播放：「阶段 A → B」或「全部阶段依次」平滑过渡（位置、角度、缩放、拉伸、斜切插值，翻转和层在一半时切换），「侧倾循环」播 t0 → 右倾 → t0 → 左倾镜像 → t0。可调过渡、停留、缓动、倍速、循环、整像素，「播放 / 暂停」「停止」和进度条拖动定位，下方写当前是哪两个姿态、百分比和秒数。点画布或「停止」回到编辑。</li>
+      </ol>
+      <h3>玩家机</h3>
+      <ol>
+        <li>做零件时看弹窗里的比例行：宽高比和参考图差太多会标黄。默认勾着「锁定源比例」。</li>
+        <li>看颜色统计：暗色占九成以上、或一种颜色占九成以上，会标黄提示，移入装配时状态行也会写出来。</li>
+        <li>工具栏「对照尺寸」选 Jason 26×30、Eagle 28×32 或 Mandy 48×32，画布上出现粉色虚线框，状态行写当前阶段大小和倍数。只对照，不裁切。</li>
+        <li>摆好平飞后点「侧倾 t0–t5」。和局内一样只编右倾：t0 平飞是原稿，t1–t5 逐级向右倾；左倾由代码把 t1–t5 水平镜像，文件里没有左倾阶段，也不用画。</li>
+        <li>生成后装配下方出现「侧倾对比」：左五格是镜像，中间 t0，右五格是 t1–t5，和局内 11 帧一样排。点一格，装配画布也切到那一帧。</li>
+        <li>在对比里拖「角度」「横向拉伸」「纵向拉伸」「透视」，结果写回那一帧的零件。透视为正时，右侧（下沉的那边）更窄。改 t0，跟参数走的帧会一起重算。</li>
+        <li>想一件件细调某一帧，点「改成手调」，或直接在装配里改那一帧的零件（会自动变成手调）。「按参数重算」再回到跟 t0 走。单个零件也有「横向拉伸」「纵向拉伸」。</li>
+        <li>选中机身，加「尾焰喷口」和「枪口」锚点。坐标相对轴心，画布上闪烁。</li>
+        <li>选中零件后画布上有选框：拖角点拉宽高，拖边点拉一边，Shift 保持比例；拖顶上圆点旋转；拖内部移动。要斜切，在检查栏把「边点拖动」换成「斜切」，再拖菱形边点，或直接填「斜切 X」「斜切 Y」。白框不会跟着零件变。检查栏的数字跟着变。点一下装配画布再按方向键挪零件；点一下「侧倾对比」再按 ← → 切换格子。</li>
+      </ol>
+      <p>「网格文件」读一份已经导出的 <code>*.grid.json</code>，加进零件列表。</p>
+      <div class="row">
+        <button id="guide-try-a" type="button">试路径 A</button>
+        <button id="guide-try-b" type="button">试路径 B</button>
+        <button id="guide-close" type="button">关闭</button>
+      </div>
+    </dialog>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

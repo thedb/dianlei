@@ -1,0 +1,387 @@
+{
+  "format": "dianlei.entity",
+  "version": 1,
+  "name": "sample-assembly",
+  "grids": {
+    "body": {
+      "format": "dianlei.palette-grid",
+      "version": 1,
+      "width": 8,
+      "height": 10,
+      "palette": {
+        "id": "dianlei",
+        "version": 1,
+        "size": 52
+      },
+      "source": {
+        "name": "body.grid.json",
+        "params": {
+          "sourceWidth": 8,
+          "sourceHeight": 10,
+          "targetWidth": 8,
+          "targetHeight": 10,
+          "sample": "nearest",
+          "quantize": "nearest",
+          "alphaCutoff": 0,
+          "ditherStrength": 0
+        }
+      },
+      "cells": [
+        2,
+        2,
+        2,
+        2,
+        10,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        10,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        10,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        10,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        10,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        10,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        10,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        10,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        10,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        10,
+        2,
+        2,
+        2
+      ]
+    },
+    "wing": {
+      "format": "dianlei.palette-grid",
+      "version": 1,
+      "width": 4,
+      "height": 8,
+      "palette": {
+        "id": "dianlei",
+        "version": 1,
+        "size": 52
+      },
+      "source": {
+        "name": "wing.grid.json",
+        "params": {
+          "sourceWidth": 4,
+          "sourceHeight": 8,
+          "targetWidth": 4,
+          "targetHeight": 8,
+          "sample": "nearest",
+          "quantize": "nearest",
+          "alphaCutoff": 0,
+          "ditherStrength": 0
+        }
+      },
+      "cells": [
+        11,
+        11,
+        11,
+        10,
+        11,
+        11,
+        11,
+        11,
+        11,
+        11,
+        11,
+        11,
+        11,
+        11,
+        11,
+        11,
+        11,
+        11,
+        11,
+        11,
+        11,
+        11,
+        11,
+        11,
+        11,
+        11,
+        11,
+        11,
+        11,
+        11,
+        11,
+        11
+      ]
+    }
+  },
+  "stages": [
+    {
+      "id": "folded",
+      "parts": [
+        {
+          "id": "body",
+          "grid": "body",
+          "x": 0,
+          "y": 0,
+          "pivot": {
+            "x": 4,
+            "y": 5
+          },
+          "angle": 0,
+          "flipX": false,
+          "scale": 1,
+          "layer": 0,
+          "hit": {
+            "x": 0,
+            "y": 0,
+            "w": 8,
+            "h": 10
+          },
+          "anchors": [
+            {
+              "id": "jet",
+              "kind": "exhaust",
+              "x": 0,
+              "y": 5
+            },
+            {
+              "id": "gun",
+              "kind": "muzzle",
+              "x": 0,
+              "y": -5
+            }
+          ]
+        },
+        {
+          "id": "wingL",
+          "grid": "wing",
+          "x": -4,
+          "y": 0,
+          "pivot": {
+            "x": 3,
+            "y": 1
+          },
+          "angle": 0,
+          "flipX": false,
+          "scale": 1,
+          "layer": 1
+        },
+        {
+          "id": "wingR",
+          "grid": "wing",
+          "x": 4,
+          "y": 0,
+          "pivot": {
+            "x": 3,
+            "y": 1
+          },
+          "angle": 0,
+          "flipX": true,
+          "scale": 1,
+          "layer": 1
+        }
+      ]
+    },
+    {
+      "id": "half",
+      "parts": [
+        {
+          "id": "body",
+          "grid": "body",
+          "x": 0,
+          "y": 0,
+          "pivot": {
+            "x": 4,
+            "y": 5
+          },
+          "angle": 0,
+          "flipX": false,
+          "scale": 1,
+          "layer": 0,
+          "hit": {
+            "x": 0,
+            "y": 0,
+            "w": 8,
+            "h": 10
+          },
+          "anchors": [
+            {
+              "id": "jet",
+              "kind": "exhaust",
+              "x": 0,
+              "y": 5
+            },
+            {
+              "id": "gun",
+              "kind": "muzzle",
+              "x": 0,
+              "y": -5
+            }
+          ]
+        },
+        {
+          "id": "wingL",
+          "grid": "wing",
+          "x": -4,
+          "y": 0,
+          "pivot": {
+            "x": 3,
+            "y": 1
+          },
+          "angle": 0,
+          "flipX": false,
+          "scale": 1,
+          "layer": 1
+        },
+        {
+          "id": "wingR",
+          "grid": "wing",
+          "x": 4,
+          "y": 0,
+          "pivot": {
+            "x": 3,
+            "y": 1
+          },
+          "angle": 1.5707963267948966,
+          "flipX": true,
+          "scale": 1,
+          "layer": 1
+        }
+      ]
+    },
+    {
+      "id": "open",
+      "parts": [
+        {
+          "id": "body",
+          "grid": "body",
+          "x": 0,
+          "y": 0,
+          "pivot": {
+            "x": 4,
+            "y": 5
+          },
+          "angle": 0,
+          "flipX": false,
+          "scale": 1,
+          "layer": 0,
+          "hit": {
+            "x": 0,
+            "y": 0,
+            "w": 8,
+            "h": 10
+          },
+          "anchors": [
+            {
+              "id": "jet",
+              "kind": "exhaust",
+              "x": 0,
+              "y": 5
+            },
+            {
+              "id": "gun",
+              "kind": "muzzle",
+              "x": 0,
+              "y": -5
+            }
+          ]
+        },
+        {
+          "id": "wingL",
+          "grid": "wing",
+          "x": -4,
+          "y": 0,
+          "pivot": {
+            "x": 3,
+            "y": 1
+          },
+          "angle": -1.5707963267948966,
+          "flipX": false,
+          "scale": 1,
+          "layer": 1,
+          "hit": {
+            "x": 0,
+            "y": 0,
+            "w": 4,
+            "h": 8,
+            "role": "block"
+          }
+        },
+        {
+          "id": "wingR",
+          "grid": "wing",
+          "x": 4,
+          "y": 0,
+          "pivot": {
+            "x": 3,
+            "y": 1
+          },
+          "angle": 1.5707963267948966,
+          "flipX": true,
+          "scale": 1,
+          "layer": 1,
+          "hit": {
+            "x": 0,
+            "y": 0,
+            "w": 4,
+            "h": 8
+          }
+        }
+      ]
+    }
+  ]
+}
