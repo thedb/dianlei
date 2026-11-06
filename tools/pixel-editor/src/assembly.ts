@@ -66,6 +66,14 @@ import {
 import { gridColorStats } from '@/game/art/gridStats';
 import { blitPlacedSprite, renderSprite } from '@/game/art/spriteRenderer';
 import { BANK_STAGE_IDS, clearBankData, hasBankData } from './bankData';
+import {
+  BANK_STRIP_CELLS,
+  bankFrameTitle,
+  bankStripLabel,
+  bankStripLevel,
+  bankStripMirrored,
+  bankStripSelected,
+} from './bankStrip';
 import { colorWarnings, renderColorStats } from './colorStats';
 import {
   closePlaybackPanel,
@@ -108,8 +116,6 @@ let refSize: { width: number; height: number } | null = null;
 let flickerPhase = false;
 /** Pose drawn instead of the current stage while the playback panel plays or is paused. */
 let playPose: PlayedFrame | null = null;
-/** Cells in the bank strip: left 5 (mirrored t5…t1), t0, right t1…t5. */
-const BANK_CELLS = 11;
 const BANK_PAD = 3;
 const BANK_MAX_H = 84;
 const BANK_LABEL_H = 14;
@@ -1248,14 +1254,14 @@ function pickBankFrame(event: MouseEvent): void {
   const canvas = must(HTMLCanvasElement, 'bank-view');
   const rect = canvas.getBoundingClientRect();
   if (rect.width <= 0) return;
-  const cell = Math.floor(((event.clientX - rect.left) / rect.width) * BANK_CELLS);
-  if (cell < 0 || cell >= BANK_CELLS) return;
+  const cell = Math.floor(((event.clientX - rect.left) / rect.width) * BANK_STRIP_CELLS);
+  if (cell < 0 || cell >= BANK_STRIP_CELLS) return;
   selectBankCell(cell);
 }
 
 function stepBankCell(dir: -1 | 1): void {
   if (!bankOpen || !entity) return;
-  const next = Math.max(0, Math.min(BANK_CELLS - 1, bankCell + dir));
+  const next = Math.max(0, Math.min(BANK_STRIP_CELLS - 1, bankCell + dir));
   if (next === bankCell) {
     setStatus(next === 0 ? '已经是最左一格（左 5 镜像）' : '已经是最右一格（t5）');
     return;
@@ -1309,10 +1315,10 @@ function paintBank(): void {
   const avail = Math.max(220, (canvas.parentElement?.clientWidth ?? 0) - 4);
   const scale = Math.max(
     1,
-    Math.min(Math.floor(avail / (BANK_CELLS * cellW)), Math.floor(BANK_MAX_H / cellH))
+    Math.min(Math.floor(avail / (BANK_STRIP_CELLS * cellW)), Math.floor(BANK_MAX_H / cellH))
   );
   const cellPx = cellW * scale;
-  canvas.width = BANK_CELLS * cellPx;
+  canvas.width = BANK_STRIP_CELLS * cellPx;
   canvas.height = cellH * scale + BANK_LABEL_H;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Failed to get 2D context');
@@ -1321,29 +1327,27 @@ function paintBank(): void {
   ctx.fillStyle = EXTERIOR_VOID;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   const mark = PALETTE[COLOR.PLAYER_GOLD_LIGHT] ?? '#fdb927';
-  for (let cell = 0; cell < BANK_CELLS; cell++) {
-    const level = Math.abs(cell - 5);
-    const mirrored = cell < 5;
+  for (let cell = 0; cell < BANK_STRIP_CELLS; cell++) {
+    const level = bankStripLevel(cell);
+    const mirrored = bankStripMirrored(cell);
     const stage = stages[level] ?? null;
     const x0 = cell * cellPx;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = mirrored ? '#0c1420' : '#102236';
     ctx.fillRect(x0 + 1, 0, cellPx - 2, cellH * scale);
-    const picked = `t${level}` === bankFrameId;
-    if (picked) {
+    if (bankStripSelected(cell, bankCell)) {
       ctx.strokeStyle = mark;
-      ctx.globalAlpha = cell === bankCell ? 1 : 0.4;
       ctx.lineWidth = 2;
       ctx.strokeRect(x0 + 2, 1, cellPx - 4, cellH * scale - 2);
-      ctx.globalAlpha = 1;
     }
     ctx.fillStyle = mirrored ? '#6e7f90' : '#cfe3ee';
     ctx.font = '11px system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    const name = level === 0 ? 't0 平飞' : mirrored ? `左${level} 镜像` : `t${level}`;
+    const name = bankStripLabel(cell);
     ctx.fillText(stage ? name : `${name} 无`, x0 + cellPx / 2, cellH * scale + 2);
     if (!stage) continue;
+    // Negative scaleX is the horizontal mirror of this level. The nose stays up.
     ctx.setTransform(
       mirrored ? -scale : scale,
       0,
@@ -1386,9 +1390,10 @@ function fillBankControls(): void {
   mode.title = bank
     ? '保留现在的零件，以后不跟 t0 重算，可以在装配里一件件改。'
     : '用默认参数从 t0 重新生成这一帧，会盖掉手调。';
-  must(HTMLElement, 'bank-frame').textContent = stage
+  const stageLabel = stage
     ? `${stage.id}${stage.name ? ` ${stage.name}` : ''}`
     : `${bankFrameId}（无）`;
+  must(HTMLElement, 'bank-frame').textContent = bankFrameTitle(bankCell, stageLabel);
   const [angle, sx, sy, taper] = ranges;
   if (bank && angle && sx && sy && taper) {
     angle.value = formatDeg(bank.angle);
