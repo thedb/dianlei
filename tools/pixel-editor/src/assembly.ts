@@ -65,6 +65,7 @@ import {
 } from '@/game/art/entityHandles';
 import { gridColorStats } from '@/game/art/gridStats';
 import { blitPlacedSprite, renderSprite } from '@/game/art/spriteRenderer';
+import { BANK_STAGE_IDS, clearBankData, hasBankData } from './bankData';
 import { colorWarnings, renderColorStats } from './colorStats';
 import {
   closePlaybackPanel,
@@ -99,7 +100,6 @@ let viewMap: { scale: number; minX: number; minY: number; bleed: number } | null
 const FRAME_BLEED = 2;
 /** Anchor flicker period. Only repaints while a visible anchor exists. */
 const FLICKER_MS = 120;
-const BANK_STAGE_IDS = ['t0', 't1', 't2', 't3', 't4', 't5'] as const;
 const NUDGE_STEP = 1;
 const NUDGE_SHIFT_STEP = 8;
 
@@ -243,6 +243,9 @@ export function mountAssembly(next: AssemblyHost): void {
   });
   must(HTMLButtonElement, 'asm-bank').addEventListener('click', () => {
     addBankStages();
+  });
+  must(HTMLButtonElement, 'asm-bank-clear').addEventListener('click', () => {
+    clearBankStages();
   });
   mountPlayback({
     entity: () => entity,
@@ -860,6 +863,7 @@ function hideEditor(): void {
 function renderStages(): void {
   const select = must(HTMLSelectElement, 'asm-stage');
   select.replaceChildren();
+  syncBankActions();
   if (!entity) return;
   for (const stage of entity.stages) {
     const option = document.createElement('option');
@@ -870,6 +874,14 @@ function renderStages(): void {
   select.value = stageId;
   fillStageId();
   refreshPlaybackStages();
+}
+
+function syncBankActions(): void {
+  const button = must(HTMLButtonElement, 'asm-bank-clear');
+  button.disabled = !hasBankData(entity);
+  button.title = button.disabled
+    ? '当前没有可清除的侧倾帧。'
+    : '删除 t1–t5 侧倾帧及 bank 参数；保留 t0、其他阶段、网格和装配零件。';
 }
 
 function renderParts(): void {
@@ -1091,6 +1103,47 @@ function addBankStages(): void {
     added.length > 0
       ? `已生成 ${added.join('、')}，并打开下方「侧倾对比」。左五格是代码镜像，右五格是 t1–t5，点一格调角度和拉伸`
       : '侧倾帧都已经有了，已打开下方「侧倾对比」'
+  );
+}
+
+function clearBankStages(): void {
+  if (!entity || !hasBankData(entity)) return;
+  const bankIds = entity.stages
+    .filter((stage) => stage.id !== 't0' && (stage.bank || bankLevel(stage.id) > 0))
+    .map((stage) => stage.id);
+  const named = bankIds.length > 0 ? bankIds.join('、') : 'bank 参数';
+  if (
+    !window.confirm(
+      `清除侧倾数据 ${named}？\n\n会保留 t0、其他阶段、网格和装配零件。清除后可修改 t0，再用「侧倾 t0–t5」重新生成。此操作不能撤销。`
+    )
+  ) {
+    return;
+  }
+
+  const backup = serializeEntityFile(entity);
+  closePlaybackPanel();
+  const result = clearBankData(entity);
+  try {
+    serializeEntityFile(entity);
+  } catch (error) {
+    entity = parseEntityFile(backup);
+    showEditor();
+    fail(error);
+    return;
+  }
+
+  bankOpen = false;
+  bankFrameId = 't1';
+  bankCell = 6;
+  partId = '';
+  const next = entity.stages.find((stage) => stage.id === 't0') ?? entity.stages[0];
+  stageId = next?.id ?? '';
+  showEditor();
+  paintBank();
+  paintAssembly();
+  const removed = result.removedStageIds.length > 0 ? result.removedStageIds.join('、') : 'bank 参数';
+  setStatus(
+    `已清除侧倾数据 ${removed}。t0、其他阶段和装配零件已保留；修改 t0 后可重新生成侧倾`
   );
 }
 

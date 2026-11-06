@@ -134,6 +134,7 @@
               <button id="asm-dup-stage" type="button" title="把当前阶段整份复制成新阶段，零件 id 不变，再去改角度和位移。">复制阶段</button>
               <button id="asm-del-stage" type="button" title="删掉当前阶段。至少留一个。">删除阶段</button>
               <button id="asm-bank" type="button" title="玩家机：以 t0（平飞）为原稿生成 t1–t5（右倾），并在装配下方打开侧倾对比。没有 t0 时先把当前阶段复制成 t0。左倾由游戏镜像。" aria-describedby="hint-bank">侧倾 t0–t5</button>
+              <button id="asm-bank-clear" class="danger" type="button" disabled title="删除 t1–t5 侧倾帧及 bank 参数；保留 t0、其他阶段、网格和装配零件。">清除侧倾</button>
               <button id="asm-play" type="button" aria-pressed="false" title="打开播放预览：阶段之间平滑过渡，或侧倾循环。再点一次停止并收起。" aria-describedby="hint-play">播放预览</button>
               <button id="asm-export" type="button" title="下载装配文件 *.entity.json。" aria-describedby="hint-entity-export">
                 导出 .entity.json
@@ -358,7 +359,7 @@
                 <select id="play-mode" title="播哪一段。">
                   <option value="pair">阶段 A → B</option>
                   <option value="chain">全部阶段依次</option>
-                  <option value="bank">侧倾循环</option>
+                  <option id="play-bank-option" value="bank" disabled>侧倾循环</option>
                 </select>
               </label>
               <label id="play-from-label">
@@ -693,7 +694,7 @@
         <li>做零件时看弹窗里的比例行：宽高比和参考图差太多会标黄。默认勾着「锁定源比例」。</li>
         <li>看颜色统计：暗色占九成以上、或一种颜色占九成以上，会标黄提示，移入装配时状态行也会写出来。</li>
         <li>工具栏「对照尺寸」选 Jason 26×30、Eagle 28×32 或 Mandy 48×32，画布上出现粉色虚线框，状态行写当前阶段大小和倍数。只对照，不裁切。</li>
-        <li>摆好平飞后点「侧倾 t0–t5」。和局内一样只编右倾：t0 平飞是原稿，t1–t5 逐级向右倾；左倾由代码把 t1–t5 水平镜像，文件里没有左倾阶段，也不用画。</li>
+        <li>摆好平飞后点「侧倾 t0–t5」。和局内一样只编右倾：t0 平飞是原稿，t1–t5 逐级向右倾；左倾由代码把 t1–t5 水平镜像，文件里没有左倾阶段，也不用画。「清除侧倾」经确认后删除 t1–t5 和已有 bank 参数，但保留 t0、其他阶段、网格和装配零件；修改 t0 后再点「侧倾 t0–t5」，仍用同一套流程重新生成全部侧倾帧。</li>
         <li>生成后装配下方出现「侧倾对比」：左五格是镜像，中间 t0，右五格是 t1–t5，和局内 11 帧一样排。点一格，装配画布也切到那一帧。</li>
         <li>在对比里拖「角度」「横向拉伸」「纵向拉伸」「透视」，结果写回那一帧的零件。透视为正时，右侧（下沉的那边）更窄。改 t0，跟参数走的帧会一起重算。</li>
         <li>想一件件细调某一帧，点「改成手调」，或直接在装配里改那一帧的零件（会自动变成手调）。「按参数重算」再回到跟 t0 走。单个零件也有「横向拉伸」「纵向拉伸」。</li>

@@ -23,7 +23,7 @@ body {
   background: var(--app-bg) !important;
   color: var(--text) !important;
   font:
-    13px/1.35 Inter,
+    14px/1.35 Inter,
     "PingFang SC",
     "Microsoft YaHei",
     ui-sans-serif,
@@ -57,7 +57,7 @@ body {
 .brand h1 {
   overflow: hidden;
   color: #f1f3f6;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 650;
   letter-spacing: 0.02em;
   text-overflow: ellipsis;
@@ -66,7 +66,7 @@ body {
 
 .brand span {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -148,6 +148,17 @@ button.primary:hover:not(:disabled) {
   background: #3072a8;
 }
 
+button.danger:not(:disabled) {
+  border-color: #754646;
+  background: #392526;
+  color: #f0b4b4;
+}
+
+button.danger:hover:not(:disabled) {
+  border-color: var(--danger);
+  background: #4a292b;
+}
+
 input,
 select {
   min-width: 0;
@@ -191,7 +202,7 @@ input[type="file"]::file-selector-button {
 .toolbar label {
   gap: 5px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -265,13 +276,13 @@ input[type="file"]::file-selector-button {
 }
 
 .panel-heading h2 {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 650;
 }
 
 .panel-heading .hint {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 #asm-parts {
@@ -286,7 +297,7 @@ input[type="file"]::file-selector-button {
   display: block;
   padding: 20px 8px;
   color: #777f8b;
-  font-size: 12px;
+  font-size: 13px;
   text-align: center;
   content: "暂无图层";
 }
@@ -348,7 +359,7 @@ input[type="file"]::file-selector-button {
   border-bottom: 1px solid var(--line);
   background: var(--bar-bg);
   color: var(--text);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 650;
   content: "属性";
 }
@@ -357,7 +368,7 @@ input[type="file"]::file-selector-button {
   display: block;
   padding: 32px 10px;
   color: #777f8b;
-  font-size: 12px;
+  font-size: 13px;
   text-align: center;
   content: "选择画布或图层中的零件以编辑属性";
 }
@@ -372,7 +383,7 @@ input[type="file"]::file-selector-button {
 
 .inspector-head h2 {
   overflow: hidden;
-  font-size: 12px;
+  font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -387,7 +398,7 @@ input[type="file"]::file-selector-button {
   min-height: 28px;
   margin: 2px 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 #asm-inspector label input:not([type="checkbox"]),
@@ -404,7 +415,7 @@ input[type="file"]::file-selector-button {
   padding-top: 8px;
   border-top: 1px solid var(--line);
   color: var(--text);
-  font-size: 11px;
+  font-size: 12px;
   text-transform: none;
 }
 
@@ -432,7 +443,7 @@ input[type="file"]::file-selector-button {
   border-top: 1px solid #090a0c;
   background: var(--bar-bg);
   color: #b5bdc9;
-  font-size: 11px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -457,6 +468,10 @@ input[type="file"]::file-selector-button {
   align-items: center;
 }
 
+.bank-head h2 {
+  font-size: 15px;
+}
+
 .bank-head .hint {
   display: none;
 }
@@ -468,7 +483,7 @@ input[type="file"]::file-selector-button {
 .bank-controls label {
   margin: 2px 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 #bank-view {
@@ -489,6 +504,15 @@ dialog {
   background: var(--panel-bg);
   color: var(--text);
   box-shadow: 0 18px 70px rgba(0, 0, 0, 0.58);
+}
+
+dialog h2,
+dialog h3 {
+  font-size: 16px;
+}
+
+#part-dialog h2 {
+  font-size: 19px;
 }
 
 dialog::backdrop {
@@ -544,6 +568,7 @@ dialog::backdrop {
 
 .hint {
   color: var(--muted);
+  font-size: 13px;
 }
 
 .warn,
