@@ -3,27 +3,28 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>电雷像素化</title>
+    <title>电雷像素编辑器</title>
     <link rel="stylesheet" href="./src/style.css" />
+    <link rel="stylesheet" href="./src/shell.css" />
   </head>
   <body>
-    <main>
-      <header>
+    <main class="app-shell">
+      <header class="app-bar">
         <div class="title-row">
-          <h1>电雷像素化</h1>
-          <div class="row">
-            <button id="part-open" type="button" title="打开零件预览弹窗。主界面仍是装配。">零件预览</button>
-            <button id="batch-open" type="button" title="用同一套参数把多张 PNG 收成网格，打成一个 zip。">批量量化</button>
-            <button id="guide-open" type="button">使用说明</button>
+          <div class="brand">
+            <h1>电雷像素编辑器</h1>
+            <span>装配工作台</span>
+          </div>
+          <div class="row app-actions">
+            <button id="part-open" type="button" title="打开零件预览，像素化单张 PNG。">零件</button>
+            <button id="batch-open" type="button" title="用同一组参数批量量化 PNG，并下载网格压缩包。">批量</button>
+            <button id="guide-open" class="help-button" type="button" title="打开中文使用说明" aria-label="打开使用说明">?</button>
           </div>
         </div>
-        <p>
-          主界面是装配预览。零件在「零件预览」弹窗里做，两块画布互不相干。参考 PNG 只是原料。游戏以后只认导出的 JSON。
-        </p>
       </header>
       <section id="assembly-pane" class="stage">
         <div class="stage-main">
-          <div class="toolbar">
+          <div class="toolbar document-toolbar" aria-label="装配文件与视图工具">
             <button
               id="asm-example"
               type="button"
@@ -92,7 +93,7 @@
             </label>
             <button id="asm-frame-fit" type="button" title="把边界缩到包住所有阶段的零件，远处再留 8 像素。">框住零件</button>
             <p id="asm-size" class="hint" aria-live="polite"></p>
-            <details class="hints">
+            <details class="hints legacy-help">
               <summary>按钮说明</summary>
             <p id="hint-frame" class="hint">
               白框是当前这套装配的编辑边界，中心在原点。拉伸、斜切、旋转、移动零件都不会改它的大小和位置，视图也不跟着零件缩放；只有「边界宽」「边界高」「框住零件」会改。局内逻辑画面是 360×640，那是游戏屏幕，不是这个框的默认大小。载入装配、载入示例或移入零件后，按零件包围盒外加 8 像素重算。手改宽高，或点「框住零件」，才写入 <code>previewFrame</code>；没改过不写。文件里若已有这个字段，载入时用文件里的数。战斗不读。
@@ -112,7 +113,7 @@
             </details>
           </div>
           <div id="asm-editor" hidden>
-            <div class="toolbar">
+            <div class="toolbar stage-toolbar" aria-label="阶段与导出工具">
               <label>
                 名称
                 <input id="asm-name" type="text" maxlength="128" title="导出文件名用这个名字。" />
@@ -137,7 +138,7 @@
               <button id="asm-export" type="button" title="下载装配文件 *.entity.json。" aria-describedby="hint-entity-export">
                 导出 .entity.json
               </button>
-              <details class="hints">
+              <details class="hints legacy-help">
                 <summary>阶段说明</summary>
               <p id="hint-stage" class="hint">
                 「阶段」是同一架机体的一个姿势。示例里 folded 是收起，half 是一边张开，open 是两边张开。切换时装配画布上的翼会动，零件预览弹窗不动。
@@ -161,7 +162,7 @@
                 <h2 id="asm-inspector-title">选中零件</h2>
                 <button id="asm-inspector-close" type="button" title="退出调参。也可以按 Esc，或点画布空白处。">关闭</button>
               </div>
-              <p class="hint">只调这一件。这一栏从画布右侧滑入，装配画布的大小不变。Esc、关闭，或点画布空白处滑出。</p>
+              <p class="hint inspector-intro">只调整当前零件。按 Esc、关闭，或点画布空白处退出选择。</p>
               <div id="asm-fields">
             <label>
               x
@@ -408,11 +409,14 @@
             </div>
             <p class="hint"><output id="play-frame" aria-live="polite">—</output></p>
           </section>
-          <div class="parts-row">
-            <span class="hint" title="列表从左到右是从后往前画。">图层 后 → 前</span>
+          <div class="parts-row" aria-label="图层列表">
+            <div class="panel-heading">
+              <h2>图层</h2>
+              <span class="hint" title="列表从上到下按从前往后排列；层号越大越靠前。">前 → 后</span>
+            </div>
             <div id="asm-parts"></div>
           </div>
-          <p class="hint">选中零件后：拖白色角点同时拉宽高，拖边点只拉一边（按住 Shift 保持比例），拖顶上圆点旋转（每次 1°，Shift 15°），拖零件内部移动。拉伸绕轴心，宽高吸附到整像素，写进检查栏的「横向拉伸」「纵向拉伸」「角度」。检查栏「边点拖动」换成「斜切」后，拖菱形边点斜切。白框和视图不跟着零件变。焦点在装配画布上时，方向键每次挪 1 像素，Shift 挪 8 像素；焦点在「侧倾对比」上时，← → 切换格子，不挪零件。</p>
+          <p class="hint canvas-help-text">选中零件后可拖动、缩放、旋转或斜切；画布方向键移动零件，侧倾对比中的左右键只切换帧。完整说明请点右上角「?」。</p>
           <p id="asm-status">尚未装配。点「零件预览」做好一张再移入装配，或点「载入装配示例」。</p>
         </div>
       </section>
@@ -422,7 +426,7 @@
         <h2 id="part-title">零件预览</h2>
         <button id="part-close" type="button">关闭</button>
       </div>
-      <p class="hint">
+      <p class="hint dialog-intro">
         路径 A。弹窗里只画当前这一张网格，关掉后主界面仍是装配。不会盖住装配画布的内容。
       </p>
       <div class="part-view">
@@ -497,15 +501,15 @@
         <label>
           取样
           <select id="sample">
-            <option value="nearest">nearest</option>
-            <option value="box">box</option>
+            <option value="nearest">最近邻取样</option>
+            <option value="box">区域平均</option>
           </select>
         </label>
         <label>
           量化
           <select id="quantize">
-            <option value="nearest">nearest</option>
-            <option value="dither">dither</option>
+            <option value="nearest">最邻近色</option>
+            <option value="dither">抖动量化</option>
           </select>
         </label>
         <label>
@@ -542,7 +546,7 @@
       <p id="status">先点「载入示例」，或选一张 PNG。上面是这张零件。</p>
       <div id="part-colors" class="swatches" aria-label="调色板用量"></div>
       <p id="part-warn" class="warn" hidden></p>
-      <details class="hints">
+      <details class="hints legacy-help">
         <summary>按钮说明</summary>
         <p id="hint-fixture" class="hint">
           「载入示例」打开仓库自带的 8×8
