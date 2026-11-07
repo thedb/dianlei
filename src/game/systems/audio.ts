@@ -1,14 +1,30 @@
 /**
- * Audio system - 8-bit style WebAudio synthesized SFX and one looping BGM.
- * The context comes from the platform adapter (H5 AudioContext / WeChat WebAudio).
+ * Audio system. Short ogg one-shots in `assets/sfx/` play through WebAudio
+ * `decodeAudioData` (H5 AudioContext / WeChat `wx.createWebAudioContext`).
+ * A failed fetch or decode falls back to the synthesized one-shot.
+ * BGM stays a synthesized loop. No other binary music.
  */
 
+import { SFX_BOSS_GAIN, SFX_ELITE_GAIN, SFX_EXPLODE_GAIN, SFX_SHOOT_GAIN } from '@/game/config';
+import type { ShipId } from '@/game/entities/shipDefs';
 import { BGM_STEP_SEC, BGM_STEPS, bgmBusGain, bgmNote } from './bgm';
+import {
+  SFX_SAMPLE_IDS,
+  SFX_SAMPLE_URL,
+  explodeSampleForTier,
+  sampleSlot,
+  shootSample,
+  voicesToStop,
+  type ExplodeTier,
+  type SampleSlot,
+  type SfxSampleId,
+} from './sfxMap';
 
 export type SfxType =
   | 'shoot'
   | 'enemyHit'
   | 'enemyExplode'
+  | 'bossExplode'
   | 'playerExplode'
   | 'bomb'
   | 'itemPickup'
@@ -16,10 +32,21 @@ export type SfxType =
   | 'extend'
   | 'warning';
 
+export interface SfxPlayOptions {
+  /** Main-gun ship. Omitted stays on Eagle's sample. Wingmen do not call this. */
+  shipId?: ShipId;
+  /** Kill tier. Omitted is the normal / turret pool. */
+  tier?: ExplodeTier;
+  /** Large boss-death blasts this frame. Each one restarts B2. */
+  count?: number;
+}
+
 export interface AudioSystem {
   init(): void;
   unlock(): void;
-  play(sfx: SfxType): void;
+  play(sfx: SfxType, options?: SfxPlayOptions): void;
+  /** Resolves when every sample has loaded or failed. Failures keep the synth. */
+  samplesSettled(): Promise<void>;
   setMuted(muted: boolean): void;
   isMuted(): boolean;
   /** Platform factory. Falls back to the global AudioContext when unset. */
@@ -33,6 +60,84 @@ export interface AudioSystem {
 /** Keeps two oscillators from clipping the music bus at volume 1. */
 const BGM_LEVEL = 0.16;
 
+interface WxRequestApi {
+  request?: (opts: {
+    url: string;
+    responseType?: string;
+    success?: (res: { data?: ArrayBuffer; statusCode?: number }) => void;
+    fail?: (err: unknown) => void;
+  }) => void;
+}
+
+interface LiveVoice {
+  slot: SampleSlot;
+  source: AudioBufferSourceNode;
+  dropped: boolean;
+}
+
+const SAMPLE_GAIN: Readonly<Record<SampleSlot, number>> = {
+  shoot: SFX_SHOOT_GAIN,
+  explode: SFX_EXPLODE_GAIN,
+  elite: SFX_ELITE_GAIN,
+  boss: SFX_BOSS_GAIN,
+};
+
+/** Pool draws stay off `Math.random` so a replay spy never sees them. */
+function createAudioUnit(): () => number {
+  let seed = 0x51f0a11;
+  return () => {
+    seed = (seed + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(seed ^ (seed >>> 15), seed | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function loadSampleBytes(url: string): Promise<ArrayBuffer> {
+  const wxApi = (globalThis as { wx?: WxRequestApi }).wx;
+  if (wxApi?.request) {
+    return new Promise((resolve, reject) => {
+      wxApi.request?.({
+        url,
+        responseType: 'arraybuffer',
+        success: (res) => {
+          if (res.data instanceof ArrayBuffer) resolve(res.data);
+          else reject(new Error('sfx'));
+        },
+        fail: (err) => reject(err instanceof Error ? err : new Error('sfx')),
+      });
+    });
+  }
+  if (typeof fetch !== 'function') return Promise.reject(new Error('sfx'));
+  return fetch(url).then((res) => {
+    if (!res.ok) throw new Error(String(res.status));
+    return res.arrayBuffer();
+  });
+}
+
+function decodeSample(ctx: AudioContext, bytes: ArrayBuffer): Promise<AudioBuffer> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const ok = (buffer: AudioBuffer): void => {
+      if (settled) return;
+      settled = true;
+      resolve(buffer);
+    };
+    const bad = (): void => {
+      if (settled) return;
+      settled = true;
+      reject(new Error('sfx-decode'));
+    };
+    try {
+      const copy = bytes.slice(0);
+      const pending = ctx.decodeAudioData(copy, ok, bad);
+      if (typeof pending.then === 'function') void pending.then(ok, bad);
+    } catch {
+      bad();
+    }
+  });
+}
+
 /** Create WebAudio-based sound system */
 export function createAudioSystem(): AudioSystem {
   let audioCtx: AudioContext | null = null;
@@ -44,13 +149,90 @@ export function createAudioSystem(): AudioSystem {
   let bgmGain: GainNode | null = null;
   let nextNoteTime = 0;
   let stepIndex = 0;
+  const buffers = new Map<SfxSampleId, AudioBuffer>();
+  const failed = new Set<SfxSampleId>();
+  const loading = new Map<SfxSampleId, Promise<void>>();
+  const live: LiveVoice[] = [];
+  const audioUnit = createAudioUnit();
 
   function ensureContext(): AudioContext | null {
     if (!audioCtx) {
       if (backend) audioCtx = backend();
       else if (typeof AudioContext !== 'undefined') audioCtx = new AudioContext();
     }
+    if (audioCtx) ensureLoads(audioCtx);
     return audioCtx;
+  }
+
+  function ensureLoads(ctx: AudioContext): void {
+    for (const id of SFX_SAMPLE_IDS) {
+      if (buffers.has(id) || failed.has(id) || loading.has(id)) continue;
+      const task = loadSampleBytes(SFX_SAMPLE_URL[id])
+        .then((bytes) => decodeSample(ctx, bytes))
+        .then((buffer) => {
+          buffers.set(id, buffer);
+        })
+        .catch(() => {
+          failed.add(id);
+        })
+        .finally(() => {
+          loading.delete(id);
+        });
+      loading.set(id, task);
+    }
+  }
+
+  function dropVoice(voice: LiveVoice): void {
+    if (voice.dropped) return;
+    voice.dropped = true;
+    try {
+      voice.source.stop();
+    } catch {
+      // Already stopped.
+    }
+    const index = live.indexOf(voice);
+    if (index >= 0) live.splice(index, 1);
+  }
+
+  function stopSlot(slot: SampleSlot, count: number): void {
+    if (count <= 0) return;
+    const victims: LiveVoice[] = [];
+    for (const voice of live) {
+      if (victims.length >= count) break;
+      if (voice.slot === slot && !voice.dropped) victims.push(voice);
+    }
+    for (const voice of victims) dropVoice(voice);
+  }
+
+  function stopSamples(): void {
+    for (const voice of [...live]) dropVoice(voice);
+  }
+
+  function playSample(id: SfxSampleId): boolean {
+    const ctx = audioCtx;
+    const buffer = buffers.get(id);
+    if (!ctx || !buffer || muted) return false;
+    const slot = sampleSlot(id);
+    const playing = live.filter((voice) => voice.slot === slot && !voice.dropped).length;
+    stopSlot(slot, voicesToStop(slot, playing));
+    const source = ctx.createBufferSource();
+    const gain = ctx.createGain();
+    source.buffer = buffer;
+    gain.gain.value = SAMPLE_GAIN[slot];
+    source.connect(gain);
+    gain.connect(ctx.destination);
+    const voice: LiveVoice = { slot, source, dropped: false };
+    source.onended = () => {
+      const index = live.indexOf(voice);
+      if (index >= 0) live.splice(index, 1);
+    };
+    try {
+      source.start();
+    } catch {
+      return false;
+    }
+    live.push(voice);
+    return true;
   }
 
   function musicGain(): number {
@@ -167,6 +349,7 @@ export function createAudioSystem(): AudioSystem {
   return {
     init(): void {
       initialized = true;
+      ensureContext();
     },
 
     unlock(): void {
@@ -176,13 +359,20 @@ export function createAudioSystem(): AudioSystem {
       }
     },
 
-    play(sfx: SfxType): void {
+    samplesSettled(): Promise<void> {
+      ensureContext();
+      return Promise.all([...loading.values()]).then(() => undefined);
+    },
+
+    play(sfx: SfxType, options?: SfxPlayOptions): void {
       if (!initialized || muted) return;
+      ensureContext();
 
       switch (sfx) {
         case 'shoot':
-          // Quick laser sound
-          playFrequencyRamp(800, 400, 0.05, 'square', 0.08);
+          if (!playSample(shootSample(options?.shipId))) {
+            playFrequencyRamp(800, 400, 0.05, 'square', 0.08);
+          }
           break;
 
         case 'enemyHit':
@@ -191,10 +381,23 @@ export function createAudioSystem(): AudioSystem {
           break;
 
         case 'enemyExplode':
-          // Explosion with noise
-          playNoise(0.15, 0.12);
-          playFrequencyRamp(200, 50, 0.15, 'sawtooth', 0.1);
+          if (!playSample(explodeSampleForTier(options?.tier ?? 'normal', audioUnit))) {
+            playNoise(0.15, 0.12);
+            playFrequencyRamp(200, 50, 0.15, 'sawtooth', 0.1);
+          }
           break;
+
+        case 'bossExplode': {
+          const hits = Math.max(0, Math.floor(options?.count ?? 1));
+          if (hits <= 0) break;
+          if (buffers.has('explode_boss_b2')) {
+            for (let i = 0; i < hits; i++) playSample('explode_boss_b2');
+          } else {
+            playNoise(0.15, 0.12);
+            playFrequencyRamp(200, 50, 0.15, 'sawtooth', 0.1);
+          }
+          break;
+        }
 
         case 'playerExplode':
           // Bigger explosion
@@ -243,7 +446,10 @@ export function createAudioSystem(): AudioSystem {
     setMuted(m: boolean): void {
       muted = m;
       if (bgmGain) bgmGain.gain.value = musicGain();
-      if (muted) nextNoteTime = 0;
+      if (muted) {
+        nextNoteTime = 0;
+        stopSamples();
+      }
     },
 
     isMuted(): boolean {

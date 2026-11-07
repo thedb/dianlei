@@ -460,6 +460,22 @@ export const TANK_DIAG_CLIMB = 45;
 export const BGM_VOLUME_DEFAULT = 0.6;
 
 /**
+ * Sample voices. Shoot and the boss death crunch are one voice: a new play
+ * stops the one already running. Normal / turret explosions and the elite
+ * crunch allow a few at once, then steal the oldest.
+ */
+export const SFX_SHOOT_VOICES = 1;
+export const SFX_EXPLODE_VOICES = 4;
+export const SFX_ELITE_VOICES = 2;
+export const SFX_BOSS_VOICES = 1;
+
+/** Linear gain into the context destination. Several explosions may overlap. */
+export const SFX_SHOOT_GAIN = 0.35;
+export const SFX_EXPLODE_GAIN = 0.32;
+export const SFX_ELITE_GAIN = 0.4;
+export const SFX_BOSS_GAIN = 0.55;
+
+/**
  * Title attract loop length, seconds.
  * Covers the ground section and the start of the coast (through the bomber),
  * then the demo restarts. Stops before the dense late waves and the boss.

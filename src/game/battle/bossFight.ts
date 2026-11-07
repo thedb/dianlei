@@ -17,6 +17,7 @@ import {
 } from '@/game/systems/boss';
 import { assignClearHandoff } from './campaign';
 import { stepVictoryExit, victoryExitBlocksInput } from '@/game/systems/victoryExit';
+import { bossExplosionVoices } from '@/game/systems/sfxMap';
 import { publishRun, runDifficulty, runProfile, type Battle } from './context';
 import { spawnExplosion, triggerShake } from './fx';
 import { isPlayerVulnerable, killPlayer, neutralizePlayerPose, snapshotRun } from './player';
@@ -73,7 +74,10 @@ export function applyBossEvents(b: Battle, ev: BossEvents): void {
   }
   if (ev.chaseBoost !== undefined) b.chaseBoost = ev.chaseBoost;
   if (ev.shake) triggerShake(b.fx, ev.shake.intensity, ev.shake.duration);
-  if (ev.explosions.length > 0) b.sfx('enemyExplode');
+  const cues = bossExplosionVoices(ev.explosions);
+  // One B2 restart per large death blast. Do not also play the normal explode.
+  if (cues.bossBlasts > 0) b.sfx('bossExplode', { count: cues.bossBlasts });
+  else if (cues.otherBlasts > 0) b.sfx('enemyExplode', { tier: 'normal' });
 }
 
 /** Boss frame plus the victory fly-off. Returns 'result' once the ship has left. */

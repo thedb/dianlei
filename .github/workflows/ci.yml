@@ -59,6 +59,23 @@ jobs:
           done
           echo "✓ Shell cover, title mark, and title font are in dist/"
 
+          for f in \
+            dist/assets/sfx/shoot_eagle.ogg \
+            dist/assets/sfx/shoot_mandy.ogg \
+            dist/assets/sfx/shoot_jason.ogg \
+            dist/assets/sfx/explode_n1.ogg \
+            dist/assets/sfx/explode_n2.ogg \
+            dist/assets/sfx/explode_n3.ogg \
+            dist/assets/sfx/explode_n4.ogg \
+            dist/assets/sfx/explode_boss_b2.ogg
+          do
+            if [ ! -f "$f" ]; then
+              echo "::error::missing $f (assets/sfx must be emitted into dist/assets/sfx)"
+              exit 1
+            fi
+          done
+          echo "✓ Picked SFX samples are in dist/assets/sfx/"
+
       - name: Build WeChat (type check only)
         run: npm run build:wx
 

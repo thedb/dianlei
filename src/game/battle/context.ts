@@ -59,7 +59,7 @@ import {
 } from '@/game/systems/seaStrike';
 import { SpatialGrid } from '@/game/systems/collision';
 import { WaveScheduler } from '@/game/systems/waveScheduler';
-import { getAudioSystem, type SfxType } from '@/game/systems/audio';
+import { getAudioSystem, type SfxPlayOptions, type SfxType } from '@/game/systems/audio';
 import type { Loadout, WeaponEmitter } from '@/game/systems/playerWeapons';
 import type { BossRuntime } from '@/game/systems/boss';
 import type { RunReport } from '@/game/systems/score';
@@ -118,7 +118,7 @@ export interface Battle {
   rules(): PlayModeRules;
   /** Gameplay randomness: the context's seeded generator, else a clock-seeded one. */
   readonly rng: Rng;
-  sfx(id: SfxType): void;
+  sfx(id: SfxType, options?: SfxPlayOptions): void;
   readonly pause: PauseMenu;
   readonly player: PlayerShip;
   readonly state: GameState;
@@ -192,8 +192,8 @@ export function createBattle(scene: SceneContext): Battle {
     scene,
     rules,
     rng: () => (scene.rng ?? fallbackRng)(),
-    sfx(id) {
-      if (!rules().silent) audio.play(id);
+    sfx(id, options) {
+      if (!rules().silent) audio.play(id, options);
     },
     pause: createPauseMenu(scene.settings, { exitMode: () => rules().pauseExit }),
     player: {
