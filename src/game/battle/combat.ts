@@ -60,6 +60,7 @@ import {
   resolveBossBullet,
 } from '@/game/systems/boss';
 import { bulletHitsWeaponTarget, WEAPON_TEST_TARGET } from '@/game/scenes/weaponTest';
+import { explodeTierForBuilding, explodeTierForEnemy } from '@/game/systems/sfxMap';
 import { clearEnemyBullets, runProfile, type Battle } from './context';
 import { spawnExplosion, spawnHitSpark } from './fx';
 import { collectItem, isPlayerControllable, isPlayerVulnerable, killPlayer } from './player';
@@ -90,7 +91,7 @@ export function killEnemy(b: Battle, enemy: Enemy): void {
     spawnExplosion(b.fx, enemy.x + dx, enemy.y + dy, kind, delay);
   }
   if (def.countsInKillRate !== false) b.waves?.recordKill();
-  b.sfx('enemyExplode');
+  b.sfx('enemyExplode', { tier: explodeTierForEnemy(enemy.type) });
   const drop = def.killDrop ? chooseKillDrop(def.killDrop, b.state.mate, b.rng) : enemy.drop;
   if (drop) spawnItem(b.items.acquire(), drop, enemy.x, enemy.y, b.rng);
   b.enemies.release(enemy);
@@ -102,7 +103,7 @@ export function destroyBuilding(b: Battle, building: Building): void {
   spawnExplosion(b.fx, building.x, building.y, kind);
   spawnExplosion(b.fx, building.x - building.width / 4, building.y + 4, kind, 0.06);
   spawnExplosion(b.fx, building.x + building.width / 4, building.y - 4, kind, 0.12);
-  b.sfx('enemyExplode');
+  b.sfx('enemyExplode', { tier: explodeTierForBuilding(building.type) });
   // Live loadout and the locks rolled at enter. A copy from scene start is stale.
   const rules = buildingDropRules(b);
   const drop = chooseBuildingDrop({
@@ -142,7 +143,7 @@ function bombSpendsStock(b: Battle): boolean {
 export function destroyWreckFloat(b: Battle, floater: WreckFloat): void {
   b.state.score += floater.score;
   spawnExplosion(b.fx, floater.x, floater.y, explosionKindForSize('small'));
-  b.sfx('enemyExplode');
+  b.sfx('enemyExplode', { tier: 'normal' });
   b.wreckFloats.release(floater);
 }
 

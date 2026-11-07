@@ -219,6 +219,7 @@ This document defines the coding conventions and constraints for all AI agents w
 ### What NOT to Commit
 - External reference art (Raiden sprites, etc.)
 - Exception: the title face in `public/fonts/` (Fusion Pixel Font, OFL, TakWolf 2026.10.25, zh_hans 12px subset for 「电雷计划」 / `DIANLEI PLAN` only). H5 loads it with `@font-face` (`font-family: "Fusion Pixel Font"`, then `"Fusion Pixel", "PingFang SC", "Microsoft YaHei", sans-serif`). WeChat uses `wx.loadFontFace` with that same family. Do not add other binary art this way. Menu and HUD text stay on the system CJK stack
+- Exception: finalized short SFX oggs in `assets/sfx/` (CC0, see `assets/sfx/LICENSE.md`). BGM stays synthesized. Do not commit candidate packs or other binary music
 - Generated files (dist/, .vite/)
 - Node modules
 - IDE settings
@@ -236,11 +237,15 @@ This document defines the coding conventions and constraints for all AI agents w
 
 ## Audio
 
-### WebAudio Synthesis
-- 8-bit style SFX and one looping BGM, both generated with WebAudio API. No binary music files
-- Context comes from the platform adapter (`createAudioContext`: H5 `AudioContext`, WeChat `wx.createWebAudioContext`)
+### Samples and synthesis
+- Finalized short ogg one-shots live in `assets/sfx/` and play through WebAudio `decodeAudioData` on the platform context (`createAudioContext`: H5 `AudioContext`, WeChat `wx.createWebAudioContext`). Fetch the relative URL (`assets/sfx/…`); on 小游戏 prefer `wx.request` with `arraybuffer` when that API exists. A failed fetch or decode falls back to the synthesized one-shot. Vite emits the files at `dist/assets/sfx/` (stable names, not content-hashed)
+- BGM stays one synthesized 8-bit loop. No binary music files. Music is still TBD
+- Shoot follows the current `shipId`: Eagle `shoot_eagle.ogg` (E5), Mandy `shoot_mandy.ogg` (J1, the Jason-column thin laser, not an M sample), Jason `shoot_jason.ogg` (J2). One shoot voice; a new shot stops the previous buffer (Mandy 4/s and Jason 6/s). Wingmen do not play a second shot. Omitted `shipId` uses Eagle
+- Explosions: normal enemies and turrets (including gun buildings) draw one of `explode_n2.ogg` / `explode_n3.ogg` / `explode_n4.ogg` per kill. Elites (`medium`, `bomber`, `strike`, `torpedo`) always play `explode_n1.ogg`. The draw uses an audio-local generator, not `SceneContext.rng` and not `Math.random`. The pool allows a few overlapping voices, then steals the oldest
+- Boss death plays `explode_boss_b2.ogg` once per large blast (`BossExplosion.size === 'large'`, including the 黑曜 saucer break). One voice: each blast restarts B2. Do not layer another explosion sample (no B3) on that frame. Part pops, sheds, and crates stay on the normal pool, one cue per event batch
+- Hits, the player explosion, the bomb, pickups, power-up, extend, and warning stay synthesized
 - BGM defaults **off**. The on/off switch and 0–100% volume slider live only on the settings page (title and pause), persisted with the other settings. The title and boot screens do not show them
-- The mute toggle silences SFX and BGM
+- The mute toggle silences SFX (in-flight samples stop) and BGM
 - Unlock audio context on first user interaction
 
 ## Settings

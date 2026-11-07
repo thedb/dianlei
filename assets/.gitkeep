@@ -1,4 +1,4 @@
 # Static assets directory
-# - Fonts (Fusion Pixel Font subset)
-# - Audio (SFX and BGM, P4+)
+# - assets/sfx/: finalized CC0 one-shots (see LICENSE.md). BGM stays synthesized
+# - Fonts live in public/fonts
 # - Bitmap sprites (optional replacement for code-drawn sprites)

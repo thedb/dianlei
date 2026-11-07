@@ -49,7 +49,7 @@ dianlei/
 │   ├── game.json           # 游戏配置
 │   └── project.config.json # 项目配置
 ├── public/fonts/           # 标题字体 Fusion Pixel（OFL，见该目录 README）
-├── assets/                 # 静态资源占位（字体实际放在 public/fonts）
+├── assets/sfx/             # 定稿短音效 ogg（CC0，见 LICENSE.md）。BGM 仍是合成
 └── dist/                   # H5 构建产物
 ```
 
@@ -123,7 +123,7 @@ npm run dev
 ### 生产环境 URL
 
 - H5 试玩：`https://cdn.it-consultis.com/vibeCoding/dianlei/h5/index.html`
-- 页面引用的脚本在同一前缀下的 `h5/assets/`（文件名带内容哈希）。没有单独的 `vibeCoding/dianlei/assets/` 目录。
+- 页面引用的脚本在同一前缀下的 `h5/assets/`（文件名带内容哈希）。没有单独的 `vibeCoding/dianlei/assets/` 目录。定稿音效在 `h5/assets/sfx/`，文件名不带哈希，跟脚本一起上传。
 - 封面和标题图在 `h5/ui/`，标题字体在 `h5/fonts/`。文件名不带哈希，每次部署覆盖，缓存 1 天。
 
 ### 手动部署

@@ -150,7 +150,10 @@ function fireVolley(b: Battle, weapon: EquippedWeapon): void {
   } else {
     level.fire(b.player.x, b.player.y, emit);
   }
-  if (WEAPONS[weapon.id].slot === 'main') b.sfx('shoot');
+  if (WEAPONS[weapon.id].slot === 'main') {
+    const shipId = b.scene.shipId;
+    b.sfx('shoot', shipId === undefined ? undefined : { shipId });
+  }
 }
 
 export function isPlayerControllable(b: Battle): boolean {

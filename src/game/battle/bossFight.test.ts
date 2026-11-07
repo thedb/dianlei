@@ -3,7 +3,8 @@ import { getBankFrameIndex } from '@/game/art';
 import { TIEBAO_ENTER_DURATION, VICTORY_EXIT_WAIT } from '@/game/config';
 import { spawnEnemyBullet } from '@/game/entities/enemyBullet';
 import { getStage } from '@/game/levels/registry';
-import { bossPart, resolveBossBullet } from '@/game/systems/boss';
+import { bossPart, emptyBossEvents, resolveBossBullet } from '@/game/systems/boss';
+import { createFx } from './fx';
 import { tiebaoCommittedCars } from '@/game/systems/tiebao';
 import { battleContext, seeded } from '@/test/battleHarness';
 import { activateBomb } from './combat';
@@ -146,6 +147,35 @@ describe('铁堡 bullets stay up', () => {
     expect(boss.stage).toBe('death');
     expect(marker.active).toBe(true);
     expect(b.enemyBullets.getActiveCount()).toBeGreaterThan(0);
+  });
+
+  it('plays one B2 cue per large death blast and does not add a normal explode', () => {
+    const calls: Array<[string, unknown]> = [];
+    const b = {
+      state: { score: 0 },
+      fx: createFx(),
+      sfx: (id: string, detail?: unknown) => {
+        calls.push([id, detail]);
+      },
+    } as unknown as Battle;
+
+    const mixed = emptyBossEvents();
+    mixed.explosions.push(
+      { x: 10, y: 20, delay: 0, size: 'large' },
+      { x: 30, y: 40, delay: 0, size: 'medium' },
+      { x: 50, y: 60, delay: 0, size: 'large' }
+    );
+    applyBossEvents(b, mixed);
+    expect(calls).toEqual([['bossExplode', { count: 2 }]]);
+
+    calls.length = 0;
+    const shed = emptyBossEvents();
+    shed.explosions.push(
+      { x: 1, y: 2, delay: 0, size: 'medium' },
+      { x: 3, y: 4, delay: 0, size: 'small' }
+    );
+    applyBossEvents(b, shed);
+    expect(calls).toEqual([['enemyExplode', { tier: 'normal' }]]);
   });
 
   it('still clears every enemy bullet when the player uses a bomb', () => {
