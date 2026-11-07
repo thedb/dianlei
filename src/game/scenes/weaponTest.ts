@@ -273,8 +273,8 @@ export function weaponTestVolleyDamage(
 /** Emitter that stamps one damage onto every projectile. Does not edit WEAPONS. */
 export function emitWithDamage(emit: WeaponEmitter, damage: number): WeaponEmitter {
   return {
-    bullet: (x, y, vx, vy, _kept, width, height) =>
-      emit.bullet(x, y, vx, vy, damage, width, height),
+    bullet: (x, y, vx, vy, _kept, width, height, pattern) =>
+      emit.bullet(x, y, vx, vy, damage, width, height, pattern),
     missile: (x, y, angle) => emit.missile(x, y, angle, damage),
   };
 }

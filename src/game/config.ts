@@ -128,6 +128,53 @@ export const LV3_SPREAD_DEG = 15;
 /** Distance from the ship center up to the vulcan muzzle. */
 export const VULCAN_MUZZLE_Y = 16;
 
+/**
+ * Mandy / Jason main-gun patterns (2026-11-07). Eagle stays on FIRE_RATE,
+ * PLAYER_BULLET_DAMAGE, and the vulcan volley. T homing is shared and unchanged.
+ * Thin and thick damages stay the 2026-11-04 table. P2's full-hit product
+ * changes only because two thick shells replace three thin ones.
+ */
+export const MANDY_FIRE_RATE = 4;
+export const MANDY_BULLET_SPEED = 720;
+export const MANDY_THIN_DAMAGE = 1.75;
+export const MANDY_THICK_DAMAGE = 2.75;
+/** Outer lanes, both sides of the ship center. P1 and P2 and P3. */
+export const MANDY_LANE_X = 12;
+export const MANDY_MUZZLE_Y = 18;
+export const MANDY_THICK_W = 6;
+export const MANDY_THICK_H = 14;
+/** Pointy hexagram: up, upper-right, lower-right, down, lower-left, upper-left. */
+export const MANDY_SPLIT_ARMS = 6;
+/**
+ * Forward pixels before a P3 shell splits. Half the logical screen, so a shot
+ * from the lower spawn line breaks near mid-screen.
+ */
+export const MANDY_SPLIT_RANGE = LOGICAL_H / 2;
+export const MANDY_SHARD_W = 3;
+export const MANDY_SHARD_H = 6;
+/**
+ * P3 shell damage. Two shells × this × MANDY_SPLIT_ARMS × MANDY_FIRE_RATE
+ * equals the locked Lv3 bar of 33 (the old 3 × thick volley). A hit before
+ * the split deals this × MANDY_SPLIT_ARMS and does not split. Each shard
+ * deals this, so six shards sum to that same hit.
+ */
+export const MANDY_P3_SHELL_DAMAGE = (3 * MANDY_THICK_DAMAGE) / (2 * MANDY_SPLIT_ARMS);
+
+export const JASON_FIRE_RATE = 6;
+export const JASON_BULLET_DAMAGE = 1;
+export const JASON_BULLET_SPEED = 900;
+export const JASON_MUZZLE_Y = 13;
+/** Lateral sine amplitude of one helix stream, logical pixels. */
+export const JASON_HELIX_AMPLITUDE = 24;
+/** Seconds for one helix cycle. The two P2 streams are half a cycle apart. */
+export const JASON_HELIX_PERIOD = 0.4;
+export const JASON_HELIX_OMEGA = (2 * Math.PI) / JASON_HELIX_PERIOD;
+/** Second stream, opposite the first. */
+export const JASON_HELIX_PHASE = Math.PI;
+
+/** Release a player bullet this far outside the 360×640 field. */
+export const PLAYER_BULLET_CULL = 20;
+
 // ============================================================================
 // §14.4.1 Sub weapon: T homing missile
 // ============================================================================

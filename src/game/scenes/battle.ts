@@ -69,6 +69,7 @@ import {
   stageWindow,
   stepEnemies,
   stepMissiles,
+  flushPlayerSplits,
   stepPlayerBullets,
   stepScroll,
   stepShotsAndItems,
@@ -279,6 +280,8 @@ export function createBattleScene(sceneCtx: SceneContext): BattleScene {
       stepShotsAndItems(b, dt, warningWindow);
       updateFx(b.fx, dt);
       resolveCollisions(b, warningWindow);
+      // A P3 shell that overlapped a target this frame was already released.
+      flushPlayerSplits(b);
       checkExtend(b);
       return null;
     },
