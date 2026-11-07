@@ -207,10 +207,10 @@ export const DEATH_MATE_LOSS = 1;
 export const LIVES_START = 3;
 
 /** Starting lives on Easy. Medium and Hard stay on `LIVES_START`. */
-export const LIVES_EASY = 5;
+export const LIVES_EASY = 10;
 
-/** Maximum lives */
-export const LIVES_MAX = 5;
+/** Maximum lives. Holds an Easy start, so that stock is not already over the cap. */
+export const LIVES_MAX = 10;
 
 /** Score needed for extra life */
 export const EXTEND_EVERY = 100000;

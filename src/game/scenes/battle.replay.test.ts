@@ -13,9 +13,11 @@
  * The full-width hard overload recaptured the hard dodge seed and hard boss
  * practice: both run out of lives in phase 3. Easy, medium, and 普通 did not
  * move.
- * Easy now starts with 5 lives. That recaptured the easy clear (lives and
- * digest only), the easy demo game over (two extra deaths), boss practice
- * 普通, and the attract digest. Medium and hard stay on 3 and were left as-is.
+ * Easy now starts with 10 lives (`LIVES_EASY`). That recaptured the easy
+ * clear (lives and digest only), the easy demo game over (five extra deaths,
+ * so it lasts longer), boss practice 普通, the attract digest, and the
+ * weapon-test life count. Medium and hard stay on 3 and were left as-is.
+ * `LIVES_MAX` is 10; these seeds never fill it, so the cap did not move a run.
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -345,7 +347,7 @@ const EXPECTED: Record<string, ReplayResult> = {
     outcome: 'result',
     frames: 11366,
     score: 89100,
-    lives: 5,
+    lives: 10,
     report: {
       outcome: 'clear',
       baseScore: 89100,
@@ -363,7 +365,7 @@ const EXPECTED: Record<string, ReplayResult> = {
       'clear@10952',
       'done@11366',
     ],
-    digest: 2516599040,
+    digest: 3668159694,
   },
   'stage 1 medium, full clear': {
     outcome: 'result',
@@ -414,19 +416,19 @@ const EXPECTED: Record<string, ReplayResult> = {
   },
   'stage 1 easy, demo pilot game over': {
     outcome: 'gameover',
-    frames: 6843,
-    score: 13900,
+    frames: 8548,
+    score: 14300,
     lives: 0,
     report: {
       outcome: 'gameover',
-      baseScore: 13900,
-      kills: 41,
-      spawned: 110,
-      deaths: 5,
-      time: 114.06666666666148,
+      baseScore: 14300,
+      kills: 43,
+      spawned: 148,
+      deaths: 10,
+      time: 142.48333333333886,
     },
     bossPhases: [],
-    digest: 647979824,
+    digest: 2598035449,
   },
   'stage 1 hard, demo pilot game over': {
     outcome: 'gameover',
@@ -448,7 +450,7 @@ const EXPECTED: Record<string, ReplayResult> = {
     outcome: 'result',
     frames: 3442,
     score: 40000,
-    lives: 5,
+    lives: 10,
     report: {
       outcome: 'clear',
       baseScore: 40000,
@@ -466,7 +468,7 @@ const EXPECTED: Record<string, ReplayResult> = {
       'clear@3028',
       'done@3442',
     ],
-    digest: 4215535147,
+    digest: 1370228699,
   },
   'boss practice 困难': {
     outcome: 'gameover',
@@ -516,7 +518,7 @@ describe('deterministic replay', () => {
 const EXPECTED_MODES: Record<string, unknown> = {
   attract: {
     plans: ['0/61958@0', '5/699030@4320'],
-    digest: 4040634353,
+    digest: 1641672103,
     final: {
       time: 2.9833333333333276,
       spawned: 0,
@@ -525,7 +527,7 @@ const EXPECTED_MODES: Record<string, unknown> = {
       enemyBullets: 0,
       playerDead: false,
       explosions: 0,
-      lives: 5,
+      lives: 10,
       bombs: 2,
       fade: 0,
       sceneId: 'battle',
@@ -570,7 +572,7 @@ const EXPECTED_MODES: Record<string, unknown> = {
       subLevel: 2,
       mateLevel: 0,
       missileCount: 6,
-      lives: 5,
+      lives: 10,
       paused: false,
       gameTime: 8.033333333333312,
       playerDead: false,
