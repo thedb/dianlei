@@ -99,7 +99,7 @@ describe('battle boss practice', () => {
     expect(info.bossMaxHp).toBeCloseTo(parts + (bossPhaseDef(prepared, 'phase3').segmentHp ?? 0));
   });
 
-  it('easy starts with 5 lives; medium and hard stay at 3; bombs stay at 2', () => {
+  it('easy starts with 10 lives; medium and hard stay at 3; bombs stay at 2', () => {
     expect(setup('stage', 'easy').getDebugInfo!().lives).toBe(startingLives('easy'));
     expect(setup('stage', 'easy').getDebugInfo!().bombs).toBe(BOMBS_START);
     expect(setup('stage', 'medium').getDebugInfo!().lives).toBe(LIVES_START);

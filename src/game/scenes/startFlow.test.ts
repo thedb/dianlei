@@ -34,13 +34,21 @@ vi.mock('@/game/systems/audio', () => {
 });
 import { START_BUTTON } from '@/game/ui/startButton';
 import { SHIP_SELECT_BACK, SHIP_SELECT_CONFIRM } from '@/game/ui/shipSelect';
+import { createBattleScene } from './battle';
+import { shipDef } from '@/game/entities/shipDefs';
+import {
+  BGM_VOLUME_DEFAULT,
+  BOMBS_RUSH_START,
+  BOMBS_START,
+  LIVES_EASY,
+  RESPAWN_FLYIN_TIME,
+} from '@/game/config';
 import {
   DIFFICULTY_BACK_BUTTON,
   DIFFICULTY_EASY_BUTTON,
   DIFFICULTY_HARD_BUTTON,
   DIFFICULTY_MEDIUM_BUTTON,
 } from '@/game/ui/difficultySelect';
-import { BGM_VOLUME_DEFAULT } from '@/game/config';
 import { HIGH_SCORE_KEY } from '@/game/highScore';
 import { createSettingsStore, createMemoryStorage } from '@/game/settings';
 import { computeControlLayout } from '@/game/controls';
@@ -87,6 +95,17 @@ function confirmShip(title: {
   update: (dt: number, input: ReturnType<typeof makeInput>) => unknown;
 }) {
   expect(title.update(DT, makeInput({ taps: [point(SHIP_SELECT_CONFIRM)] }))).toBeNull();
+}
+
+/** After the fly-in, hold full right and return how far the ship moved. */
+function movedRight(scene: ReturnType<typeof createBattleScene>): number {
+  const frames = Math.ceil(RESPAWN_FLYIN_TIME / DT);
+  for (let i = 0; i < frames; i++) scene.update(DT, makeInput());
+  const start = scene.getBattleView().player.x;
+  for (let i = 0; i < 10; i++) {
+    scene.update(DT, makeInput({ joystickX: 1, joystickMagnitude: 1 }));
+  }
+  return scene.getBattleView().player.x - start;
 }
 
 function loadingRenderer(): Renderer & { clears: string[]; images: number } {
@@ -460,6 +479,7 @@ describe('title screen start button', () => {
     expect(ctx.bossRush).toBe(true);
     expect(ctx.challengeStage).toBe('1');
     expect(ctx.difficulty).toBe('medium');
+    expect(ctx.shipId).toBe('eagle');
     expect(ctx.runStage).toBeUndefined();
     expect(ctx.campaignNext).toBeUndefined();
     expect(ctx.carriedRun).toBeUndefined();
@@ -471,6 +491,64 @@ describe('title screen start button', () => {
     expect(renderer.texts).toContain('Boss连战');
     expect(renderer.texts).toContain('开始游戏');
     expect(renderer.texts).toContain('设置');
+  });
+
+  it('开始游戏 confirms Mandy, then Easy starts that ship on a stage', () => {
+    const ctx = context();
+    const title = createTitleScene(ctx);
+    title.enter();
+    expect(title.update(DT, makeInput({ taps: [center] }))).toBeNull();
+    expect(title.update(DT, makeInput({ menuRight: true }))).toBeNull();
+    expect(title.update(DT, makeInput({ menuConfirm: true }))).toBeNull();
+    expect(ctx.playMode).toBeUndefined();
+    expect(ctx.shipId).toBe('mandy');
+    expect(title.update(DT, makeInput({ taps: [point(DIFFICULTY_EASY_BUTTON)] }))).toBe('battle');
+    expect(ctx.battleEntry).toBe('stage');
+    expect(ctx.bossRush).toBeUndefined();
+    expect(ctx.shipId).toBe('mandy');
+
+    const scene = createBattleScene(ctx);
+    scene.enter();
+    expect(scene.getDebugInfo!().lives).toBe(LIVES_EASY);
+    expect(scene.getDebugInfo!().bombs).toBe(BOMBS_START);
+    expect(movedRight(scene)).toBeCloseTo(shipDef('mandy').speed * 10 * DT, 5);
+  });
+
+  it('Boss连战 confirms Jason, then Easy starts the rush on that ship', () => {
+    const ctx = context();
+    const title = createTitleScene(ctx);
+    title.enter();
+    const rush = point(BOSS_RUSH_BUTTON);
+    expect(title.update(DT, makeInput({ taps: [rush] }))).toBeNull();
+    expect(ctx.playMode).toBeUndefined();
+    expect(ctx.bossRush).toBeUndefined();
+    expect(ctx.shipId).toBeUndefined();
+    peekSharedTitleAttract()?.stop();
+    const renderer = textRenderer();
+    title.render(renderer, 1);
+    expect(renderer.texts).toContain('选择机体');
+    expect(renderer.texts).toContain('Jason');
+
+    expect(title.update(DT, makeInput({ menuRight: true }))).toBeNull();
+    expect(title.update(DT, makeInput({ menuRight: true }))).toBeNull();
+    expect(title.update(DT, makeInput({ menuConfirm: true }))).toBeNull();
+    expect(ctx.shipId).toBe('jason');
+    expect(ctx.bossRush).toBeUndefined();
+    expect(title.update(DT, makeInput({ taps: [point(DIFFICULTY_EASY_BUTTON)] }))).toBe('battle');
+    expect(ctx.playMode).toBe('play');
+    expect(ctx.battleEntry).toBe('boss');
+    expect(ctx.bossRush).toBe(true);
+    expect(ctx.challengeStage).toBe('1');
+    expect(ctx.difficulty).toBe('easy');
+    expect(ctx.shipId).toBe('jason');
+
+    const scene = createBattleScene(ctx);
+    scene.enter();
+    const info = scene.getDebugInfo!();
+    expect(info.lives).toBe(LIVES_EASY);
+    expect(info.lives).toBe(10);
+    expect(info.bombs).toBe(BOMBS_RUSH_START);
+    expect(movedRight(scene)).toBeCloseTo(shipDef('jason').speed * 10 * DT, 5);
   });
 
   it('draws the centered title mark without throwing', () => {

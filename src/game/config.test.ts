@@ -66,7 +66,8 @@ describe('Game Config', () => {
 
   it('should have valid lives configuration', () => {
     expect(LIVES_START).toBe(3);
-    expect(LIVES_EASY).toBe(5);
+    expect(LIVES_EASY).toBe(10);
+    expect(LIVES_MAX).toBe(10);
     expect(LIVES_MAX).toBeGreaterThanOrEqual(LIVES_START);
     expect(LIVES_MAX).toBeGreaterThanOrEqual(LIVES_EASY);
   });
