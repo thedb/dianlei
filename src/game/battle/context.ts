@@ -26,7 +26,7 @@ import {
   type Difficulty,
   type DifficultyProfile,
 } from '@/game/difficulty';
-import { createBullet } from '@/game/entities/bullet';
+import { armPlayerBullet, createBullet } from '@/game/entities/bullet';
 import { createEnemy, type Enemy } from '@/game/entities/enemy';
 import {
   createEnemyBullet,
@@ -260,17 +260,8 @@ export function createBattle(scene: SceneContext): Battle {
       },
     },
     emitter: {
-      bullet(x, y, vx, vy, damage, width?: number, height?: number) {
-        const bullet = bullets.acquire();
-        bullet.x = x;
-        bullet.y = y;
-        bullet.prevX = x;
-        bullet.prevY = y;
-        bullet.vx = vx;
-        bullet.vy = vy;
-        bullet.damage = damage;
-        if (width !== undefined) bullet.width = width;
-        if (height !== undefined) bullet.height = height;
+      bullet(x, y, vx, vy, damage, width, height, pattern) {
+        armPlayerBullet(bullets.acquire(), x, y, vx, vy, damage, width, height, pattern);
       },
       missile(x, y, angle, damage) {
         spawnHomingMissile(missiles.acquire(), x, y, angle, damage);

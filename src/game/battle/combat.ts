@@ -15,6 +15,7 @@ import {
 import { explosionKindForSize } from '@/game/art';
 import { ENEMY_DEFS, ENEMY_MAX_HIT_RADIUS } from '@/game/entities/enemyDefs';
 import { shipDef } from '@/game/entities/shipDefs';
+import { playerBulletImpactDamage } from '@/game/entities/bullet';
 import { damageEnemy, isGroundEnemy, type Enemy } from '@/game/entities/enemy';
 import { spawnItem } from '@/game/entities/item';
 import {
@@ -233,6 +234,8 @@ interface Shot {
   x: number;
   y: number;
   damage: number;
+  /** Mandy P3 shell. Absent on Eagle, Jason, shards, and homing missiles. */
+  impactMul?: number;
 }
 
 /**
@@ -248,16 +251,19 @@ function resolveShot(
   release: () => void,
   stopAtFirstEnemy: boolean
 ): void {
+  // Read once. A splitter keeps impactMul for every overlap this frame, and
+  // the shell's own damage stays put so a miss can still shard at that value.
+  const damage = playerBulletImpactDamage(shot);
   if (b.rules().range) {
     if (bulletHitsWeaponTarget(shot.x, shot.y, w, h)) {
-      b.meter.record(b.gameTime, shot.damage);
+      b.meter.record(b.gameTime, damage);
       spawnHitSpark(b.fx, shot.x, shot.y);
       release();
     }
     return;
   }
   if (b.boss) {
-    const hit = resolveBossBullet(b.boss, { x: shot.x, y: shot.y, w, h }, shot.damage);
+    const hit = resolveBossBullet(b.boss, { x: shot.x, y: shot.y, w, h }, damage);
     if (hit.consumedBullet) {
       spawnHitSpark(b.fx, shot.x, shot.y);
       release();
@@ -275,7 +281,6 @@ function resolveShot(
       if (!checkBulletEnemyCollision(shot.x, shot.y, w, h, enemy.x, enemy.y, enemy.hitRadius)) {
         return;
       }
-      const damage = shot.damage;
       const hx = shot.x;
       const hy = shot.y;
       release();
@@ -286,7 +291,6 @@ function resolveShot(
   b.buildings.forEach((building) => {
     if (!shot.active) return;
     if (!bulletHitsBuilding(building, shot.x, shot.y, w, h)) return;
-    const damage = shot.damage;
     const hx = shot.x;
     const hy = shot.y;
     release();
@@ -296,7 +300,6 @@ function resolveShot(
   b.wreckFloats.forEach((floater) => {
     if (!shot.active) return;
     if (!bulletHitsWreckFloat(floater, shot.x, shot.y, w, h)) return;
-    const damage = shot.damage;
     const hx = shot.x;
     const hy = shot.y;
     release();

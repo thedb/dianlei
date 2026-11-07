@@ -6,8 +6,9 @@
 
 import {
   ENEMY_BULLET_CAP,
+  LOGICAL_H,
   LOGICAL_W,
-  PLAYER_BULLET_SPEED,
+  PLAYER_BULLET_CULL,
   PLAYER_SPAWN_Y,
   SCORE_WRECK_FLOAT,
   WARNING_BANNER_DELAY,
@@ -15,6 +16,7 @@ import {
 } from '@/game/config';
 import { scaleHp } from '@/game/difficulty';
 import { terrainBlocksTank } from '@/game/maps/track';
+import { spawnSplitShards, stepPlayerBullet, type Bullet } from '@/game/entities/bullet';
 import { spawnEnemy, scaledEnemyVitals, updateEnemy } from '@/game/entities/enemy';
 import {
   enemyBulletBurstDue,
@@ -78,16 +80,33 @@ export function stepScroll(b: Battle, dt: number): void {
 
 export function stepPlayerBullets(b: Battle, dt: number): void {
   b.bullets.forEach((bullet) => {
-    bullet.prevX = bullet.x;
-    bullet.prevY = bullet.y;
-    if (bullet.vx !== undefined && bullet.vy !== undefined) {
-      bullet.x += bullet.vx * dt;
-      bullet.y += bullet.vy * dt;
-    } else {
-      bullet.y -= PLAYER_BULLET_SPEED * dt;
+    stepPlayerBullet(bullet, dt);
+    if (
+      bullet.y < -PLAYER_BULLET_CULL ||
+      bullet.y > LOGICAL_H + PLAYER_BULLET_CULL ||
+      bullet.x < -PLAYER_BULLET_CULL ||
+      bullet.x > LOGICAL_W + PLAYER_BULLET_CULL
+    ) {
+      b.bullets.release(bullet);
     }
-    if (bullet.y < -20 || bullet.x < -20 || bullet.x > LOGICAL_W + 20) b.bullets.release(bullet);
   });
+}
+
+/**
+ * Mandy P3 shells that reached MANDY_SPLIT_RANGE and were not hit this frame.
+ * Runs after collisions so an overlap on the split frame pays ×6 and consumes
+ * the round instead of bursting.
+ */
+export function flushPlayerSplits(b: Battle): void {
+  const due: Bullet[] = [];
+  b.bullets.forEach((bullet) => {
+    if (bullet.pendingSplit) due.push(bullet);
+  });
+  for (const parent of due) {
+    if (!parent.active || !parent.pendingSplit) continue;
+    spawnSplitShards(parent, b.emitter);
+    b.bullets.release(parent);
+  }
 }
 
 /** Wave spawns (until the warning), the boss at `enterAt`, then buildings. */

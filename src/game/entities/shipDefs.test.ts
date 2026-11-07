@@ -2,8 +2,19 @@ import { describe, expect, it } from 'vitest';
 import {
   FIRE_RATE,
   HITBOX_RADIUS,
-  LV2_GAP,
-  LV3_SPREAD_DEG,
+  JASON_BULLET_SPEED,
+  JASON_HELIX_AMPLITUDE,
+  JASON_HELIX_OMEGA,
+  JASON_HELIX_PHASE,
+  MANDY_BULLET_SPEED,
+  MANDY_LANE_X,
+  MANDY_P3_SHELL_DAMAGE,
+  MANDY_SPLIT_ARMS,
+  MANDY_SPLIT_RANGE,
+  MANDY_THICK_DAMAGE,
+  MANDY_THICK_H,
+  MANDY_THICK_W,
+  MANDY_THIN_DAMAGE,
   MATE_OFFSET_X,
   PALETTE_SIZE,
   PLAYER_BULLET_DAMAGE,
@@ -13,7 +24,7 @@ import {
 import { PLAYER_FLAME_CONFIG } from '@/game/art/engineFlame';
 import { COLOR, PALETTE } from '@/game/palette';
 import { weaponLevel } from '@/game/systems/playerWeapons';
-import type { WeaponEmitter } from '@/game/systems/playerWeapons';
+import type { PlayerBulletPattern, WeaponEmitter } from '@/game/systems/playerWeapons';
 import { listShips, shipDef, shipGradeLine, type ShipId } from './shipDefs';
 
 interface Shot {
@@ -24,15 +35,17 @@ interface Shot {
   damage: number;
   width?: number;
   height?: number;
+  pattern?: PlayerBulletPattern;
 }
 
 function volley(id: ShipId, level: number, x = 180, y = 560): Shot[] {
   const shots: Shot[] = [];
   const emit: WeaponEmitter = {
-    bullet(sx, sy, vx, vy, damage, width, height) {
+    bullet(sx, sy, vx, vy, damage, width, height, pattern) {
       const shot: Shot = { x: sx, y: sy, vx, vy, damage };
       if (width !== undefined) shot.width = width;
       if (height !== undefined) shot.height = height;
+      if (pattern !== undefined) shot.pattern = pattern;
       shots.push(shot);
     },
     missile() {
@@ -137,47 +150,94 @@ describe('ship table', () => {
     }
   });
 
-  it('fires Mandy wide and thin, then a thick center shell at Lv3', () => {
+  it('fires Mandy P1 thin dual and P2 thick dual on the same lanes', () => {
     const lv1 = volley('mandy', 1);
-    expect(lv1.map((s) => s.x - 180)).toEqual([-12, 12]);
-    expect(lv1.every((s) => s.damage === 1.75 && s.vy === -720 && s.vx === 0)).toBe(true);
+    expect(lv1.map((s) => s.x - 180)).toEqual([-MANDY_LANE_X, MANDY_LANE_X]);
+    expect(
+      lv1.every(
+        (s) =>
+          s.damage === MANDY_THIN_DAMAGE &&
+          s.vy === -MANDY_BULLET_SPEED &&
+          s.vx === 0 &&
+          s.pattern === undefined
+      )
+    ).toBe(true);
     expect(lv1.every((s) => s.width === undefined && s.y === 560 - 18)).toBe(true);
 
     const lv2 = volley('mandy', 2);
-    expect(lv2.map((s) => s.x - 180)).toEqual([-12, 0, 12]);
-    expect(lv2.every((s) => s.damage === 1.75 && s.width === undefined)).toBe(true);
-
-    const lv3 = volley('mandy', 3);
-    expect(lv3.map((s) => s.x - 180)).toEqual([-12, 0, 12]);
-    expect(lv3.every((s) => s.damage === 2.75 && s.width === 6 && s.height === 14)).toBe(true);
-    expect(4 * 2 * 1.75).toBe(14);
-    expect(4 * 3 * 1.75).toBe(21);
-    expect(4 * 3 * 2.75).toBe(33);
+    expect(lv2).toHaveLength(2);
+    expect(lv2.map((s) => s.x - 180)).toEqual([-MANDY_LANE_X, MANDY_LANE_X]);
+    expect(
+      lv2.every(
+        (s) =>
+          s.damage === MANDY_THICK_DAMAGE &&
+          s.width === MANDY_THICK_W &&
+          s.height === MANDY_THICK_H &&
+          s.vx === 0 &&
+          s.vy === -MANDY_BULLET_SPEED &&
+          s.pattern === undefined
+      )
+    ).toBe(true);
+    expect(4 * 2 * MANDY_THIN_DAMAGE).toBe(14);
+    expect(4 * 2 * MANDY_THICK_DAMAGE).toBe(22);
   });
 
-  it('fires Jason with Eagle spacing, damage 1, and speed 900', () => {
+  it('fires Mandy P3 as two thick shells that carry the split range', () => {
+    const lv3 = volley('mandy', 3);
+    expect(lv3).toHaveLength(2);
+    expect(lv3.map((s) => s.x - 180)).toEqual([-MANDY_LANE_X, MANDY_LANE_X]);
+    expect(
+      lv3.every(
+        (s) =>
+          s.damage === MANDY_P3_SHELL_DAMAGE &&
+          s.width === MANDY_THICK_W &&
+          s.height === MANDY_THICK_H &&
+          s.pattern?.splitRange === MANDY_SPLIT_RANGE &&
+          s.pattern.helixAmp === undefined
+      )
+    ).toBe(true);
+    expect(4 * 2 * MANDY_P3_SHELL_DAMAGE * MANDY_SPLIT_ARMS).toBe(33);
+  });
+
+  it('fires Jason P1 straight, P2 dual helix, and P3 center plus helix', () => {
     const lv1 = volley('jason', 1);
     expect(lv1).toHaveLength(1);
-    expect(lv1[0]).toMatchObject({ x: 180, y: 560 - 13, vx: 0, vy: -900, damage: 1 });
+    expect(lv1[0]).toMatchObject({
+      x: 180,
+      y: 560 - 13,
+      vx: 0,
+      vy: -JASON_BULLET_SPEED,
+      damage: 1,
+    });
+    expect(lv1[0]?.pattern).toBeUndefined();
 
     const lv2 = volley('jason', 2);
-    expect(lv2.map((s) => s.x)).toEqual([180 - LV2_GAP / 2, 180 + LV2_GAP / 2]);
-    expect(lv2.every((s) => s.vy === -900 && s.damage === 1)).toBe(true);
+    expect(lv2).toHaveLength(2);
+    expect(lv2.every((s) => s.x === 180 && s.vy === -JASON_BULLET_SPEED && s.damage === 1)).toBe(
+      true
+    );
+    expect(lv2[0]?.pattern).toMatchObject({
+      helixAmp: JASON_HELIX_AMPLITUDE,
+      helixOmega: JASON_HELIX_OMEGA,
+      helixPhase: 0,
+    });
+    expect(lv2[1]?.pattern?.helixPhase).toBe(JASON_HELIX_PHASE);
+    expect(lv2[1]?.pattern?.helixPhase).toBeCloseTo(Math.PI);
 
-    const spread = (LV3_SPREAD_DEG * Math.PI) / 180;
     const lv3 = volley('jason', 3);
     expect(lv3).toHaveLength(3);
-    expect(lv3[0]).toMatchObject({ x: 180, vx: 0, vy: -900, damage: 1 });
-    expect(lv3[1]!.x).toBe(176);
-    expect(lv3[1]!.vx).toBeCloseTo(-Math.sin(spread) * 900);
-    expect(lv3[1]!.vy).toBeCloseTo(-Math.cos(spread) * 900);
-    expect(lv3[2]!.vx).toBeCloseTo(Math.sin(spread) * 900);
+    expect(lv3[0]).toMatchObject({ x: 180, vx: 0, vy: -JASON_BULLET_SPEED, damage: 1 });
+    expect(lv3[0]?.pattern).toBeUndefined();
+    expect(lv3[1]?.pattern?.helixPhase).toBe(0);
+    expect(lv3[2]?.pattern?.helixPhase).toBe(JASON_HELIX_PHASE);
+    expect(lv3[1]?.x).toBe(lv3[2]?.x);
+    expect(lv3[1]?.x).toBe(lv3[0]?.x);
     expect(6 * 1).toBe(6);
     expect(6 * 2 * 1).toBe(12);
     expect(6 * 3 * 1).toBe(18);
     expect(14).toBeGreaterThan(10);
     expect(10).toBeGreaterThan(6);
-    expect(21).toBeGreaterThan(20);
+    expect(22).toBeGreaterThan(20);
     expect(20).toBeGreaterThan(12);
     expect(33).toBeGreaterThan(30);
     expect(30).toBeGreaterThan(18);
