@@ -16,7 +16,6 @@ import {
   EXTEND_EVERY,
   EXTEND_OVERFLOW_SCORE,
   EXTEND_REPEAT,
-  LIVES_MAX,
   LOGICAL_H,
   LOGICAL_W,
   FIRE_RATE,
@@ -30,6 +29,7 @@ import {
 } from '@/game/config';
 import { getBankFrameIndex, PLAYER_DEATH_EXPLOSION } from '@/game/art';
 import { ITEM_DEFS, type ItemType } from '@/game/entities/item';
+import { livesMax } from '@/game/difficulty';
 import { shipDef } from '@/game/entities/shipDefs';
 import { isPlayerVulnerable as isVulnerable } from '@/game/systems/collision';
 import { applyMatePickup, fireMates } from '@/game/systems/mate';
@@ -56,6 +56,7 @@ import {
   clearEnemyBullets,
   freshBombs,
   freshLives,
+  runDifficulty,
   type Battle,
   type GameState,
   type PlayerShip,
@@ -339,7 +340,7 @@ export function collectItem(b: Battle, type: ItemType): void {
 export function checkExtend(b: Battle): void {
   const { state } = b;
   if (state.score < state.nextExtendScore) return;
-  if (state.lives < LIVES_MAX) {
+  if (state.lives < livesMax(runDifficulty(b))) {
     state.lives++;
     b.sfx('extend');
   } else {

@@ -135,7 +135,10 @@ export interface SpawnDrop {
   item: 'P' | 'B';
 }
 
-/** A run difficulty. Same three ids as `difficulty.ts`, kept here to avoid a cycle. */
+/**
+ * Wave-table column. Same combat ids as `difficulty.ts`, kept here to avoid a
+ * cycle. 菜鸟 is not a column: the run maps it onto `easy` before filtering.
+ */
 export type WaveDifficulty = 'easy' | 'medium' | 'hard';
 
 export interface SpawnGroup {

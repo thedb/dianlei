@@ -6,7 +6,8 @@
  */
 
 import type { Poolable } from '@/engine/pool';
-import type { BuildingPlacement, BuildingType, Fire, WaveDifficulty } from '@/game/levels/types';
+import { waveTableOf, type Difficulty } from '@/game/difficulty';
+import type { BuildingPlacement, BuildingType, Fire } from '@/game/levels/types';
 import type { AaProfile } from '@/game/systems/seaStrike';
 import type { BulletSpawner } from '@/game/entities/enemyBullet';
 import { executeFirePattern, fireInterval } from '@/game/systems/danmaku';
@@ -50,14 +51,15 @@ export function buildingMaxHp(type: BuildingType): number {
 /**
  * Placements this difficulty actually fields. Omit `difficulty` and every
  * placement is kept. A written `difficulties` list is exclusive.
- * Call this before the scheduler.
+ * 菜鸟 reads the Easy list. Call this before the scheduler.
  */
 export function placementsForDifficulty(
   placements: readonly BuildingPlacement[],
-  difficulty?: WaveDifficulty
+  difficulty?: Difficulty
 ): BuildingPlacement[] {
   if (!difficulty) return [...placements];
-  const kept = placements.filter((p) => !p.difficulties || p.difficulties.includes(difficulty));
+  const key = waveTableOf(difficulty);
+  const kept = placements.filter((p) => !p.difficulties || p.difficulties.includes(key));
   // Same members, same order: keep the array so a stage with no filter still
   // rolls exclusive drops from the authored list.
   if (kept.length === placements.length) return placements as BuildingPlacement[];

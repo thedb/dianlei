@@ -3,7 +3,7 @@
  * The live stage demo starts here, in enter, once this scene is current.
  * Boot and any earlier loading frame do not create it.
  * A hidden top-right hot zone opens the debug panel; the demo keeps running.
- * 「关卡选择」 pauses it for a stage list and the normal 简单 / 中等 / 困难 step.
+ * 「关卡选择」 pauses it for a stage list and the normal 菜鸟 / 简单 / 中等 / 困难 step.
  * 「挑战 Boss」 then pauses it for a stage list and a 普通 / 困难 step.
  * 「Boss连战」 uses that same formal difficulty step, then a boss-only chain.
  * 「地图预览」 pauses it for the map list.

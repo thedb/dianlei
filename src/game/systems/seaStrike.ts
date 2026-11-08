@@ -17,7 +17,7 @@ import {
   HITBOX_RADIUS,
   LOGICAL_H,
 } from '@/game/config';
-import type { Difficulty } from '@/game/difficulty';
+import { waveTableOf, type Difficulty } from '@/game/difficulty';
 import type { Enemy } from '@/game/entities/enemy';
 import { shouldEnemyFire } from '@/game/entities/enemy';
 import type { BulletSpawner } from '@/game/entities/enemyBullet';
@@ -53,10 +53,11 @@ export interface AaProfile {
 }
 
 export function aaProfile(difficulty: Difficulty): AaProfile {
+  const table = waveTableOf(difficulty);
   return {
-    delay: AA_BURST_DELAY[difficulty],
-    count: AA_BURST_COUNT[difficulty],
-    interval: AA_FIRE_INTERVAL[difficulty],
+    delay: AA_BURST_DELAY[table],
+    count: AA_BURST_COUNT[table],
+    interval: AA_FIRE_INTERVAL[table],
     speed: AA_BURST_SPEED,
   };
 }

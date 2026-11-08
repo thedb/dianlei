@@ -56,8 +56,8 @@ export interface SceneContext {
   battleEntry: BattleEntry;
   /**
    * Chosen for this run, including retry. Omitted means Easy.
-   * Formal start writes 简单 / 中等 / 困难. Challenge Boss writes 普通 (easy)
-   * or 困难 (hard) and never medium. Not persisted.
+   * Formal start writes 菜鸟 / 简单 / 中等 / 困难. Challenge Boss writes 普通
+   * (easy) or 困难 (hard) and never medium or rookie. Not persisted.
    * The attract demo does not read it.
    */
   difficulty?: Difficulty;

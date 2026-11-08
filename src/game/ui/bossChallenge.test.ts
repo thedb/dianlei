@@ -26,6 +26,7 @@ describe('challenge boss picker', () => {
     expect(BOSS_STAGE_ROWS[3]?.sub).toBe('黑曜');
     expect(BOSS_DIFFICULTY_ROWS.map((row) => row.title)).toEqual(['普通', '困难', '返回']);
     expect(BOSS_DIFFICULTY_ROWS.some((row) => row.title.includes('中等'))).toBe(false);
+    expect(BOSS_DIFFICULTY_ROWS.some((row) => row.title.includes('菜鸟'))).toBe(false);
     expect(challengeRunDifficulty('normal')).toBe('easy');
     expect(challengeRunDifficulty('hard')).toBe('hard');
   });

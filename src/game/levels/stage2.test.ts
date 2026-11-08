@@ -7,7 +7,7 @@ import {
   REAR_DIAG_SPAWN_X_RIGHT,
   STAGE2_WARNING_AT,
 } from '@/game/config';
-import { DIFFICULTY_PROFILES, scaleHp, type Difficulty } from '@/game/difficulty';
+import { DIFFICULTY_PROFILES, scaleHp, waveTableOf, type Difficulty } from '@/game/difficulty';
 import {
   BUILDING_SPECS,
   buildingCenter,
@@ -451,7 +451,7 @@ describe('stage 2 waves', () => {
     const tankCount = (id: string, difficulty: Difficulty) =>
       waveById(id).groups.reduce((sum, group) => {
         if (group.enemy !== 'tank') return sum;
-        if (group.difficulties && !group.difficulties.includes(difficulty)) return sum;
+        if (group.difficulties && !group.difficulties.includes(waveTableOf(difficulty))) return sum;
         return sum + group.count;
       }, 0);
     expect([
