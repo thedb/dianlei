@@ -29,10 +29,24 @@ import { applyMateDeath } from '@/game/systems/mate';
 export type WeaponSlot = 'main' | 'sub';
 export type WeaponId = 'vulcan' | 'homing';
 
+/**
+ * Extra motion on a player bullet. Eagle leaves this unset.
+ * Helix weaves about the spawn x. `splitRange` is a Mandy P3 shell.
+ */
+export interface PlayerBulletPattern {
+  helixAmp?: number;
+  helixOmega?: number;
+  helixPhase?: number;
+  splitRange?: number;
+  /** Draw the sprite along velocity. Helix streams and split shards. */
+  align?: boolean;
+}
+
 /** Where a volley's projectiles go. The battle scene backs these with pools. */
 export interface WeaponEmitter {
   /**
-   * `width` / `height` default to the 4×12 vulcan shell. Mandy Lv3 passes 6×14.
+   * `width` / `height` default to the 4×12 vulcan shell.
+   * Mandy P2 and P3 pass the 6×14 shell. P3 shards are 3×6.
    */
   bullet(
     x: number,
@@ -41,7 +55,8 @@ export interface WeaponEmitter {
     vy: number,
     damage: number,
     width?: number,
-    height?: number
+    height?: number,
+    pattern?: PlayerBulletPattern
   ): void;
   /** `angle` in radians, -PI/2 is straight up. */
   missile(x: number, y: number, angle: number, damage: number): void;

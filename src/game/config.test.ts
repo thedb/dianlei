@@ -13,6 +13,14 @@ import {
   POWER_MAX,
   ENEMY_BULLET_CAP,
   FIRE_RATE,
+  JASON_FIRE_RATE,
+  JASON_HELIX_PHASE,
+  MANDY_FIRE_RATE,
+  MANDY_P3_SHELL_DAMAGE,
+  MANDY_SPLIT_ARMS,
+  MANDY_SPLIT_RANGE,
+  MANDY_THICK_DAMAGE,
+  MANDY_THIN_DAMAGE,
   PLAYER_BULLET_DAMAGE,
   HOMING_FIRE_RATE,
   HOMING_DAMAGE,
@@ -94,6 +102,15 @@ describe('Game Config', () => {
     expect(FIRE_RATE * 1 * PLAYER_BULLET_DAMAGE).toBe(10);
     expect(FIRE_RATE * 2 * PLAYER_BULLET_DAMAGE).toBe(20);
     expect(FIRE_RATE * 3 * PLAYER_BULLET_DAMAGE).toBe(30);
+    expect(MANDY_SPLIT_RANGE).toBe(LOGICAL_H / 2);
+    expect(MANDY_FIRE_RATE * 2 * MANDY_THIN_DAMAGE).toBe(14);
+    expect(MANDY_FIRE_RATE * 2 * MANDY_THICK_DAMAGE).toBe(22);
+    expect(MANDY_FIRE_RATE * 2 * MANDY_P3_SHELL_DAMAGE * MANDY_SPLIT_ARMS).toBe(33);
+    expect(MANDY_P3_SHELL_DAMAGE * MANDY_SPLIT_ARMS).toBeCloseTo((3 * MANDY_THICK_DAMAGE) / 2);
+    expect(JASON_FIRE_RATE * 1).toBe(6);
+    expect(JASON_FIRE_RATE * 2).toBe(12);
+    expect(JASON_FIRE_RATE * 3).toBe(18);
+    expect(JASON_HELIX_PHASE).toBeCloseTo(Math.PI);
     // T stays at the P9 numbers. It must not scale with the new main values
     // (that would be (5 / 6) * 0.9 ≈ 0.75 and (2 / 2) * 5 = 5).
     expect(HOMING_FIRE_RATE).toBe(1.5);

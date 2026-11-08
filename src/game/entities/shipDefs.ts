@@ -8,8 +8,23 @@
 import {
   FIRE_RATE,
   HITBOX_RADIUS,
-  LV2_GAP,
-  LV3_SPREAD_DEG,
+  JASON_BULLET_DAMAGE,
+  JASON_BULLET_SPEED,
+  JASON_FIRE_RATE,
+  JASON_HELIX_AMPLITUDE,
+  JASON_HELIX_OMEGA,
+  JASON_HELIX_PHASE,
+  JASON_MUZZLE_Y,
+  MANDY_BULLET_SPEED,
+  MANDY_FIRE_RATE,
+  MANDY_LANE_X,
+  MANDY_MUZZLE_Y,
+  MANDY_P3_SHELL_DAMAGE,
+  MANDY_SPLIT_RANGE,
+  MANDY_THICK_DAMAGE,
+  MANDY_THICK_H,
+  MANDY_THICK_W,
+  MANDY_THIN_DAMAGE,
   MATE_OFFSET_X,
   PLAYER_BULLET_DAMAGE,
   PLAYER_BULLET_SPEED,
@@ -53,7 +68,7 @@ export interface ShipDef {
   /** Main-gun volleys per second. Thin-shell damage is `bulletDamage`. */
   fireRate: number;
   bulletDamage: number;
-  /** Mandy Lv3 only. Other ships leave this unset. */
+  /** Mandy P2 thick shell. P3 flies a smaller shell that bursts. Other ships omit this. */
   thickDamage?: number;
   bulletSpeed: number;
   /** Muzzle distance above the ship center. Eagle's shots still use VULCAN_MUZZLE_Y. */
@@ -74,44 +89,71 @@ const EAGLE_DEATH: ReadonlyArray<readonly [number, number, number]> = [
   [5, -8, 0.3],
 ];
 
-/** 2026-11-04. Lv1 full-hit is 4×2×1.75 = 14. Thick keeps Lv3 above Eagle's 30. */
-const MANDY_THIN = 1.75;
-const MANDY_THICK = 2.75;
-const MANDY_SPEED = 720;
-const MANDY_MUZZLE_Y = 18;
-const JASON_SPEED = 900;
-const JASON_MUZZLE_Y = 13;
-const JASON_DAMAGE = 1;
-const SPREAD_RAD = (LV3_SPREAD_DEG * Math.PI) / 180;
-
-function mandyFire(level: number, x: number, y: number, emit: WeaponEmitter): void {
-  const xs = level <= 1 ? [-12, 12] : [-12, 0, 12];
-  const thick = level >= 3;
-  const damage = thick ? MANDY_THICK : MANDY_THIN;
-  const by = y - MANDY_MUZZLE_Y;
-  for (const dx of xs) {
-    emit.bullet(x + dx, by, 0, -MANDY_SPEED, damage, thick ? 6 : undefined, thick ? 14 : undefined);
-  }
+function mandyShell(
+  emit: WeaponEmitter,
+  x: number,
+  y: number,
+  damage: number,
+  thick: boolean,
+  split: boolean
+): void {
+  emit.bullet(
+    x,
+    y,
+    0,
+    -MANDY_BULLET_SPEED,
+    damage,
+    thick ? MANDY_THICK_W : undefined,
+    thick ? MANDY_THICK_H : undefined,
+    split ? { splitRange: MANDY_SPLIT_RANGE } : undefined
+  );
 }
 
-function jasonFire(level: number, x: number, y: number, emit: WeaponEmitter): void {
-  const by = y - JASON_MUZZLE_Y;
-  const speed = JASON_SPEED;
-  const straight = (sx: number) => emit.bullet(sx, by, 0, -speed, JASON_DAMAGE);
-  if (level <= 1) {
-    straight(x);
+/**
+ * P1 thin dual. P2 the same lanes, thick. P3 thick dual that splits
+ * after MANDY_SPLIT_RANGE (the shell damage is the shard, ×6 on an early hit).
+ */
+function mandyFire(level: number, x: number, y: number, emit: WeaponEmitter): void {
+  const by = y - MANDY_MUZZLE_Y;
+  const left = x - MANDY_LANE_X;
+  const right = x + MANDY_LANE_X;
+  if (level >= 3) {
+    mandyShell(emit, left, by, MANDY_P3_SHELL_DAMAGE, true, true);
+    mandyShell(emit, right, by, MANDY_P3_SHELL_DAMAGE, true, true);
     return;
   }
   if (level === 2) {
-    straight(x - LV2_GAP / 2);
-    straight(x + LV2_GAP / 2);
+    mandyShell(emit, left, by, MANDY_THICK_DAMAGE, true, false);
+    mandyShell(emit, right, by, MANDY_THICK_DAMAGE, true, false);
     return;
   }
-  const vx = Math.sin(SPREAD_RAD) * speed;
-  const vy = -Math.cos(SPREAD_RAD) * speed;
-  straight(x);
-  emit.bullet(x - 4, by, -vx, vy, JASON_DAMAGE);
-  emit.bullet(x + 4, by, vx, vy, JASON_DAMAGE);
+  mandyShell(emit, left, by, MANDY_THIN_DAMAGE, false, false);
+  mandyShell(emit, right, by, MANDY_THIN_DAMAGE, false, false);
+}
+
+function jasonHelix(emit: WeaponEmitter, x: number, y: number, phase: number): void {
+  emit.bullet(x, y, 0, -JASON_BULLET_SPEED, JASON_BULLET_DAMAGE, undefined, undefined, {
+    helixAmp: JASON_HELIX_AMPLITUDE,
+    helixOmega: JASON_HELIX_OMEGA,
+    helixPhase: phase,
+  });
+}
+
+/**
+ * P1 one straight shot. P2 two helix streams half a cycle apart.
+ * P3 adds the straight center stream. The volley clock stays JASON_FIRE_RATE.
+ */
+function jasonFire(level: number, x: number, y: number, emit: WeaponEmitter): void {
+  const by = y - JASON_MUZZLE_Y;
+  if (level <= 1) {
+    emit.bullet(x, by, 0, -JASON_BULLET_SPEED, JASON_BULLET_DAMAGE);
+    return;
+  }
+  if (level >= 3) {
+    emit.bullet(x, by, 0, -JASON_BULLET_SPEED, JASON_BULLET_DAMAGE);
+  }
+  jasonHelix(emit, x, by, 0);
+  jasonHelix(emit, x, by, JASON_HELIX_PHASE);
 }
 
 /** Select row: 速度 a/8 · 火力 b/8 · 攻击频率 c/8. No hitbox term. */
@@ -158,10 +200,10 @@ const MANDY: ShipDef = {
   hitRadius: 3,
   spriteW: 48,
   spriteH: 32,
-  fireRate: 4,
-  bulletDamage: MANDY_THIN,
-  thickDamage: MANDY_THICK,
-  bulletSpeed: MANDY_SPEED,
+  fireRate: MANDY_FIRE_RATE,
+  bulletDamage: MANDY_THIN_DAMAGE,
+  thickDamage: MANDY_THICK_DAMAGE,
+  bulletSpeed: MANDY_BULLET_SPEED,
   muzzleY: MANDY_MUZZLE_Y,
   mateOffsetX: 32,
   flame: PLAYER_FLAME_CONFIG,
@@ -188,9 +230,9 @@ const JASON: ShipDef = {
   hitRadius: 2,
   spriteW: 26,
   spriteH: 30,
-  fireRate: 6,
-  bulletDamage: JASON_DAMAGE,
-  bulletSpeed: JASON_SPEED,
+  fireRate: JASON_FIRE_RATE,
+  bulletDamage: JASON_BULLET_DAMAGE,
+  bulletSpeed: JASON_BULLET_SPEED,
   muzzleY: JASON_MUZZLE_Y,
   mateOffsetX: 20,
   flame: PLAYER_FLAME_CONFIG,

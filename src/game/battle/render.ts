@@ -8,6 +8,7 @@ import type { Renderer } from '@/engine/renderer';
 import {
   BOMB_WAVE_TIME,
   HITBOX_ALPHA,
+  MANDY_SHARD_W,
   INVINCIBLE_ALPHA_MAX,
   INVINCIBLE_ALPHA_MIN,
   INVINCIBLE_BLINK_FAST,
@@ -303,10 +304,20 @@ export function drawField(renderer: Renderer, b: Battle, assets: GameAssets, alp
     const by = lerp(bullet.prevY, bullet.y, alpha);
     drawBulletGlow(ctx, bx, by, 8, BULLET_GLOW_COLORS.player);
     const frame =
-      bullet.width > 4 && assets.bullets.playerBulletThick
-        ? assets.bullets.playerBulletThick
-        : assets.bullets.playerBullet;
-    renderer.drawImage(frame.canvas, bx - frame.anchorX, by - frame.anchorY);
+      bullet.width <= MANDY_SHARD_W
+        ? assets.bullets.playerBulletShard
+        : bullet.width > 4
+          ? assets.bullets.playerBulletThick
+          : assets.bullets.playerBullet;
+    if (bullet.align) {
+      ctx.save();
+      ctx.translate(bx, by);
+      ctx.rotate(Math.atan2(bullet.vy ?? -1, bullet.vx ?? 0) + Math.PI / 2);
+      ctx.drawImage(frame.canvas, -frame.anchorX, -frame.anchorY);
+      ctx.restore();
+    } else {
+      renderer.drawImage(frame.canvas, bx - frame.anchorX, by - frame.anchorY);
+    }
   });
 
   b.missiles.forEach((m) => {

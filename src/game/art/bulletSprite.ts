@@ -37,7 +37,19 @@ const PLAYER_BULLET = [
 ];
 
 /**
- * Mandy Lv3 shell — 6×14. Player cyan and white only. Head and tail taper.
+ * Mandy P3 shard — 3×6. Weaker than the shell. Player cyan and white only.
+ */
+const PLAYER_BULLET_SHARD = [
+  [_, PC, _],
+  [PM, W, PM],
+  [PC, W, PC],
+  [PC, W, PC],
+  [PM, W, PM],
+  [_, PD, _],
+];
+
+/**
+ * Mandy P2 and P3 shell — 6×14. Player cyan and white only. Head and tail taper.
  */
 const PLAYER_BULLET_THICK = [
   [_, _, PM, PM, _, _],
@@ -125,8 +137,10 @@ export function homingMissilePixels(): number[][] {
 
 export interface BulletAssets {
   playerBullet: SpriteFrame;
-  /** Mandy Lv3. Eagle and Jason keep `playerBullet`. */
+  /** Mandy P2 and P3 shells. Eagle and Jason keep `playerBullet`. */
   playerBulletThick: SpriteFrame;
+  /** Mandy P3 shards. */
+  playerBulletShard: SpriteFrame;
   homingMissile: SpriteFrame;
   enemyBulletSmall: SpriteFrame;
   enemyBulletLarge: SpriteFrame;
@@ -138,6 +152,7 @@ export function createBulletAssets(): BulletAssets {
   return {
     playerBullet: renderSprite(PLAYER_BULLET, 0.5, 0.5),
     playerBulletThick: renderSprite(PLAYER_BULLET_THICK, 0.5, 0.5),
+    playerBulletShard: renderSprite(PLAYER_BULLET_SHARD, 0.5, 0.5),
     homingMissile: renderSprite(HOMING_MISSILE, 0.5, 0.5),
     enemyBulletSmall: renderSprite(ENEMY_BULLET_SMALL, 0.5, 0.5),
     enemyBulletLarge: renderSprite(ENEMY_BULLET_LARGE, 0.5, 0.5),
