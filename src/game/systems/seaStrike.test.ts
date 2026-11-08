@@ -71,6 +71,7 @@ describe('naval strikes', () => {
     expect(hard.delay).toBeLessThanOrEqual(0.9);
     expect(hard.count).toBe(AA_BURST_COUNT.hard);
     expect(aaProfile('easy').count).toBeLessThan(aaProfile('hard').count);
+    expect(aaProfile('rookie')).toEqual(aaProfile('easy'));
 
     const mark = createFlakMark();
     armFlakMark(mark, 120, 240, hard.delay, hard.count, hard.speed);

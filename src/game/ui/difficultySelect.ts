@@ -15,12 +15,15 @@ export function difficultyButton(index: number): Rect {
   return choiceButton(index);
 }
 
-export const DIFFICULTY_EASY_BUTTON = difficultyButton(0);
-export const DIFFICULTY_MEDIUM_BUTTON = difficultyButton(1);
-export const DIFFICULTY_HARD_BUTTON = difficultyButton(2);
-export const DIFFICULTY_BACK_BUTTON = difficultyButton(3);
+export const DIFFICULTY_ROOKIE_BUTTON = difficultyButton(0);
+export const DIFFICULTY_EASY_BUTTON = difficultyButton(1);
+export const DIFFICULTY_MEDIUM_BUTTON = difficultyButton(2);
+export const DIFFICULTY_HARD_BUTTON = difficultyButton(3);
+export const DIFFICULTY_BACK_BUTTON = difficultyButton(4);
 
-const ROWS: ReadonlyArray<ChoiceRow<Difficulty>> = [
+/** Formal picker. 菜鸟 sits above 简单. Debug 挑战 Boss does not use this list. */
+export const DIFFICULTY_ROWS: ReadonlyArray<ChoiceRow<Difficulty>> = [
+  { action: 'rookie', title: '菜鸟', sub: '99条命' },
   { action: 'easy', title: '简单', sub: '当前平衡' },
   { action: 'medium', title: '中等', sub: '敌方生命 +15%' },
   { action: 'hard', title: '困难', sub: '生命 +30%，BOSS 三阶段' },
@@ -34,5 +37,5 @@ export interface DifficultySelect {
 }
 
 export function createDifficultySelect(): DifficultySelect {
-  return createChoiceOverlay({ heading: '选择难度', rows: ROWS });
+  return createChoiceOverlay({ heading: '选择难度', rows: DIFFICULTY_ROWS });
 }

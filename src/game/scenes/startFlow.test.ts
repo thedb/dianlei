@@ -41,6 +41,7 @@ import {
   BOMBS_RUSH_START,
   BOMBS_START,
   LIVES_EASY,
+  LIVES_ROOKIE,
   RESPAWN_FLYIN_TIME,
 } from '@/game/config';
 import {
@@ -48,6 +49,7 @@ import {
   DIFFICULTY_EASY_BUTTON,
   DIFFICULTY_HARD_BUTTON,
   DIFFICULTY_MEDIUM_BUTTON,
+  DIFFICULTY_ROOKIE_BUTTON,
 } from '@/game/ui/difficultySelect';
 import { HIGH_SCORE_KEY } from '@/game/highScore';
 import { createSettingsStore, createMemoryStorage } from '@/game/settings';
@@ -345,6 +347,7 @@ describe('title screen start button', () => {
     confirmShip(title);
     title.update(DT, makeInput({ menuDown: true }));
     title.update(DT, makeInput({ menuDown: true }));
+    title.update(DT, makeInput({ menuDown: true }));
     expect(title.update(DT, makeInput({ menuConfirm: true }))).toBe('battle');
     expect(ctx.difficulty).toBe('hard');
     expect(ctx.shipId).toBe('eagle');
@@ -549,6 +552,56 @@ describe('title screen start button', () => {
     expect(info.lives).toBe(10);
     expect(info.bombs).toBe(BOMBS_RUSH_START);
     expect(movedRight(scene)).toBeCloseTo(shipDef('jason').speed * 10 * DT, 5);
+  });
+
+  it('shows 菜鸟 with 99条命 and starts that run at 99 lives', () => {
+    const ctx = context();
+    const title = createTitleScene(ctx);
+    title.enter();
+    expect(title.update(DT, makeInput({ taps: [center] }))).toBeNull();
+    confirmShip(title);
+    peekSharedTitleAttract()?.stop();
+    const renderer = textRenderer();
+    title.render(renderer, 1);
+    expect(renderer.texts).toContain('菜鸟');
+    expect(renderer.texts).toContain('99条命');
+    expect(renderer.texts).toContain('简单');
+    expect(renderer.texts.indexOf('菜鸟')).toBeLessThan(renderer.texts.indexOf('简单'));
+
+    expect(title.update(DT, makeInput({ taps: [point(DIFFICULTY_ROOKIE_BUTTON)] }))).toBe('battle');
+    expect(ctx.difficulty).toBe('rookie');
+    expect(ctx.battleEntry).toBe('stage');
+    expect(ctx.bossRush).toBeUndefined();
+    const scene = createBattleScene(ctx);
+    scene.enter();
+    expect(scene.getDebugInfo!().lives).toBe(LIVES_ROOKIE);
+    expect(scene.getDebugInfo!().lives).toBe(99);
+    expect(scene.getDebugInfo!().bombs).toBe(BOMBS_START);
+  });
+
+  it('Boss连战 lists 菜鸟 and starts the rush at 99 lives', () => {
+    const ctx = context();
+    const title = createTitleScene(ctx);
+    title.enter();
+    expect(title.update(DT, makeInput({ taps: [point(BOSS_RUSH_BUTTON)] }))).toBeNull();
+    confirmShip(title);
+    peekSharedTitleAttract()?.stop();
+    const renderer = textRenderer();
+    title.render(renderer, 1);
+    expect(renderer.texts).toContain('菜鸟');
+    expect(renderer.texts).toContain('99条命');
+
+    expect(title.update(DT, makeInput({ taps: [point(DIFFICULTY_ROOKIE_BUTTON)] }))).toBe('battle');
+    expect(ctx.playMode).toBe('play');
+    expect(ctx.battleEntry).toBe('boss');
+    expect(ctx.bossRush).toBe(true);
+    expect(ctx.challengeStage).toBe('1');
+    expect(ctx.difficulty).toBe('rookie');
+    const scene = createBattleScene(ctx);
+    scene.enter();
+    const info = scene.getDebugInfo!();
+    expect(info.lives).toBe(99);
+    expect(info.bombs).toBe(BOMBS_RUSH_START);
   });
 
   it('draws the centered title mark without throwing', () => {

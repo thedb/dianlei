@@ -1,11 +1,15 @@
 /**
  * Run difficulty (P10.1). Easy is the authored wave table.
  *
- * Each difficulty is a profile with several knobs. `hpScale`, `bossGates`, and
- * `lives` differ. Bullet speed, fire rate, and drop rules are wired slots
- * that every profile leaves at the authored values. Stage 2's extra ships and
- * hotter patterns live on the wave table (`countByDifficulty`, `fireByDifficulty`),
- * not on `fireRateScale` or `bulletSpeedScale`.
+ * 菜鸟 (rookie) is a fourth run id with Easy's combat knobs and its own life
+ * stock. It is not a fourth wave table: `table` points it at Easy, so ship
+ * counts, fire overrides, buildings, and risk crates stay on the Easy rows.
+ *
+ * Each difficulty is a profile with several knobs. `hpScale`, `bossGates`,
+ * `lives`, and `livesMax` differ. Bullet speed, fire rate, and drop rules are
+ * wired slots that every profile leaves at the authored values. Stage 2's
+ * extra ships and hotter patterns live on the wave table (`countByDifficulty`,
+ * `fireByDifficulty`), not on `fireRateScale` or `bulletSpeedScale`.
  *
  * The HP scale is one multiply, applied to enemies, buildings, and boss parts.
  * It is not rounded, so a 3 HP fighter becomes 3.45 on Medium.
@@ -18,12 +22,15 @@ import {
   DIFFICULTY_HP_HARD,
   DIFFICULTY_HP_MEDIUM,
   LIVES_EASY,
+  LIVES_MAX,
+  LIVES_ROOKIE,
+  LIVES_ROOKIE_MAX,
   LIVES_START,
 } from '@/game/config';
-import type { BossDef } from '@/game/levels/types';
+import type { BossDef, WaveDifficulty } from '@/game/levels/types';
 import type { DropRule } from '@/game/systems/dropRules';
 
-export type Difficulty = 'easy' | 'medium' | 'hard';
+export type Difficulty = 'rookie' | 'easy' | 'medium' | 'hard';
 
 /** Boss phases gated on this run only on Hard (stage 1 phase 3). */
 export const HARD_PHASE_GATE = 'hard';
@@ -44,15 +51,33 @@ export interface DifficultyProfile {
   buildingDrops?: readonly DropRule[];
   /** Lives on a fresh start. A carried handoff overwrites this. */
   lives: number;
+  /** Extend stops here. 菜鸟 is not clamped to the Easy / Medium / Hard cap. */
+  livesMax: number;
+  /**
+   * Wave, building, and risk-crate table. 菜鸟 reuses Easy's authored rows.
+   * Hard does not inherit a medium override; that rule stays in `wavePlan`.
+   */
+  table: WaveDifficulty;
 }
 
 export const DIFFICULTY_PROFILES: Readonly<Record<Difficulty, DifficultyProfile>> = {
+  rookie: {
+    hpScale: DIFFICULTY_HP_EASY,
+    bulletSpeedScale: 1,
+    fireRateScale: 1,
+    bossGates: [],
+    lives: LIVES_ROOKIE,
+    livesMax: LIVES_ROOKIE_MAX,
+    table: 'easy',
+  },
   easy: {
     hpScale: DIFFICULTY_HP_EASY,
     bulletSpeedScale: 1,
     fireRateScale: 1,
     bossGates: [],
     lives: LIVES_EASY,
+    livesMax: LIVES_MAX,
+    table: 'easy',
   },
   medium: {
     hpScale: DIFFICULTY_HP_MEDIUM,
@@ -60,6 +85,8 @@ export const DIFFICULTY_PROFILES: Readonly<Record<Difficulty, DifficultyProfile>
     fireRateScale: 1,
     bossGates: [],
     lives: LIVES_START,
+    livesMax: LIVES_MAX,
+    table: 'medium',
   },
   hard: {
     hpScale: DIFFICULTY_HP_HARD,
@@ -67,6 +94,8 @@ export const DIFFICULTY_PROFILES: Readonly<Record<Difficulty, DifficultyProfile>
     fireRateScale: 1,
     bossGates: [HARD_PHASE_GATE],
     lives: LIVES_START,
+    livesMax: LIVES_MAX,
+    table: 'hard',
   },
 };
 
@@ -75,6 +104,7 @@ export function difficultyProfile(difficulty: Difficulty): DifficultyProfile {
 }
 
 export const DIFFICULTY_HP_SCALE: Record<Difficulty, number> = {
+  rookie: DIFFICULTY_PROFILES.rookie.hpScale,
   easy: DIFFICULTY_PROFILES.easy.hpScale,
   medium: DIFFICULTY_PROFILES.medium.hpScale,
   hard: DIFFICULTY_PROFILES.hard.hpScale,
@@ -87,6 +117,19 @@ export function difficultyHpScale(difficulty: Difficulty): number {
 /** Lives for a fresh start of this difficulty. Carried runs do not use it. */
 export function startingLives(difficulty: Difficulty): number {
   return DIFFICULTY_PROFILES[difficulty].lives;
+}
+
+/** Extend cap for this difficulty. 菜鸟 is not the Easy cap of `LIVES_MAX`. */
+export function livesMax(difficulty: Difficulty): number {
+  return DIFFICULTY_PROFILES[difficulty].livesMax;
+}
+
+/**
+ * Wave-table id for this run. 菜鸟 reads Easy's rows; it is not listed on
+ * `Wave.difficulties` or the per-difficulty overrides.
+ */
+export function waveTableOf(difficulty: Difficulty): WaveDifficulty {
+  return DIFFICULTY_PROFILES[difficulty].table;
 }
 
 /** `baseHp * scale`. Easy returns the authored value unchanged. */

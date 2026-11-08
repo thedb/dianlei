@@ -7,6 +7,8 @@ import {
   LIVES_EASY,
   LIVES_START,
   LIVES_MAX,
+  LIVES_ROOKIE,
+  LIVES_ROOKIE_MAX,
   BOMBS_RUSH_START,
   BOMBS_START,
   BOMBS_MAX,
@@ -76,8 +78,11 @@ describe('Game Config', () => {
     expect(LIVES_START).toBe(3);
     expect(LIVES_EASY).toBe(10);
     expect(LIVES_MAX).toBe(10);
+    expect(LIVES_ROOKIE).toBe(99);
+    expect(LIVES_ROOKIE_MAX).toBe(99);
     expect(LIVES_MAX).toBeGreaterThanOrEqual(LIVES_START);
     expect(LIVES_MAX).toBeGreaterThanOrEqual(LIVES_EASY);
+    expect(LIVES_ROOKIE_MAX).toBeGreaterThanOrEqual(LIVES_ROOKIE);
   });
 
   it('should have valid bombs configuration', () => {

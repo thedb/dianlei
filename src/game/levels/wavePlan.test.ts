@@ -47,6 +47,7 @@ describe('wave difficulty plan', () => {
       groups: [],
     };
     expect(waveEnabled(wave, 'easy')).toBe(false);
+    expect(waveEnabled(wave, 'rookie')).toBe(false);
     expect(waveEnabled(wave, 'hard')).toBe(true);
     expect(waveEnabled(wave)).toBe(true);
     const open: Wave = { id: 'W', t: 0, section: 'runway', mvp: true, groups: [] };
@@ -54,7 +55,32 @@ describe('wave difficulty plan', () => {
 
     const hardOnly = group({ difficulties: ['hard'] });
     expect(groupEnabled(hardOnly, 'easy')).toBe(false);
+    expect(groupEnabled(hardOnly, 'rookie')).toBe(false);
     expect(groupEnabled(hardOnly, 'hard')).toBe(true);
     expect(groupEnabled(hardOnly)).toBe(true);
+  });
+
+  it('reads 菜鸟 from the Easy column, including an Easy-only fire list', () => {
+    const row = group({
+      difficulties: ['easy'],
+      countByDifficulty: { hard: 3 },
+      fireByDifficulty: { hard: { kind: 'aimed1', maxShots: 1 } },
+      fireOnlyByDifficulty: { easy: [0], hard: [1, 2] },
+    });
+    expect(groupEnabled(row, 'rookie')).toBe(true);
+    expect(resolveGroupCount(row, 'rookie')).toBe(resolveGroupCount(row, 'easy'));
+    expect(resolveGroupFire(row, 'rookie')).toEqual(resolveGroupFire(row, 'easy'));
+    expect(resolveFireOnly(row, 'rookie')).toEqual([0]);
+    expect(resolveFireOnly(row, 'hard')).toEqual([1, 2]);
+    const easyWave: Wave = {
+      id: 'W',
+      t: 0,
+      section: 'runway',
+      mvp: true,
+      difficulties: ['easy'],
+      groups: [],
+    };
+    expect(waveEnabled(easyWave, 'rookie')).toBe(true);
+    expect(waveEnabled(easyWave, 'medium')).toBe(false);
   });
 });

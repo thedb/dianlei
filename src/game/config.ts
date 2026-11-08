@@ -249,15 +249,25 @@ export const DEATH_MATE_LOSS = 1;
 
 /**
  * Starting lives on Medium and Hard.
- * Easy uses `LIVES_EASY` so the two stocks do not share one constant.
+ * Easy uses `LIVES_EASY` and 菜鸟 uses `LIVES_ROOKIE`, so the stocks do not share one constant.
  */
 export const LIVES_START = 3;
 
 /** Starting lives on Easy. Medium and Hard stay on `LIVES_START`. */
 export const LIVES_EASY = 10;
 
-/** Maximum lives. Holds an Easy start, so that stock is not already over the cap. */
+/** Starting lives on 菜鸟. Combat stays on the Easy table. */
+export const LIVES_ROOKIE = 99;
+
+/**
+ * Life cap for Easy, Medium, and Hard.
+ * Holds an Easy start, so that stock is not already over the cap.
+ * 菜鸟 uses `LIVES_ROOKIE_MAX` and is not clamped to this.
+ */
 export const LIVES_MAX = 10;
+
+/** Life cap on 菜鸟. Extend stops here; a fresh start sits on the cap. */
+export const LIVES_ROOKIE_MAX = 99;
 
 /** Score needed for extra life */
 export const EXTEND_EVERY = 100000;

@@ -3,7 +3,7 @@
  * Spawns enemies according to a stage's wave table (default: the registry's default stage).
  */
 
-import type { Difficulty } from '@/game/difficulty';
+import { waveTableOf, type Difficulty } from '@/game/difficulty';
 import type {
   Wave,
   EnemyType,
@@ -49,9 +49,8 @@ export function riskCratesFor(
   crates: readonly RiskCrateSpawn[],
   difficulty: Difficulty
 ): RiskCrateSpawn[] {
-  return crates
-    .filter((crate) => crate.difficulties.includes(difficulty))
-    .sort((a, b) => a.t - b.t);
+  const key = waveTableOf(difficulty);
+  return crates.filter((crate) => crate.difficulties.includes(key)).sort((a, b) => a.t - b.t);
 }
 
 export interface SpawnRequest {
